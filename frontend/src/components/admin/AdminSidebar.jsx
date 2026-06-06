@@ -25,6 +25,8 @@ import {
   ChevronDown,
   LayoutTemplate,
   FileText,
+  BarChart3,
+  TrendingUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { useAuthStore } from '@/features/auth/store.js';
@@ -61,6 +63,14 @@ const FRONTEND_GROUP = {
   ],
 };
 
+const ANALYTICS_GROUP = {
+  label: 'Analytics',
+  icon: BarChart3,
+  children: [
+    { to: '/admin/analytics/sales', label: 'Sales & Revenue', icon: TrendingUp, end: false, permission: 'dashboard.view' },
+  ],
+};
+
 function useVisibleNav() {
   const user = useAuthStore((s) => s.user);
   const isAdmin = !!user?.is_admin;
@@ -73,9 +83,10 @@ function useVisibleNav() {
   }
 
   const flatItems = NAV.filter(isVisible);
-  const groupChildren = FRONTEND_GROUP.children.filter(isVisible);
+  const frontendChildren = FRONTEND_GROUP.children.filter(isVisible);
+  const analyticsChildren = ANALYTICS_GROUP.children.filter(isVisible);
 
-  return { flatItems, groupChildren };
+  return { flatItems, frontendChildren, analyticsChildren };
 }
 
 function NavItem({ item, onNavigate }) {
@@ -99,7 +110,7 @@ function NavItem({ item, onNavigate }) {
   );
 }
 
-function FrontendGroup({ children, onNavigate }) {
+function CollapsibleGroup({ group, children, onNavigate }) {
   const location = useLocation();
 
   // Auto-expand when any child route is active.
@@ -107,6 +118,8 @@ function FrontendGroup({ children, onNavigate }) {
   const [open, setOpen] = useState(isAnyChildActive);
 
   if (children.length === 0) return null;
+
+  const GroupIcon = group.icon;
 
   return (
     <div>
@@ -121,8 +134,8 @@ function FrontendGroup({ children, onNavigate }) {
         )}
         aria-expanded={open}
       >
-        <LayoutPanelTop className="size-4 shrink-0" aria-hidden="true" />
-        <span className="flex-1 text-left">{FRONTEND_GROUP.label}</span>
+        <GroupIcon className="size-4 shrink-0" aria-hidden="true" />
+        <span className="flex-1 text-left">{group.label}</span>
         <ChevronDown
           className={cn(
             'size-3.5 text-ink-tertiary transition-transform duration-200',
@@ -169,10 +182,15 @@ function FrontendGroup({ children, onNavigate }) {
   );
 }
 
+// Keep the old name as a thin wrapper so any external references still compile.
+function FrontendGroup({ children, onNavigate }) {
+  return <CollapsibleGroup group={FRONTEND_GROUP} children={children} onNavigate={onNavigate} />;
+}
+
 function SidebarContent({ onNavigate }) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const { flatItems, groupChildren } = useVisibleNav();
+  const { flatItems, frontendChildren, analyticsChildren } = useVisibleNav();
 
   // Split flat items: place Frontend group where the Hero item used to be
   // (after Categories, before Coupons — index 4 in the original NAV order).
@@ -208,11 +226,14 @@ function SidebarContent({ onNavigate }) {
         ))}
 
         {/* Collapsible Frontend group — sits where Hero slides used to be */}
-        <FrontendGroup children={groupChildren} onNavigate={onNavigate} />
+        <FrontendGroup children={frontendChildren} onNavigate={onNavigate} />
 
         {afterGroup.map((item) => (
           <NavItem key={item.to} item={item} onNavigate={onNavigate} />
         ))}
+
+        {/* Collapsible Analytics group */}
+        <CollapsibleGroup group={ANALYTICS_GROUP} children={analyticsChildren} onNavigate={onNavigate} />
       </nav>
 
       <div className="mt-auto flex shrink-0 flex-col gap-1 border-t border-line-subtle pt-3">
