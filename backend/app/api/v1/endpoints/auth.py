@@ -21,6 +21,7 @@ from app.schemas.user import (
     RefreshRequest,
     ResetPasswordRequest,
     SessionsRevokedResponse,
+    TotpConfirmRequest,
     UserCreate,
     UserLogin,
     UserRead,
@@ -237,7 +238,7 @@ def totp_start(
 
 @router.post("/me/totp/confirm")
 def totp_confirm(
-    payload: dict,
+    payload: TotpConfirmRequest,
     request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -249,7 +250,7 @@ def totp_confirm(
     from app.services.audit_service import AuditService
     from app.services.totp_service import TotpService
 
-    code = (payload or {}).get("code", "")
+    code = payload.code
     backup = TotpService(db).confirm_enrollment(user, code)
     AuditService(db).record(
         actor=user,
@@ -287,14 +288,37 @@ def totp_disable(
     db.commit()
 
 
-@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/forgot-password",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[
+        Depends(
+            rate_limit_by_ip(
+                scope="forgot.ip",
+                limit=settings.RATE_LIMIT_LOGIN_IP_PER_15MIN,
+                window_sec=15 * 60,
+            )
+        )
+    ],
+)
 def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
     # Always the same response — never reveals whether the email exists.
     AuthService(db).request_password_reset(payload.email)
     return {"detail": "If that email is registered, a reset code has been sent."}
 
 
-@router.post("/reset-password")
+@router.post(
+    "/reset-password",
+    dependencies=[
+        Depends(
+            rate_limit_by_ip(
+                scope="reset.ip",
+                limit=settings.RATE_LIMIT_LOGIN_IP_PER_15MIN,
+                window_sec=15 * 60,
+            )
+        )
+    ],
+)
 def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
     AuthService(db).reset_password(payload.email, payload.otp, payload.new_password)
     return {"detail": "Your password has been reset. You can now sign in."}
@@ -342,8 +366,21 @@ def google_callback(
     if not email:
         return RedirectResponse(f"{frontend_cb}#error=google")
 
+    # Reject sign-ins where Google has not verified ownership of the email address.
+    # An unverified email would let a bad actor claim any address they like through
+    # a specially-crafted Google account (account-takeover vector).
+    if not info.get("email_verified"):
+        return RedirectResponse(f"{frontend_cb}#error=google_unverified_email")
+
+    # SECURITY TODO: access/refresh tokens are currently passed in the URL fragment
+    # (#access_token=…). This should be replaced with a short-lived one-time code
+    # redeemed by the frontend via a back-channel POST to avoid token leakage in
+    # browser history, referrer headers, and server logs. Deferred because it
+    # requires a coordinated frontend change.
     try:
-        tokens = AuthService(db).login_with_google(email, info.get("name"))
+        tokens = AuthService(db).login_with_google(
+            email, info.get("name"), email_verified=info.get("email_verified", False)
+        )
     except UnauthorizedError:
         return RedirectResponse(f"{frontend_cb}#error=disabled")
 

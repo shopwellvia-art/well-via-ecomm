@@ -61,6 +61,12 @@ class LoginTotpRequest(BaseModel):
     code: str
 
 
+class TotpConfirmRequest(BaseModel):
+    """Body of POST /auth/me/totp/confirm — the code from the authenticator app."""
+
+    code: str = Field(min_length=6, max_length=10)
+
+
 class RefreshRequest(BaseModel):
     """Body of POST /auth/refresh. The refresh token is sent in the body
     rather than a header so it never ends up in an access log or referrer

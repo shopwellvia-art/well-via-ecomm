@@ -2,7 +2,7 @@ from functools import lru_cache
 from typing import List
 from urllib.parse import quote_plus
 
-from pydantic import Field, computed_field
+from pydantic import Field, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -97,6 +97,19 @@ class Settings(BaseSettings):
     #   PAYMENT_WEBHOOK_URL — the S2S callback URL handed to PhonePe.
     PAYMENT_RETURN_URL: str = "http://localhost:5173/payments/return"
     PAYMENT_WEBHOOK_URL: str = "http://localhost:8000/api/v1/payments/webhook/phonepe"
+
+    @model_validator(mode="after")
+    def _validate_secret_key_in_production(self) -> "Settings":
+        """Refuse to boot in production with an insecure SECRET_KEY."""
+        _PLACEHOLDER = "replace-this-with-openssl-rand-hex-32-output"
+        if self.ENVIRONMENT == "production":
+            if self.SECRET_KEY == _PLACEHOLDER or len(self.SECRET_KEY) < 32:
+                raise ValueError(
+                    "SECRET_KEY must be at least 32 characters and must not be "
+                    "the placeholder value when ENVIRONMENT=production. "
+                    "Generate one with: openssl rand -hex 32"
+                )
+        return self
 
     @computed_field
     @property

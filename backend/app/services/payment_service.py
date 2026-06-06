@@ -228,7 +228,7 @@ class PaymentService:
             raise ForbiddenError("Invalid payment signature.")
         result = self.provider.parse_webhook(body)
         order = self._order_for_mtid(result.merchant_transaction_id)
-        self._apply_status(order, result.status)
+        self._apply_status(order, result.status, gateway_amount_minor=result.amount_minor)
         return order
 
     def get_status(self, user_id: int, merchant_transaction_id: str) -> Order:
@@ -241,7 +241,10 @@ class PaymentService:
             try:
                 result = self.provider.fetch_status(merchant_transaction_id)
                 if result.status != PaymentStatus.PENDING:
-                    self._apply_status(order, result.status)
+                    self._apply_status(
+                        order, result.status,
+                        gateway_amount_minor=result.amount_minor,
+                    )
             except Exception as exc:  # don't fail the poll on a flaky provider
                 logger.warning("status check failed for %s: %s", merchant_transaction_id, exc)
         return order
@@ -403,12 +406,35 @@ class PaymentService:
             raise NotFoundError("Order not found for transaction.")
         return order
 
-    def _apply_status(self, order: Order, payment_status: PaymentStatus) -> None:
+    def _apply_status(
+        self,
+        order: Order,
+        payment_status: PaymentStatus,
+        *,
+        gateway_amount_minor: int | None = None,
+    ) -> None:
         # Idempotent: only PENDING orders move. Webhooks can fire twice.
         if order.status != OrderStatus.PENDING:
             return
         notify_paid = False
         if payment_status == PaymentStatus.SUCCESS:
+            # Verify the gateway-reported amount matches what we expected to
+            # charge. A mismatch (e.g. amount tampering or replay from a
+            # different order) must not result in marking the order PAID.
+            if gateway_amount_minor is not None:
+                expected_minor = int(
+                    (Decimal(str(order.total_amount)) * 100).to_integral_value()
+                )
+                if gateway_amount_minor != expected_minor:
+                    logger.error(
+                        "amount mismatch on order %s: expected %s paise, "
+                        "gateway reported %s paise — leaving PENDING for review",
+                        order.id,
+                        expected_minor,
+                        gateway_amount_minor,
+                    )
+                    self.db.commit()
+                    return
             self._mark_paid(order)
             notify_paid = True
         elif payment_status == PaymentStatus.FAILED:

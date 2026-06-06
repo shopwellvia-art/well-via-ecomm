@@ -10,7 +10,7 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
-from app.core.middleware import RequestIDMiddleware
+from app.core.middleware import RequestIDMiddleware, SecurityHeadersMiddleware
 from app.db.session import SessionLocal
 from app.services.rbac_seed import seed_rbac
 
@@ -31,23 +31,31 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    # Don't expose the interactive docs / OpenAPI schema in production — they
+    # leak the full API surface to anonymous callers.
+    is_prod = (settings.ENVIRONMENT or "").lower() == "production"
     app = FastAPI(
         title=settings.PROJECT_NAME,
         version=settings.VERSION,
-        openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
-        docs_url="/docs",
-        redoc_url="/redoc",
+        openapi_url=None if is_prod else f"{settings.API_V1_PREFIX}/openapi.json",
+        docs_url=None if is_prod else "/docs",
+        redoc_url=None if is_prod else "/redoc",
         lifespan=lifespan,
     )
 
+    # Never combine a wildcard origin with credentials — browsers reject it and
+    # it's a footgun (any site could ride a logged-in user's cookies). If the
+    # config lists "*", drop credentials.
+    allow_credentials = "*" not in settings.CORS_ORIGINS
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
-        allow_credentials=True,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )
     app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
 
     register_exception_handlers(app)
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)

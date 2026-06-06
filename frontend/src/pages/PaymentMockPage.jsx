@@ -25,6 +25,14 @@ export default function PaymentMockPage() {
   const [working, setWorking] = useState(null); // 'approve' | 'decline' | null
   const [error, setError] = useState(null);
 
+  // Only allow site-relative return URLs (must start with "/") to prevent
+  // open-redirect attacks where an attacker crafts a `return` param pointing
+  // to an external site.  Mirrors the LoginPage pattern (~line 196).
+  const safeReturnUrl =
+    returnUrl && returnUrl.startsWith('/')
+      ? returnUrl
+      : `/payments/return?mtid=${txnId}`;
+
   async function decide(action) {
     setWorking(action);
     setError(null);
@@ -32,7 +40,7 @@ export default function PaymentMockPage() {
       await paymentsApi.mockDecision(txnId, action);
       // After the order state is settled we send the user back to the return
       // URL, mirroring what PhonePe's hosted page does in production.
-      window.location.assign(returnUrl || `/payments/return?mtid=${txnId}`);
+      window.location.assign(safeReturnUrl);
     } catch (err) {
       setWorking(null);
       setError(

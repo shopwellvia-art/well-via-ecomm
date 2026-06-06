@@ -48,7 +48,8 @@ docker run --rm --env-file ./backend/.env -v ${PWD}/backend:/app -w /app ecom-ba
 
 ## Known environment notes
 
-- Target DB: remote MySQL 8.0 at `3.110.31.141`, database `ecommercesimple`.
+- Target DB: remote MySQL 8.0 at `<DB_HOST>`, database `ecommercesimple`.
+  *(Live host IP was redacted — it is a leaked secret that must be rotated and purged from git history.)*
 - The DB password is URL-encoded in the DSN; `alembic/env.py` escapes `%`
   so configparser does not treat it as interpolation. Keep that escaping.
 

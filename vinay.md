@@ -95,7 +95,7 @@
 
   1. demo_DB/db_ecommerce.sql is a red herring — it's a 118-table Laravel multi-vendor dump, NOT this app's schema. The real schema is the ~18 tables in
   backend/alembic/versions/. (You had this file open in the IDE — it's reference only.)
-  2. Backend .env points at a remote AWS RDS (3.110.31.141, db ecommercesimple), not the local Docker MySQL. Confirm which DB is authoritative before running
+  2. Backend .env points at a remote AWS RDS (<DB_HOST>, db ecommercesimple), not the local Docker MySQL. Confirm which DB is authoritative before running
   migrations.
   3. Hardcoded DB credentials in scripts/check_db.py and backend/.env; SECRET_KEY is still the placeholder. Rotate before any real deploy.
   4. frontend;C/ is an empty accidental folder — safe to delete. Root _t-*.jpg files are upload test fixtures (one is 14MB).
@@ -226,13 +226,17 @@
 
   From backend/.env (this is what the running backend connects to):
 
-  Host:     3.110.31.141      ← remote server (AWS EC2/RDS, Mumbai region IP)
+  Host:     <DB_HOST>         ← remote server (AWS EC2/RDS, Mumbai region IP)
   Port:     3306              (MySQL)
   User:     vinay
-  Password: Vinay@1234#
+  Password: <REDACTED – ROTATE THIS CREDENTIAL>
   Database: ecommercesimple   ← the real DB the app reads/writes
 
-  So when you run the backend, it talks to MySQL on 3.110.31.141 over the internet. That's the source of truth. scripts/check_db.py points at the exact same place
+  [SECURITY: The host IP and password above were live secrets previously committed in plain text.
+   They have been redacted and must be rotated immediately. The git history must be purged
+   (e.g. via git-filter-repo or BFG Repo Cleaner) to remove the exposed values.]
+
+  So when you run the backend, it talks to MySQL on <DB_HOST> over the internet. That's the source of truth. scripts/check_db.py points at the exact same place
   (hardcoded) — run it to confirm it's reachable:
 
   python scripts/check_db.py
@@ -242,7 +246,7 @@
   ┌─────┬───────────────────────────────┬────────────────────┬──────────────────────────────────────┬────────────────────────────────────────────────────────────┐
   │  #  │             Where             │        Name        │              What it is              │                      Usedby the app?                      │
   ├─────┼───────────────────────────────┼────────────────────┼──────────────────────────────────────┼────────────────────────────────────────────────────────────┤
-  │ 1   │ Remote 3.110.31.141           │ ecommercesimple    │ The real, live database              │ ✅ Yes — backend connectshere                             │
+  │ 1   │ Remote <DB_HOST>              │ ecommercesimple    │ The real, live database              │ ✅ Yes — backend connectshere                             │
   ├─────┼───────────────────────────────┼────────────────────┼──────────────────────────────────────┼────────────────────────────────────────────────────────────┤
   │ 2   │ Local Docker                  │ ecommerce (user    │ A local MySQL container Compose      │ ❌ No — backend's .env overrides it to the remote host, so │
   │     │ (docker-compose.yml)          │ ecom)              │ spins up                             │  this container sits unused                                │
@@ -257,8 +261,8 @@
   Two security flags worth acting on
 
   1. Live DB credentials are committed in plaintext in backend/.env and hardcoded in scripts/check_db.py. .env is gitignored, but scripts/check_db.py is tracked in
-  git — so the password Vinay@1234# is in your repo history. Worth rotating + removing.
-  2. The MySQL server at 3.110.31.141:3306 is exposed to the public internet (you're connecting to it from your laptop). Make sure its security group restricts access
+  git — so the password <REDACTED – ROTATE THIS CREDENTIAL> is in your repo history. Worth rotating + removing.
+  2. The MySQL server at <DB_HOST>:3306 is exposed to the public internet (you're connecting to it from your laptop). Make sure its security group restricts access
   to known IPs.
 
   Want me to (a) run check_db.py to confirm the connection and list the live tables, or (b) move those hardcoded credentials incheck_db.py to read from .env?

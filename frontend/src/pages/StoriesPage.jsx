@@ -1,4 +1,5 @@
 import { ArrowUpRight, Newspaper } from 'lucide-react';
+import { safeUrl } from '@/lib/safeUrl.js';
 import { Page } from '@/components/layout/Page.jsx';
 import { Card, CardBody } from '@/components/ui/Card.jsx';
 import { useSitePages } from '@/features/site-pages/hooks.js';
@@ -59,7 +60,7 @@ function StoryCard({ post }) {
   return (
     <Card className="group overflow-hidden transition-colors hover:border-line-strong">
       {post.url ? (
-        <a href={post.url} className="block rounded-lg focus-visible:focus-ring">
+        <a href={safeUrl(post.url)} className="block rounded-lg focus-visible:focus-ring">
           {inner}
         </a>
       ) : (

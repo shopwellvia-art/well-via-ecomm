@@ -46,11 +46,21 @@ def exchange_code(code: str) -> str:
 
 
 def fetch_userinfo(access_token: str) -> dict:
-    """Fetch the verified Google profile (email, name, …)."""
+    """Fetch the Google profile and return it with a normalised `email_verified`
+    key. Callers MUST check `email_verified` before trusting the email address.
+
+    Google's v3 userinfo endpoint uses "email_verified" (bool). We normalise
+    both spellings ("email_verified" / "verified_email") into the single key
+    "email_verified" so the rest of the app has one canonical field to check.
+    """
     response = httpx.get(
         USERINFO_URL,
         headers={"Authorization": f"Bearer {access_token}"},
         timeout=15,
     )
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+    # Normalise: prefer "email_verified", fall back to "verified_email".
+    verified = data.get("email_verified", data.get("verified_email", False))
+    data["email_verified"] = bool(verified)
+    return data

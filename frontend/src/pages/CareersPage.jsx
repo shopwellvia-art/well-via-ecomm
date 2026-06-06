@@ -1,4 +1,5 @@
 import { MapPin, Briefcase, ArrowUpRight } from 'lucide-react';
+import { safeUrl } from '@/lib/safeUrl.js';
 import { Page } from '@/components/layout/Page.jsx';
 import { Card, CardBody } from '@/components/ui/Card.jsx';
 import { useSitePages } from '@/features/site-pages/hooks.js';
@@ -48,7 +49,7 @@ function Opening({ job }) {
   return (
     <Card className="transition-colors hover:border-line-strong">
       {job.url ? (
-        <a href={job.url} className="block rounded-lg focus-visible:focus-ring">
+        <a href={safeUrl(job.url)} className="block rounded-lg focus-visible:focus-ring">
           {inner}
         </a>
       ) : (

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { safeUrl } from '@/lib/safeUrl.js';
 import { Check } from 'lucide-react';
 import { Page } from '@/components/layout/Page.jsx';
 import { Card, CardBody } from '@/components/ui/Card.jsx';
@@ -129,7 +130,7 @@ export default function ContactPage() {
                   className="transition-colors hover:border-line-strong"
                 >
                   {m.href ? (
-                    <a href={m.href} className="block rounded-lg focus-visible:focus-ring">
+                    <a href={safeUrl(m.href)} className="block rounded-lg focus-visible:focus-ring">
                       {body}
                     </a>
                   ) : (

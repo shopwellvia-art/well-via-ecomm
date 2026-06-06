@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Generator
 
 from fastapi import Depends, Header, Request
@@ -34,6 +35,22 @@ def get_current_user(
     user = UserRepository(db).get(user_id)
     if not user or not user.is_active:
         raise UnauthorizedError("User not found or disabled")
+
+    # Honour server-side "revoke all sessions" / admin force-logout for stateless
+    # access tokens: reject any token issued at/before the revocation marker.
+    # Imported lazily to avoid a circular import at module load.
+    from app.services.session_service import SessionService
+
+    revoked_after = SessionService().access_revoked_after(user_id)
+    if revoked_after:
+        issued_at = payload.get("iat")
+        if issued_at:
+            try:
+                if datetime.fromisoformat(issued_at) <= datetime.fromisoformat(revoked_after):
+                    raise UnauthorizedError("Session was revoked — please sign in again")
+            except ValueError:
+                # Unparseable timestamps: don't lock the user out over a format quirk.
+                pass
     return user
 
 

@@ -3,6 +3,13 @@
 Tokens are PASETO v4.local — symmetric, authenticated encryption. The 32-byte
 key is derived deterministically from SECRET_KEY, so existing configuration
 keeps working with no new environment variable.
+
+Key derivation — domain separation:
+  Each subsystem derives its key from SECRET_KEY with a distinct label so the
+  PASETO token key and the Fernet at-rest encryption key are never the same raw
+  bytes. Changing SECRET_KEY re-keys both subsystems and invalidates all
+  existing tokens AND encrypted TOTP secrets — this is acceptable and desired
+  after a deliberate key rotation.
 """
 import hashlib
 import json
@@ -18,13 +25,30 @@ from pyseto.exceptions import PysetoError
 from app.core.config import settings
 from app.core.exceptions import UnauthorizedError
 
+# SECURITY TODO: replace passlib/bcrypt with a modern library (e.g. argon2-cffi)
+# and add bcrypt 72-byte pre-hashing — deferred because it would invalidate all
+# existing password hashes.
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
+def _derive_key(label: str) -> bytes:
+    """Derive a 32-byte key from SECRET_KEY with domain separation.
+
+    Using a distinct label per subsystem ensures that even if one key is
+    somehow exposed the other remains uncompromised.
+    """
+    return hashlib.sha256(
+        label.encode("utf-8") + b":" + settings.SECRET_KEY.encode("utf-8")
+    ).digest()
+
+
 # PASETO v4.local requires a 32-byte symmetric key.
+# Label "paseto-v4-local" keeps this key distinct from the Fernet key.
 _paseto_key = Key.new(
     version=4,
     purpose="local",
-    key=hashlib.sha256(settings.SECRET_KEY.encode("utf-8")).digest(),
+    key=_derive_key("paseto-v4-local"),
 )
 
 
@@ -46,10 +70,12 @@ def _encode(payload: dict[str, Any]) -> str:
 
 
 def create_access_token(subject: str | int, extra: dict[str, Any] | None = None) -> str:
-    expire = _now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    now = _now()
+    expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     payload: dict[str, Any] = {
         "sub": str(subject),
         "type": "access",
+        "iat": now.isoformat(),   # issued-at — used by access-token revocation check
         "exp": expire.isoformat(),
     }
     if extra:
@@ -95,15 +121,17 @@ def decode_token(token: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise UnauthorizedError("Invalid token payload")
 
+    # Require a valid exp claim — tokens without one are forged or legacy.
     expires_at = payload.get("exp")
-    if expires_at:
-        try:
-            exp = datetime.fromisoformat(expires_at)
-        except (TypeError, ValueError) as exc:
-            raise UnauthorizedError("Invalid token expiry") from exc
-        if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=timezone.utc)
-        if _now() >= exp:
-            raise UnauthorizedError("Token has expired")
+    if not expires_at:
+        raise UnauthorizedError("Token has expired")
+    try:
+        exp = datetime.fromisoformat(expires_at)
+    except (TypeError, ValueError) as exc:
+        raise UnauthorizedError("Invalid token expiry") from exc
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if _now() >= exp:
+        raise UnauthorizedError("Token has expired")
 
     return payload

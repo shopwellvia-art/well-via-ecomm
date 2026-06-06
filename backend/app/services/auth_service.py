@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import logging
 import secrets
 from dataclasses import dataclass
@@ -38,8 +40,16 @@ class LoginOutcome:
     pending_token: str | None = None
 
 
+_OTP_MAX_ATTEMPTS = 5
+
+
 def _otp_key(email: str) -> str:
     return f"otp:reset:{email.lower()}"
+
+
+def _hash_otp(otp: str) -> str:
+    """SHA-256 of the OTP so we never store the plaintext in Redis."""
+    return hashlib.sha256(otp.encode("utf-8")).hexdigest()
 
 
 class AuthService:
@@ -274,7 +284,13 @@ class AuthService:
         if not user:
             return
         otp = f"{secrets.randbelow(1_000_000):06d}"
-        self.redis.setex(_otp_key(email), settings.OTP_TTL_MINUTES * 60, otp)
+        # Store hash:attempts so we never hold the cleartext OTP in Redis and
+        # can cap wrong guesses without a separate key (mirrors cod_otp_service).
+        self.redis.setex(
+            _otp_key(email),
+            settings.OTP_TTL_MINUTES * 60,
+            f"{_hash_otp(otp)}:0",
+        )
         send_email(
             to=email,
             subject="Your password reset code",
@@ -286,11 +302,43 @@ class AuthService:
         )
 
     def reset_password(self, email: str, otp: str, new_password: str) -> None:
-        stored = self.redis.get(_otp_key(email))
-        if not stored or stored != otp:
+        raw = self.redis.get(_otp_key(email))
+        if not raw:
             raise UnauthorizedError("Invalid or expired code")
+
+        # Record is stored as "<hash>:<attempts>" (see request_password_reset).
+        try:
+            stored_hash, attempts_str = raw.rsplit(":", 1)
+            attempts = int(attempts_str)
+        except (ValueError, AttributeError):
+            self.redis.delete(_otp_key(email))
+            raise UnauthorizedError("Invalid or expired code")
+
+        if attempts >= _OTP_MAX_ATTEMPTS:
+            # Already burned — belt and braces in case of a race.
+            self.redis.delete(_otp_key(email))
+            raise UnauthorizedError("Invalid or expired code")
+
+        # Constant-time comparison to prevent timing oracle attacks.
+        if not hmac.compare_digest(_hash_otp((otp or "").strip()), stored_hash):
+            new_attempts = attempts + 1
+            if new_attempts >= _OTP_MAX_ATTEMPTS:
+                # Too many wrong guesses — invalidate the OTP entirely.
+                self.redis.delete(_otp_key(email))
+                raise UnauthorizedError("Invalid or expired code")
+            # Preserve the remaining TTL so the window doesn't widen on failures.
+            ttl = self.redis.ttl(_otp_key(email))
+            self.redis.setex(
+                _otp_key(email),
+                max(ttl, 1),
+                f"{stored_hash}:{new_attempts}",
+            )
+            raise UnauthorizedError("Invalid or expired code")
+
+        # Code is correct — reset the password and consume the OTP.
         user = self.users.get_by_email(email)
         if not user:
+            self.redis.delete(_otp_key(email))
             raise UnauthorizedError("Invalid or expired code")
         user.hashed_password = hash_password(new_password)
         self.db.commit()
@@ -298,8 +346,17 @@ class AuthService:
 
     # ---- Google sign-in ----
 
-    def login_with_google(self, email: str, full_name: str | None) -> Token:
-        """Find or create a user for a verified Google profile, then issue tokens."""
+    def login_with_google(
+        self, email: str, full_name: str | None, *, email_verified: bool = False
+    ) -> Token:
+        """Find or create a user for a verified Google profile, then issue tokens.
+
+        email_verified MUST be True — if Google reports the address as unverified
+        we refuse to create/match a local account to prevent account-takeover via
+        an unverified Google identity.
+        """
+        if not email_verified:
+            raise UnauthorizedError("Google account email is not verified")
         user = self.users.get_by_email(email)
         if not user:
             user = User(

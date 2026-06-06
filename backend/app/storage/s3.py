@@ -1,9 +1,9 @@
 import uuid
-from pathlib import Path
 
 import boto3
 
 from app.core.config import settings
+from app.core.exceptions import ValidationError
 from app.storage.base import CONTENT_TYPE_EXT, Storage
 
 KEY_PREFIX = "products/"
@@ -32,7 +32,15 @@ class S3Storage(Storage):
         )
 
     def save(self, *, data: bytes, filename: str, content_type: str) -> str:
-        ext = Path(filename).suffix.lower() or CONTENT_TYPE_EXT.get(content_type, "")
+        # Derive the extension solely from the validated content-type allowlist.
+        # Never trust the user-controlled filename suffix — it can be used to
+        # store arbitrary file types (e.g. .html, .svg) that lead to XSS when
+        # served same-origin.
+        ext = CONTENT_TYPE_EXT.get((content_type or "").lower())
+        if not ext:
+            raise ValidationError(
+                f"Unsupported image content type: {content_type or 'unknown'}"
+            )
         key = f"{KEY_PREFIX}{uuid.uuid4().hex}{ext}"
         self.client.put_object(
             Bucket=self.bucket,

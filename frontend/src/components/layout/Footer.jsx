@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Sparkles, Mail, ArrowRight, Check, Gift, Zap, Percent, LifeBuoy } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
+import { safeUrl } from '@/lib/safeUrl.js';
 import { useFooterConfig } from '@/features/footer/hooks.js';
 import { FOOTER_DEFAULTS, resolveIcon } from '@/features/footer/defaults.js';
 
@@ -71,7 +72,7 @@ export default function Footer() {
                 return (
                   <li key={label}>
                     <a
-                      href={href}
+                      href={safeUrl(href)}
                       target="_blank"
                       rel="noreferrer"
                       aria-label={label}

@@ -11,7 +11,9 @@ The shape here is mirrored 1:1 by the frontend at
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+
+from app.schemas._validators import validate_safe_url
 
 # ---------------------------------------------------------------------------
 # Shared building blocks
@@ -62,6 +64,11 @@ class ContactMethod(BaseModel):
     detail: str
     href: str = ""
 
+    @field_validator("href")
+    @classmethod
+    def _check_href(cls, v: str) -> str:
+        return validate_safe_url(v)
+
 
 class ContactForm(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -87,6 +94,11 @@ class JobOpening(BaseModel):
     type: str = ""
     url: str = ""
 
+    @field_validator("url")
+    @classmethod
+    def _check_url(cls, v: str) -> str:
+        return validate_safe_url(v)
+
 
 class Story(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -98,6 +110,11 @@ class Story(BaseModel):
     date: str = ""
     url: str = ""
 
+    @field_validator("url")
+    @classmethod
+    def _check_url(cls, v: str) -> str:
+        return validate_safe_url(v)
+
 
 class PressRelease(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -106,6 +123,11 @@ class PressRelease(BaseModel):
     title: str
     source: str = ""
     url: str = ""
+
+    @field_validator("url")
+    @classmethod
+    def _check_url(cls, v: str) -> str:
+        return validate_safe_url(v)
 
 
 class PressContact(BaseModel):
@@ -129,6 +151,11 @@ class Download(BaseModel):
 
     label: str
     url: str = ""
+
+    @field_validator("url")
+    @classmethod
+    def _check_url(cls, v: str) -> str:
+        return validate_safe_url(v)
 
 
 class CorporateEntity(BaseModel):
@@ -197,6 +224,11 @@ class PressPage(BaseModel):
     releases: list[PressRelease] = []
     contact: PressContact
     kit_url: str = ""
+
+    @field_validator("kit_url")
+    @classmethod
+    def _check_kit_url(cls, v: str) -> str:
+        return validate_safe_url(v)
 
 
 class CorporatePage(BaseModel):

@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.schemas._validators import validate_safe_url
 
 
 class Perk(BaseModel):
@@ -57,6 +59,11 @@ class HeroSlideUpdate(BaseModel):
     countdown_label: str | None = Field(default=None, max_length=80)
     perks: list[Perk] | None = None
     text_theme: Literal["light", "dark"] | None = None
+
+    @field_validator("cta_href", "cta2_href")
+    @classmethod
+    def _check_cta_href(cls, v: str | None) -> str | None:
+        return validate_safe_url(v)
 
 
 class HeroSlideReorder(BaseModel):

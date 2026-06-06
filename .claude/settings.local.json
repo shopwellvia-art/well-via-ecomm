@@ -101,7 +101,11 @@
       "Bash(py scripts/_diag_rbac.py)",
       "Bash(xargs grep -l \"class Token\")",
       "Bash(Select-String \"Hi |successfully\")",
-      "PowerShell(git ls-remote *)"
+      "PowerShell(git ls-remote *)",
+      "Bash(findstr 5173)",
+      "Bash(Select-Object -Last 20)",
+      "Bash(docker inspect *)",
+      "Bash(docker exec *)"
     ]
   }
 }

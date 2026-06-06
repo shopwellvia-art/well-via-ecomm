@@ -1,4 +1,4 @@
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, update
 from sqlalchemy.orm import aliased, selectinload
 
 from app.models.order import Order, OrderItem, OrderStatus
@@ -56,7 +56,18 @@ class ProductRepository(BaseRepository[Product]):
         return items, total
 
     def decrement_stock(self, product: Product, qty: int) -> None:
-        product.stock = product.stock - qty
+        # Atomic conditional UPDATE prevents TOCTOU oversell under concurrent
+        # requests. The WHERE stock >= qty ensures we never go negative; 0 rows
+        # updated means insufficient stock at the moment of write.
+        result = self.db.execute(
+            update(Product)
+            .where(Product.id == product.id, Product.stock >= qty)
+            .values(stock=Product.stock - qty)
+            .execution_options(synchronize_session="fetch")
+        )
+        if result.rowcount == 0:
+            from app.core.exceptions import ConflictError
+            raise ConflictError(f"Insufficient stock for product {product.sku}")
         self.db.flush()
 
     def bestsellers(self, *, limit: int, category_id: int | None = None) -> list[Product]:

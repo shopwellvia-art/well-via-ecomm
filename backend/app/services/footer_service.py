@@ -16,9 +16,10 @@ from app.schemas.footer import DEFAULT_FOOTER, FooterConfigUpdate
 from app.storage import get_storage
 from app.storage.base import CONTENT_TYPE_EXT
 
-# Logos may additionally be uploaded as SVG (vector marks are common for
-# logos), on top of the raster types shared with product/hero uploads.
-_LOGO_CONTENT_TYPES = {**CONTENT_TYPE_EXT, "image/svg+xml": ".svg"}
+# Logo uploads are restricted to raster types only. SVG is intentionally
+# excluded: it is an active document format and when served same-origin from
+# /media it can execute arbitrary JavaScript, enabling stored XSS.
+_LOGO_CONTENT_TYPES = {**CONTENT_TYPE_EXT}
 
 
 class FooterService:

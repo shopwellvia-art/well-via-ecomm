@@ -135,9 +135,11 @@ Frontend `.env`: `VITE_API_BASE_URL` (`/api/v1`), `VITE_BACKEND_URL`, `VITE_APP_
    *Laravel multi-vendor* platform (has `migrations`, `model_has_roles`, `personal_access_tokens`,
    seller/wallet/translation tables). The real app uses ~18 SQLAlchemy tables defined by Alembic in
    `backend/alembic/versions/`. Treat `demo_DB/` as external reference only.
-2. **Backend `.env` points at a remote AWS RDS** (`3.110.31.141`, db `ecommercesimple`), not the
+2. **Backend `.env` points at a remote AWS RDS** (host `<DB_HOST>`, db `ecommercesimple`), not the
    local Docker MySQL. So Compose's mysql service may be unused in your current setup — confirm which
    DB is authoritative before running migrations.
+   *(Live secrets redacted — host IP and DB password were previously exposed here and must be rotated
+   and purged from git history.)*
 3. **Hardcoded credentials** sit in `scripts/check_db.py` and `backend/.env` (host/user/pass). `.env`
    is gitignored, but rotate/secret-manage these before any real deployment. `SECRET_KEY` is still
    the placeholder value.

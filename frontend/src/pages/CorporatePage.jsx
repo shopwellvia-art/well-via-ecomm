@@ -4,6 +4,7 @@ import { Page } from '@/components/layout/Page.jsx';
 import { Card, CardBody } from '@/components/ui/Card.jsx';
 import { useSitePages } from '@/features/site-pages/hooks.js';
 import { SITE_PAGES_DEFAULTS } from '@/features/site-pages/defaults.js';
+import { safeUrl } from '@/lib/safeUrl.js';
 import {
   CompanyHero,
   Prose,
@@ -32,7 +33,7 @@ function DownloadLink({ item }) {
       {content}
     </Link>
   ) : (
-    <a href={item.url} target="_blank" rel="noreferrer" className={cls}>
+    <a href={safeUrl(item.url)} target="_blank" rel="noreferrer" className={cls}>
       {content}
     </a>
   );

@@ -15,6 +15,7 @@ is refreshed on every login/rotate so it always outlives its members.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 import redis
@@ -34,8 +35,19 @@ def _user_families_key(user_id: int) -> str:
     return f"auth:user:{user_id}:families"
 
 
+def _revoked_after_key(user_id: int) -> str:
+    """Marker timestamp: every access token issued at/before this instant is
+    considered revoked for the user. Used by get_current_user."""
+    return f"auth:revoked_after:{user_id}"
+
+
 def _refresh_ttl_seconds() -> int:
     return max(60, int(settings.REFRESH_TOKEN_EXPIRE_DAYS) * 86400)
+
+
+def _access_ttl_seconds() -> int:
+    # The marker only needs to outlive any access token already in the wild.
+    return max(60, int(settings.ACCESS_TOKEN_EXPIRE_MINUTES) * 60)
 
 
 class SessionService:
@@ -128,19 +140,40 @@ class SessionService:
         return self._wipe_family(family_id, user_id) > 0
 
     def revoke_all_for_user(self, user_id: int) -> int:
-        """End every session for a user. Returns how many were killed."""
+        """End every session for a user. Returns how many were killed.
+
+        Also stamps a `revoked_after` marker so outstanding *access* tokens
+        (which are stateless and otherwise valid for their full TTL) are
+        rejected on their next request — closing the gap where an admin
+        force-logout or self "revoke all" left live access tokens working.
+        """
         try:
             family_ids = list(self.redis.smembers(_user_families_key(user_id)))
         except redis.RedisError as exc:
             logger.warning("revoke_all_for_user lookup failed: %s", exc)
-            return 0
+            family_ids = []
         for fid in family_ids:
             self._wipe_family(fid, user_id)
         try:
             self.redis.delete(_user_families_key(user_id))
+            self.redis.setex(
+                _revoked_after_key(user_id),
+                _access_ttl_seconds(),
+                datetime.now(timezone.utc).isoformat(),
+            )
         except redis.RedisError as exc:
             logger.warning("revoke_all_for_user cleanup failed: %s", exc)
         return len(family_ids)
+
+    def access_revoked_after(self, user_id: int) -> Optional[str]:
+        """ISO timestamp before which the user's access tokens are revoked, or
+        None. Fails open (returns None) if Redis is unavailable so an outage
+        can't lock everyone out — matches the rest of the auth layer."""
+        try:
+            return self.redis.get(_revoked_after_key(user_id))
+        except redis.RedisError as exc:
+            logger.warning("revoked_after lookup failed: %s", exc)
+            return None
 
     def session_count(self, user_id: int) -> int:
         try:

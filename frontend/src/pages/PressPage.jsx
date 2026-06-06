@@ -1,4 +1,5 @@
 import { ArrowUpRight, Download, Mail, Phone } from 'lucide-react';
+import { safeUrl } from '@/lib/safeUrl.js';
 import { Page } from '@/components/layout/Page.jsx';
 import { Card, CardBody } from '@/components/ui/Card.jsx';
 import { useSitePages } from '@/features/site-pages/hooks.js';
@@ -41,7 +42,7 @@ function Release({ item }) {
   return (
     <Card className="transition-colors hover:border-line-strong">
       {item.url ? (
-        <a href={item.url} target="_blank" rel="noreferrer" className="block rounded-lg focus-visible:focus-ring">
+        <a href={safeUrl(item.url)} target="_blank" rel="noreferrer" className="block rounded-lg focus-visible:focus-ring">
           {inner}
         </a>
       ) : (
@@ -122,7 +123,7 @@ export default function PressPage() {
 
           {page.kit_url && (
             <a
-              href={page.kit_url}
+              href={safeUrl(page.kit_url)}
               className="flex items-center gap-3 rounded-lg border border-line-subtle bg-bg-elevated p-4 shadow-md transition-colors hover:border-line-strong focus-visible:focus-ring"
             >
               <span className="grid size-10 place-items-center rounded-xl bg-accent/12 text-accent">

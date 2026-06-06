@@ -6,7 +6,9 @@ service falls back to it when no row exists or when a top-level key is absent.
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+
+from app.schemas._validators import validate_safe_url
 
 
 # ---------------------------------------------------------------------------
@@ -29,6 +31,11 @@ class Brand(BaseModel):
     # Optional uploaded logo. When set, the storefront renders this image in
     # place of the icon + wordmark in both the navbar and footer.
     logo_url: str = ""
+
+    @field_validator("logo_url")
+    @classmethod
+    def _check_logo_url(cls, v: str) -> str:
+        return validate_safe_url(v)
 
 
 class Newsletter(BaseModel):
@@ -83,6 +90,11 @@ class SocialLink(BaseModel):
     icon: str
     label: str
     href: str
+
+    @field_validator("href")
+    @classmethod
+    def _check_href(cls, v: str) -> str:
+        return validate_safe_url(v)
 
 
 class BottomLink(BaseModel):

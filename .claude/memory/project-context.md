@@ -57,8 +57,9 @@ Full detail in `../docs/architecture-rules.md`.
   (`backend/app/core/config.py`).
 - Secrets live in `backend/.env`, `frontend/.env`, root `.env` — all gitignored.
   Only `.env.example` files are tracked.
-- Target database: remote **MySQL 8.0 at `3.110.31.141`**, database
+- Target database: remote **MySQL 8.0 at `<DB_HOST>`**, database
   **`ecommercesimple`**, user `vinay`.
+  *(Live host IP was redacted — it is a leaked secret that must be rotated and purged from git history.)*
 - The DB password contains special characters, so it is URL-encoded into the
   SQLAlchemy DSN; `alembic/env.py` escapes `%` for configparser.
 

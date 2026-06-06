@@ -1,12 +1,23 @@
-"""One-shot connectivity check against the configured MySQL DSN."""
+"""One-shot connectivity check against the configured MySQL DSN.
+
+All connection parameters are read from environment variables (or a loaded .env file).
+Set MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB before running.
+
+SECURITY NOTE: A previous version of this file hardcoded the live DB host and
+credentials directly in source code. Those literals have been removed. The
+previously committed credential (host, user, password) must be treated as
+compromised and rotated immediately, and the git history must be purged
+(e.g. via git-filter-repo or BFG).
+"""
+import os
 import sys
 import pymysql
 
-HOST = "3.110.31.141"
-PORT = 3306
-USER = "vinay"
-PASSWORD = "Vinay@1234#"
-DB = "ecommercesimple"
+HOST = os.environ["MYSQL_HOST"]
+PORT = int(os.environ.get("MYSQL_PORT", 3306))
+USER = os.environ["MYSQL_USER"]
+PASSWORD = os.environ["MYSQL_PASSWORD"]
+DB = os.environ["MYSQL_DB"]
 
 try:
     conn = pymysql.connect(

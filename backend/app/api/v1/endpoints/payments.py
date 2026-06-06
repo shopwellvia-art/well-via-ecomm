@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Header, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.config import settings
 from app.core.exceptions import ForbiddenError, ValidationError
 from app.models.user import User
 from app.schemas.order import OrderRead
@@ -107,7 +108,11 @@ def mock_webhook(
 ):
     # Guard so this stays out of production paths. The active provider now
     # lives in the DB (admin-configurable), so read it from there rather than
-    # the env var.
+    # the env var. Additionally, reject in production even if the DB still has
+    # the mock provider set — a misconfigured prod deployment must not expose
+    # this endpoint.
+    if (settings.ENVIRONMENT or "").lower() == "production":
+        raise ForbiddenError("Mock webhook is disabled in production.")
     active_provider = (PaymentGatewayService(db).get().provider or "mock").lower()
     if active_provider != "mock":
         raise ForbiddenError("Mock webhook disabled when a real provider is configured.")
