@@ -29,6 +29,9 @@ class ProductBase(BaseModel):
     # When present, must be strictly greater than `price` — otherwise there's
     # no "discount" to show and the data is misleading.
     compare_at_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    # Unit procurement / production cost. Used for contribution-margin analytics.
+    # Nullable so existing products without a recorded cost stay valid.
+    cost: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     stock: int = Field(ge=0, default=0)
     # Optional shipping weight in grams. Drives the rate calculator; null
     # falls back to a 200g default at quote time.
@@ -55,6 +58,8 @@ class ProductUpdate(BaseModel):
     description: str | None = None
     price: Decimal | None = None
     compare_at_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    # Cost update mirrors compare_at_price: optional, non-negative, 2dp.
+    cost: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     stock: int | None = None
     weight_grams: int | None = Field(default=None, ge=0, le=200_000)
     cod_blocked: bool | None = None

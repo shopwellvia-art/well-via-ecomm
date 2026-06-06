@@ -21,6 +21,7 @@ const EMPTY = {
   description: '',
   price: '',
   compare_at_price: '',
+  cost: '',
   stock: '',
   weight_grams: '',
   cod_blocked: false,
@@ -58,6 +59,7 @@ export default function AdminProductFormPage() {
         price: String(product.price ?? ''),
         compare_at_price:
           product.compare_at_price != null ? String(product.compare_at_price) : '',
+        cost: product.cost != null ? String(product.cost) : '',
         stock: String(product.stock ?? ''),
         weight_grams:
           product.weight_grams != null ? String(product.weight_grams) : '',
@@ -102,6 +104,12 @@ export default function AdminProductFormPage() {
         next.compare_at_price = 'Must be greater than the price.';
       }
     }
+    if (form.cost !== '') {
+      const cost = Number(form.cost);
+      if (Number.isNaN(cost) || cost < 0) {
+        next.cost = 'Enter a cost of 0 or more.';
+      }
+    }
     if (form.stock !== '' && (Number.isNaN(Number(form.stock)) || Number(form.stock) < 0)) {
       next.stock = 'Stock cannot be negative.';
     }
@@ -122,6 +130,7 @@ export default function AdminProductFormPage() {
       price: Number(form.price),
       compare_at_price:
         form.compare_at_price === '' ? null : Number(form.compare_at_price),
+      cost: form.cost === '' ? null : Number(form.cost),
       stock: form.stock === '' ? 0 : Number(form.stock),
       weight_grams:
         form.weight_grams === '' ? null : Number(form.weight_grams),
@@ -254,6 +263,17 @@ export default function AdminProductFormPage() {
               error={errors.compare_at_price}
               helper="Optional. Shows as the struck-through original next to a Sale badge."
               placeholder="399.00"
+            />
+            <Input
+              label="Cost price (₹)"
+              type="number"
+              step="0.01"
+              min="0"
+              value={form.cost}
+              onChange={set('cost')}
+              error={errors.cost}
+              helper="Optional. Used for profitability analytics — not shown to customers."
+              placeholder="150.00"
             />
             <Input
               label="Stock"

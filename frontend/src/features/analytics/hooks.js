@@ -10,3 +10,13 @@ export function useSalesAnalytics({ period = '30d', granularity = 'day' } = {}) 
     refetchInterval: 60_000,
   });
 }
+
+export function useProfitAnalytics({ period = '30d' } = {}) {
+  return useQuery({
+    queryKey: ['analytics', 'profit', period],
+    queryFn: () => analyticsApi.profit({ period }),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+}

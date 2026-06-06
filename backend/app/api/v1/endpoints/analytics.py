@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_permission
-from app.schemas.analytics import SalesAnalytics
+from app.schemas.analytics import ProfitAnalytics, SalesAnalytics
 from app.services.analytics_service import AnalyticsService
+from app.services.profit_service import ProfitService
 
 router = APIRouter()
 
@@ -24,3 +25,15 @@ def admin_analytics_sales(
     db: Session = Depends(get_db),
 ):
     return AnalyticsService(db).sales(period=period, granularity=granularity)
+
+
+@router.get(
+    "/profit",
+    response_model=ProfitAnalytics,
+    dependencies=[Depends(require_permission("dashboard.view"))],
+)
+def admin_analytics_profit(
+    period: str = Query(default="30d", pattern="^(7d|30d|90d)$"),
+    db: Session = Depends(get_db),
+):
+    return ProfitService(db).profit(period=period)

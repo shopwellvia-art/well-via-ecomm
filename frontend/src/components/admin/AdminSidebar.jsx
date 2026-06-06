@@ -27,6 +27,7 @@ import {
   FileText,
   BarChart3,
   TrendingUp,
+  PiggyBank,
 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { useAuthStore } from '@/features/auth/store.js';
@@ -68,6 +69,7 @@ const ANALYTICS_GROUP = {
   icon: BarChart3,
   children: [
     { to: '/admin/analytics/sales', label: 'Sales & Revenue', icon: TrendingUp, end: false, permission: 'dashboard.view' },
+    { to: '/admin/analytics/profit', label: 'Profitability', icon: PiggyBank, end: false, permission: 'dashboard.view' },
   ],
 };
 

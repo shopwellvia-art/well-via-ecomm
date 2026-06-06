@@ -46,6 +46,7 @@ class OrderService:
                 product_id=product.id,
                 quantity=line.quantity,
                 unit_price=product.price,
+                unit_cost=product.cost,  # snapshot cost like unit_price; may be None
             )
             order.items.append(item)
             total += product.price * line.quantity

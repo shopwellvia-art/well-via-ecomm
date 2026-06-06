@@ -33,6 +33,9 @@ class Product(Base, IDMixin, TimestampMixin):
     # When set and greater than `price`, the storefront renders this as a
     # strikethrough "compare at" / "was" price next to a Sale badge.
     compare_at_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    # What we paid to buy/make one unit. Used for contribution-margin / profit
+    # analytics. Nullable: existing products have no cost recorded yet.
+    cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     stock: Mapped[int] = mapped_column(default=0, nullable=False)
     # Shipping weight in grams. Null falls back to a 200g default at rate-quote
     # time so untagged SKUs still ship. Admin-editable from the product form.

@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -77,5 +78,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def validation_handler(_: Request, exc: RequestValidationError):
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=_envelope("validation_error", "Invalid request", {"errors": exc.errors()}),
+            # jsonable_encoder so non-JSON-native error inputs (e.g. a Decimal
+            # like a rejected negative price/cost) don't crash json.dumps → 500.
+            content=_envelope(
+                "validation_error", "Invalid request", {"errors": jsonable_encoder(exc.errors())}
+            ),
         )

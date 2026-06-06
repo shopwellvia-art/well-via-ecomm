@@ -132,5 +132,9 @@ class OrderItem(Base, IDMixin, TimestampMixin):
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"))
     quantity: Mapped[int] = mapped_column(nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    # Snapshot of Product.cost at the moment of sale — frozen like unit_price so
+    # historical profit stays accurate even if the product's cost changes later.
+    # Nullable: orders placed before cost tracking existed have no snapshot.
+    unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
 
     order: Mapped[Order] = relationship(back_populates="items")

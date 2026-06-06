@@ -5,4 +5,9 @@ export const analyticsApi = {
     apiClient
       .get('/analytics/sales', { params: { period, granularity } })
       .then((r) => r.data),
+
+  profit: ({ period = '30d' } = {}) =>
+    apiClient
+      .get('/analytics/profit', { params: { period } })
+      .then((r) => r.data),
 };

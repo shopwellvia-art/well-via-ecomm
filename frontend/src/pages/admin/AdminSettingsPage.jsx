@@ -14,6 +14,7 @@ import {
   Wallet,
   CreditCard,
   LogIn,
+  PiggyBank,
 } from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Button } from '@/components/ui/Button.jsx';
@@ -156,6 +157,14 @@ const FIELD_META = {
   // own dedicated screen — Admin → Payment Gateway — backed by the
   // payment_gateway_config table, not these key/value settings.
 
+  // Costs / Profitability. These values feed the /analytics/profit endpoint.
+  // All are stored as numeric strings; the backend converts on read.
+  'costs.packing_per_order':  { label: 'Packing cost per order (₹)', type: 'number', placeholder: '20' },
+  'costs.handling_per_order': { label: 'Handling cost per order (₹)', type: 'number', placeholder: '10' },
+  'costs.gateway_fee_pct':    { label: 'Payment gateway fee (%)', type: 'number', placeholder: '2' },
+  'costs.monthly_overheads':  { label: 'Monthly overheads (₹)', type: 'number', placeholder: '20000' },
+  'costs.monthly_ad_spend':   { label: 'Monthly ad spend (₹)', type: 'number', placeholder: '8000' },
+
   // Payment instruments (Phase 10). Each rail can be enabled/disabled
   // independently and can carry its own % discount — UPI typically gets
   // the discount because UPI MDR is ~0% in India.
@@ -179,8 +188,9 @@ const FIELD_META = {
     placeholder: '0' },
 };
 
-const CATEGORY_ORDER = ['payments', 'shipping', 'cod', 'login', 'email', 'sms', 'notifications', 'security', 'general'];
+const CATEGORY_ORDER = ['costs', 'payments', 'shipping', 'cod', 'login', 'email', 'sms', 'notifications', 'security', 'general'];
 const TAB_META = {
+  costs:         { label: 'Costs / Profitability', icon: PiggyBank },
   payments:      { label: 'Payments',         icon: CreditCard },
   shipping:      { label: 'Shipping',         icon: Truck },
   cod:           { label: 'Cash on Delivery', icon: Wallet },
