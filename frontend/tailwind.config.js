@@ -33,10 +33,47 @@ export default {
           DEFAULT: '#6366F1',
           hover: '#7C7FF5',
           press: '#5457D6',
+          // shadcn/ui token — used by the ghost/outline variants in button-base.jsx.
+          foreground: 'hsl(var(--accent-foreground))',
         },
         success: '#22C55E',
         warning: '#F59E0B',
         danger: '#EF4444',
+
+        // ── shadcn/ui tokens ──────────────────────────────────────────────
+        // Additive layer consumed by src/components/ui/button-base.jsx (and any
+        // future shadcn primitives). Values resolve from the HSL CSS variables
+        // defined in src/styles/global.css. None of these names are used by the
+        // project's own design tokens above, so nothing here overrides them.
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        primary: {
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(var(--primary-foreground))',
+        },
+        secondary: {
+          DEFAULT: 'hsl(var(--secondary))',
+          foreground: 'hsl(var(--secondary-foreground))',
+        },
+        destructive: {
+          DEFAULT: 'hsl(var(--destructive))',
+          foreground: 'hsl(var(--destructive-foreground))',
+        },
+        muted: {
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'hsl(var(--muted-foreground))',
+        },
+        card: {
+          DEFAULT: 'hsl(var(--card))',
+          foreground: 'hsl(var(--card-foreground))',
+        },
+        popover: {
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],

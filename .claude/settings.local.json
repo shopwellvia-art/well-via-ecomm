@@ -105,7 +105,9 @@
       "Bash(findstr 5173)",
       "Bash(Select-Object -Last 20)",
       "Bash(docker inspect *)",
-      "Bash(docker exec *)"
+      "Bash(docker exec *)",
+      "Bash(grep -E \"\\\\.\\(py|ts|tsx\\)$\")",
+      "Bash(awk '{print $NF}')"
     ]
   }
 }
