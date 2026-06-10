@@ -21,6 +21,7 @@ const OrdersPage = lazy(() => import('@/pages/OrdersPage.jsx'));
 const WishlistPage = lazy(() => import('@/pages/WishlistPage.jsx'));
 const RewardsPage = lazy(() => import('@/pages/RewardsPage.jsx'));
 const AccountSecurityPage = lazy(() => import('@/pages/AccountSecurityPage.jsx'));
+const AddressesPage = lazy(() => import('@/pages/AddressesPage.jsx'));
 const LoginPage = lazy(() => import('@/pages/LoginPage.jsx'));
 const ForgotPasswordPage = lazy(() => import('@/pages/ForgotPasswordPage.jsx'));
 const AuthCallbackPage = lazy(() => import('@/pages/AuthCallbackPage.jsx'));
@@ -47,7 +48,7 @@ const AdminReviewsPage = lazy(() => import('@/pages/admin/AdminReviewsPage.jsx')
 const AdminLoyaltyPage = lazy(() => import('@/pages/admin/AdminLoyaltyPage.jsx'));
 const AdminAuditPage = lazy(() => import('@/pages/admin/AdminAuditPage.jsx'));
 const AdminSettingsPage = lazy(() => import('@/pages/admin/AdminSettingsPage.jsx'));
-const AdminPaymentGatewayPage = lazy(() => import('@/pages/admin/AdminPaymentGatewayPage.jsx'));
+const AdminPaymentMethodsPage = lazy(() => import('@/pages/admin/AdminPaymentMethodsPage.jsx'));
 const AdminFooterPage = lazy(() => import('@/pages/admin/AdminFooterPage.jsx'));
 const AdminPagesPage = lazy(() => import('@/pages/admin/AdminPagesPage.jsx'));
 const AdminOrdersPage = lazy(() => import('@/pages/admin/AdminOrdersPage.jsx'));
@@ -72,6 +73,7 @@ export default function App() {
             <Route path="wishlist" element={<WishlistPage />} />
             <Route path="rewards" element={<RewardsPage />} />
             <Route path="account/security" element={<AccountSecurityPage />} />
+            <Route path="account/addresses" element={<AddressesPage />} />
             <Route path="checkout" element={<CheckoutPage />} />
             <Route path="orders" element={<OrdersPage />} />
             <Route path="payments/mock/:txnId" element={<PaymentMockPage />} />
@@ -192,10 +194,10 @@ export default function App() {
               }
             />
             <Route
-              path="admin/payment-gateway"
+              path="admin/payment-methods"
               element={
                 <RequirePermission permission="payments.manage">
-                  <AdminPaymentGatewayPage />
+                  <AdminPaymentMethodsPage />
                 </RequirePermission>
               }
             />

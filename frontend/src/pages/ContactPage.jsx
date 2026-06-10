@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import { safeUrl } from '@/lib/safeUrl.js';
 import { Check } from 'lucide-react';
 import { Page } from '@/components/layout/Page.jsx';
-import { Card, CardBody } from '@/components/ui/Card.jsx';
+import { Card, CardBody, CardHeader } from '@/components/ui/Card.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Input } from '@/components/ui/Input.jsx';
 import { Textarea } from '@/components/ui/Textarea.jsx';
@@ -14,6 +15,7 @@ import {
   SectionLabel,
   PageDisabled,
 } from '@/features/site-pages/components.jsx';
+import { staggerContainer, fadeUp } from '@/lib/motion.js';
 
 function ContactForm({ form }) {
   const [values, setValues] = useState({ name: '', email: '', message: '' });
@@ -46,11 +48,11 @@ function ContactForm({ form }) {
 
   return (
     <Card>
+      <CardHeader title={form?.heading || 'Send us a message'} />
       <CardBody className="p-6 sm:p-8">
-        <h3 className="text-h3 text-ink-primary">{form?.heading || 'Send us a message'}</h3>
-        {form?.note && <p className="mt-1 text-sm text-ink-secondary">{form.note}</p>}
+        {form?.note && <p className="mb-4 text-sm text-ink-secondary">{form.note}</p>}
 
-        <form onSubmit={onSubmit} noValidate className="mt-5">
+        <form onSubmit={onSubmit} noValidate>
           <div className="grid gap-x-4 sm:grid-cols-2">
             <Input
               label="Your name"
@@ -58,6 +60,7 @@ function ContactForm({ form }) {
               onChange={(e) => set('name', e.target.value)}
               error={errors.name}
               autoComplete="name"
+              required
             />
             <Input
               label="Email"
@@ -66,23 +69,31 @@ function ContactForm({ form }) {
               onChange={(e) => set('email', e.target.value)}
               error={errors.email}
               autoComplete="email"
+              required
             />
           </div>
           <Textarea
             label="Message"
             rows={5}
+            maxRows={8}
             value={values.message}
             onChange={(e) => set('message', e.target.value)}
             error={errors.message}
             placeholder="How can we help?"
+            required
           />
-          <div className="mt-2 flex items-center gap-4">
+          <div className="mt-4 flex items-center gap-4">
             <Button type="submit">Send message</Button>
             {submitted && (
-              <span className="flex items-center gap-1.5 text-sm text-success" role="status">
+              <motion.span
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="flex items-center gap-1.5 text-sm text-success"
+                role="status"
+              >
                 <Check className="size-4" aria-hidden="true" />
-                {form?.success || 'Thanks — we’ll be in touch shortly.'}
-              </span>
+                {form?.success || 'Thanks — we\'ll be in touch shortly.'}
+              </motion.span>
             )}
           </div>
         </form>
@@ -107,15 +118,21 @@ export default function ContactPage() {
     <Page>
       <CompanyHero hero={page.hero} current="Contact Us" />
 
-      {/* Contact methods */}
+      {/* Contact method tiles */}
       {page.methods?.length > 0 && (
         <Section className="mt-12">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <motion.div
+            variants={staggerContainer(0.06)}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '-60px' }}
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+          >
             {page.methods.map((m, i) => {
               const Icon = resolvePageIcon(m.icon);
               const body = (
                 <CardBody className="flex flex-col gap-3">
-                  <span className="grid size-11 place-items-center rounded-xl bg-accent/12 text-accent">
+                  <span className="grid size-11 place-items-center rounded-xl bg-accent-soft text-accent">
                     <Icon className="size-5" aria-hidden="true" />
                   </span>
                   <div>
@@ -125,27 +142,34 @@ export default function ContactPage() {
                 </CardBody>
               );
               return (
-                <Card
-                  key={i}
-                  className="transition-colors hover:border-line-strong"
-                >
-                  {m.href ? (
-                    <a href={safeUrl(m.href)} className="block rounded-lg focus-visible:focus-ring">
-                      {body}
-                    </a>
-                  ) : (
-                    body
-                  )}
-                </Card>
+                <motion.div key={i} variants={fadeUp}>
+                  <Card interactive className="h-full">
+                    {m.href ? (
+                      <a
+                        href={safeUrl(m.href)}
+                        className="block h-full rounded-lg focus-visible:focus-ring"
+                      >
+                        {body}
+                      </a>
+                    ) : (
+                      body
+                    )}
+                  </Card>
+                </motion.div>
               );
             })}
-          </div>
+          </motion.div>
         </Section>
       )}
 
+      {/* Form + offices */}
       <Section className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
         <div>
-          {page.intro && <p className="mb-5 max-w-xl text-ink-secondary">{page.intro}</p>}
+          {page.intro && (
+            <p className="mb-5 max-w-xl text-sm leading-relaxed text-ink-secondary">
+              {page.intro}
+            </p>
+          )}
           <ContactForm form={page.form} />
         </div>
 
@@ -153,22 +177,30 @@ export default function ContactPage() {
         {page.offices?.length > 0 && (
           <div>
             <SectionLabel className="text-h3">Our offices</SectionLabel>
-            <div className="mt-5 flex flex-col gap-4">
+            <motion.div
+              variants={staggerContainer(0.07)}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, margin: '-60px' }}
+              className="mt-5 flex flex-col gap-4"
+            >
               {page.offices.map((o, i) => (
-                <Card key={i}>
-                  <CardBody>
-                    <h3 className="font-semibold text-ink-primary">{o.city}</h3>
-                    <address className="mt-1.5 not-italic text-sm leading-6 text-ink-secondary">
-                      {(o.lines || []).map((line, li) => (
-                        <span key={li} className="block">
-                          {line}
-                        </span>
-                      ))}
-                    </address>
-                  </CardBody>
-                </Card>
+                <motion.div key={i} variants={fadeUp}>
+                  <Card>
+                    <CardBody>
+                      <h3 className="font-semibold text-ink-primary">{o.city}</h3>
+                      <address className="mt-1.5 not-italic text-sm leading-6 text-ink-secondary">
+                        {(o.lines || []).map((line, li) => (
+                          <span key={li} className="block">
+                            {line}
+                          </span>
+                        ))}
+                      </address>
+                    </CardBody>
+                  </Card>
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           </div>
         )}
       </Section>

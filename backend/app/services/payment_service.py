@@ -26,6 +26,7 @@ from app.integrations.payments import (
     InitiateRequest,
     PaymentStatus,
     get_payment_provider,
+    get_provider_for_order,
 )
 from app.models.coupon import Coupon
 from app.models.order import Order, OrderItem, OrderStatus
@@ -34,6 +35,7 @@ from app.repositories.coupon_repository import CouponRepository
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
 from app.schemas.payment import CheckoutRequest
+from app.services.address_service import AddressService, render_address_text, snapshot_of
 from app.services.cart_service import CartService
 from app.services.cod_service import CodService
 from app.services.coupon_service import CouponService
@@ -58,7 +60,6 @@ class PaymentService:
         self.products = ProductRepository(db)
         self.cart = CartService(db)
         self.coupons = CouponRepository(db)
-        self.provider = get_payment_provider(self.db)
 
     # ---- public ----
 
@@ -73,8 +74,16 @@ class PaymentService:
             as the webhook SUCCESS path), redirect URL points to the return
             page so the SPA can read /payments/{mtid}/order and confirm.
         """
+        # Resolve the shipping address BEFORE _enforce_cod_availability and
+        # _build_order so that data.shipping_pincode and data.shipping_address
+        # are populated from the structured source when downstream code reads them.
+        # NOTE: _resolve_shipping_address may commit an AddressService.create()
+        # call when save_address=True, but the session is clean at this point
+        # (no order rows have been added yet), so the early commit is safe.
+        snapshot, resolved_address_id = self._resolve_shipping_address(user, data)
+
         method = (data.payment_method or "prepaid").lower()
-        order, total = self._build_order(user.id, data)
+        order, total = self._build_order(user.id, data, snapshot=snapshot, resolved_address_id=resolved_address_id)
         mtid = _new_mtid()
         order.payment_intent_id = mtid
         self.orders.add(order)
@@ -131,7 +140,9 @@ class PaymentService:
                     "cart. Please re-select a payment method."
                 )
             try:
-                initiate = self.provider.initiate(
+                provider = get_payment_provider(self.db, data.gateway_code)
+                order.gateway_code = provider.name
+                initiate = provider.initiate(
                     InitiateRequest(
                         order_id=order.id,
                         user_id=user.id,
@@ -142,21 +153,24 @@ class PaymentService:
                         user_email=user.email,
                     )
                 )
+                order.payment_provider_ref = initiate.provider_transaction_id
             except Exception:
                 self.db.rollback()
                 raise
             self.db.commit()
             self.db.refresh(order)
             logger.info(
-                "split_cod checkout user=%s order=%s mtid=%s prepaid=%s balance=%s",
-                user.id, order.id, mtid,
+                "split_cod checkout user=%s order=%s mtid=%s provider=%s prepaid=%s balance=%s",
+                user.id, order.id, mtid, provider.name,
                 Decimal(prepaid_minor) / 100, order.cod_balance,
             )
             return order, mtid, initiate.redirect_url
 
         # Prepaid — ask the gateway for a redirect URL and stay PENDING.
         try:
-            initiate = self.provider.initiate(
+            provider = get_payment_provider(self.db, data.gateway_code)
+            order.gateway_code = provider.name
+            initiate = provider.initiate(
                 InitiateRequest(
                     order_id=order.id,
                     user_id=user.id,
@@ -167,6 +181,7 @@ class PaymentService:
                     user_email=user.email,
                 )
             )
+            order.payment_provider_ref = initiate.provider_transaction_id
         except Exception:
             # The provider failed *before* we committed. Roll back the
             # reserved stock so the customer can retry without losing units.
@@ -176,11 +191,12 @@ class PaymentService:
         self.db.commit()
         self.db.refresh(order)
         logger.info(
-            "checkout user=%s order=%s mtid=%s provider=%s",
+            "checkout user=%s order=%s mtid=%s provider=%s gateway=%s",
             user.id,
             order.id,
             mtid,
-            self.provider.name,
+            provider.name,
+            order.gateway_code,
         )
         return order, mtid, initiate.redirect_url
 
@@ -223,10 +239,13 @@ class PaymentService:
             )
             raise ConflictError(first)
 
-    def handle_webhook(self, body: bytes, signature: str | None) -> Order:
-        if not self.provider.verify_webhook(body, signature):
+    def handle_webhook(
+        self, body: bytes, signature: str | None, gateway_code: str = "phonepe"
+    ) -> Order:
+        provider = get_payment_provider(self.db, gateway_code)
+        if not provider.verify_webhook(body, signature):
             raise ForbiddenError("Invalid payment signature.")
-        result = self.provider.parse_webhook(body)
+        result = provider.parse_webhook(body)
         order = self._order_for_mtid(result.merchant_transaction_id)
         self._apply_status(order, result.status, gateway_amount_minor=result.amount_minor)
         return order
@@ -239,7 +258,10 @@ class PaymentService:
         # where the webhook hasn't landed yet (the user beat it back to us).
         if order.status == OrderStatus.PENDING:
             try:
-                result = self.provider.fetch_status(merchant_transaction_id)
+                provider = get_provider_for_order(self.db, order)
+                result = provider.fetch_status(
+                    merchant_transaction_id, order.payment_provider_ref
+                )
                 if result.status != PaymentStatus.PENDING:
                     self._apply_status(
                         order, result.status,
@@ -253,19 +275,93 @@ class PaymentService:
         """Dev-only — drives the mock simulator without going through the
         signed-webhook path. Reuses the same `_apply_status` so behavior is
         identical to the real path."""
-        if self.provider.name != "mock":
+        provider = get_payment_provider(self.db, "mock")
+        if provider.name != "mock":
             raise ForbiddenError("Mock decisions are disabled.")
         status_ = PaymentStatus.SUCCESS if action == "approve" else PaymentStatus.FAILED
         # Also persist the decision in Redis so a status poll matches.
         body = f'{{"merchant_transaction_id":"{mtid}","action":"{action}"}}'.encode()
-        self.provider.parse_webhook(body)
+        provider.parse_webhook(body)
         order = self._order_for_mtid(mtid)
         self._apply_status(order, status_)
         return order
 
     # ---- internals ----
 
-    def _build_order(self, user_id: int, data: CheckoutRequest) -> tuple[Order, Decimal]:
+    def _resolve_shipping_address(
+        self,
+        user: User,
+        data: CheckoutRequest,
+    ) -> tuple[dict | None, int | None]:
+        """Determine the authoritative shipping address for this checkout.
+
+        Precedence (first match wins):
+          1. data.address_id  — a saved address the user owns
+          2. data.address     — inline AddressCreate (optionally save)
+          3. data.shipping_address (legacy free-text) — accepted this release
+             for stale SPA bundles; logs a deprecation warning
+          4. Nothing provided → ValidationError
+
+        Side-effects when a structured address is resolved:
+          - Overwrites data.shipping_pincode with the address pincode so COD
+            gate + rate-quote logic always reads the authoritative pin.
+          - Overwrites data.shipping_address with render_address_text(snapshot)
+            so _build_order's existing ``order.shipping_address = data.shipping_address``
+            assignment (line ~269) automatically writes the correct rendered text.
+          - Does NOT auto-fill data.customer_phone from the address phone even
+            when the field is empty — OTP semantics: the COD OTP was sent to
+            whatever phone the user explicitly provided; silently substituting
+            the address phone would allow bypassing the OTP gate.
+
+        Returns (snapshot_dict | None, address_id | None).
+        Legacy path returns (None, None) — _build_order skips snapshot columns.
+        """
+        if data.address_id is not None:
+            addr = AddressService(self.db).get_owned(user.id, data.address_id)
+            snap = snapshot_of(addr)
+            data.shipping_pincode = snap["pincode"]
+            data.shipping_address = render_address_text(snap)
+            return snap, addr.id
+
+        if data.address is not None:
+            snap = snapshot_of(data.address)
+            saved_id: int | None = None
+
+            if data.save_address:
+                try:
+                    saved = AddressService(self.db).create(user.id, data.address)
+                    saved_id = saved.id
+                except ValidationError as exc:
+                    # Address cap full — log and continue without saving.
+                    # Never fail a sale over address-book housekeeping.
+                    logger.warning(
+                        "save_address skipped for user=%s: %s", user.id, exc.message
+                    )
+
+            data.shipping_pincode = snap["pincode"]
+            data.shipping_address = render_address_text(snap)
+            return snap, saved_id
+
+        if data.shipping_address:
+            # Legacy free-text path — accepted this release for stale SPA
+            # bundles. Remove next release.
+            logger.warning(
+                "checkout user=%s used deprecated free-text shipping_address; "
+                "migrate to address_id or address",
+                user.id,
+            )
+            return None, None
+
+        raise ValidationError("A shipping address is required")
+
+    def _build_order(
+        self,
+        user_id: int,
+        data: CheckoutRequest,
+        *,
+        snapshot: dict | None = None,
+        resolved_address_id: int | None = None,
+    ) -> tuple[Order, Decimal]:
         order = Order(user_id=user_id, shipping_address=data.shipping_address)
         subtotal = Decimal("0.00")
         tax_amount = Decimal("0.00")
@@ -397,6 +493,14 @@ class PaymentService:
         order.cod_balance = cod_balance
         order.total_amount = total
         order.status = OrderStatus.PENDING
+        # Structured address path: store frozen snapshot + provenance FK.
+        # shipping_address (text) and shipping_pincode already carry the
+        # correct values because _resolve_shipping_address overwrote
+        # data.shipping_address / data.shipping_pincode before _build_order
+        # was called, so the existing assignments above are authoritative.
+        if snapshot is not None:
+            order.shipping_address_snapshot = snapshot
+            order.shipping_address_id = resolved_address_id
         return order, total
 
     def _order_for_mtid(self, mtid: str) -> Order:

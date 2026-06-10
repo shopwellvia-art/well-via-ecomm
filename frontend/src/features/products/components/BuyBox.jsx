@@ -1,23 +1,26 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Minus, Plus, ShoppingBag, Zap, Lock, Truck, RotateCcw, ShieldCheck, Check } from 'lucide-react';
+import { motion } from 'framer-motion';
+import {
+  Minus, Plus, ShoppingBag, Zap, Lock, Truck,
+  RotateCcw, ShieldCheck, Check,
+} from 'lucide-react';
 import { Button } from '@/components/ui/Button.jsx';
 import { useAddToCart } from '@/features/cart/hooks.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { formatPrice } from '@/lib/utils.js';
 import { WishlistButton } from '@/features/wishlist/WishlistButton.jsx';
+import { attentionPulse, tapPress } from '@/lib/motion.js';
 
 /**
  * Right-rail buy box — the "convert" panel.
  *
- * Two actions stacked, mirroring Amazon's hierarchy:
+ * Two actions stacked:
  *   1. Add to Cart  — adds to the persistent cart, stays on page.
- *   2. Buy Now      — skips the cart and jumps to /checkout pre-loaded with
- *                     this one product. (Read by CheckoutPage from query
- *                     params, so no extra state plumbing is needed.)
+ *   2. Buy Now      — skips the cart and jumps to /checkout.
  *
- * Buttons use our theme tokens but warm them to match the iconic yellow/orange
- * Amazon hierarchy without looking out of place against the dark surface.
+ * Uses design-system tokens throughout (no hardcoded hex). The warm CTA
+ * colours come from warning/accent tokens so both themes stay correct.
  */
 export function BuyBox({ product }) {
   const navigate = useNavigate();
@@ -43,8 +46,6 @@ export function BuyBox({ product }) {
   }
 
   function handleBuyNow() {
-    // Hand off to /checkout with a buyNow query — CheckoutPage will use this
-    // one product instead of the cart contents.
     const target = `/checkout?buyNow=${product.id}&qty=${qty}`;
     if (!user) {
       navigate(`/login?next=${encodeURIComponent(target)}`);
@@ -56,42 +57,50 @@ export function BuyBox({ product }) {
   return (
     <aside
       aria-label="Purchase options"
-      className="rounded-lg border border-line-subtle bg-bg-elevated p-5 lg:sticky lg:top-24"
+      className="rounded-lg border border-line-subtle bg-bg-elevated p-5 shadow-md lg:sticky lg:top-24"
     >
-      {/* Price */}
-      <p className="text-h2 text-ink-primary tabular-nums">
-        {formatPrice(product.price)}
-      </p>
-      <p className="mt-1 text-xs text-ink-tertiary">Inclusive of all taxes.</p>
-
-      {/* Delivery */}
-      <div className="mt-4 space-y-1.5 text-sm">
-        <p className="text-ink-primary">
-          <span className="text-ink-tertiary">Free delivery</span>{' '}
-          <strong>{deliveryDates.free}</strong>
+      {/* Price block */}
+      <div className="flex items-baseline gap-2">
+        <p className="nums text-h2 font-semibold text-ink-primary">
+          {formatPrice(product.price)}
         </p>
-        <p className="text-ink-secondary">
-          <span className="text-ink-tertiary">Or fastest by</span>{' '}
+        {product.compare_at_price && Number(product.compare_at_price) > Number(product.price) && (
+          <s className="nums text-sm text-ink-tertiary" aria-label={`Was ${formatPrice(product.compare_at_price)}`}>
+            {formatPrice(product.compare_at_price)}
+          </s>
+        )}
+      </div>
+      <p className="mt-0.5 text-xs text-ink-tertiary">Inclusive of all taxes.</p>
+
+      {/* Delivery estimate */}
+      <div className="mt-4 space-y-1.5 rounded-sm bg-bg-sunken px-3 py-2.5 text-sm">
+        <p>
+          <span className="text-ink-tertiary">Free delivery </span>
+          <strong className="text-ink-primary">{deliveryDates.free}</strong>
+        </p>
+        <p>
+          <span className="text-ink-tertiary">Or fastest by </span>
           <strong className="text-accent">{deliveryDates.fast}</strong>
         </p>
       </div>
 
-      {/* Stock */}
+      {/* Stock status */}
       <p
-        className={`mt-4 text-base font-semibold ${
-          outOfStock ? 'text-danger' : product.stock <= 5 ? 'text-warning' : 'text-success'
-        }`}
+        className={[
+          'mt-4 text-sm font-semibold',
+          outOfStock ? 'text-danger' : product.stock <= 5 ? 'text-warning' : 'text-success',
+        ].join(' ')}
       >
         {outOfStock
           ? 'Out of stock'
           : product.stock <= 5
-            ? `Only ${product.stock} left in stock`
+            ? `Only ${product.stock} left in stock — order soon`
             : 'In stock'}
       </p>
 
-      {/* Quantity */}
+      {/* Quantity stepper */}
       <div className="mt-4">
-        <label className="text-xs font-medium text-ink-secondary" htmlFor="qty">
+        <label className="text-xs font-medium text-ink-secondary" htmlFor="buybox-qty">
           Quantity
         </label>
         <div className="mt-1.5 flex h-10 w-fit items-center rounded-sm border border-line-subtle bg-bg-sunken">
@@ -105,8 +114,8 @@ export function BuyBox({ product }) {
             <Minus className="size-4" />
           </button>
           <span
-            id="qty"
-            className="w-10 text-center text-sm tabular-nums text-ink-primary"
+            id="buybox-qty"
+            className="nums w-10 text-center text-sm text-ink-primary"
           >
             {qty}
           </span>
@@ -122,36 +131,43 @@ export function BuyBox({ product }) {
         </div>
       </div>
 
-      {/* Actions */}
+      {/* CTAs */}
       <div className="mt-5 flex flex-col gap-2.5">
-        <button
+        {/* Add to Cart — warning-toned to match conventional ecomm hierarchy */}
+        <motion.button
           type="button"
+          whileTap={tapPress}
           onClick={handleAddToCart}
           disabled={outOfStock || addToCart.isPending}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#f7c64a] text-sm font-semibold text-[#1a1408] shadow-sm transition-[transform,filter] hover:brightness-105 hover:-translate-y-px focus-visible:focus-ring disabled:opacity-40 disabled:pointer-events-none"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-warning text-sm font-semibold text-bg-base shadow-sm transition-[filter,opacity] hover:brightness-110 focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-40"
         >
           {added ? (
-            <>
+            <motion.span
+              animate={attentionPulse}
+              className="inline-flex items-center gap-2"
+            >
               <Check className="size-4" aria-hidden="true" />
               Added to cart
-            </>
+            </motion.span>
           ) : (
             <>
               <ShoppingBag className="size-4" aria-hidden="true" />
               Add to Cart
             </>
           )}
-        </button>
+        </motion.button>
 
-        <button
+        {/* Buy Now — accent-toned, slightly lower visual weight */}
+        <motion.button
           type="button"
+          whileTap={tapPress}
           onClick={handleBuyNow}
           disabled={outOfStock}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#f0903a] text-sm font-semibold text-[#1a1408] shadow-sm transition-[transform,filter] hover:brightness-105 hover:-translate-y-px focus-visible:focus-ring disabled:opacity-40 disabled:pointer-events-none"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-accent text-sm font-semibold text-white shadow-sm transition-[filter,opacity] hover:brightness-110 focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-40"
         >
           <Zap className="size-4" aria-hidden="true" />
           Buy Now
-        </button>
+        </motion.button>
 
         <WishlistButton productId={product.id} variant="inline" />
       </div>
@@ -161,11 +177,11 @@ export function BuyBox({ product }) {
         Secure transaction
       </p>
 
-      {/* Footer mini-info */}
+      {/* Seller info strip */}
       <ul className="mt-5 flex flex-col gap-2 border-t border-line-subtle pt-4 text-xs">
-        <Row icon={Truck} label="Ships from" value="ShopWell warehouse" />
-        <Row icon={ShieldCheck} label="Sold by" value="ShopWell Retail" />
-        <Row icon={RotateCcw} label="Returns" value="7 days from delivery" />
+        <InfoRow icon={Truck} label="Ships from" value="ShopWell warehouse" />
+        <InfoRow icon={ShieldCheck} label="Sold by" value="ShopWell Retail" />
+        <InfoRow icon={RotateCcw} label="Returns" value="7 days from delivery" />
       </ul>
 
       {addToCart.isError && !addToCart.isPending && (
@@ -177,7 +193,7 @@ export function BuyBox({ product }) {
   );
 }
 
-function Row({ icon: Icon, label, value }) {
+function InfoRow({ icon: Icon, label, value }) {
   return (
     <li className="flex items-start gap-2 text-ink-secondary">
       <Icon className="mt-0.5 size-3.5 shrink-0 text-ink-tertiary" aria-hidden="true" />

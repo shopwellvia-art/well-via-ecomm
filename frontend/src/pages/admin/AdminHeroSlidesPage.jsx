@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import {
   ChevronUp,
   ChevronDown,
@@ -13,13 +14,19 @@ import {
   Clock,
   Link as LinkIcon,
   ShieldCheck,
+  GripVertical,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Button } from '@/components/ui/Button.jsx';
+import { Badge } from '@/components/ui/Badge.jsx';
 import { Input } from '@/components/ui/Input.jsx';
+import { Card, CardHeader, CardBody } from '@/components/ui/Card.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { cn } from '@/lib/utils.js';
+import { fadeUp, scaleIn, listStagger } from '@/lib/motion.js';
 import { PERK_ICON_NAMES, DEFAULT_PERKS } from '@/features/hero-slides/perks.js';
 import {
   useAdminHeroSlides,
@@ -29,13 +36,8 @@ import {
   useReorderHeroSlides,
 } from '@/features/hero-slides/hooks.js';
 
-// ---------------------------------------------------------------------------
-// Constants & helpers
-// ---------------------------------------------------------------------------
+// ─── Constants & helpers ──────────────────────────────────────────────────────
 
-// Built-in defaults used to seed editor fields when a slide's value is null,
-// so the admin always sees what the storefront currently renders. Mirrors the
-// null → default convention in Hero.jsx. Clearing a field to empty hides it.
 const HERO_DEFAULTS = {
   eyebrow: 'Mega season sale is live',
   cta2_label: 'Browse new arrivals',
@@ -46,14 +48,15 @@ const HERO_DEFAULTS = {
 const eff = (slide, key) => (slide[key] == null ? HERO_DEFAULTS[key] ?? '' : slide[key]);
 const effPerks = (slide) => (Array.isArray(slide.perks) ? slide.perks : DEFAULT_PERKS);
 
-const fieldLabel = 'mb-1 block text-xs font-medium text-ink-secondary';
+// Shared raw-input class for fields inside SlideFields (not using the Input component
+// since these are tightly-gridded and already inside a labelled context).
+const fieldLabel = 'mb-1.5 block text-xs font-medium text-ink-secondary';
 const fieldInput = cn(
-  'h-9 w-full rounded-sm border border-line-subtle bg-bg-sunken px-3 text-sm text-ink-primary',
+  'h-10 w-full rounded-lg border border-line-subtle bg-bg-sunken px-3 text-sm text-ink-primary',
   'placeholder:text-ink-tertiary',
-  'hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring',
-  'transition-colors duration-200',
+  'hover:border-line-strong transition-colors duration-200',
 );
-const fieldTextarea = cn(fieldInput, 'h-auto min-h-[72px] resize-y py-2 leading-normal');
+const fieldTextarea = cn(fieldInput, 'h-auto min-h-[80px] resize-y py-2.5 leading-relaxed');
 
 function isoToDatetimeLocal(iso) {
   if (!iso) return '';
@@ -70,7 +73,6 @@ function datetimeLocalToIso(value) {
   return d.toISOString();
 }
 
-/** Build an editable values object from a slide (or blank defaults). */
 function valuesFromSlide(slide) {
   return {
     kind: slide?.kind ?? 'sale',
@@ -90,9 +92,6 @@ function valuesFromSlide(slide) {
   };
 }
 
-/** Convert an editable values object into the PATCH/create payload.
- *  `heading/subtext/cta*` use null-for-empty (they have storefront defaults);
- *  `eyebrow/cta2/countdown_label` persist '' so the admin can hide them. */
 function valuesToPayload(v) {
   return {
     kind: v.kind,
@@ -114,9 +113,20 @@ function valuesToPayload(v) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Perks editor
-// ---------------------------------------------------------------------------
+// ─── KindBadge ────────────────────────────────────────────────────────────────
+
+function KindBadge({ kind }) {
+  return (
+    <Badge
+      tone={kind === 'sale' ? 'warning' : 'info'}
+      size="sm"
+    >
+      {kind === 'sale' ? 'Sale' : 'Photo'}
+    </Badge>
+  );
+}
+
+// ─── PerksEditor ──────────────────────────────────────────────────────────────
 
 function PerksEditor({ perks, onChange }) {
   function update(i, key, val) {
@@ -149,7 +159,7 @@ function PerksEditor({ perks, onChange }) {
             type="button"
             aria-label="Remove perk"
             onClick={() => onChange(perks.filter((_, idx) => idx !== i))}
-            className="grid size-9 shrink-0 place-items-center rounded-sm text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
+            className="grid size-9 shrink-0 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
           >
             <Trash2 className="size-4" aria-hidden="true" />
           </button>
@@ -158,7 +168,7 @@ function PerksEditor({ perks, onChange }) {
       <button
         type="button"
         onClick={() => onChange([...perks, { icon: 'ShieldCheck', label: '' }])}
-        className="flex items-center gap-1.5 self-start rounded-sm px-3 py-1.5 text-sm text-accent transition-colors hover:bg-accent/10 focus-visible:focus-ring"
+        className="flex items-center gap-1.5 self-start rounded-md px-3 py-1.5 text-sm text-accent transition-colors hover:bg-accent/10 focus-visible:focus-ring"
       >
         <Plus className="size-4" aria-hidden="true" />
         Add trust feature
@@ -170,12 +180,9 @@ function PerksEditor({ perks, onChange }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Shared content fields (used by both create form and per-slide editor)
-// ---------------------------------------------------------------------------
+// ─── SlideFields ──────────────────────────────────────────────────────────────
 
 function SlideFields({ values, set }) {
-  const isSale = values.kind === 'sale';
   return (
     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {/* Kind */}
@@ -224,7 +231,7 @@ function SlideFields({ values, set }) {
 
       {/* Eyebrow */}
       <div className="sm:col-span-2 lg:col-span-3">
-        <label className={fieldLabel}>Eyebrow / badge pill {isSale ? '' : '(sale slides only)'}</label>
+        <label className={fieldLabel}>Eyebrow / badge pill {values.kind !== 'sale' ? '(sale slides only)' : ''}</label>
         <input
           type="text"
           value={values.eyebrow}
@@ -364,9 +371,7 @@ function SlideFields({ values, set }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Create form — image + full content in one step
-// ---------------------------------------------------------------------------
+// ─── CreateSlideForm ──────────────────────────────────────────────────────────
 
 function CreateSlideForm({ prominent = false }) {
   const fileRef = useRef(null);
@@ -399,48 +404,114 @@ function CreateSlideForm({ prominent = false }) {
   }
 
   return (
-    <form
+    <motion.form
+      variants={scaleIn}
+      initial="hidden"
+      animate="show"
       onSubmit={handleSubmit}
       className={cn(
-        'rounded-lg border border-line-subtle bg-bg-elevated p-5',
-        prominent ? 'p-6' : 'mb-8',
+        'overflow-hidden rounded-xl border border-line-subtle bg-bg-elevated shadow-md',
+        prominent ? '' : 'mb-6',
       )}
     >
-      <p className="mb-4 text-sm font-semibold text-ink-primary">
-        {prominent ? 'Add your first slide' : 'Add a new slide'}
-      </p>
+      <CardHeader
+        title={prominent ? 'Add your first slide' : 'Add a new slide'}
+        action={
+          <Badge tone="accent" size="sm">
+            <Plus className="size-3" aria-hidden="true" />
+            New
+          </Badge>
+        }
+      />
 
-      {/* Image (required) */}
-      <div className="mb-5 grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className={fieldLabel}>Image (required)</label>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="block w-full rounded-sm border border-line-subtle bg-bg-sunken px-3.5 py-2 text-sm text-ink-primary file:mr-3 file:rounded-sm file:border-0 file:bg-fill file:px-3 file:py-1 file:text-xs file:font-medium file:text-ink-secondary hover:border-line-strong focus-visible:focus-ring"
-          />
+      <div className="p-6">
+        {/* Image upload */}
+        <div className="mb-6">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
+            Image (required)
+          </p>
+          <label className="block cursor-pointer">
+            <div
+              className={cn(
+                'flex items-center gap-4 rounded-xl border-2 border-dashed px-5 py-4 transition-colors',
+                file
+                  ? 'border-accent/40 bg-accent/4'
+                  : 'border-line-strong bg-bg-sunken hover:border-accent/40 hover:bg-accent/4',
+              )}
+            >
+              {file ? (
+                <>
+                  <div className="grid size-10 shrink-0 place-items-center rounded-full bg-accent/12 text-accent">
+                    <ImageIcon className="size-5" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink-primary">{file.name}</p>
+                    <p className="nums text-xs text-ink-tertiary">
+                      {(file.size / 1024).toFixed(0)} KB
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setFile(null);
+                      if (fileRef.current) fileRef.current.value = '';
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="grid size-10 shrink-0 place-items-center rounded-full bg-fill text-ink-tertiary">
+                    <ImageIcon className="size-5" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-ink-primary">Click to upload image</p>
+                    <p className="text-xs text-ink-tertiary">PNG, JPG, WebP recommended</p>
+                  </div>
+                </>
+              )}
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="sr-only"
+              aria-label="Upload slide image"
+            />
+          </label>
+        </div>
+
+        {/* Separator */}
+        <div className="mb-5 flex items-center gap-3">
+          <div className="h-px flex-1 bg-line-subtle" />
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-tertiary">
+            Content
+          </span>
+          <div className="h-px flex-1 bg-line-subtle" />
+        </div>
+
+        <SlideFields values={values} set={set} />
+
+        <div className="mt-6 flex items-center gap-3 border-t border-line-subtle pt-5">
+          <Button type="submit" loading={create.isPending}>
+            <Plus className="size-4" aria-hidden="true" />
+            Create slide
+          </Button>
+          {error && (
+            <span className="text-xs text-danger">{error}</span>
+          )}
         </div>
       </div>
-
-      {/* Full content */}
-      <SlideFields values={values} set={set} />
-
-      <div className="mt-5 flex items-center gap-3">
-        <Button type="submit" loading={create.isPending}>
-          <Plus className="size-4" aria-hidden="true" />
-          Create slide
-        </Button>
-        {error && <span className="text-xs text-danger">{error}</span>}
-      </div>
-    </form>
+    </motion.form>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Per-slide editor card
-// ---------------------------------------------------------------------------
+// ─── SlideCard ────────────────────────────────────────────────────────────────
 
 function SlideCard({ slide, isFirst, isLast, slides, reorder }) {
   const update = useUpdateHeroSlide();
@@ -485,118 +556,229 @@ function SlideCard({ slide, isFirst, isLast, slides, reorder }) {
   const anyPending = update.isPending || del.isPending || reorder.isPending;
 
   return (
-    <div className="overflow-hidden rounded-lg border border-line-subtle bg-bg-elevated">
-      {/* Collapsed row */}
+    <motion.div
+      variants={fadeUp}
+      className={cn(
+        'overflow-hidden rounded-xl border bg-bg-elevated shadow-md transition-shadow duration-200',
+        expanded ? 'border-accent/30 shadow-lg' : 'border-line-subtle hover:border-line-strong',
+      )}
+    >
+      {/* Collapsed row — image thumb + metadata + controls */}
       <div className="flex items-center gap-3 px-4 py-3">
-        <img
-          src={slide.image_url}
-          alt={slide.alt || ''}
-          loading="lazy"
-          className="h-[54px] w-24 shrink-0 rounded-sm bg-fill object-cover"
+        {/* Drag grip indicator */}
+        <GripVertical
+          className="size-4 shrink-0 text-ink-tertiary/40"
+          aria-hidden="true"
         />
-        <span
-          className={cn(
-            'hidden shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide sm:inline-block',
-            slide.kind === 'sale'
-              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
-              : 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300',
-          )}
-        >
-          {slide.kind}
-        </span>
-        <p className="min-w-0 flex-1 truncate text-sm text-ink-secondary">
-          {slide.heading || slide.alt || <span className="italic text-ink-tertiary">No title</span>}
-        </p>
-        <span className="hidden shrink-0 text-xs tabular-nums text-ink-tertiary sm:block">
-          #{slide.sort_order}
-        </span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={slide.is_active}
-          aria-label={slide.is_active ? 'Deactivate slide' : 'Activate slide'}
-          disabled={anyPending}
-          onClick={handleToggleActive}
-          className={cn(
-            'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
-            'focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-40',
-            slide.is_active ? 'bg-accent' : 'bg-fill-strong',
-          )}
-        >
+
+        {/* Thumbnail */}
+        <div className="relative shrink-0 overflow-hidden rounded-md">
+          <img
+            src={slide.image_url}
+            alt={slide.alt || ''}
+            loading="lazy"
+            className="h-14 w-24 object-cover"
+          />
+          {/* Kind overlay */}
           <span
             className={cn(
-              'pointer-events-none block size-4 rounded-full bg-white shadow transition-transform duration-200',
-              slide.is_active ? 'translate-x-4' : 'translate-x-0',
+              'absolute bottom-1 left-1 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide',
+              slide.kind === 'sale'
+                ? 'bg-amber-500/80 text-white'
+                : 'bg-sky-500/80 text-white',
             )}
-          />
-        </button>
-        <button
-          type="button"
-          aria-label="Move slide up"
-          disabled={isFirst || anyPending}
-          onClick={() => move('up')}
-          className="grid size-8 shrink-0 place-items-center rounded-sm text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-30"
-        >
-          <ChevronUp className="size-4" />
-        </button>
-        <button
-          type="button"
-          aria-label="Move slide down"
-          disabled={isLast || anyPending}
-          onClick={() => move('down')}
-          className="grid size-8 shrink-0 place-items-center rounded-sm text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-30"
-        >
-          <ChevronDown className="size-4" />
-        </button>
-        <button
-          type="button"
-          aria-label="Delete slide"
-          disabled={anyPending}
-          onClick={handleDelete}
-          className="grid size-8 shrink-0 place-items-center rounded-sm text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-30"
-        >
-          <Trash2 className="size-4" />
-        </button>
-        <button
-          type="button"
-          aria-expanded={expanded}
-          aria-label={expanded ? 'Collapse editor' : 'Expand editor'}
-          onClick={() => setExpanded((v) => !v)}
-          className="grid size-8 shrink-0 place-items-center rounded-sm text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
-        >
-          <ChevronExpand
-            className={cn('size-4 transition-transform duration-200', expanded && 'rotate-180')}
-          />
-        </button>
+          >
+            {slide.kind}
+          </span>
+        </div>
+
+        {/* Title + meta */}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-ink-primary">
+            {slide.heading || slide.alt || (
+              <span className="italic text-ink-tertiary">No title</span>
+            )}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <Badge
+              tone={slide.is_active ? 'success' : 'neutral'}
+              dot
+              size="sm"
+            >
+              {slide.is_active ? 'Active' : 'Inactive'}
+            </Badge>
+            <span className="nums text-[11px] text-ink-tertiary">
+              Order #{slide.sort_order}
+            </span>
+            {slide.countdown_end && (
+              <span className="hidden text-[11px] text-ink-tertiary sm:block">
+                <Clock className="inline size-3 mr-0.5" aria-hidden="true" />
+                Countdown set
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="flex shrink-0 items-center gap-1">
+          {/* Active toggle */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={slide.is_active}
+            aria-label={slide.is_active ? 'Deactivate slide' : 'Activate slide'}
+            disabled={anyPending}
+            onClick={handleToggleActive}
+            className={cn(
+              'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
+              'focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-40',
+              slide.is_active ? 'bg-accent' : 'bg-fill-strong',
+            )}
+          >
+            <span
+              className={cn(
+                'pointer-events-none block size-4 rounded-full bg-white shadow transition-transform duration-200',
+                slide.is_active ? 'translate-x-4' : 'translate-x-0',
+              )}
+            />
+          </button>
+
+          {/* Move up */}
+          <button
+            type="button"
+            aria-label="Move slide up"
+            disabled={isFirst || anyPending}
+            onClick={() => move('up')}
+            className="grid size-8 shrink-0 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-30"
+          >
+            <ChevronUp className="size-4" />
+          </button>
+
+          {/* Move down */}
+          <button
+            type="button"
+            aria-label="Move slide down"
+            disabled={isLast || anyPending}
+            onClick={() => move('down')}
+            className="grid size-8 shrink-0 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-30"
+          >
+            <ChevronDown className="size-4" />
+          </button>
+
+          {/* Delete */}
+          <button
+            type="button"
+            aria-label="Delete slide"
+            disabled={anyPending}
+            onClick={handleDelete}
+            className="grid size-8 shrink-0 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-30"
+          >
+            <Trash2 className="size-4" />
+          </button>
+
+          {/* Expand */}
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-label={expanded ? 'Collapse editor' : 'Edit slide'}
+            onClick={() => setExpanded((v) => !v)}
+            className={cn(
+              'grid size-8 shrink-0 place-items-center rounded-md transition-colors focus-visible:focus-ring',
+              expanded
+                ? 'bg-accent/12 text-accent'
+                : 'text-ink-tertiary hover:bg-fill hover:text-ink-primary',
+            )}
+          >
+            <ChevronExpand
+              className={cn('size-4 transition-transform duration-200', expanded && 'rotate-180')}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Expanded editor */}
       {expanded && (
-        <div className="border-t border-line-subtle bg-bg-base/40 px-4 pb-5 pt-4">
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+          className="border-t border-line-subtle bg-bg-sunken/40 px-5 pb-6 pt-5"
+        >
+          {/* Section label */}
+          <div className="mb-4 flex items-center gap-2">
+            <div className="grid size-7 place-items-center rounded-full bg-accent/12 text-accent">
+              <Eye className="size-3.5" aria-hidden="true" />
+            </div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
+              Edit slide content
+            </p>
+          </div>
+
           <SlideFields values={values} set={set} />
-          <div className="mt-5 flex items-center gap-3">
-            <Button size="sm" onClick={handleSave} loading={update.isPending} disabled={anyPending}>
+
+          <div className="mt-6 flex items-center gap-3 border-t border-line-subtle pt-5">
+            <Button
+              size="sm"
+              onClick={handleSave}
+              loading={update.isPending}
+              disabled={anyPending}
+            >
               <Save className="size-4" aria-hidden="true" />
               Save changes
             </Button>
             {update.isSuccess && !update.isPending && (
-              <span className="text-xs font-medium text-success">Saved</span>
+              <motion.span
+                variants={scaleIn}
+                initial="hidden"
+                animate="show"
+                className="text-xs font-medium text-success"
+              >
+                Saved
+              </motion.span>
             )}
-            {saveError && <span className="text-xs text-danger">{saveError}</span>}
+            {saveError && (
+              <span className="text-xs text-danger">{saveError}</span>
+            )}
+          </div>
+        </motion.div>
+      )}
+    </motion.div>
+  );
+}
+
+// ─── Loading skeleton ─────────────────────────────────────────────────────────
+
+function SlideListSkeleton() {
+  return (
+    <div className="flex flex-col gap-3">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-3 overflow-hidden rounded-xl border border-line-subtle bg-bg-elevated px-4 py-3 shadow-md"
+        >
+          <Skeleton className="h-14 w-24 shrink-0 rounded-md" />
+          <div className="flex-1">
+            <Skeleton variant="text" lines={1} className="mb-2 w-48" />
+            <Skeleton variant="text" lines={1} className="w-28" />
+          </div>
+          <div className="flex gap-1">
+            <Skeleton className="size-8 rounded-md" />
+            <Skeleton className="size-8 rounded-md" />
+            <Skeleton className="size-8 rounded-md" />
           </div>
         </div>
-      )}
+      ))}
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AdminHeroSlidesPage() {
   const { data: slides = [], isLoading, isError, refetch } = useAdminHeroSlides();
   const reorder = useReorderHeroSlides();
+
+  const activeCount = slides.filter((s) => s.is_active).length;
 
   return (
     <AdminPage
@@ -610,6 +792,7 @@ export default function AdminHeroSlidesPage() {
       {isError ? (
         <EmptyState
           icon={GalleryHorizontal}
+          iconTone="danger"
           title="Couldn't load slides"
           description="Something went wrong. Please try again."
           action={
@@ -619,11 +802,7 @@ export default function AdminHeroSlidesPage() {
           }
         />
       ) : isLoading ? (
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-20" />
-          ))}
-        </div>
+        <SlideListSkeleton />
       ) : slides.length === 0 ? (
         <EmptyState
           icon={GalleryHorizontal}
@@ -634,8 +813,36 @@ export default function AdminHeroSlidesPage() {
         />
       ) : (
         <>
+          {/* Summary strip */}
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-ink-tertiary">
+              <span className="nums font-medium text-ink-secondary">{slides.length}</span> total
+            </p>
+            <span className="text-ink-tertiary">·</span>
+            <Badge tone="success" dot size="sm">
+              <span className="nums">{activeCount}</span> active
+            </Badge>
+            {slides.length - activeCount > 0 && (
+              <>
+                <span className="text-ink-tertiary">·</span>
+                <Badge tone="neutral" size="sm">
+                  <EyeOff className="size-3" aria-hidden="true" />
+                  <span className="nums">{slides.length - activeCount}</span> hidden
+                </Badge>
+              </>
+            )}
+          </div>
+
+          {/* Create form */}
           <CreateSlideForm />
-          <div className="flex flex-col gap-3">
+
+          {/* Slide list */}
+          <motion.div
+            className="flex flex-col gap-3"
+            variants={listStagger(0.04)}
+            initial="hidden"
+            animate="show"
+          >
             {slides.map((slide, i) => (
               <SlideCard
                 key={slide.id}
@@ -646,7 +853,12 @@ export default function AdminHeroSlidesPage() {
                 reorder={reorder}
               />
             ))}
-          </div>
+          </motion.div>
+
+          <p className="flex items-center gap-1.5 text-xs text-ink-tertiary">
+            <GripVertical className="size-3.5" aria-hidden="true" />
+            Use the up/down arrows to reorder slides. Active slides rotate in order on the homepage.
+          </p>
         </>
       )}
     </AdminPage>

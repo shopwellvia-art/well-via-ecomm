@@ -1,10 +1,14 @@
+import { motion } from 'framer-motion';
 import { ArrowUpRight, Newspaper } from 'lucide-react';
 import { safeUrl } from '@/lib/safeUrl.js';
 import { Page } from '@/components/layout/Page.jsx';
 import { Card, CardBody } from '@/components/ui/Card.jsx';
+import { Badge } from '@/components/ui/Badge.jsx';
+import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { useSitePages } from '@/features/site-pages/hooks.js';
 import { SITE_PAGES_DEFAULTS } from '@/features/site-pages/defaults.js';
 import { CompanyHero, Section, PageDisabled } from '@/features/site-pages/components.jsx';
+import { staggerContainer, fadeUp } from '@/lib/motion.js';
 
 function formatDate(iso) {
   if (!iso) return '';
@@ -16,6 +20,7 @@ function formatDate(iso) {
 function StoryCard({ post }) {
   const inner = (
     <>
+      {/* Thumbnail */}
       <div className="relative aspect-[16/9] overflow-hidden bg-fill">
         {post.image ? (
           <img
@@ -30,25 +35,29 @@ function StoryCard({ post }) {
           </div>
         )}
         {post.category && (
-          <span className="absolute left-3 top-3 rounded-full bg-bg-elevated/90 px-2.5 py-1 text-xs font-medium text-ink-primary backdrop-blur">
-            {post.category}
+          <span className="absolute left-3 top-3">
+            <Badge tone="accent" outline>{post.category}</Badge>
           </span>
         )}
       </div>
-      <CardBody>
+
+      {/* Body */}
+      <CardBody className="flex flex-col gap-1.5">
         {post.date && (
-          <p className="text-xs font-medium text-ink-tertiary">{formatDate(post.date)}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-tertiary">
+            {formatDate(post.date)}
+          </p>
         )}
-        <h3 className="mt-1.5 font-semibold text-ink-primary group-hover:text-accent">
+        <h3 className="font-semibold leading-snug text-ink-primary transition-colors group-hover:text-accent">
           {post.title}
         </h3>
         {post.excerpt && (
-          <p className="mt-1.5 line-clamp-3 text-sm leading-relaxed text-ink-secondary">
+          <p className="line-clamp-3 text-sm leading-relaxed text-ink-secondary">
             {post.excerpt}
           </p>
         )}
         {post.url && (
-          <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-accent">
+          <span className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-accent">
             Read more
             <ArrowUpRight className="size-4" aria-hidden="true" />
           </span>
@@ -58,7 +67,7 @@ function StoryCard({ post }) {
   );
 
   return (
-    <Card className="group overflow-hidden transition-colors hover:border-line-strong">
+    <Card interactive className="group overflow-hidden">
       {post.url ? (
         <a href={safeUrl(post.url)} className="block rounded-lg focus-visible:focus-ring">
           {inner}
@@ -85,18 +94,36 @@ export default function StoriesPage() {
   return (
     <Page>
       <CompanyHero hero={page.hero} current="Lumen Stories">
-        {page.intro && <p className="mt-5 max-w-2xl text-ink-secondary">{page.intro}</p>}
+        {page.intro && (
+          <p className="mt-5 max-w-2xl text-sm leading-relaxed text-ink-secondary">
+            {page.intro}
+          </p>
+        )}
       </CompanyHero>
 
       <Section className="mt-12">
         {page.posts?.length > 0 ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <motion.div
+            variants={staggerContainer(0.06)}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '-60px' }}
+            className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+          >
             {page.posts.map((post, i) => (
-              <StoryCard key={i} post={post} />
+              <motion.div key={i} variants={fadeUp}>
+                <StoryCard post={post} />
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         ) : (
-          <p className="text-ink-secondary">No stories published yet. Check back soon.</p>
+          <EmptyState
+            icon={Newspaper}
+            size="sm"
+            title="No stories yet"
+            description="No stories published yet. Check back soon."
+            bordered={false}
+          />
         )}
       </Section>
     </Page>

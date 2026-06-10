@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from 'framer-motion';
 import { Star, StarHalf } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 
@@ -23,6 +24,7 @@ export function StarRating({
   className,
   ariaLabel,
 }) {
+  const reduce = useReducedMotion();
   const v = Math.max(0, Math.min(5, Number(value) || 0));
   const sizeClass = SIZES[size] || SIZES.md;
   const interactive = typeof onChange === 'function';
@@ -39,20 +41,22 @@ export function StarRating({
         {[1, 2, 3, 4, 5].map((i) => {
           const active = i <= Math.round(v);
           return (
-            <button
+            <motion.button
               key={i}
               type="button"
               role="radio"
               aria-checked={Math.round(v) === i}
               aria-label={`${i} star${i === 1 ? '' : 's'}`}
               onClick={() => onChange(i)}
+              whileHover={reduce ? undefined : { scale: 1.2 }}
+              whileTap={reduce ? undefined : { scale: 0.9 }}
               className={cn(
-                'rounded-sm p-0.5 transition-transform focus-visible:focus-ring hover:scale-110',
-                active ? 'text-warning' : 'text-ink-tertiary',
+                'rounded-sm p-0.5 transition-colors focus-visible:focus-ring',
+                active ? 'text-warning' : 'text-ink-tertiary hover:text-warning/70',
               )}
             >
               <Star className={cn(sizeClass, active && 'fill-current')} aria-hidden="true" />
-            </button>
+            </motion.button>
           );
         })}
       </div>
@@ -75,7 +79,6 @@ export function StarRating({
           );
         }
         if (half) {
-          // lucide's StarHalf already renders a half-filled star.
           return (
             <StarHalf
               key={i}
@@ -87,7 +90,7 @@ export function StarRating({
         return (
           <Star
             key={i}
-            className={cn(sizeClass, 'text-ink-tertiary')}
+            className={cn(sizeClass, 'text-ink-tertiary/40')}
             aria-hidden="true"
           />
         );

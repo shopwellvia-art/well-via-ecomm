@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    addresses,
     analytics,
     audit,
     auth,
@@ -15,6 +16,7 @@ from app.api.v1.endpoints import (
     orders,
     payment_gateway,
     payment_instruments,
+    payment_methods,
     payments,
     products,
     returns,
@@ -39,11 +41,24 @@ api_router.include_router(payments.checkout_router, prefix="/checkout", tags=["c
 api_router.include_router(payments.payments_router, prefix="/payments", tags=["payments"])
 api_router.include_router(payment_instruments.router, prefix="/payments", tags=["payments"])
 api_router.include_router(payment_gateway.router, prefix="/payment-gateway", tags=["payments"])
+# Admin payment-method config: GET/PUT /admin/payment-methods[/{code}]
+api_router.include_router(
+    payment_methods.admin_router,
+    prefix="/admin/payment-methods",
+    tags=["payment-methods"],
+)
+# Public active-gateway list: GET /payment-methods/active
+api_router.include_router(
+    payment_methods.public_router,
+    prefix="/payment-methods/active",
+    tags=["payment-methods"],
+)
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(taxes.router, prefix="/taxes", tags=["taxes"])
 api_router.include_router(coupons.router, prefix="/coupons", tags=["coupons"])
 api_router.include_router(wishlist.router, prefix="/wishlist", tags=["wishlist"])
+api_router.include_router(addresses.router, prefix="/addresses", tags=["addresses"])
 # Reviews are surfaced under /products/{id}/reviews (public + user-create) and
 # under /reviews (user-edit/delete + admin CRUD).
 api_router.include_router(reviews.public_router, prefix="/products", tags=["reviews"])

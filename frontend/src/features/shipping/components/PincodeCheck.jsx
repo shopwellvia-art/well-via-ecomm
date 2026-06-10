@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Check, AlertTriangle, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/Input.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { useServiceability } from '@/features/shipping/hooks.js';
 import { readSavedPincode, saveSavedPincode } from '@/features/shipping/storage.js';
+import { fadeUp } from '@/lib/motion.js';
 
 /**
  * Pincode serviceability widget for the cart / checkout page.
@@ -22,8 +24,7 @@ export default function PincodeCheck({ onResult }) {
   const { data, isFetching, isError, error: queryError } =
     useServiceability(submitted);
 
-  // Bubble the result up so the parent can gate the checkout button. Effect
-  // (not inline) so a parent that does setState in onResult doesn't loop.
+  // Bubble the result up so the parent can gate the checkout button.
   useEffect(() => {
     if (data && onResult) onResult(data);
   }, [data, onResult]);
@@ -47,16 +48,20 @@ export default function PincodeCheck({ onResult }) {
     'Could not check that pincode right now.';
 
   return (
-    <div className="mt-5 rounded-sm border border-line-subtle bg-bg-sunken p-3">
-      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
-        <MapPin className="size-3.5" aria-hidden="true" /> Check delivery
+    <div className="mt-5 overflow-hidden rounded-md border border-line-subtle bg-bg-sunken">
+      {/* Header */}
+      <div className="flex items-center gap-1.5 border-b border-line-subtle px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
+        <MapPin className="size-3.5" aria-hidden="true" />
+        Check delivery
       </div>
-      <form onSubmit={handleCheck} className="mt-2 flex items-start gap-2">
+
+      {/* Input form */}
+      <form onSubmit={handleCheck} className="flex items-start gap-2 p-3">
         <div className="flex-1">
           <Input
             value={draft}
             onChange={(e) => setDraft(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            placeholder="Enter 6-digit pincode"
+            placeholder="6-digit pincode"
             inputMode="numeric"
             autoComplete="postal-code"
             error={error}
@@ -68,57 +73,92 @@ export default function PincodeCheck({ onResult }) {
           variant="secondary"
           size="sm"
           loading={isFetching}
-          className="mt-0.5"
+          className="mt-0.5 shrink-0"
         >
           Check
         </Button>
       </form>
 
-      {isFetching && !result && (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-tertiary">
-          <Loader2 className="size-3 animate-spin" aria-hidden="true" /> Checking…
-        </p>
-      )}
+      {/* Result */}
+      <AnimatePresence mode="wait">
+        {isFetching && !result && (
+          <motion.p
+            key="checking"
+            variants={fadeUp}
+            initial="hidden"
+            animate="show"
+            exit="hidden"
+            className="flex items-center gap-1.5 px-3 pb-3 text-xs text-ink-tertiary"
+          >
+            <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+            Checking…
+          </motion.p>
+        )}
 
-      {showServerError && (
-        <p className="mt-2 flex items-start gap-1.5 text-xs text-danger">
-          <AlertTriangle className="mt-0.5 size-3" aria-hidden="true" />
-          {serverMessage}
-        </p>
-      )}
+        {showServerError && (
+          <motion.p
+            key="server-error"
+            variants={fadeUp}
+            initial="hidden"
+            animate="show"
+            exit="hidden"
+            className="flex items-start gap-1.5 px-3 pb-3 text-xs text-danger"
+          >
+            <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+            {serverMessage}
+          </motion.p>
+        )}
 
-      {result && result.serviceable && (
-        <div className="mt-2 flex items-start gap-1.5 text-xs text-success">
-          <Check className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          <span className="text-ink-secondary">
-            <span className="font-medium text-success">Delivers to {result.pincode}.</span>
-            {result.eta_days_min && (
-              <>
-                {' '}Arrives in {result.eta_days_min}
-                {result.eta_days_max && result.eta_days_max !== result.eta_days_min
-                  ? `–${result.eta_days_max}`
-                  : ''}{' '}
-                days.
-              </>
-            )}
-            {result.cod_available && (
-              <span className="ml-1 rounded-sm bg-success/10 px-1.5 py-0.5 font-mono text-[10px] text-success">
-                COD
-              </span>
-            )}
-          </span>
-        </div>
-      )}
+        {result && result.serviceable && (
+          <motion.div
+            key="serviceable"
+            variants={fadeUp}
+            initial="hidden"
+            animate="show"
+            exit="hidden"
+            className="flex items-start gap-1.5 px-3 pb-3 text-xs"
+          >
+            <Check className="mt-0.5 size-3.5 shrink-0 text-success" aria-hidden="true" />
+            <span className="text-ink-secondary">
+              <span className="font-medium text-success">Delivers to {result.pincode}.</span>
+              {result.eta_days_min && (
+                <>
+                  {' '}Arrives in{' '}
+                  <span className="nums">{result.eta_days_min}</span>
+                  {result.eta_days_max && result.eta_days_max !== result.eta_days_min
+                    ? <><span className="nums">–{result.eta_days_max}</span></>
+                    : ''}{' '}
+                  days.
+                </>
+              )}
+              {result.cod_available && (
+                <span className="ml-1 rounded-sm bg-success/12 px-1.5 py-0.5 font-mono text-[10px] font-medium text-success">
+                  COD
+                </span>
+              )}
+            </span>
+          </motion.div>
+        )}
 
-      {result && !result.serviceable && (
-        <p className="mt-2 flex items-start gap-1.5 text-xs text-danger">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          <span>
-            <span className="font-medium">Sorry — we don&apos;t deliver to {result.pincode}.</span>{' '}
-            {result.remark}
-          </span>
-        </p>
-      )}
+        {result && !result.serviceable && (
+          <motion.p
+            key="not-serviceable"
+            variants={fadeUp}
+            initial="hidden"
+            animate="show"
+            exit="hidden"
+            className="flex items-start gap-1.5 px-3 pb-3 text-xs text-danger"
+          >
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+            <span>
+              <span className="font-medium">
+                Sorry — we don&apos;t deliver to {result.pincode}.
+              </span>{' '}
+              {result.remark}
+            </span>
+          </motion.p>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

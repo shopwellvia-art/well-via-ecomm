@@ -59,3 +59,18 @@ class RateQuoteResponse(BaseModel):
     # convenient for the cart summary so it doesn't need a second call.
     eta_days_min: int | None = None
     eta_days_max: int | None = None
+
+
+class PincodeLookupResponse(BaseModel):
+    """Result of GET /shipping/pincode/{pincode}.
+
+    Always returns HTTP 200 — `found=False` is the degraded-but-safe response
+    when the pin is invalid, the external API is down, or the pin simply isn't
+    in the postal database.  Autofill is cosmetic; checkout is never blocked by
+    a lookup failure.
+    """
+
+    pincode: str
+    found: bool
+    city: str | None = None
+    state: str | None = None

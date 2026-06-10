@@ -108,7 +108,9 @@ class PhonePeProvider:
             raw=resp,
         )
 
-    def fetch_status(self, merchant_transaction_id: str) -> StatusResponse:
+    def fetch_status(
+        self, merchant_transaction_id: str, provider_ref: str | None = None
+    ) -> StatusResponse:
         endpoint = f"/pg/v1/status/{self.merchant_id}/{merchant_transaction_id}"
         signature = self._sign(endpoint)
         resp = self._get(

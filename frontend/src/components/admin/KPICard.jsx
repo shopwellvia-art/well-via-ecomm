@@ -23,11 +23,11 @@ export function KPICard({ label, icon: Icon, value, previousValue, deltaPct, for
   const isGood = hasDelta && (positiveIsGood ? isUp : !isUp);
 
   const TONE = {
-    accent: 'bg-accent/15 text-accent',
-    success: 'bg-success/15 text-success',
-    info: 'bg-blue-500/15 text-blue-400',
-    warning: 'bg-warning/15 text-warning',
-  }[tone] || 'bg-accent/15 text-accent';
+    accent: 'bg-accent/12 text-accent',
+    success: 'bg-success/12 text-success',
+    info: 'bg-info/12 text-info',
+    warning: 'bg-warning/12 text-warning',
+  }[tone] || 'bg-accent/12 text-accent';
 
   return (
     <Card className="p-5">
@@ -39,7 +39,7 @@ export function KPICard({ label, icon: Icon, value, previousValue, deltaPct, for
           <span
             className={cn(
               'inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums',
-              isGood ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger',
+              isGood ? 'bg-success/12 text-success' : 'bg-danger/12 text-danger',
             )}
             title={`Previous: ${format(previousValue)}`}
           >

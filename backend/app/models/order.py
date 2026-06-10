@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Numeric, String, Text, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, IDMixin, TimestampMixin
@@ -73,7 +73,27 @@ class Order(Base, IDMixin, TimestampMixin):
     # Destination pin extracted from `shipping_address`. Stored separately so
     # the shipment/tracking phases don't re-parse the free-text address.
     shipping_pincode: Mapped[str | None] = mapped_column(String(20))
+    # `shipping_address_snapshot` is the frozen, structured copy of the address
+    # at checkout time — it is the source of truth for fulfillment display.
+    # `shipping_address_id` is provenance-only (SET NULL on delete); never read
+    # for fulfillment so that editing or deleting the saved address never
+    # rewrites historical order data.
+    shipping_address_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("addresses.id", ondelete="SET NULL", name="fk_orders_shipping_address_id"),
+        nullable=True,
+        index=True,
+    )
+    shipping_address_snapshot: Mapped[dict | None] = mapped_column(JSON)
     payment_intent_id: Mapped[str | None] = mapped_column(String(255), unique=True)
+    # Which payment gateway routed this order (matches payment_methods.gateway_code).
+    # Null for legacy orders and COD orders that bypass the gateway entirely.
+    gateway_code: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    # Provider-side transaction / session / order identifier returned at checkout
+    # initiation — e.g. a Stripe checkout session id, Razorpay payment-link id,
+    # or PayPal order id.  Used by the status-polling / webhook handlers to
+    # correlate provider callbacks back to this order row.
+    payment_provider_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     # Fulfillment metadata. Admin writes these when transitioning the status.
     # `tracking_number` + `carrier` are presentational — the storefront can

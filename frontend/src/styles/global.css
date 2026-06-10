@@ -35,6 +35,17 @@
     --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
     --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
 
+    /* Elevation lift — used by hover-lift utility */
+    --shadow-lift: 0 16px 40px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
+
+    /* Accent glow — tighter than shadow-glow, used for inputs and interactive rings */
+    --accent-glow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+
+    /* Gradient stops for accent-gradient utilities */
+    --gradient-accent-from: #6366F1;
+    --gradient-accent-via: #818CF8;
+    --gradient-accent-to: #A78BFA;
+
     /* shadcn/ui tokens (dark) — consumed by components/ui/button-base.jsx and
        any future shadcn primitives. Additive: independent of the project's own
        bg / ink / accent design tokens above. Values are shadcn "zinc" dark. */
@@ -84,6 +95,17 @@
     --shadow-sm: 0 1px 2px rgba(17, 17, 26, 0.06);
     --shadow-md: 0 10px 30px rgba(17, 17, 26, 0.1);
     --shadow-lg: 0 24px 60px rgba(17, 17, 26, 0.14);
+
+    /* Elevation lift — lighter in light mode */
+    --shadow-lift: 0 16px 40px rgba(17, 17, 26, 0.18), 0 4px 12px rgba(17, 17, 26, 0.1);
+
+    /* Accent glow — same hue, lighter in light mode */
+    --accent-glow: 0 0 0 3px rgba(99, 102, 241, 0.14);
+
+    /* Gradient stops — same brand color, both themes */
+    --gradient-accent-from: #6366F1;
+    --gradient-accent-via: #818CF8;
+    --gradient-accent-to: #A78BFA;
 
     /* shadcn/ui tokens (light) — see the :root/.dark block above. */
     --background: 0 0% 100%;
@@ -149,7 +171,8 @@
 }
 
 @layer components {
-  /* Glassmorphism surface — translucent fill + blur + hairline + inner highlight */
+  /* ─── Glassmorphism surface ───────────────────────────────────────────────── */
+  /* Translucent fill + blur + hairline + inner highlight */
   .glass {
     background: var(--glass);
     -webkit-backdrop-filter: blur(16px) saturate(140%);
@@ -166,20 +189,200 @@
       background: var(--glass-fallback);
     }
   }
+
+  /* ─── Gradient border / halo ─────────────────────────────────────────────── */
+  /*
+   * Wraps content in a 1-px gradient border via a pseudo-element background.
+   * Usage: add `gradient-border` to any rounded container.
+   * The inner content needs its own bg to "cut out" the gradient ring.
+   */
+  .gradient-border {
+    position: relative;
+  }
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      var(--gradient-accent-from),
+      var(--gradient-accent-via),
+      var(--gradient-accent-to)
+    );
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* ─── Accent halo / outer-ring glow ──────────────────────────────────────── */
+  /*
+   * Subtle outer glow ring. Use on hero CTAs, featured cards.
+   * Distinct from shadow-glow (which uses box-shadow); this uses ::after.
+   */
+  .accent-halo {
+    position: relative;
+  }
+  .accent-halo::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: inherit;
+    background: radial-gradient(
+      ellipse at center,
+      rgba(99, 102, 241, 0.25) 0%,
+      transparent 70%
+    );
+    pointer-events: none;
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .accent-halo:hover::after,
+  .accent-halo:focus-visible::after {
+    opacity: 1;
+  }
+
+  /* ─── Hover lift ─────────────────────────────────────────────────────────── */
+  /*
+   * Elevates a card/surface on hover via transform + shadow upgrade.
+   * Intentionally separate from Button's built-in -translate-y-px micro-lift.
+   * Use on product cards, feature tiles, KPI cards.
+   */
+  .hover-lift {
+    transition:
+      transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .hover-lift:hover {
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: var(--shadow-lift);
+  }
+  .hover-lift:active {
+    transform: translateY(-1px) scale(1.005);
+  }
+
+  /* ─── Interactive card ───────────────────────────────────────────────────── */
+  /*
+   * Card that signals clickability: lift + subtle border brighten on hover.
+   * Compose with <Card> via className="card-interactive".
+   */
+  .card-interactive {
+    cursor: pointer;
+    transition:
+      transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.18s ease;
+  }
+  .card-interactive:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lift);
+    border-color: var(--line-strong);
+  }
+  .card-interactive:active {
+    transform: translateY(-1px);
+  }
+
+  /* ─── Shimmer skeleton (base class) ─────────────────────────────────────── */
+  /*
+   * The Skeleton component already applies these via Tailwind classes.
+   * This block is provided for teams that need to apply shimmer to arbitrary
+   * non-Skeleton elements (e.g. image placeholders inside existing divs).
+   */
+  .skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+    background: var(--fill);
+    border-radius: 8px;
+  }
+  .skeleton-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--fill-strong) 40%,
+      rgba(255, 255, 255, 0.08) 55%,
+      transparent 100%
+    );
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
 }
 
 @layer utilities {
-  /* Standard accessible focus ring — used on all interactive elements */
+  /* ─── Accessible focus ring ──────────────────────────────────────────────── */
+  /* Used on all interactive elements */
   .focus-ring {
     @apply outline-none ring-2 ring-accent/70 ring-offset-2 ring-offset-bg-base;
   }
 
+  /* ─── Text gradient ──────────────────────────────────────────────────────── */
+  /*
+   * Accent gradient applied to text. Works on any heading or inline span.
+   * Usage: <h1 className="text-gradient">…</h1>
+   * Do NOT use on body text — only decorative headings and hero callouts.
+   */
+  .text-gradient {
+    background: linear-gradient(
+      135deg,
+      var(--gradient-accent-from) 0%,
+      var(--gradient-accent-via) 50%,
+      var(--gradient-accent-to) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  /* ─── Surface gradient ───────────────────────────────────────────────────── */
+  /*
+   * Subtle bg gradient for hero sections, feature callout panels.
+   * Uses bg-bg-base as a starting color, fading into a hint of accent.
+   */
+  .surface-gradient {
+    background: radial-gradient(
+      ellipse 80% 60% at 50% -10%,
+      rgba(99, 102, 241, 0.12) 0%,
+      transparent 70%
+    ),
+    rgb(var(--bg-base));
+  }
+
+  /* ─── Text balance ───────────────────────────────────────────────────────── */
   .text-balance {
     text-wrap: balance;
   }
+
+  /* ─── Tabular nums shorthand ─────────────────────────────────────────────── */
+  .nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* ─── Subtle grid overlay ────────────────────────────────────────────────── */
+  /*
+   * Very light dot-grid texture on section backgrounds. Use sparingly on
+   * hero sections only; never on cards or content areas.
+   */
+  .grid-dots {
+    background-image: radial-gradient(
+      circle,
+      var(--grid-line) 1px,
+      transparent 1px
+    );
+    background-size: 24px 24px;
+  }
 }
 
-/* Respect reduced-transparency: drop glass blur for an opaque surface */
+/* ─── Respect reduced-transparency ─────────────────────────────────────────── */
+/* Drop glass blur for an opaque surface */
 @media (prefers-reduced-transparency: reduce) {
   .glass {
     -webkit-backdrop-filter: none;
@@ -188,7 +391,8 @@
   }
 }
 
-/* Honor reduced-motion globally — disable parallax, tilt, large transitions */
+/* ─── Honor reduced-motion globally ─────────────────────────────────────────── */
+/* Disable parallax, tilt, large transitions; keep instant feedback */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -197,5 +401,12 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .hover-lift:hover,
+  .hover-lift:active,
+  .card-interactive:hover,
+  .card-interactive:active {
+    transform: none !important;
   }
 }

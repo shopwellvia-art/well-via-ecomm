@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button.jsx';
 import { authApi } from '@/features/auth/api.js';
 import { useAuthStore } from '@/features/auth/store.js';
+import { heroContainer, fadeUp } from '@/lib/motion.js';
 
 const ERROR_MESSAGES = {
   state: 'Security check failed. Please try signing in again.',
@@ -54,23 +56,50 @@ export default function AuthCallbackPage() {
   }, [navigate, setSession, setUser]);
 
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-content items-center justify-center px-6 py-12">
+    <main className="relative mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-content items-center justify-center px-6 py-12">
+      {/* Ambient glow */}
+      <div
+        aria-hidden="true"
+        className="absolute left-1/2 top-1/3 -z-10 size-[400px] -translate-x-1/2 rounded-full bg-accent/10 blur-[140px]"
+      />
+
       {errorMsg ? (
-        <div className="flex max-w-sm flex-col items-center text-center">
-          <span className="grid size-12 place-items-center rounded-full bg-danger/15 text-danger">
+        <motion.div
+          variants={heroContainer}
+          initial="hidden"
+          animate="show"
+          className="flex max-w-sm flex-col items-center text-center"
+        >
+          <motion.span
+            variants={fadeUp}
+            className="grid size-14 place-items-center rounded-full bg-danger/12 text-danger shadow-glow-danger"
+          >
             <AlertTriangle className="size-6" aria-hidden="true" />
-          </span>
-          <h1 className="mt-4 text-h2 text-ink-primary">Sign-in failed</h1>
-          <p className="mt-1 text-sm text-ink-secondary">{errorMsg}</p>
-          <Link to="/login" className="mt-6">
-            <Button size="lg">Back to sign in</Button>
-          </Link>
-        </div>
+          </motion.span>
+          <motion.h1 variants={fadeUp} className="mt-5 text-h2 tracking-tight text-ink-primary">
+            Sign-in failed
+          </motion.h1>
+          <motion.p variants={fadeUp} className="mt-1.5 text-sm text-ink-secondary">
+            {errorMsg}
+          </motion.p>
+          <motion.div variants={fadeUp} className="mt-6">
+            <Link to="/login">
+              <Button size="lg">Back to sign in</Button>
+            </Link>
+          </motion.div>
+        </motion.div>
       ) : (
-        <div className="flex flex-col items-center gap-3 text-ink-secondary">
-          <Loader2 className="size-6 animate-spin" aria-hidden="true" />
-          <p className="text-sm">Signing you in…</p>
-        </div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+          className="flex flex-col items-center gap-4 text-ink-secondary"
+        >
+          <span className="grid size-12 place-items-center rounded-full bg-accent/10">
+            <Loader2 className="size-6 animate-spin text-accent" aria-hidden="true" />
+          </span>
+          <p className="text-sm font-medium text-ink-secondary">Signing you in…</p>
+        </motion.div>
       )}
     </main>
   );

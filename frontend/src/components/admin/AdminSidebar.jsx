@@ -49,7 +49,7 @@ const NAV = [
   { to: '/admin/users', label: 'Users', icon: Users, end: false, permission: 'users.view' },
   { to: '/admin/roles', label: 'Roles', icon: ShieldCheck, end: false, permission: 'roles.view' },
   { to: '/admin/audit', label: 'Audit log', icon: History, end: false, permission: 'audit.view' },
-  { to: '/admin/payment-gateway', label: 'Payment Gateway', icon: CreditCard, end: false, permission: 'payments.manage' },
+  { to: '/admin/payment-methods', label: 'Payment Methods', icon: CreditCard, end: false, permission: 'payments.manage' },
   { to: '/admin/settings', label: 'Settings', icon: SettingsIcon, end: false, permission: 'settings.manage' },
 ];
 
@@ -101,7 +101,7 @@ function NavItem({ item, onNavigate }) {
         cn(
           'flex items-center gap-3 rounded-sm px-3 py-2.5 text-sm transition-colors focus-visible:focus-ring',
           isActive
-            ? 'bg-accent/15 text-accent'
+            ? 'bg-accent/12 text-accent'
             : 'text-ink-secondary hover:bg-fill hover:text-ink-primary',
         )
       }
@@ -167,7 +167,7 @@ function CollapsibleGroup({ group, children, onNavigate }) {
                     cn(
                       'flex items-center gap-3 rounded-sm px-3 py-2 text-sm transition-colors focus-visible:focus-ring',
                       isActive
-                        ? 'bg-accent/15 text-accent'
+                        ? 'bg-accent/12 text-accent'
                         : 'text-ink-secondary hover:bg-fill hover:text-ink-primary',
                     )
                   }
@@ -249,7 +249,7 @@ function SidebarContent({ onNavigate }) {
         </Link>
 
         <div className="flex items-center gap-2 px-3 py-2">
-          <div className="grid size-8 shrink-0 place-items-center rounded-full bg-accent/15 text-xs font-semibold text-accent">
+          <div className="grid size-8 shrink-0 place-items-center rounded-full bg-accent/12 text-xs font-semibold text-accent">
             {(user?.email || '?').charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">

@@ -1,7 +1,8 @@
-import { Download, FileText, Mail, Phone } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Download, FileText, Mail, Phone, Building2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Page } from '@/components/layout/Page.jsx';
-import { Card, CardBody } from '@/components/ui/Card.jsx';
+import { Card, CardBody, CardHeader } from '@/components/ui/Card.jsx';
 import { useSitePages } from '@/features/site-pages/hooks.js';
 import { SITE_PAGES_DEFAULTS } from '@/features/site-pages/defaults.js';
 import { safeUrl } from '@/lib/safeUrl.js';
@@ -12,18 +13,19 @@ import {
   SectionLabel,
   PageDisabled,
 } from '@/features/site-pages/components.jsx';
+import { staggerContainer, fadeUp, listStagger } from '@/lib/motion.js';
 
 function DownloadLink({ item }) {
   const isInternal = item.url?.startsWith('/');
   const content = (
     <>
       <FileText className="size-4 text-accent" aria-hidden="true" />
-      <span className="flex-1">{item.label}</span>
+      <span className="flex-1 text-sm font-medium">{item.label}</span>
       <Download className="size-4 text-ink-tertiary" aria-hidden="true" />
     </>
   );
   const cls =
-    'flex items-center gap-3 rounded-sm border border-line-subtle bg-bg-elevated px-4 py-3 text-sm font-medium text-ink-primary transition-colors hover:border-line-strong focus-visible:focus-ring';
+    'flex items-center gap-3 rounded-sm border border-line-subtle bg-bg-elevated px-4 py-3 text-ink-primary transition-all hover:border-line-strong hover-lift focus-visible:focus-ring';
 
   if (!item.url) {
     return <div className={cls}>{content}</div>;
@@ -58,70 +60,95 @@ export default function CorporatePage() {
       <CompanyHero hero={page.hero} current="Corporate Information" />
 
       <Section className="mt-12 grid gap-10 lg:grid-cols-[1.5fr_1fr]">
-        {/* Prose sections */}
+        {/* Main: prose sections + leadership */}
         <div className="flex flex-col gap-10">
+          {/* Text sections */}
           {page.sections?.map((s, i) => (
-            <div key={i}>
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-60px' }}
+              transition={{ duration: 0.4, delay: i * 0.05 }}
+            >
               <SectionLabel className="text-h3">{s.heading}</SectionLabel>
               <div className="mt-3">
                 <Prose text={s.body} />
               </div>
-            </div>
+            </motion.div>
           ))}
 
           {/* Leadership */}
           {page.leadership?.length > 0 && (
             <div>
               <SectionLabel className="text-h3">Leadership</SectionLabel>
-              <div className="mt-5 grid gap-4 sm:grid-cols-3">
+              <motion.div
+                variants={staggerContainer(0.07)}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, margin: '-60px' }}
+                className="mt-5 grid gap-4 sm:grid-cols-3"
+              >
                 {page.leadership.map((p, i) => (
-                  <Card key={i}>
-                    <CardBody className="flex flex-col items-center text-center">
-                      {p.image ? (
-                        <img
-                          src={p.image}
-                          alt=""
-                          loading="lazy"
-                          className="size-16 rounded-full object-cover"
-                        />
-                      ) : (
-                        <span className="grid size-16 place-items-center rounded-full bg-accent/12 text-lg font-semibold text-accent">
-                          {(p.name || '?').charAt(0)}
-                        </span>
-                      )}
-                      <p className="mt-3 font-semibold text-ink-primary">{p.name}</p>
-                      {p.title && <p className="text-xs text-ink-secondary">{p.title}</p>}
-                    </CardBody>
-                  </Card>
+                  <motion.div key={i} variants={fadeUp}>
+                    <Card interactive>
+                      <CardBody className="flex flex-col items-center text-center">
+                        {p.image ? (
+                          <img
+                            src={p.image}
+                            alt=""
+                            loading="lazy"
+                            className="size-16 rounded-full object-cover ring-2 ring-line-subtle"
+                          />
+                        ) : (
+                          <span className="grid size-16 place-items-center rounded-full bg-accent-soft text-lg font-semibold text-accent">
+                            {(p.name || '?').charAt(0)}
+                          </span>
+                        )}
+                        <p className="mt-3 font-semibold text-ink-primary">{p.name}</p>
+                        {p.title && (
+                          <p className="mt-0.5 text-xs text-ink-secondary">{p.title}</p>
+                        )}
+                      </CardBody>
+                    </Card>
+                  </motion.div>
                 ))}
-              </div>
+              </motion.div>
             </div>
           )}
         </div>
 
-        {/* Sidebar: entity details + downloads */}
+        {/* Sidebar: entity details + documents */}
         <aside className="flex flex-col gap-4">
           {entity && (
             <Card>
+              <CardHeader
+                title="Registered entity"
+              />
               <CardBody>
-                <h3 className="font-semibold text-ink-primary">Registered entity</h3>
-                <dl className="mt-3 space-y-3 text-sm">
+                <dl className="space-y-3 text-sm">
                   <div>
-                    <dt className="text-xs uppercase tracking-wide text-ink-tertiary">Legal name</dt>
-                    <dd className="text-ink-secondary">{entity.name}</dd>
+                    <dt className="text-[11px] font-semibold uppercase tracking-widest text-ink-tertiary">
+                      Legal name
+                    </dt>
+                    <dd className="mt-0.5 text-ink-secondary">{entity.name}</dd>
                   </div>
                   {entity.cin && (
                     <div>
-                      <dt className="text-xs uppercase tracking-wide text-ink-tertiary">CIN</dt>
-                      <dd className="text-ink-secondary">{entity.cin}</dd>
+                      <dt className="text-[11px] font-semibold uppercase tracking-widest text-ink-tertiary">
+                        CIN
+                      </dt>
+                      <dd className="mt-0.5 font-mono text-xs text-ink-secondary">
+                        {entity.cin}
+                      </dd>
                     </div>
                   )}
                   {entity.address_lines?.length > 0 && (
                     <div>
-                      <dt className="text-xs uppercase tracking-wide text-ink-tertiary">
+                      <dt className="text-[11px] font-semibold uppercase tracking-widest text-ink-tertiary">
                         Registered office
                       </dt>
-                      <dd>
+                      <dd className="mt-0.5">
                         <address className="not-italic leading-6 text-ink-secondary">
                           {entity.address_lines.map((line, li) => (
                             <span key={li} className="block">
@@ -135,7 +162,10 @@ export default function CorporatePage() {
                   {entity.email && (
                     <div className="flex items-center gap-2 text-ink-secondary">
                       <Mail className="size-4 text-accent" aria-hidden="true" />
-                      <a href={`mailto:${entity.email}`} className="hover:text-accent focus-visible:focus-ring">
+                      <a
+                        href={`mailto:${entity.email}`}
+                        className="transition-colors hover:text-accent focus-visible:focus-ring"
+                      >
                         {entity.email}
                       </a>
                     </div>
@@ -145,7 +175,7 @@ export default function CorporatePage() {
                       <Phone className="size-4 text-accent" aria-hidden="true" />
                       <a
                         href={`tel:${entity.phone.replace(/\s/g, '')}`}
-                        className="hover:text-accent focus-visible:focus-ring"
+                        className="transition-colors hover:text-accent focus-visible:focus-ring"
                       >
                         {entity.phone}
                       </a>
@@ -158,12 +188,20 @@ export default function CorporatePage() {
 
           {page.downloads?.length > 0 && (
             <div>
-              <h3 className="mb-3 font-semibold text-ink-primary">Documents</h3>
-              <div className="flex flex-col gap-2">
+              <h3 className="mb-3 text-sm font-semibold text-ink-primary">Documents</h3>
+              <motion.div
+                variants={listStagger(0.04)}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, margin: '-40px' }}
+                className="flex flex-col gap-2"
+              >
                 {page.downloads.map((d, i) => (
-                  <DownloadLink key={i} item={d} />
+                  <motion.div key={i} variants={fadeUp}>
+                    <DownloadLink item={d} />
+                  </motion.div>
                 ))}
-              </div>
+              </motion.div>
             </div>
           )}
         </aside>

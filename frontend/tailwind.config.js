@@ -33,12 +33,30 @@ export default {
           DEFAULT: '#6366F1',
           hover: '#7C7FF5',
           press: '#5457D6',
+          // Mid-ramp of the gradient — useful as a standalone tint
+          mid: '#818CF8',
+          // Light ramp — for tinted backgrounds in tonal badges
+          soft: 'rgba(99, 102, 241, 0.12)',
           // shadcn/ui token — used by the ghost/outline variants in button-base.jsx.
           foreground: 'hsl(var(--accent-foreground))',
         },
-        success: '#22C55E',
-        warning: '#F59E0B',
-        danger: '#EF4444',
+        success: {
+          DEFAULT: '#22C55E',
+          soft: 'rgba(34, 197, 94, 0.12)',
+        },
+        warning: {
+          DEFAULT: '#F59E0B',
+          soft: 'rgba(245, 158, 11, 0.12)',
+        },
+        danger: {
+          DEFAULT: '#EF4444',
+          soft: 'rgba(239, 68, 68, 0.12)',
+        },
+        // Info tone — used by KPI cards and status badges
+        info: {
+          DEFAULT: '#38BDF8',
+          soft: 'rgba(56, 189, 248, 0.12)',
+        },
 
         // ── shadcn/ui tokens ──────────────────────────────────────────────
         // Additive layer consumed by src/components/ui/button-base.jsx (and any
@@ -98,23 +116,53 @@ export default {
         sm: 'var(--shadow-sm)',
         md: 'var(--shadow-md)',
         lg: 'var(--shadow-lg)',
+        lift: 'var(--shadow-lift)',
         glow: '0 0 0 1px rgba(99,102,241,0.4), 0 8px 32px rgba(99,102,241,0.25)',
+        // Softer accent ring — use instead of glow when you want less saturation
+        'glow-sm': '0 0 0 1px rgba(99,102,241,0.25), 0 4px 16px rgba(99,102,241,0.15)',
+        // Success/danger glow for inline feedback states
+        'glow-success': '0 0 0 1px rgba(34,197,94,0.35), 0 4px 16px rgba(34,197,94,0.15)',
+        'glow-danger': '0 0 0 1px rgba(239,68,68,0.35), 0 4px 16px rgba(239,68,68,0.15)',
       },
       maxWidth: {
         content: '1200px',
       },
       keyframes: {
         shimmer: {
+          '0%': { transform: 'translateX(-100%)' },
           '100%': { transform: 'translateX(100%)' },
         },
         marquee: {
           '0%': { transform: 'translate3d(0,0,0)' },
           '100%': { transform: 'translate3d(-50%,0,0)' },
         },
+        // Fade in + rise — JS-free alternative when Framer Motion is not available
+        fadeUp: {
+          '0%': { opacity: '0', transform: 'translateY(12px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        // Scale in from center — for modals, popovers, tooltips
+        scaleIn: {
+          '0%': { opacity: '0', transform: 'scale(0.95)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        // Pulse ring — for live/attention indicators
+        pulseRing: {
+          '0%': { transform: 'scale(1)', opacity: '0.6' },
+          '100%': { transform: 'scale(1.6)', opacity: '0' },
+        },
       },
       animation: {
-        shimmer: 'shimmer 1.4s infinite',
+        shimmer: 'shimmer 1.6s ease-in-out infinite',
         marquee: 'marquee 60s linear infinite',
+        fadeUp: 'fadeUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both',
+        scaleIn: 'scaleIn 0.2s cubic-bezier(0.22, 1, 0.36, 1) both',
+        pulseRing: 'pulseRing 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      },
+      // Transitioned properties used for performant hover-lift
+      transitionProperty: {
+        'lift': 'transform, box-shadow',
+        'card': 'transform, box-shadow, border-color',
       },
     },
   },

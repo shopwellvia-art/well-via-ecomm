@@ -1,3 +1,4 @@
+from app.models.address import Address, AddressLabel
 from app.models.audit import AuditEvent
 from app.models.base import Base
 from app.models.coupon import Coupon, CouponUsage, DiscountType
@@ -13,6 +14,7 @@ from app.models.loyalty import (
 )
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.payment_gateway import PaymentGatewayConfig
+from app.models.payment_method import PaymentMethod
 from app.models.product import Category, Product, ProductImage
 from app.models.rbac import Permission, Role, role_permissions, user_roles
 from app.models.referral import Referral, ReferralStatus
@@ -32,6 +34,8 @@ from app.models.wishlist import Wishlist
 
 __all__ = [
     "AccountStatus",
+    "Address",
+    "AddressLabel",
     "AuditEvent",
     "Base",
     "Category",
@@ -46,6 +50,7 @@ __all__ = [
     "OrderItem",
     "OrderStatus",
     "PaymentGatewayConfig",
+    "PaymentMethod",
     "Permission",
     "PointsReason",
     "PointsTransaction",

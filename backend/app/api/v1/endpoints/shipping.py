@@ -30,10 +30,12 @@ from app.integrations.shipping import (
 )
 from app.models.user import User
 from app.schemas.shipping import (
+    PincodeLookupResponse,
     RateQuoteRequest as RateQuoteRequestSchema,
     RateQuoteResponse,
     ServiceabilityResponse,
 )
+from app.services.pincode_service import PincodeService
 from app.services.settings_service import SettingsService
 from app.services.shipping_service import ShippingService
 
@@ -203,6 +205,35 @@ async def tracking_webhook(
         # own.
         return {"ok": True, "matched": False}
     return {"ok": True, "matched": True, "order_id": order.id, "order_status": order.status.value}
+
+
+# ---- Pincode autofill (public) ------------------------------------------
+
+
+@router.get(
+    "/pincode/{pincode}",
+    response_model=PincodeLookupResponse,
+)
+def lookup_pincode(
+    pincode: str,
+    request: Request,
+):
+    """Resolve a 6-digit Indian pincode to city + state for checkout autofill.
+
+    Public endpoint — no auth required.  Returns HTTP 200 in all cases;
+    ``found=False`` signals that the city/state could not be determined.
+    Never blocks checkout: autofill is purely cosmetic.
+
+    Rate-limited 60 req/min/IP — same policy as the serviceability check.
+    """
+    RateLimiter().enforce(
+        scope="shipping.pincode_lookup",
+        identifier=get_client_ip(request),
+        limit=60,
+        window_sec=60,
+    )
+    result = PincodeService().lookup(pincode)
+    return PincodeLookupResponse(**result)
 
 
 # ---- Mock simulator (dev only) ------------------------------------------

@@ -1,8 +1,13 @@
 """Payment gateway configuration service.
 
+DEPRECATED: This service manages the legacy PaymentGatewayConfig table (single
+active provider + PhonePe credentials).  The factory no longer reads from this
+service.  New code should use PaymentMethodConfigService which manages the
+multi-gateway payment_methods table.  This service will be removed in a future
+release.
+
 Owns the single config row and all salt-key crypto, so encryption lives in
-exactly one place. The factory reads the active provider through here; the
-admin endpoints read/update through here.
+exactly one place.
 """
 from __future__ import annotations
 

@@ -1,8 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, AlertTriangle, ImageOff, Percent } from 'lucide-react';
+import { motion } from 'framer-motion';
+import {
+  ArrowLeft,
+  AlertTriangle,
+  ImageOff,
+  Percent,
+  DollarSign,
+  Package,
+  Tag,
+  Boxes,
+  Scale,
+  ShieldOff,
+} from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { ProductImageManager } from '@/components/admin/ProductImageManager.jsx';
+import { Card, CardHeader } from '@/components/ui/Card.jsx';
 import { Input } from '@/components/ui/Input.jsx';
 import { Textarea } from '@/components/ui/Textarea.jsx';
 import { Select } from '@/components/ui/Select.jsx';
@@ -14,6 +27,7 @@ import { useProduct } from '@/features/products/hooks.js';
 import { useCategories } from '@/features/categories/hooks.js';
 import { useCreateProduct, useUpdateProduct } from '@/features/admin/hooks.js';
 import { useTaxes, useSetProductTaxes } from '@/features/taxes/hooks.js';
+import { staggerContainer, fadeUp } from '@/lib/motion.js';
 
 const EMPTY = {
   sku: '',
@@ -27,6 +41,16 @@ const EMPTY = {
   cod_blocked: false,
   category_id: '',
 };
+
+/** Thin section heading used inside form cards */
+function SectionLabel({ icon: Icon, children }) {
+  return (
+    <p className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
+      {Icon && <Icon className="size-3.5 shrink-0" aria-hidden="true" />}
+      {children}
+    </p>
+  );
+}
 
 export default function AdminProductFormPage() {
   const { id } = useParams();
@@ -43,13 +67,10 @@ export default function AdminProductFormPage() {
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState(null);
-  // Tax IDs attached to this product. Persisted on save via the dedicated
-  // PUT /taxes/products/{id} endpoint.
   const [selectedTaxIds, setSelectedTaxIds] = useState([]);
 
   const activeTaxes = useMemo(() => taxes.filter((t) => t.is_active), [taxes]);
 
-  // Prefill when editing once the product loads.
   useEffect(() => {
     if (isEdit && product) {
       setForm({
@@ -70,21 +91,19 @@ export default function AdminProductFormPage() {
     }
   }, [isEdit, product]);
 
-  function toggleTax(id) {
+  function toggleTax(taxId) {
     setSelectedTaxIds((cur) =>
-      cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id],
+      cur.includes(taxId) ? cur.filter((x) => x !== taxId) : [...cur, taxId],
     );
   }
 
-  // Did the tax selection diverge from what's already persisted? Used to skip
-  // a no-op write when only product fields changed.
   const initialTaxIds = useMemo(
     () => new Set((product?.taxes || []).map((t) => t.id)),
     [product],
   );
   const taxesChanged = useMemo(() => {
     if (selectedTaxIds.length !== initialTaxIds.size) return true;
-    return selectedTaxIds.some((id) => !initialTaxIds.has(id));
+    return selectedTaxIds.some((taxId) => !initialTaxIds.has(taxId));
   }, [selectedTaxIds, initialTaxIds]);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -173,10 +192,11 @@ export default function AdminProductFormPage() {
   if (isEdit && isLoading) {
     return (
       <AdminPage title="Edit product">
-        <div className="flex flex-col gap-4">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-12" />
-          ))}
+        <div className="max-w-2xl space-y-4">
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-48 rounded-lg" />
+          <Skeleton className="h-40 rounded-lg" />
+          <Skeleton className="h-28 rounded-lg" />
         </div>
       </AdminPage>
     );
@@ -187,6 +207,7 @@ export default function AdminProductFormPage() {
       <AdminPage title="Edit product">
         <EmptyState
           icon={AlertTriangle}
+          iconTone="danger"
           title="Product not found"
           description="This product may have been removed."
           action={
@@ -214,206 +235,266 @@ export default function AdminProductFormPage() {
         Back to products
       </Link>
 
-      <div className="max-w-2xl">
-        <form
-          onSubmit={handleSubmit}
-          noValidate
-          className="rounded-lg border border-line-subtle bg-bg-elevated p-6"
-        >
-          <Input
-            label="SKU"
-            value={form.sku}
-            onChange={set('sku')}
-            error={errors.sku}
-            disabled={isEdit}
-            helper={isEdit ? 'SKU cannot be changed after creation.' : 'Unique product code.'}
-            placeholder="AUD-AURA-01"
-          />
-          <Input
-            label="Name"
-            value={form.name}
-            onChange={set('name')}
-            error={errors.name}
-            placeholder="Aura Wireless Headphones"
-          />
-          <Textarea
-            label="Description"
-            value={form.description}
-            onChange={set('description')}
-            placeholder="A short, appealing product description."
-          />
-          <div className="grid gap-x-4 sm:grid-cols-3">
-            <Input
-              label="Price (INR)"
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.price}
-              onChange={set('price')}
-              error={errors.price}
-              placeholder="299.00"
-            />
-            <Input
-              label="Compare-at price"
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.compare_at_price}
-              onChange={set('compare_at_price')}
-              error={errors.compare_at_price}
-              helper="Optional. Shows as the struck-through original next to a Sale badge."
-              placeholder="399.00"
-            />
-            <Input
-              label="Cost price (₹)"
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.cost}
-              onChange={set('cost')}
-              error={errors.cost}
-              helper="Optional. Used for profitability analytics — not shown to customers."
-              placeholder="150.00"
-            />
-            <Input
-              label="Stock"
-              type="number"
-              step="1"
-              min="0"
-              value={form.stock}
-              onChange={set('stock')}
-              error={errors.stock}
-              placeholder="24"
-            />
-            <Input
-              label="Weight (grams)"
-              type="number"
-              step="1"
-              min="0"
-              value={form.weight_grams}
-              onChange={set('weight_grams')}
-              error={errors.weight_grams}
-              helper="Optional. Drives shipping cost — leave blank to use the 200g fallback."
-              placeholder="450"
-            />
-          </div>
-          <label className="mt-4 flex items-start gap-2 rounded-sm border border-line-subtle bg-bg-sunken px-3 py-3">
-            <input
-              type="checkbox"
-              checked={form.cod_blocked}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, cod_blocked: e.target.checked }))
-              }
-              className="mt-0.5 size-4 rounded-sm border border-line-subtle bg-bg-elevated text-accent focus-visible:focus-ring"
-            />
-            <span className="flex-1 text-sm">
-              <span className="block font-medium text-ink-primary">
-                Block Cash on Delivery
-              </span>
-              <span className="block text-xs text-ink-tertiary">
-                When checked, any cart containing this product disables COD at
-                checkout. Use for fragile or high-value items.
-              </span>
-            </span>
-          </label>
-          <Select
-            label="Category"
-            value={form.category_id}
-            onChange={set('category_id')}
-            helper="Optional — used for browsing and filtering."
-          >
-            <option value="">Uncategorized</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
-
-          {/* Multiple active taxes can be attached; their rates sum at checkout. */}
-          <fieldset className="mb-4 rounded-sm border border-line-subtle bg-bg-sunken p-4">
-            <legend className="-mt-2 mb-2 flex items-center gap-2 bg-bg-elevated px-2 text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-              <Percent className="size-3" />
-              Taxes
-              <span className="font-normal normal-case tracking-normal text-ink-tertiary">
-                ({selectedTaxIds.length} selected)
-              </span>
-            </legend>
-            {activeTaxes.length === 0 ? (
-              <p className="text-xs text-ink-tertiary">
-                No active taxes yet — create one on{' '}
-                <Link to="/admin/taxes" className="underline hover:text-ink-primary">
-                  /admin/taxes
-                </Link>{' '}
-                first.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-1.5">
-                {activeTaxes.map((t) => {
-                  const checked = selectedTaxIds.includes(t.id);
-                  return (
-                    <label
-                      key={t.id}
-                      className={cn(
-                        'flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors',
-                        checked
-                          ? 'bg-accent/10 text-ink-primary'
-                          : 'text-ink-secondary hover:bg-fill',
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleTax(t.id)}
-                        className="size-4 rounded-sm border border-line-subtle bg-bg-elevated text-accent focus-visible:focus-ring"
-                      />
-                      <span className="flex-1">{t.name}</span>
-                      <span className="font-mono text-xs tabular-nums text-ink-tertiary">
-                        {Number(t.rate).toFixed(3)}%
-                      </span>
-                    </label>
-                  );
-                })}
+      <motion.div
+        variants={staggerContainer(0.06)}
+        initial="hidden"
+        animate="show"
+        className="max-w-2xl space-y-5"
+      >
+        <form onSubmit={handleSubmit} noValidate>
+          {/* ── Identity ── */}
+          <motion.div variants={fadeUp}>
+            <Card className="p-5 shadow-md">
+              <SectionLabel icon={Tag}>Identity</SectionLabel>
+              <div className="space-y-4">
+                <Input
+                  label="SKU"
+                  value={form.sku}
+                  onChange={set('sku')}
+                  error={errors.sku}
+                  required={!isEdit}
+                  disabled={isEdit}
+                  helper={isEdit ? 'SKU cannot be changed after creation.' : 'Unique product code.'}
+                  placeholder="AUD-AURA-01"
+                />
+                <Input
+                  label="Name"
+                  value={form.name}
+                  onChange={set('name')}
+                  error={errors.name}
+                  required
+                  placeholder="Aura Wireless Headphones"
+                />
+                <Textarea
+                  label="Description"
+                  value={form.description}
+                  onChange={set('description')}
+                  placeholder="A short, appealing product description."
+                  maxRows={8}
+                />
               </div>
-            )}
-          </fieldset>
+            </Card>
+          </motion.div>
 
+          {/* ── Pricing ── */}
+          <motion.div variants={fadeUp} className="mt-5">
+            <Card className="p-5 shadow-md">
+              <SectionLabel icon={DollarSign}>Pricing</SectionLabel>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Input
+                  label="Price (INR)"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.price}
+                  onChange={set('price')}
+                  error={errors.price}
+                  required
+                  placeholder="299.00"
+                />
+                <Input
+                  label="Compare-at price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.compare_at_price}
+                  onChange={set('compare_at_price')}
+                  error={errors.compare_at_price}
+                  helper="Optional. Shows as the struck-through original next to a Sale badge."
+                  placeholder="399.00"
+                />
+                <Input
+                  label="Cost price (₹)"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.cost}
+                  onChange={set('cost')}
+                  error={errors.cost}
+                  helper="Optional. Used for profitability analytics — not shown to customers."
+                  placeholder="150.00"
+                />
+              </div>
+            </Card>
+          </motion.div>
+
+          {/* ── Inventory & Shipping ── */}
+          <motion.div variants={fadeUp} className="mt-5">
+            <Card className="p-5 shadow-md">
+              <SectionLabel icon={Boxes}>Inventory &amp; Shipping</SectionLabel>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Input
+                  label="Stock"
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={form.stock}
+                  onChange={set('stock')}
+                  error={errors.stock}
+                  placeholder="24"
+                />
+                <Input
+                  label="Weight (grams)"
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={form.weight_grams}
+                  onChange={set('weight_grams')}
+                  error={errors.weight_grams}
+                  helper="Optional. Drives shipping cost — leave blank to use the 200 g fallback."
+                  placeholder="450"
+                />
+              </div>
+
+              <div className="mt-4 flex items-start gap-3 rounded-md border border-line-subtle bg-bg-sunken px-4 py-3">
+                <ShieldOff className="mt-0.5 size-4 shrink-0 text-ink-tertiary" aria-hidden="true" />
+                <label className="flex flex-1 cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={form.cod_blocked}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, cod_blocked: e.target.checked }))
+                    }
+                    className="mt-0.5 size-4 rounded-sm border border-line-subtle bg-bg-elevated text-accent focus-visible:focus-ring"
+                  />
+                  <span className="flex-1 text-sm">
+                    <span className="block font-medium text-ink-primary">
+                      Block Cash on Delivery
+                    </span>
+                    <span className="block text-xs text-ink-tertiary">
+                      When checked, any cart containing this product disables COD at
+                      checkout. Use for fragile or high-value items.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </Card>
+          </motion.div>
+
+          {/* ── Organisation ── */}
+          <motion.div variants={fadeUp} className="mt-5">
+            <Card className="p-5 shadow-md">
+              <SectionLabel icon={Package}>Organisation</SectionLabel>
+              <Select
+                label="Category"
+                value={form.category_id}
+                onChange={set('category_id')}
+                helper="Optional — used for browsing and filtering."
+              >
+                <option value="">Uncategorized</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </Card>
+          </motion.div>
+
+          {/* ── Taxes ── */}
+          <motion.div variants={fadeUp} className="mt-5">
+            <Card className="shadow-md">
+              <CardHeader
+                title={
+                  <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
+                    <Percent className="size-3.5" aria-hidden="true" />
+                    Taxes
+                    <span className="font-normal normal-case tracking-normal text-ink-tertiary">
+                      ({selectedTaxIds.length} selected)
+                    </span>
+                  </span>
+                }
+              />
+              <div className="p-5">
+                {activeTaxes.length === 0 ? (
+                  <p className="text-xs text-ink-tertiary">
+                    No active taxes yet — create one on{' '}
+                    <Link to="/admin/taxes" className="text-accent underline hover:text-ink-primary">
+                      /admin/taxes
+                    </Link>{' '}
+                    first.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {activeTaxes.map((t) => {
+                      const checked = selectedTaxIds.includes(t.id);
+                      return (
+                        <label
+                          key={t.id}
+                          className={cn(
+                            'flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+                            checked
+                              ? 'bg-accent/10 text-ink-primary'
+                              : 'text-ink-secondary hover:bg-fill',
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleTax(t.id)}
+                            className="size-4 rounded-sm border border-line-subtle bg-bg-elevated text-accent focus-visible:focus-ring"
+                          />
+                          <span className="flex-1">{t.name}</span>
+                          <span className="nums font-mono text-xs text-ink-tertiary">
+                            {Number(t.rate).toFixed(3)}%
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </Card>
+          </motion.div>
+
+          {/* ── Server error ── */}
           {serverError && (
-            <p className="mb-4 rounded-sm bg-danger/10 px-3 py-2 text-sm text-danger">
+            <motion.p
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-4 flex items-start gap-2 rounded-md bg-danger/10 px-4 py-3 text-sm text-danger shadow-glow-danger"
+            >
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               {serverError}
-            </p>
+            </motion.p>
           )}
 
-          <div className="flex gap-3">
+          {/* ── Actions ── */}
+          <motion.div variants={fadeUp} className="mt-6 flex gap-3">
             <Button type="submit" loading={busy}>
               {isEdit ? 'Save changes' : 'Create product'}
             </Button>
             <Link to="/admin/products">
-              <Button type="button" variant="ghost" disabled={busy}>
+              <Button type="button" variant="outline" disabled={busy}>
                 Cancel
               </Button>
             </Link>
-          </div>
+          </motion.div>
         </form>
 
-        {/* Images — managed separately; uploads apply immediately */}
-        <div className="mt-6 rounded-lg border border-line-subtle bg-bg-elevated p-6">
-          {isEdit ? (
-            <ProductImageManager
-              key={product.id}
-              productId={product.id}
-              initialImages={product.images || []}
-            />
-          ) : (
-            <div className="flex items-center gap-3 text-sm text-ink-secondary">
-              <ImageOff className="size-5 shrink-0 text-ink-tertiary" aria-hidden="true" />
-              <span>
-                Save the product first — then edit it to upload up to 8 images.
-              </span>
+        {/* ── Images ── */}
+        <motion.div variants={fadeUp}>
+          <Card className="shadow-md">
+            <CardHeader title="Product images" />
+            <div className="p-5">
+              {isEdit ? (
+                <ProductImageManager
+                  key={product.id}
+                  productId={product.id}
+                  initialImages={product.images || []}
+                />
+              ) : (
+                <div className="flex items-center gap-3 rounded-md border border-dashed border-line-strong bg-bg-sunken px-4 py-4 text-sm text-ink-secondary">
+                  <ImageOff className="size-5 shrink-0 text-ink-tertiary" aria-hidden="true" />
+                  <span>
+                    Save the product first — then edit it to upload up to 8 images.
+                  </span>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </Card>
+        </motion.div>
+      </motion.div>
     </AdminPage>
   );
 }

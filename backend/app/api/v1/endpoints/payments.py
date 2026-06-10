@@ -1,10 +1,11 @@
 """Payment + checkout endpoints.
 
 Routes:
-  POST /checkout                     create order + initiate payment
-  GET  /payments/{mtid}/status       what the return page polls
-  POST /payments/webhook/phonepe     S2S callback from PhonePe (signed)
-  POST /payments/webhook/mock        local simulator (mock provider only)
+  POST /checkout                          create order + initiate payment
+  GET  /payments/{mtid}/status            what the return page polls
+  POST /payments/webhook/phonepe          S2S callback from PhonePe (signed)
+  POST /payments/webhook/mock             local simulator (mock provider only)
+  POST /payments/webhook/{gateway_code}   generic signed webhook for any gateway
 """
 from __future__ import annotations
 
@@ -13,7 +14,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
-from app.core.exceptions import ForbiddenError, ValidationError
+from app.core.exceptions import ForbiddenError, NotFoundError, ValidationError
+from app.integrations.payments.registry import get_gateway
+from app.models.payment_method import PaymentMethod
 from app.models.user import User
 from app.schemas.order import OrderRead
 from app.schemas.payment import (
@@ -23,6 +26,7 @@ from app.schemas.payment import (
     PaymentStatusResponse,
 )
 from app.services.payment_gateway_service import PaymentGatewayService
+from app.services.payment_method_config_service import PaymentMethodConfigService
 from app.services.payment_service import PaymentService
 
 checkout_router = APIRouter()
@@ -54,7 +58,7 @@ def start_checkout(
         order_id=order.id,
         merchant_transaction_id=mtid,
         redirect_url=redirect_url,
-        provider=svc.provider.name,
+        provider=order.gateway_code or "mock",
         amount_minor=amount_minor,
         currency=order.currency,
     )
@@ -97,7 +101,7 @@ async def phonepe_webhook(
     db: Session = Depends(get_db),
 ):
     body = await request.body()
-    PaymentService(db).handle_webhook(body, x_verify)
+    PaymentService(db).handle_webhook(body, x_verify, gateway_code="phonepe")
     return {"ok": True}
 
 
@@ -122,3 +126,56 @@ def mock_webhook(
         payload.merchant_transaction_id, payload.action
     )
     return {"ok": True, "order_id": order.id, "order_status": order.status.value}
+
+
+@payments_router.post("/webhook/{gateway_code}", status_code=status.HTTP_200_OK)
+async def generic_webhook(
+    gateway_code: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Generic signed webhook endpoint for any implemented gateway.
+
+    Signature header selection per provider:
+    - phonepe: X-VERIFY (use the dedicated /webhook/phonepe route instead)
+    - razorpay: X-Razorpay-Signature
+    - stripe: Stripe-Signature
+    - paystack: x-paystack-signature
+    - flutterwave: verif-hash
+    - paypal: not used (verify always returns False; status-polling is used)
+    - All others: no standard header — pass None and let verify decide.
+    """
+    # Validate that the gateway code is known and enabled+implemented.
+    from sqlalchemy import select as _select
+    pm_row = db.execute(
+        _select(PaymentMethod).where(PaymentMethod.gateway_code == gateway_code)
+    ).scalar_one_or_none()
+    if pm_row is None:
+        raise NotFoundError(f"Payment gateway '{gateway_code}' not found.")
+    gw_def = get_gateway(gateway_code)
+    if gw_def is None or not gw_def.implemented:
+        raise ForbiddenError(
+            f"Webhook not available for gateway '{gateway_code}'."
+        )
+    if not pm_row.enabled:
+        raise ForbiddenError(
+            f"Gateway '{gateway_code}' is not enabled."
+        )
+
+    body = await request.body()
+
+    # Pick the most relevant signature header for each gateway.
+    signature: str | None = None
+    if gateway_code == "razorpay":
+        signature = request.headers.get("X-Razorpay-Signature")
+    elif gateway_code == "stripe":
+        signature = request.headers.get("Stripe-Signature")
+    elif gateway_code == "paystack":
+        signature = request.headers.get("x-paystack-signature")
+    elif gateway_code == "flutterwave":
+        signature = request.headers.get("verif-hash")
+    elif gateway_code == "phonepe":
+        signature = request.headers.get("X-VERIFY")
+
+    PaymentService(db).handle_webhook(body, signature, gateway_code=gateway_code)
+    return {"ok": True}

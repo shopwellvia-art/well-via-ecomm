@@ -59,7 +59,9 @@ class PaymentProvider(Protocol):
 
     def initiate(self, req: InitiateRequest) -> InitiateResponse: ...
 
-    def fetch_status(self, merchant_transaction_id: str) -> StatusResponse: ...
+    def fetch_status(
+        self, merchant_transaction_id: str, provider_ref: str | None = None
+    ) -> StatusResponse: ...
 
     def verify_webhook(self, body: bytes, signature: str | None) -> bool:
         """Return True iff the webhook body is authentic for this provider."""

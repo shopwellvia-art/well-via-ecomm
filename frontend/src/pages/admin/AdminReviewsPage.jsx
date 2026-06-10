@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import {
   Plus,
@@ -11,15 +12,18 @@ import {
   MessageSquare,
   ChevronLeft,
   ChevronRight,
+  Filter,
 } from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Input } from '@/components/ui/Input.jsx';
 import { Textarea } from '@/components/ui/Textarea.jsx';
 import { Select } from '@/components/ui/Select.jsx';
+import { Badge } from '@/components/ui/Badge.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { cn } from '@/lib/utils.js';
+import { fadeUp, scaleIn, listStagger } from '@/lib/motion.js';
 import { StarRating } from '@/features/reviews/StarRating.jsx';
 import {
   useAdminReviews,
@@ -33,7 +37,7 @@ const PAGE_SIZE = 25;
 
 const EMPTY_FORM = {
   product_id: null,
-  productName: '',  // for display only
+  productName: '',
   rating: 5,
   author_name: '',
   title: '',
@@ -51,7 +55,7 @@ function useDebounced(value, ms = 250) {
   return v;
 }
 
-// ---- Product picker (search by name, click to select) ----
+// ---- Product picker ----
 
 function ProductPicker({ value, valueName, onChange, disabled, error }) {
   const [open, setOpen] = useState(false);
@@ -64,7 +68,7 @@ function ProductPicker({ value, valueName, onChange, disabled, error }) {
     return (
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-ink-secondary">Product</label>
-        <div className="flex items-center gap-2 rounded-sm border border-line-subtle bg-bg-sunken px-3 py-2.5">
+        <div className="flex items-center gap-2 rounded-lg border border-line-subtle bg-bg-sunken px-3 py-2.5">
           <span className="flex-1 truncate text-sm text-ink-primary">{valueName}</span>
           <span className="font-mono text-xs text-ink-tertiary">#{value}</span>
           <button
@@ -72,7 +76,7 @@ function ProductPicker({ value, valueName, onChange, disabled, error }) {
             aria-label="Clear product"
             disabled={disabled}
             onClick={() => onChange(null, '')}
-            className="grid size-7 place-items-center rounded-sm text-ink-tertiary hover:bg-fill hover:text-ink-primary focus-visible:focus-ring disabled:opacity-50"
+            className="grid size-7 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring disabled:opacity-50"
           >
             <X className="size-3.5" />
           </button>
@@ -98,10 +102,14 @@ function ProductPicker({ value, valueName, onChange, disabled, error }) {
           }}
           onFocus={() => setOpen(true)}
           error={error}
-          className="!h-11"
         />
         {open && q.trim().length > 0 && (
-          <ul className="absolute z-10 mt-1 max-h-72 w-full overflow-y-auto rounded-sm border border-line-subtle bg-bg-elevated shadow-lg">
+          <motion.ul
+            variants={scaleIn}
+            initial="hidden"
+            animate="show"
+            className="absolute z-10 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-line-subtle bg-bg-elevated shadow-lg"
+          >
             {isLoading ? (
               <li className="px-3 py-2 text-xs text-ink-tertiary">Searching…</li>
             ) : items.length === 0 ? (
@@ -116,7 +124,7 @@ function ProductPicker({ value, valueName, onChange, disabled, error }) {
                       setOpen(false);
                       setQ('');
                     }}
-                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-fill focus-visible:focus-ring"
+                    className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-fill focus-visible:focus-ring"
                   >
                     <span className="truncate text-ink-primary">{p.name}</span>
                     <span className="font-mono text-xs text-ink-tertiary">{p.sku}</span>
@@ -124,7 +132,7 @@ function ProductPicker({ value, valueName, onChange, disabled, error }) {
                 </li>
               ))
             )}
-          </ul>
+          </motion.ul>
         )}
       </div>
     </div>
@@ -192,26 +200,33 @@ function ReviewForm({ initial, mode, onCancel, onSaved }) {
   }
 
   return (
-    <form
+    <motion.form
+      variants={scaleIn}
+      initial="hidden"
+      animate="show"
       onSubmit={handleSubmit}
-      className="mb-6 rounded-lg border border-line-subtle bg-bg-elevated p-6"
+      className="mb-6 rounded-xl border border-line-subtle bg-bg-elevated p-6 shadow-md"
     >
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-h3 text-ink-primary">
-          {isEdit ? 'Edit review' : 'New review'}
-        </h2>
+      <div className="mb-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="grid size-10 place-items-center rounded-full bg-warning/12 text-warning">
+            <Star className="size-5" aria-hidden="true" />
+          </div>
+          <h2 className="text-h3 font-semibold tracking-tight text-ink-primary">
+            {isEdit ? 'Edit review' : 'New review'}
+          </h2>
+        </div>
         <button
           type="button"
           aria-label="Close"
           onClick={onCancel}
-          className="grid size-9 place-items-center rounded-sm text-ink-tertiary hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+          className="grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
         >
           <X className="size-4" />
         </button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {/* Product picker (create only — editing locks the product) */}
         {!isEdit ? (
           <ProductPicker
             value={form.product_id}
@@ -224,7 +239,7 @@ function ReviewForm({ initial, mode, onCancel, onSaved }) {
         ) : (
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-ink-secondary">Product</label>
-            <div className="flex h-11 items-center rounded-sm border border-line-subtle bg-bg-sunken px-3 text-sm text-ink-primary">
+            <div className="flex h-11 items-center rounded-lg border border-line-subtle bg-bg-sunken px-3 text-sm text-ink-primary">
               {form.productName}
               <span className="ml-auto font-mono text-xs text-ink-tertiary">
                 #{form.product_id}
@@ -274,33 +289,55 @@ function ReviewForm({ initial, mode, onCancel, onSaved }) {
           value={form.body}
           onChange={set('body')}
           rows={4}
+          maxRows={8}
         />
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-ink-secondary">
-        <label className="inline-flex items-center gap-2">
+      {/* Flags */}
+      <div className="mt-4 flex flex-wrap gap-3">
+        <label
+          className={cn(
+            'flex cursor-pointer items-center gap-2.5 rounded-lg border px-4 py-2.5 text-sm transition-all duration-150',
+            form.is_verified_purchase
+              ? 'border-success/40 bg-success/8 text-success'
+              : 'border-line-subtle bg-bg-sunken text-ink-secondary hover:bg-fill',
+          )}
+        >
           <input
             type="checkbox"
             checked={form.is_verified_purchase}
             onChange={set('is_verified_purchase')}
-            className="size-4 rounded-sm border border-line-subtle bg-bg-sunken text-accent focus-visible:focus-ring"
+            className="sr-only"
           />
+          <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
           Verified purchase
         </label>
-        <label className="inline-flex items-center gap-2">
+        <label
+          className={cn(
+            'flex cursor-pointer items-center gap-2.5 rounded-lg border px-4 py-2.5 text-sm transition-all duration-150',
+            form.is_approved
+              ? 'border-accent/40 bg-accent/8 text-accent'
+              : 'border-line-subtle bg-bg-sunken text-ink-secondary hover:bg-fill',
+          )}
+        >
           <input
             type="checkbox"
             checked={form.is_approved}
             onChange={set('is_approved')}
-            className="size-4 rounded-sm border border-line-subtle bg-bg-sunken text-accent focus-visible:focus-ring"
+            className="sr-only"
           />
-          Approved (visible publicly)
+          <Star className="size-4 shrink-0" aria-hidden="true" />
+          Approved — visible publicly
         </label>
       </div>
 
-      {error && <p className="mt-3 text-xs text-danger">{error}</p>}
+      {error && (
+        <p className="mt-4 rounded-lg border border-danger/30 bg-danger/8 px-3 py-2 text-xs text-danger">
+          {error}
+        </p>
+      )}
 
-      <div className="mt-5 flex justify-end gap-3">
+      <div className="mt-6 flex justify-end gap-3">
         <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
           Cancel
         </Button>
@@ -308,7 +345,7 @@ function ReviewForm({ initial, mode, onCancel, onSaved }) {
           {isEdit ? 'Save changes' : 'Create review'}
         </Button>
       </div>
-    </form>
+    </motion.form>
   );
 }
 
@@ -329,30 +366,30 @@ function ReviewRow({ review, onEdit }) {
   }
 
   return (
-    <tr className="border-t border-line-subtle">
-      <td className="px-4 py-3">
+    <motion.tr variants={fadeUp} className="group border-t border-line-subtle transition-colors duration-150 hover:bg-fill/60">
+      <td className="px-5 py-3.5">
         <Link
           to={`/products/${review.product_id}`}
-          className="text-sm font-medium text-accent hover:underline"
+          className="font-mono text-xs font-medium text-accent transition-colors hover:text-accent-hover hover:underline focus-visible:focus-ring"
         >
           #{review.product_id}
         </Link>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-5 py-3.5">
         <div className="flex items-center gap-2">
           <StarRating value={review.rating} size="sm" />
-          <span className="text-xs tabular-nums text-ink-tertiary">{review.rating}</span>
+          <span className="nums text-xs tabular-nums text-ink-tertiary">{review.rating}</span>
         </div>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-5 py-3.5">
         <p className="text-sm font-medium text-ink-primary">{review.author_display}</p>
         {review.is_verified_purchase && (
-          <p className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-success">
-            <CheckCircle2 className="size-3" /> Verified
-          </p>
+          <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-success">
+            <CheckCircle2 className="size-3" aria-hidden="true" /> Verified
+          </span>
         )}
       </td>
-      <td className="px-4 py-3">
+      <td className="max-w-xs px-5 py-3.5">
         {review.title && (
           <p className="line-clamp-1 text-sm font-medium text-ink-primary">
             {review.title}
@@ -362,29 +399,34 @@ function ReviewRow({ review, onEdit }) {
           <p className="line-clamp-2 text-xs text-ink-secondary">{review.body}</p>
         )}
       </td>
-      <td className="px-4 py-3">
-        <button
-          type="button"
-          role="switch"
-          aria-checked={review.is_approved}
-          aria-label={review.is_approved ? 'Unapprove' : 'Approve'}
-          disabled={pending}
-          onClick={toggleApproved}
-          className={cn(
-            'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
-            'focus-visible:focus-ring disabled:opacity-40 disabled:pointer-events-none',
-            review.is_approved ? 'bg-accent' : 'bg-fill-strong',
-          )}
-        >
-          <span
+      <td className="px-5 py-3.5">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={review.is_approved}
+            aria-label={review.is_approved ? 'Unapprove' : 'Approve'}
+            disabled={pending}
+            onClick={toggleApproved}
             className={cn(
-              'pointer-events-none block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200',
-              review.is_approved ? 'translate-x-4' : 'translate-x-0',
+              'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
+              'focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-40',
+              review.is_approved ? 'bg-accent' : 'bg-fill-strong',
             )}
-          />
-        </button>
+          >
+            <span
+              className={cn(
+                'pointer-events-none block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200',
+                review.is_approved ? 'translate-x-4' : 'translate-x-0',
+              )}
+            />
+          </button>
+          <Badge tone={review.is_approved ? 'success' : 'neutral'} size="sm">
+            {review.is_approved ? 'Approved' : 'Hidden'}
+          </Badge>
+        </div>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-5 py-3.5">
         <div className="flex items-center justify-end gap-1">
           {confirming ? (
             <>
@@ -417,7 +459,7 @@ function ReviewRow({ review, onEdit }) {
                 aria-label="Edit review"
                 disabled={pending}
                 onClick={() => onEdit(review)}
-                className="grid size-9 place-items-center rounded-sm text-ink-tertiary hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+                className="grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
               >
                 <Pencil className="size-4" />
               </button>
@@ -426,7 +468,7 @@ function ReviewRow({ review, onEdit }) {
                 aria-label="Delete review"
                 disabled={pending}
                 onClick={() => setConfirming(true)}
-                className="grid size-9 place-items-center rounded-sm text-ink-tertiary hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
+                className="grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
               >
                 <Trash2 className="size-4" />
               </button>
@@ -434,7 +476,7 @@ function ReviewRow({ review, onEdit }) {
           )}
         </div>
       </td>
-    </tr>
+    </motion.tr>
   );
 }
 
@@ -446,7 +488,7 @@ export default function AdminReviewsPage() {
   const debouncedSearch = useDebounced(search, 250);
   const [ratingFilter, setRatingFilter] = useState('');
   const [approvedFilter, setApprovedFilter] = useState('');
-  const [editing, setEditing] = useState(null); // null | 'new' | review object
+  const [editing, setEditing] = useState(null);
 
   useEffect(() => {
     setPage(1);
@@ -470,8 +512,6 @@ export default function AdminReviewsPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const isFormOpen = editing !== null;
-  // For edit, we need productName too — but the row doesn't carry it. We do a
-  // best-effort: leave it blank if missing; the form locks the product anyway.
   const formInitial =
     editing && editing !== 'new'
       ? {
@@ -486,6 +526,8 @@ export default function AdminReviewsPage() {
           is_approved: editing.is_approved,
         }
       : null;
+
+  const hasFilters = !!(debouncedSearch || ratingFilter || approvedFilter);
 
   return (
     <AdminPage
@@ -513,32 +555,59 @@ export default function AdminReviewsPage() {
         />
       )}
 
-      {/* Filters */}
-      <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_140px_160px]">
-        <Input
-          icon={Search}
-          placeholder="Search title, body, or author…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <Select value={ratingFilter} onChange={(e) => setRatingFilter(e.target.value)}>
-          <option value="">All ratings</option>
-          <option value="5">★ 5 only</option>
-          <option value="4">★ 4 only</option>
-          <option value="3">★ 3 only</option>
-          <option value="2">★ 2 only</option>
-          <option value="1">★ 1 only</option>
-        </Select>
-        <Select value={approvedFilter} onChange={(e) => setApprovedFilter(e.target.value)}>
-          <option value="">All statuses</option>
-          <option value="true">Approved only</option>
-          <option value="false">Unapproved only</option>
-        </Select>
+      {/* Filters bar */}
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex-1">
+          <Input
+            icon={Search}
+            placeholder="Search title, body, or author…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Filter className="size-4 text-ink-tertiary" aria-hidden="true" />
+          <Select
+            value={ratingFilter}
+            onChange={(e) => setRatingFilter(e.target.value)}
+            className="w-[130px]"
+          >
+            <option value="">All ratings</option>
+            <option value="5">★ 5 only</option>
+            <option value="4">★ 4 only</option>
+            <option value="3">★ 3 only</option>
+            <option value="2">★ 2 only</option>
+            <option value="1">★ 1 only</option>
+          </Select>
+          <Select
+            value={approvedFilter}
+            onChange={(e) => setApprovedFilter(e.target.value)}
+            className="w-[150px]"
+          >
+            <option value="">All statuses</option>
+            <option value="true">Approved only</option>
+            <option value="false">Unapproved only</option>
+          </Select>
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch('');
+                setRatingFilter('');
+                setApprovedFilter('');
+              }}
+              className="text-xs text-ink-tertiary underline hover:text-ink-secondary focus-visible:focus-ring"
+            >
+              Clear
+            </button>
+          )}
+        </div>
       </div>
 
       {isError ? (
         <EmptyState
           icon={Star}
+          iconTone="danger"
           title="Couldn't load reviews"
           description="Something went wrong. Please try again."
           action={
@@ -548,37 +617,66 @@ export default function AdminReviewsPage() {
           }
         />
       ) : isLoading ? (
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-16" />
+        <div className="overflow-hidden rounded-xl border border-line-subtle bg-bg-elevated shadow-md">
+          <div className="border-b border-line-subtle bg-bg-sunken/60 px-5 py-3">
+            <Skeleton variant="text" lines={1} className="w-32" />
+          </div>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 border-t border-line-subtle px-5 py-4">
+              <Skeleton className="h-4 w-12 rounded" />
+              <Skeleton className="h-4 w-24 rounded" />
+              <div className="flex-1">
+                <Skeleton variant="text" lines={2} />
+              </div>
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
           ))}
         </div>
       ) : items.length === 0 ? (
         <EmptyState
           icon={MessageSquare}
+          size={hasFilters ? 'sm' : undefined}
+          bordered={hasFilters}
           title={
-            search || ratingFilter || approvedFilter
+            hasFilters
               ? 'No reviews match those filters'
               : 'No reviews yet'
           }
           description={
-            search || ratingFilter || approvedFilter
+            hasFilters
               ? 'Try clearing a filter.'
               : 'Use "New review" to seed your first one.'
           }
         />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border border-line-subtle bg-bg-elevated">
-            <table className="w-full min-w-[800px]">
+          <motion.div
+            className="overflow-x-auto rounded-xl border border-line-subtle bg-bg-elevated shadow-md"
+            variants={listStagger(0.025)}
+            initial="hidden"
+            animate="show"
+          >
+            <table className="w-full min-w-[840px]">
               <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-ink-tertiary">
-                  <th className="px-4 py-3 font-medium">Product</th>
-                  <th className="px-4 py-3 font-medium">Rating</th>
-                  <th className="px-4 py-3 font-medium">Author</th>
-                  <th className="px-4 py-3 font-medium">Review</th>
-                  <th className="px-4 py-3 font-medium">Approved</th>
-                  <th className="px-4 py-3 text-right font-medium">Actions</th>
+                <tr className="border-b border-line-subtle bg-bg-sunken/60 text-left">
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+                    Product
+                  </th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+                    Rating
+                  </th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+                    Author
+                  </th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+                    Review
+                  </th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+                    Status
+                  </th>
+                  <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -587,31 +685,36 @@ export default function AdminReviewsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </motion.div>
 
           {totalPages > 1 && (
-            <div className="mt-4 flex items-center justify-end gap-2">
-              <span className="text-xs text-ink-tertiary">
-                Page {page} of {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                aria-label="Previous page"
-                className="grid size-9 place-items-center rounded-sm border border-line-subtle text-ink-secondary hover:bg-fill focus-visible:focus-ring disabled:opacity-30 disabled:pointer-events-none"
-              >
-                <ChevronLeft className="size-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                aria-label="Next page"
-                className="grid size-9 place-items-center rounded-sm border border-line-subtle text-ink-secondary hover:bg-fill focus-visible:focus-ring disabled:opacity-30 disabled:pointer-events-none"
-              >
-                <ChevronRight className="size-4" />
-              </button>
+            <div className="mt-4 flex items-center justify-between gap-2">
+              <p className="text-xs text-ink-tertiary">
+                <span className="nums font-medium text-ink-secondary">{total}</span> review{total === 1 ? '' : 's'} total
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-ink-tertiary">
+                  Page <span className="nums">{page}</span> of <span className="nums">{totalPages}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  aria-label="Previous page"
+                  className="grid size-9 place-items-center rounded-md border border-line-subtle text-ink-secondary transition-colors hover:bg-fill hover:border-line-strong focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <ChevronLeft className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  aria-label="Next page"
+                  className="grid size-9 place-items-center rounded-md border border-line-subtle text-ink-secondary transition-colors hover:bg-fill hover:border-line-strong focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <ChevronRight className="size-4" />
+                </button>
+              </div>
             </div>
           )}
         </>

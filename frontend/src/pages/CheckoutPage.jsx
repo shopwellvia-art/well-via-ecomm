@@ -23,18 +23,20 @@ import { Button } from '@/components/ui/Button.jsx';
 import { Card } from '@/components/ui/Card.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
+import AddressPicker from '@/features/addresses/components/AddressPicker.jsx';
 import { useCart } from '@/features/cart/hooks.js';
 import { useProduct } from '@/features/products/hooks.js';
 import { useCheckout } from '@/features/payments/hooks.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { useRateQuote } from '@/features/shipping/hooks.js';
-import { readSavedPincode } from '@/features/shipping/storage.js';
 import FreeShippingNudge from '@/features/shipping/components/FreeShippingNudge.jsx';
 import { useCodCheck } from '@/features/cod/hooks.js';
 import CodOtpModal from '@/features/cod/components/CodOtpModal.jsx';
 import { usePaymentInstruments } from '@/features/payments/instruments.js';
+import { useActivePaymentMethods } from '@/features/paymentMethods/hooks.js';
 import { usePublicSettings } from '@/features/settings/public.js';
 import { cn, formatPrice } from '@/lib/utils.js';
+import { fadeUp, staggerContainer, listStagger } from '@/lib/motion.js';
 
 const INSTRUMENT_ICONS = {
   upi: Smartphone,
@@ -42,15 +44,6 @@ const INSTRUMENT_ICONS = {
   card: CreditCard,
   wallet: WalletCards,
 };
-import { fadeUp } from '@/lib/motion.js';
-
-// Pulls the first 6-digit run from the free-text address. Returns '' if none
-// found. Cheaper + more reliable than asking the customer to enter the pin
-// twice — most Indian shipping addresses end with "... PIN 110001".
-function extractPincode(address) {
-  const m = (address || '').match(/\b(\d{6})\b/);
-  return m ? m[1] : '';
-}
 
 // Mirrors backend compute_line_tax — active rates sum, applied to (price × qty).
 function computeBuyNowTax(product, qty) {
@@ -61,13 +54,22 @@ function computeBuyNowTax(product, qty) {
   return Math.round(Number(product.price) * qty * rateSum) / 100;
 }
 
+function SectionLabel({ step, children }) {
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-accent/12 text-[11px] font-bold text-accent">
+        {step}
+      </span>
+      <h2 className="text-h3 text-ink-primary tracking-tight">{children}</h2>
+    </div>
+  );
+}
+
 export default function CheckoutPage() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const [params] = useSearchParams();
 
-  // Buy-now mode: ?buyNow=<id>&qty=<n>. Bypasses the cart and checks out
-  // exactly that single line. Used by the product page's "Buy Now" button.
   const buyNowId = params.get('buyNow');
   const buyNowQty = Math.max(1, Number(params.get('qty') || 1));
   const buyNowMode = !!buyNowId;
@@ -78,34 +80,30 @@ export default function CheckoutPage() {
   const { data: cart, isLoading: cartLoading } = useCart();
   const checkout = useCheckout();
 
-  // Seed the address with the saved pincode (if any) so the customer doesn't
-  // have to retype it. Anything else in the address still needs to be entered.
-  const [address, setAddress] = useState(() => {
-    const saved = readSavedPincode();
-    return saved ? `\n${saved}` : '';
-  });
+  const [addressPayload, setAddressPayload] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
-  // 'prepaid' | 'cod' | 'split_cod' — the picker. Defaults to prepaid to match prior behavior.
   const [paymentMethod, setPaymentMethod] = useState('prepaid');
-  // When `paymentMethod` is 'prepaid', the customer also picks an
-  // instrument (UPI / Netbanking / Card / Wallet). Default is set on the
-  // server's "suggested" once we load it.
   const [paymentInstrument, setPaymentInstrument] = useState(null);
-  // Customer phone — used for tracking SMS and (when COD + OTP required)
-  // as the verification target. Defaults from the account if set.
   const [customerPhone, setCustomerPhone] = useState(() => user?.phone || '');
-  // When set, the OTP modal is open; resolves to `true` once verified.
+  const [phoneUserEdited, setPhoneUserEdited] = useState(false);
   const [otpOpen, setOtpOpen] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
+  // Gateway selector — only shown when >1 active gateway and method is prepaid/split_cod.
+  const [selectedGateway, setSelectedGateway] = useState(null);
 
-  const pincode = extractPincode(address);
+  const pincode = addressPayload.pincode || '';
+
+  useEffect(() => {
+    if (phoneUserEdited) return;
+    const addrPhone = addressPayload.phone || '';
+    if (addrPhone && addrPhone !== customerPhone) {
+      setCustomerPhone(addrPhone);
+    }
+  }, [addressPayload.phone, phoneUserEdited]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isLoading = buyNowMode ? buyNowLoading : cartLoading;
 
-  // Unify both sources into one shape: items list + the totals to display.
-  // Cart mode trusts the server's numbers. Buy-now mode computes tax locally
-  // (no coupon possible — coupons attach to the persistent cart).
   const { items, subtotal, taxAmount, discountAmount, total, couponCode, checkoutItems } =
     useMemo(() => {
       if (buyNowMode) {
@@ -152,36 +150,24 @@ export default function CheckoutPage() {
       };
     }, [buyNowMode, buyNowProduct, buyNowQty, cart]);
 
-  // Live rate quote — fires only when the address contains a valid pin and
-  // we have items. The backend is the authoritative source at checkout, so
-  // this is purely for the summary display.
   const { data: quote } = useRateQuote(pincode, checkoutItems);
   const shippingAmount = quote ? Number(quote.amount) : 0;
 
-  // COD availability for this cart + pincode. The backend re-runs the gate
-  // chain at checkout, so this is purely for the picker UI.
   const { data: codCheck } = useCodCheck(pincode, checkoutItems);
   const codAvailable = !!codCheck?.available;
   const codSurcharge = codCheck ? Number(codCheck.surcharge_amount) : 0;
   const splitAvailable = !!codCheck?.split_available;
   const splitPrepaid = codCheck ? Number(codCheck.split_prepaid_amount) : 0;
 
-  // Payment instruments (UPI / Netbanking / Card / Wallet). Only relevant
-  // when `paymentMethod` is 'prepaid' or 'split_cod'.
   const { data: instrumentsData } = usePaymentInstruments();
   const enabledInstruments = (instrumentsData?.items || []).filter((i) => i.enabled);
   const suggestedInstrument = enabledInstruments.find((i) => i.suggested);
 
-  // Seed `paymentInstrument` once the list arrives — pick the server's
-  // suggested one (or the first enabled). Effect, not inline, so we don't
-  // setState during render.
   useEffect(() => {
     if (paymentInstrument || enabledInstruments.length === 0) return;
     setPaymentInstrument((suggestedInstrument || enabledInstruments[0]).code);
   }, [paymentInstrument, enabledInstruments, suggestedInstrument]);
 
-  // If the customer's selected method/instrument becomes unavailable (cart
-  // change, setting flip), fall back gracefully.
   useEffect(() => {
     if (!codCheck) return;
     if (paymentMethod === 'cod' && !codAvailable) setPaymentMethod('prepaid');
@@ -197,19 +183,15 @@ export default function CheckoutPage() {
     }
   }, [instrumentsData, paymentInstrument, enabledInstruments, suggestedInstrument]);
 
-  // The active instrument's discount % — used to compute the discount on
-  // the order subtotal for the picker preview. Server is authoritative.
   const activeInstrument = enabledInstruments.find((i) => i.code === paymentInstrument);
   const instrumentDiscountPct = activeInstrument
     ? Number(activeInstrument.discount_percent || 0)
     : 0;
-  // Instrument discount applies only when the method touches the gateway.
   const instrumentApplies = paymentMethod === 'prepaid' || paymentMethod === 'split_cod';
   const instrumentDiscount = instrumentApplies
     ? Math.round(((subtotal + taxAmount) * instrumentDiscountPct) / 100 * 100) / 100
     : 0;
 
-  // COD surcharge applies to both 'cod' and 'split_cod' for the display total.
   const codSurchargeApplied =
     paymentMethod === 'cod' || paymentMethod === 'split_cod' ? codSurcharge : 0;
 
@@ -217,26 +199,35 @@ export default function CheckoutPage() {
     0,
     total + shippingAmount + codSurchargeApplied - instrumentDiscount,
   );
-  // For Split COD the balance the carrier collects = displayedTotal − prepaid.
   const splitBalance = Math.max(0, displayedTotal - splitPrepaid);
 
-  // Whether the OTP step is required for this checkout. Public settings
-  // expose the admin's toggle so we don't issue a doomed /cod/send-otp on
-  // stores that don't use it.
   const { data: publicSettings } = usePublicSettings();
   const codOtpRequired =
     paymentMethod === 'cod' &&
     String(publicSettings?.['cod.require_otp'] || 'true').toLowerCase() === 'true';
 
-  const canSubmit = items.length > 0 && address.trim().length >= 3 && !submitting;
+  // Active payment gateways — used only when method is prepaid or split_cod.
+  const { data: activeMethodsData } = useActivePaymentMethods();
+  const activeGateways = activeMethodsData?.items ?? [];
+  // Gateway selector is only shown when >1 gateway is available for online payment.
+  const showGatewaySelector = instrumentApplies && activeGateways.length > 1;
+  // Auto-select the first gateway when the list arrives and nothing is chosen yet.
+  const resolvedGateway =
+    selectedGateway ??
+    (activeGateways.length > 0 ? activeGateways[0].code : null);
+
+  const hasValidAddress =
+    addressPayload.address_id != null ||
+    (addressPayload.address != null && addressPayload.pincode);
+  const canSubmit = items.length > 0 && hasValidAddress && !submitting;
 
   if (!user) return <Navigate to="/login" replace />;
 
   if (!isLoading && items.length === 0) {
     return (
       <Page>
-        <h1 className="text-h1 text-ink-primary">Checkout</h1>
-        <div className="mt-6">
+        <h1 className="text-h1 text-ink-primary tracking-tight">Checkout</h1>
+        <div className="mt-8">
           <EmptyState
             icon={ShoppingBag}
             title="Your cart is empty"
@@ -253,8 +244,6 @@ export default function CheckoutPage() {
   }
 
   function startPay() {
-    // COD with OTP required: open the modal first. The modal calls
-    // submitCheckout() on success.
     if (codOtpRequired && !otpVerified) {
       setError(null);
       if (!customerPhone || customerPhone.trim().length < 8) {
@@ -273,27 +262,27 @@ export default function CheckoutPage() {
     try {
       const resp = await checkout.mutateAsync({
         items: checkoutItems,
-        shipping_address: address.trim(),
         payment_method: paymentMethod,
-        // Instrument only matters for gateway-routed methods. COD ignores it
-        // server-side but we omit it from the body to keep the payload tidy.
+        ...(addressPayload.address_id != null
+          ? { address_id: addressPayload.address_id }
+          : {}),
+        ...(addressPayload.address
+          ? { address: addressPayload.address, save_address: addressPayload.save_address ?? false }
+          : {}),
         ...(instrumentApplies && paymentInstrument
           ? { payment_instrument: paymentInstrument }
           : {}),
-        // Phone is always sent when present (used for tracking SMS on
-        // prepaid orders and as the OTP target on COD orders).
         ...(customerPhone?.trim()
           ? { customer_phone: customerPhone.trim() }
           : {}),
-        // Pincode is parsed out of the address; we send it explicitly so the
-        // backend doesn't have to parse free-text and so shipping is quoted
-        // server-side against the exact pin we showed in the summary.
-        ...(pincode ? { shipping_pincode: pincode } : {}),
-        // Only send coupon_code from the cart path; buy-now never carries one.
         ...(couponCode ? { coupon_code: couponCode } : {}),
+        // Gateway code: include when method is prepaid/split_cod and a
+        // specific gateway is available. For 0 or 1 gateways the backend
+        // picks the only one; for >1 we send the customer's choice.
+        ...(instrumentApplies && resolvedGateway
+          ? { gateway_code: resolvedGateway }
+          : {}),
       });
-      // Hand off to the provider's hosted checkout page. The provider — or
-      // our mock simulator — redirects back to /payments/return when done.
       window.location.assign(resp.redirect_url);
     } catch (err) {
       setSubmitting(false);
@@ -309,362 +298,433 @@ export default function CheckoutPage() {
       <Breadcrumbs
         items={[{ label: 'Cart', to: '/cart' }]}
         current="Checkout"
-        className="mb-6"
+        className="mb-5"
       />
+
       <Link
         to="/cart"
-        className="inline-flex items-center gap-1 text-sm text-ink-secondary hover:text-ink-primary"
+        className="inline-flex items-center gap-1.5 text-sm text-ink-secondary hover:text-ink-primary transition-colors"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
         Back to cart
       </Link>
-      <h1 className="mt-2 text-h1 text-ink-primary">Checkout</h1>
+      <h1 className="mt-2 text-h1 text-ink-primary tracking-tight">Checkout</h1>
 
       {isLoading ? (
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_360px]">
+          <div className="flex flex-col gap-4">
+            <Skeleton className="h-48 rounded-lg" />
+            <Skeleton className="h-64 rounded-lg" />
+          </div>
           <Skeleton className="h-72 rounded-lg" />
-          <Skeleton className="h-56 rounded-lg" />
         </div>
       ) : (
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
-          {/* Shipping + payment method */}
-          <motion.div variants={fadeUp} initial="hidden" animate="show">
-            <Card className="p-6">
-              <h2 className="text-h3 text-ink-primary">Shipping address</h2>
-              <p className="mt-1 text-sm text-ink-secondary">
-                Used only for delivery — never shared.
-              </p>
-              <label className="mt-5 block text-sm font-medium text-ink-primary" htmlFor="ship">
-                Full address
-              </label>
-              <textarea
-                id="ship"
-                rows={3}
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="House no, street, city, state, PIN"
-                className="mt-2 w-full resize-none rounded-sm border border-line-subtle bg-bg-elevated p-3 text-sm text-ink-primary focus-visible:focus-ring"
-              />
-
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-ink-primary" htmlFor="ship-phone">
-                  Phone {codOtpRequired && <span className="text-warning">(OTP verification required for COD)</span>}
-                </label>
-                <input
-                  id="ship-phone"
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  value={customerPhone}
-                  onChange={(e) => {
-                    setCustomerPhone(e.target.value);
-                    // Editing the phone invalidates a prior OTP verification.
-                    setOtpVerified(false);
-                  }}
-                  placeholder="+91 98765 43210"
-                  className="mt-2 w-full rounded-sm border border-line-subtle bg-bg-elevated p-3 text-sm text-ink-primary focus-visible:focus-ring"
-                />
-                <p className="mt-1 text-[11px] text-ink-tertiary">
-                  We use this for delivery updates
-                  {codOtpRequired ? ' and the COD verification SMS.' : '.'}
+        <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_360px]">
+          {/* Left column: shipping + payment */}
+          <motion.div
+            variants={staggerContainer(0.1)}
+            initial="hidden"
+            animate="show"
+            className="flex flex-col gap-5"
+          >
+            {/* Step 1 – Shipping address */}
+            <motion.div variants={fadeUp}>
+              <Card className="p-6">
+                <SectionLabel step="1">Delivery address</SectionLabel>
+                <p className="mb-4 text-sm text-ink-secondary">
+                  Used only for delivery — never shared.
                 </p>
-              </div>
+                <AddressPicker
+                  onChange={(payload) => setAddressPayload(payload)}
+                />
 
-              <h2 className="mt-8 text-h3 text-ink-primary">Payment method</h2>
-              <div className="mt-3 flex flex-col gap-2">
-                {/* Instrument-level prepaid cards. Each instrument is a
-                    sibling card so the customer picks a specific rail
-                    (instead of a generic "Pay online" → instrument step
-                    on the gateway). */}
-                {enabledInstruments.length > 0 && (
-                  <p className="px-1 text-[10px] font-semibold uppercase tracking-wide text-ink-tertiary">
-                    {suggestedInstrument
-                      ? 'Suggested payment method'
-                      : 'Pay online'}
-                  </p>
-                )}
-                {enabledInstruments.map((inst) => {
-                  const Icon = INSTRUMENT_ICONS[inst.code] || Wallet;
-                  const selected =
-                    paymentMethod === 'prepaid' && paymentInstrument === inst.code;
-                  const discount = Number(inst.discount_percent || 0);
-                  return (
-                    <button
-                      key={inst.code}
-                      type="button"
-                      onClick={() => {
-                        setPaymentMethod('prepaid');
-                        setPaymentInstrument(inst.code);
-                      }}
-                      className={cn(
-                        'flex w-full items-start gap-3 rounded-sm border p-4 text-left transition-colors',
-                        selected
-                          ? 'border-accent bg-accent/5'
-                          : 'border-line-subtle bg-bg-elevated hover:border-line-strong',
-                      )}
-                    >
-                      <span className="grid size-10 shrink-0 place-items-center rounded-sm bg-accent/15 text-accent">
-                        <Icon className="size-5" aria-hidden="true" />
+                <div className="mt-5 border-t border-line-subtle pt-5">
+                  <label className="block text-sm font-medium text-ink-primary" htmlFor="ship-phone">
+                    Phone number
+                    {codOtpRequired && (
+                      <span className="ml-1.5 text-xs text-warning font-normal">
+                        (OTP required for COD)
                       </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold text-ink-primary">
-                            {inst.label}
-                          </p>
-                          {inst.suggested && (
-                            <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success">
-                              Suggested
-                            </span>
-                          )}
-                          {discount > 0 && (
-                            <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
-                              Extra {discount}% off
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-ink-secondary">
-                          {inst.description}
-                        </p>
-                      </div>
-                      {selected && (
-                        <CheckCircle2 className="size-5 shrink-0 text-accent" aria-hidden="true" />
-                      )}
-                    </button>
-                  );
-                })}
-
-                {/* COD */}
-                <button
-                  type="button"
-                  onClick={() => codAvailable && setPaymentMethod('cod')}
-                  disabled={!codAvailable}
-                  className={cn(
-                    'flex w-full items-start gap-3 rounded-sm border p-4 text-left transition-colors',
-                    !codAvailable && 'cursor-not-allowed opacity-60',
-                    codAvailable && paymentMethod === 'cod'
-                      ? 'border-accent bg-accent/5'
-                      : codAvailable
-                      ? 'border-line-subtle bg-bg-elevated hover:border-line-strong'
-                      : 'border-line-subtle bg-bg-elevated',
-                  )}
-                >
-                  <span className="grid size-10 shrink-0 place-items-center rounded-sm bg-warning/15 text-warning">
-                    <Banknote className="size-5" aria-hidden="true" />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-ink-primary">
-                        Cash on Delivery
-                      </p>
-                      {codCheck && codAvailable && codSurcharge > 0 && (
-                        <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
-                          +{formatPrice(codSurcharge)} fee
-                        </span>
-                      )}
-                    </div>
-                    {codAvailable ? (
-                      <p className="text-xs text-ink-secondary">
-                        Pay {formatPrice(displayedTotal)} on delivery. We&apos;ll send your order
-                        to the carrier immediately.
-                      </p>
-                    ) : codCheck?.reasons?.length ? (
-                      <ul className="mt-1 list-disc pl-4 text-xs text-ink-tertiary">
-                        {codCheck.reasons.slice(0, 3).map((r, i) => (
-                          <li key={i}>{r}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-xs text-ink-tertiary">
-                        Checking availability…
-                      </p>
                     )}
-                  </div>
-                  {codAvailable && paymentMethod === 'cod' ? (
-                    <CheckCircle2 className="size-5 shrink-0 text-accent" aria-hidden="true" />
-                  ) : !codAvailable && codCheck ? (
-                    <XCircle className="size-5 shrink-0 text-ink-tertiary" aria-hidden="true" />
-                  ) : null}
-                </button>
+                  </label>
+                  <input
+                    id="ship-phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    value={customerPhone}
+                    onChange={(e) => {
+                      setCustomerPhone(e.target.value);
+                      setPhoneUserEdited(true);
+                      setOtpVerified(false);
+                    }}
+                    placeholder="+91 98765 43210"
+                    className="mt-2 w-full rounded-lg border border-line-subtle bg-bg-elevated px-3 py-2.5 text-sm text-ink-primary placeholder:text-ink-tertiary transition-colors hover:border-line-strong focus-visible:focus-ring"
+                  />
+                  <p className="mt-1 text-[11px] text-ink-tertiary">
+                    We use this for delivery updates
+                    {codOtpRequired ? ' and the COD verification SMS.' : '.'}
+                  </p>
+                </div>
+              </Card>
+            </motion.div>
 
-                {/* Split COD — only renders when the admin has enabled it
-                    AND the cart total is meaningfully above the prepaid
-                    portion. Otherwise hidden entirely so the picker stays
-                    tidy on stores that don't offer it. */}
-                {splitAvailable && (
+            {/* Step 2 – Payment method */}
+            <motion.div variants={fadeUp}>
+              <Card className="p-6">
+                <SectionLabel step="2">Payment method</SectionLabel>
+
+                <div className="flex flex-col gap-2.5">
+                  {enabledInstruments.length > 0 && (
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-tertiary px-0.5">
+                      {suggestedInstrument ? 'Suggested' : 'Pay online'}
+                    </p>
+                  )}
+
+                  {enabledInstruments.map((inst) => {
+                    const Icon = INSTRUMENT_ICONS[inst.code] || Wallet;
+                    const selected =
+                      paymentMethod === 'prepaid' && paymentInstrument === inst.code;
+                    const discount = Number(inst.discount_percent || 0);
+                    return (
+                      <button
+                        key={inst.code}
+                        type="button"
+                        onClick={() => {
+                          setPaymentMethod('prepaid');
+                          setPaymentInstrument(inst.code);
+                        }}
+                        className={cn(
+                          'flex w-full items-start gap-3 rounded-lg border p-4 text-left transition-all duration-150',
+                          selected
+                            ? 'border-accent bg-accent/6 shadow-glow-sm'
+                            : 'border-line-subtle bg-bg-elevated hover:border-line-strong hover:shadow-sm',
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'grid size-10 shrink-0 place-items-center rounded-lg transition-colors',
+                            selected ? 'bg-accent/20 text-accent' : 'bg-accent/10 text-accent',
+                          )}
+                        >
+                          <Icon className="size-5" aria-hidden="true" />
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold text-ink-primary">
+                              {inst.label}
+                            </p>
+                            {inst.suggested && (
+                              <span className="rounded-full bg-success/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success">
+                                Suggested
+                              </span>
+                            )}
+                            {discount > 0 && (
+                              <span className="rounded-full bg-accent/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
+                                {discount}% off
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 text-xs text-ink-secondary">
+                            {inst.description}
+                          </p>
+                        </div>
+                        {selected && (
+                          <CheckCircle2 className="size-5 shrink-0 text-accent mt-0.5" aria-hidden="true" />
+                        )}
+                      </button>
+                    );
+                  })}
+
+                  {/* COD */}
                   <button
                     type="button"
-                    onClick={() => setPaymentMethod('split_cod')}
+                    onClick={() => codAvailable && setPaymentMethod('cod')}
+                    disabled={!codAvailable}
                     className={cn(
-                      'flex w-full items-start gap-3 rounded-sm border p-4 text-left transition-colors',
-                      paymentMethod === 'split_cod'
-                        ? 'border-accent bg-accent/5'
-                        : 'border-line-subtle bg-bg-elevated hover:border-line-strong',
+                      'flex w-full items-start gap-3 rounded-lg border p-4 text-left transition-all duration-150',
+                      !codAvailable && 'cursor-not-allowed opacity-50',
+                      codAvailable && paymentMethod === 'cod'
+                        ? 'border-accent bg-accent/6 shadow-glow-sm'
+                        : codAvailable
+                        ? 'border-line-subtle bg-bg-elevated hover:border-line-strong hover:shadow-sm'
+                        : 'border-line-subtle bg-bg-elevated',
                     )}
                   >
-                    <span className="grid size-10 shrink-0 place-items-center rounded-sm bg-blue-500/15 text-blue-400">
-                      <Split className="size-5" aria-hidden="true" />
+                    <span
+                      className={cn(
+                        'grid size-10 shrink-0 place-items-center rounded-lg',
+                        codAvailable && paymentMethod === 'cod'
+                          ? 'bg-warning/20 text-warning'
+                          : 'bg-warning/10 text-warning',
+                      )}
+                    >
+                      <Banknote className="size-5" aria-hidden="true" />
                     </span>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <p className="text-sm font-semibold text-ink-primary">
-                          Split COD
+                          Cash on Delivery
                         </p>
-                        {codSurcharge > 0 && (
-                          <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
+                        {codCheck && codAvailable && codSurcharge > 0 && (
+                          <span className="rounded-full bg-warning/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
                             +{formatPrice(codSurcharge)} fee
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-ink-secondary">
-                        Pay <span className="font-semibold text-ink-primary">
-                          {formatPrice(splitPrepaid)}
-                        </span> now via PhonePe,{' '}
-                        <span className="font-semibold text-ink-primary">
-                          {formatPrice(splitBalance)}
-                        </span> on delivery.
-                      </p>
+                      {codAvailable ? (
+                        <p className="mt-0.5 text-xs text-ink-secondary">
+                          Pay {formatPrice(displayedTotal)} on delivery.
+                        </p>
+                      ) : codCheck?.reasons?.length ? (
+                        <ul className="mt-1 list-disc pl-4 text-xs text-ink-tertiary">
+                          {codCheck.reasons.slice(0, 3).map((r, i) => (
+                            <li key={i}>{r}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-0.5 text-xs text-ink-tertiary">
+                          Checking availability…
+                        </p>
+                      )}
                     </div>
-                    {paymentMethod === 'split_cod' && (
-                      <CheckCircle2 className="size-5 shrink-0 text-accent" aria-hidden="true" />
-                    )}
+                    {codAvailable && paymentMethod === 'cod' ? (
+                      <CheckCircle2 className="size-5 shrink-0 text-accent mt-0.5" aria-hidden="true" />
+                    ) : !codAvailable && codCheck ? (
+                      <XCircle className="size-5 shrink-0 text-ink-tertiary mt-0.5" aria-hidden="true" />
+                    ) : null}
                   </button>
-                )}
-              </div>
 
-              {error && (
-                <div className="mt-4 flex items-start gap-2 rounded-sm border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                  <span>{error}</span>
+                  {/* Split COD */}
+                  {splitAvailable && (
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('split_cod')}
+                      className={cn(
+                        'flex w-full items-start gap-3 rounded-lg border p-4 text-left transition-all duration-150',
+                        paymentMethod === 'split_cod'
+                          ? 'border-accent bg-accent/6 shadow-glow-sm'
+                          : 'border-line-subtle bg-bg-elevated hover:border-line-strong hover:shadow-sm',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'grid size-10 shrink-0 place-items-center rounded-lg',
+                          paymentMethod === 'split_cod'
+                            ? 'bg-info/20 text-info'
+                            : 'bg-info/10 text-info',
+                        )}
+                      >
+                        <Split className="size-5" aria-hidden="true" />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-ink-primary">
+                            Split COD
+                          </p>
+                          {codSurcharge > 0 && (
+                            <span className="rounded-full bg-warning/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
+                              +{formatPrice(codSurcharge)} fee
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs text-ink-secondary">
+                          Pay{' '}
+                          <span className="font-semibold text-ink-primary nums">
+                            {formatPrice(splitPrepaid)}
+                          </span>{' '}
+                          now,{' '}
+                          <span className="font-semibold text-ink-primary nums">
+                            {formatPrice(splitBalance)}
+                          </span>{' '}
+                          on delivery.
+                        </p>
+                      </div>
+                      {paymentMethod === 'split_cod' && (
+                        <CheckCircle2 className="size-5 shrink-0 text-accent mt-0.5" aria-hidden="true" />
+                      )}
+                    </button>
+                  )}
                 </div>
-              )}
-            </Card>
+
+                {/* Gateway selector — only when >1 active gateway and online payment */}
+                {showGatewaySelector && (
+                  <div className="mt-5">
+                    <p className="px-1 text-[10px] font-semibold uppercase tracking-wide text-ink-tertiary">
+                      Pay via
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {activeGateways.map((gw) => {
+                        const active = resolvedGateway === gw.code;
+                        return (
+                          <button
+                            key={gw.code}
+                            type="button"
+                            onClick={() => setSelectedGateway(gw.code)}
+                            className={cn(
+                              'rounded-sm border px-3 py-1.5 text-xs font-medium transition-colors',
+                              active
+                                ? 'border-accent bg-accent/8 text-accent'
+                                : 'border-line-subtle bg-bg-elevated text-ink-secondary hover:border-line-strong hover:text-ink-primary',
+                            )}
+                          >
+                            {gw.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {error && (
+                  <div className="mt-5 flex items-start gap-2.5 rounded-lg border border-danger/35 bg-danger/8 p-3.5 text-sm text-danger shadow-glow-danger">
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                    <span>{error}</span>
+                  </div>
+                )}
+              </Card>
+            </motion.div>
           </motion.div>
 
-          {/* Summary */}
+          {/* Right column — sticky summary */}
           <div className="lg:sticky lg:top-24 lg:self-start">
-            <Card className="p-5">
-              <h2 className="text-h3 text-ink-primary">Order summary</h2>
-              <div className="mt-3">
-                <FreeShippingNudge subtotal={subtotal} />
-              </div>
-              <ul className="mt-4 flex flex-col gap-2 text-sm">
-                {items.map((i) => (
-                  <li
-                    key={i.product_id}
-                    className="flex items-baseline justify-between gap-3 text-ink-secondary"
-                  >
-                    <span className="truncate">
-                      {i.name}{' '}
-                      <span className="text-ink-tertiary">× {i.quantity}</span>
-                    </span>
-                    <span className="text-ink-primary tabular-nums">
-                      {formatPrice(i.line_total)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <dl className="mt-4 border-t border-line-subtle pt-4 text-sm">
-                <div className="flex justify-between text-ink-secondary">
-                  <dt>Subtotal</dt>
-                  <dd className="text-ink-primary tabular-nums">{formatPrice(subtotal)}</dd>
+            <Card className="overflow-hidden p-0">
+              {/* Accent band */}
+              <div className="h-1 w-full bg-gradient-to-r from-accent via-accent-mid to-accent/60" aria-hidden="true" />
+
+              <div className="p-5">
+                <h2 className="text-h3 text-ink-primary tracking-tight">Order summary</h2>
+                <div className="mt-3">
+                  <FreeShippingNudge subtotal={subtotal} />
                 </div>
-                {taxAmount > 0 && (
-                  <div className="mt-2 flex justify-between text-ink-secondary">
-                    <dt>Tax</dt>
-                    <dd className="text-ink-primary tabular-nums">{formatPrice(taxAmount)}</dd>
+
+                {/* Item list */}
+                <motion.ul
+                  variants={listStagger(0.04)}
+                  initial="hidden"
+                  animate="show"
+                  className="mt-4 flex flex-col gap-1.5"
+                >
+                  {items.map((i) => (
+                    <li
+                      key={i.product_id}
+                      className="flex items-baseline justify-between gap-3 text-sm text-ink-secondary"
+                    >
+                      <span className="truncate">
+                        {i.name}{' '}
+                        <span className="text-ink-tertiary nums">× {i.quantity}</span>
+                      </span>
+                      <span className="shrink-0 font-medium text-ink-primary nums">
+                        {formatPrice(i.line_total)}
+                      </span>
+                    </li>
+                  ))}
+                </motion.ul>
+
+                {/* Totals */}
+                <dl className="mt-4 flex flex-col gap-2 border-t border-line-subtle pt-4 text-sm">
+                  <div className="flex justify-between text-ink-secondary">
+                    <dt>Subtotal</dt>
+                    <dd className="font-medium text-ink-primary nums">{formatPrice(subtotal)}</dd>
                   </div>
-                )}
-                {discountAmount > 0 && (
-                  <div className="mt-2 flex justify-between text-success">
-                    <dt className="flex items-center gap-1">
-                      <TicketPercent className="size-3.5" aria-hidden="true" />
-                      Discount
-                      {couponCode && (
-                        <span className="font-mono text-[10px] text-ink-tertiary">
-                          ({couponCode})
-                        </span>
-                      )}
-                    </dt>
-                    <dd className="tabular-nums">−{formatPrice(discountAmount)}</dd>
-                  </div>
-                )}
-                <div className="mt-2 flex justify-between text-ink-secondary">
-                  <dt>Delivery</dt>
-                  {quote ? (
-                    <dd className="text-ink-primary tabular-nums">
-                      {formatPrice(shippingAmount)}
-                    </dd>
-                  ) : pincode ? (
-                    <dd className="text-ink-tertiary text-xs">Calculating…</dd>
-                  ) : (
-                    <dd className="text-ink-tertiary text-xs">
-                      Add a 6-digit pincode to the address
-                    </dd>
-                  )}
-                </div>
-                {(paymentMethod === 'cod' || paymentMethod === 'split_cod') &&
-                  codSurcharge > 0 && (
-                    <div className="mt-2 flex justify-between text-ink-secondary">
-                      <dt>COD fee</dt>
-                      <dd className="text-ink-primary tabular-nums">
-                        {formatPrice(codSurcharge)}
-                      </dd>
+                  {taxAmount > 0 && (
+                    <div className="flex justify-between text-ink-secondary">
+                      <dt>Tax</dt>
+                      <dd className="font-medium text-ink-primary nums">{formatPrice(taxAmount)}</dd>
                     </div>
                   )}
-                {instrumentApplies && instrumentDiscount > 0 && activeInstrument && (
-                  <div className="mt-2 flex justify-between text-success">
-                    <dt className="inline-flex items-center gap-1">
-                      <span className="capitalize">{activeInstrument.label}</span>
-                      <span className="font-mono text-[10px] text-ink-tertiary">
-                        ({instrumentDiscountPct}% off)
-                      </span>
-                    </dt>
-                    <dd className="tabular-nums">−{formatPrice(instrumentDiscount)}</dd>
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between">
+                      <dt className="flex items-center gap-1 text-success">
+                        <TicketPercent className="size-3.5" aria-hidden="true" />
+                        Discount
+                        {couponCode && (
+                          <span className="font-mono text-[10px] text-ink-tertiary">
+                            ({couponCode})
+                          </span>
+                        )}
+                      </dt>
+                      <dd className="font-semibold text-success nums">−{formatPrice(discountAmount)}</dd>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-ink-secondary">
+                    <dt>Delivery</dt>
+                    {quote ? (
+                      <dd className="font-medium text-ink-primary nums">{formatPrice(shippingAmount)}</dd>
+                    ) : pincode ? (
+                      <dd className="text-xs text-ink-tertiary">Calculating…</dd>
+                    ) : (
+                      <dd className="text-xs text-ink-tertiary">Add address</dd>
+                    )}
                   </div>
-                )}
-                {paymentMethod === 'split_cod' && (
-                  <div className="mt-2 rounded-sm border border-line-subtle bg-bg-sunken px-2.5 py-2 text-[11px] text-ink-tertiary">
-                    Now: <span className="font-mono text-ink-primary">{formatPrice(splitPrepaid)}</span>
-                    {' · '}
-                    On delivery: <span className="font-mono text-ink-primary">{formatPrice(splitBalance)}</span>
-                  </div>
-                )}
-              </dl>
-              <div className="mt-4 flex justify-between border-t border-line-subtle pt-4">
-                <span className="text-sm text-ink-secondary">Total</span>
-                <span className="text-h3 text-ink-primary tabular-nums">
-                  {formatPrice(displayedTotal)}
-                </span>
+                  {(paymentMethod === 'cod' || paymentMethod === 'split_cod') &&
+                    codSurcharge > 0 && (
+                      <div className="flex justify-between text-ink-secondary">
+                        <dt>COD fee</dt>
+                        <dd className="font-medium text-ink-primary nums">{formatPrice(codSurcharge)}</dd>
+                      </div>
+                    )}
+                  {instrumentApplies && instrumentDiscount > 0 && activeInstrument && (
+                    <div className="flex justify-between">
+                      <dt className="flex items-center gap-1 text-success">
+                        <span className="capitalize">{activeInstrument.label}</span>
+                        <span className="font-mono text-[10px] text-ink-tertiary nums">
+                          ({instrumentDiscountPct}% off)
+                        </span>
+                      </dt>
+                      <dd className="font-semibold text-success nums">−{formatPrice(instrumentDiscount)}</dd>
+                    </div>
+                  )}
+                  {paymentMethod === 'split_cod' && (
+                    <div className="rounded-lg border border-line-subtle bg-bg-sunken px-3 py-2 text-[11px] text-ink-tertiary mt-1">
+                      Now:{' '}
+                      <span className="font-semibold text-ink-primary nums">{formatPrice(splitPrepaid)}</span>
+                      {' · '}
+                      On delivery:{' '}
+                      <span className="font-semibold text-ink-primary nums">{formatPrice(splitBalance)}</span>
+                    </div>
+                  )}
+                </dl>
+
+                <div className="mt-4 flex items-baseline justify-between border-t border-line-subtle pt-4">
+                  <span className="text-sm font-medium text-ink-secondary">Total</span>
+                  <span className="text-h3 font-semibold text-ink-primary nums">
+                    {formatPrice(displayedTotal)}
+                  </span>
+                </div>
+
+                <Button
+                  block
+                  size="lg"
+                  className="mt-5 accent-halo"
+                  onClick={startPay}
+                  disabled={!canSubmit}
+                  loading={submitting}
+                >
+                  {paymentMethod === 'cod'
+                    ? `Place order · ${formatPrice(displayedTotal)} on delivery`
+                    : paymentMethod === 'split_cod'
+                    ? `Pay ${formatPrice(splitPrepaid)} now`
+                    : 'Pay with PhonePe'}
+                </Button>
+
+                <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-ink-tertiary">
+                  <Lock className="size-3" aria-hidden="true" />
+                  {paymentMethod === 'cod'
+                    ? 'Carrier collects on delivery'
+                    : paymentMethod === 'split_cod'
+                    ? `${formatPrice(splitBalance)} collected on delivery`
+                    : 'Encrypted handoff to PhonePe'}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => navigate('/cart')}
+                  className="mt-2 w-full text-center text-xs text-ink-tertiary hover:text-ink-secondary transition-colors"
+                >
+                  Cancel
+                </button>
               </div>
-              <Button
-                block
-                size="lg"
-                className="mt-5"
-                onClick={startPay}
-                disabled={!canSubmit}
-                loading={submitting}
-              >
-                {paymentMethod === 'cod'
-                  ? `Place order · ${formatPrice(displayedTotal)} on delivery`
-                  : paymentMethod === 'split_cod'
-                  ? `Pay ${formatPrice(splitPrepaid)} now via PhonePe`
-                  : 'Pay with PhonePe'}
-              </Button>
-              <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-ink-tertiary">
-                <Lock className="size-3" aria-hidden="true" />
-                {paymentMethod === 'cod'
-                  ? 'Carrier collects on delivery — no online payment'
-                  : paymentMethod === 'split_cod'
-                  ? `Balance ${formatPrice(splitBalance)} collected on delivery`
-                  : 'Encrypted handoff to PhonePe'}
-              </p>
-              <button
-                type="button"
-                onClick={() => navigate('/cart')}
-                className="mt-2 w-full text-center text-xs text-ink-tertiary hover:text-ink-secondary"
-              >
-                Cancel
-              </button>
             </Card>
           </div>
         </div>

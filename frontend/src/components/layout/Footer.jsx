@@ -8,13 +8,12 @@ import { useFooterConfig } from '@/features/footer/hooks.js';
 import { FOOTER_DEFAULTS, resolveIcon } from '@/features/footer/defaults.js';
 
 /**
- * Storefront footer — a deep indigo, "3D" footer matching the design mockup.
+ * Storefront footer — deep indigo surface with ambient depth and 3D icon tiles.
  *
- * It stays fully data-driven from the admin footer config (brand, newsletter,
- * link columns, mail/office, social, payments, copyright); only the
- * presentation changed. The 3D feel comes from glossy gradient icon tiles that
- * gently float and tilt on hover, plus soft blurred orbs drifting in the
- * background. All motion respects prefers-reduced-motion.
+ * Fully data-driven from admin footer config. All motion respects
+ * prefers-reduced-motion. Uses design-system tokens where applicable;
+ * the dark indigo background is deliberately fixed to ensure the footer
+ * reads as a distinct grounding layer in both themes.
  */
 export default function Footer() {
   const { data } = useFooterConfig();
@@ -26,7 +25,7 @@ export default function Footer() {
   return (
     <footer
       className="relative isolate mt-24 overflow-hidden text-white"
-      style={{ background: 'linear-gradient(180deg,#080b1e 0%,#0d1230 48%,#141a3c 100%)' }}
+      style={{ background: 'linear-gradient(180deg,#07091c 0%,#0b0f28 48%,#111530 100%)' }}
     >
       <FooterAura />
       <FloatingOrbs reduce={reduce} />
@@ -37,7 +36,7 @@ export default function Footer() {
         )}
 
         {/* Brand + links */}
-        <div className="grid gap-10 py-14 lg:grid-cols-[1.25fr_2.75fr] lg:gap-12">
+        <div className="grid gap-10 py-16 lg:grid-cols-[1.2fr_2.8fr] lg:gap-16">
           {/* Brand column */}
           <div>
             <Link
@@ -66,7 +65,7 @@ export default function Footer() {
             </p>
 
             {/* Social */}
-            <ul className="mt-5 flex items-center gap-2.5">
+            <ul className="mt-5 flex items-center gap-2">
               {cfg.social_links.map(({ href, label, icon }) => {
                 const Icon = resolveIcon(icon);
                 return (
@@ -76,9 +75,9 @@ export default function Footer() {
                       target="_blank"
                       rel="noreferrer"
                       aria-label={label}
-                      className="grid size-9 place-items-center rounded-full border border-white/15 bg-white/5 text-white/70 transition-colors hover:border-white/40 hover:bg-white/10 hover:text-white focus-visible:focus-ring"
+                      className="grid size-9 place-items-center rounded-full border border-white/12 bg-white/6 text-white/65 transition-[background-color,border-color,color,transform] duration-200 hover:-translate-y-px hover:border-accent-mid/60 hover:bg-white/10 hover:text-white focus-visible:focus-ring"
                     >
-                      <Icon className="size-4" aria-hidden="true" />
+                      <Icon className="size-[15px]" aria-hidden="true" />
                     </a>
                   </li>
                 );
@@ -86,17 +85,17 @@ export default function Footer() {
             </ul>
 
             {/* Trust features */}
-            <ul className="mt-7 grid grid-cols-2 gap-4">
+            <ul className="mt-7 grid grid-cols-2 gap-3">
               {cfg.trust_features.map(({ icon, title, sub }) => {
                 const Icon = resolveIcon(icon);
                 return (
-                  <li key={title} className="flex items-center gap-3">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/8 text-[#B794F4]">
-                      <Icon className="size-4" aria-hidden="true" />
+                  <li key={title} className="flex items-center gap-2.5">
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/8 text-accent-mid">
+                      <Icon className="size-[15px]" aria-hidden="true" />
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-white">{title}</p>
-                      <p className="truncate text-xs text-white/45">{sub}</p>
+                      <p className="truncate text-sm font-semibold leading-tight text-white">{title}</p>
+                      <p className="truncate text-xs text-white/50 leading-tight mt-0.5">{sub}</p>
                     </div>
                   </li>
                 );
@@ -141,7 +140,7 @@ export default function Footer() {
                     <span key={p.tel}>
                       <a
                         href={`tel:${p.tel}`}
-                        className="rounded-sm text-[#B794F4] transition-colors hover:text-white focus-visible:focus-ring"
+                        className="rounded-sm text-accent-mid transition-colors hover:text-white focus-visible:focus-ring"
                       >
                         {p.display}
                       </a>
@@ -285,13 +284,13 @@ function Equalizer({ reduce }) {
 
 function NewsletterBand({ newsletter = {}, brand = {}, reduce }) {
   return (
-    <div className="pt-12">
+    <div className="pt-14">
       <div
-        className="relative grid items-center gap-8 overflow-hidden rounded-[28px] border border-white/15 p-8 sm:p-10 lg:grid-cols-[1fr_auto]"
+        className="relative grid items-center gap-8 overflow-hidden rounded-[24px] border border-white/12 p-8 sm:p-10 lg:grid-cols-[1fr_auto]"
         style={{
-          background: 'linear-gradient(115deg,#3b39d9 0%,#7c4dff 46%,#c44bd6 100%)',
+          background: 'linear-gradient(118deg,#3836d4 0%,#7241f5 48%,#c240d0 100%)',
           boxShadow:
-            '0 24px 70px -24px rgba(124,77,255,0.7), inset 0 1px 0 rgba(255,255,255,0.25)',
+            '0 24px 80px -20px rgba(114,65,245,0.65), inset 0 1px 0 rgba(255,255,255,0.18)',
         }}
       >
         {/* sheen */}
@@ -477,29 +476,31 @@ function MemberPromo({ reduce }) {
 
 function BottomBar({ paymentMethods, bottomLinks, copyright }) {
   return (
-    <div className="flex flex-col gap-6 border-t border-white/10 py-7 lg:flex-row lg:items-center lg:justify-between">
-      <ul className="flex flex-wrap items-center justify-center gap-2">
+    <div className="flex flex-col gap-5 border-t border-white/8 py-7 lg:flex-row lg:items-center lg:justify-between">
+      {/* Payment method chips */}
+      <ul className="flex flex-wrap items-center justify-center gap-1.5">
         {paymentMethods.map((m) => (
           <li
             key={m}
             aria-label={m}
-            className="grid h-6 min-w-[2.5rem] place-items-center rounded-md border border-white/15 bg-white/10 px-2 text-[10px] font-semibold uppercase tracking-wider text-white/80"
+            className="nums grid h-[22px] min-w-[2.75rem] place-items-center rounded border border-white/12 bg-white/8 px-2 text-[10px] font-semibold uppercase tracking-wider text-white/75"
           >
             {m}
           </li>
         ))}
       </ul>
 
-      <ul className="flex flex-wrap items-center justify-center gap-x-7 gap-y-3">
+      {/* Legal / policy links */}
+      <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
         {bottomLinks.map(({ to, label, icon }) => {
           const Icon = resolveIcon(icon);
           return (
             <li key={to}>
               <Link
                 to={to}
-                className="flex items-center gap-2 rounded-sm text-sm text-white/60 transition-colors hover:text-white focus-visible:focus-ring"
+                className="flex items-center gap-1.5 rounded-sm text-xs text-white/55 transition-colors hover:text-white/90 focus-visible:focus-ring"
               >
-                <Icon className="size-4 text-[#B794F4]" aria-hidden="true" />
+                <Icon className="size-3.5 text-accent-mid" aria-hidden="true" />
                 <span>{label}</span>
               </Link>
             </li>
@@ -507,7 +508,7 @@ function BottomBar({ paymentMethods, bottomLinks, copyright }) {
         })}
       </ul>
 
-      <p className="text-center text-xs text-white/45">{copyright}</p>
+      <p className="nums text-center text-xs text-white/40">{copyright}</p>
     </div>
   );
 }
@@ -516,12 +517,12 @@ function LinkColumn({ title, links }) {
   return (
     <div>
       <SectionHeading>{title}</SectionHeading>
-      <ul className="space-y-2.5">
+      <ul className="space-y-2">
         {links.map((l) => (
           <li key={l.to}>
             <Link
               to={l.to}
-              className="rounded-sm text-sm text-white/60 transition-colors hover:text-white focus-visible:focus-ring"
+              className="inline-block rounded-sm text-sm text-white/55 transition-[color,transform] duration-150 hover:-translate-y-px hover:text-white/95 focus-visible:focus-ring"
             >
               {l.label}
             </Link>
@@ -536,7 +537,7 @@ function SectionHeading({ children, className }) {
   return (
     <h3
       className={cn(
-        'mb-4 text-xs font-semibold uppercase tracking-wider text-white/45',
+        'mb-3.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40',
         className,
       )}
     >

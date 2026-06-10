@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { LogOut, LayoutDashboard, UserRound, Package, Heart, Coins, Shield } from 'lucide-react';
+import { LogOut, LayoutDashboard, UserRound, Package, Heart, Coins, Shield, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { authApi } from '@/features/auth/api.js';
@@ -76,7 +76,7 @@ export default function AccountMenu() {
         aria-label="Account menu"
         className="grid size-10 place-items-center rounded-full focus-visible:focus-ring"
       >
-        <span className="grid size-8 place-items-center rounded-full bg-accent/15 text-xs font-semibold text-accent">
+        <span className="grid size-8 place-items-center rounded-full bg-accent/12 text-xs font-semibold text-accent">
           {initial}
         </span>
       </button>
@@ -155,6 +155,16 @@ export default function AccountMenu() {
             >
               <Shield className="size-4" aria-hidden="true" />
               Security & 2FA
+            </Link>
+
+            <Link
+              to="/account/addresses"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2.5 rounded-sm px-3 py-2 text-sm text-ink-secondary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+            >
+              <MapPin className="size-4" aria-hidden="true" />
+              My addresses
             </Link>
 
             <Link

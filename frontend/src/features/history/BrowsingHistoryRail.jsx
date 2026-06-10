@@ -9,7 +9,7 @@ import { useHistoryIds } from './store.js';
  * Pass the current product id as `excludeId` so it doesn't appear in the rail
  * looking at it.
  */
-export function BrowsingHistoryRail({ excludeId, title = 'Your browsing history' }) {
+export function BrowsingHistoryRail({ excludeId, title = 'Recently viewed' }) {
   const ids = useHistoryIds({ excludeId, limit: 12 });
   const { data: products = [], isLoading } = useProductsByIds(ids);
 

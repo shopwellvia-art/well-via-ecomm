@@ -5,6 +5,10 @@
 attributes. Without this an admin/staffer with content-management permission
 could plant a `javascript:` URI that executes in a visitor's browser (stored
 XSS). The frontend `safeUrl()` helper is the second layer of this defense.
+
+`normalize_phone` strips whitespace/dashes and an optional leading +91 so that
+"98765 43210", "+91-98765-43210", and "9876543210" all become "9876543210".
+Used in AddressCreate and reusable for any phone field in this codebase.
 """
 from __future__ import annotations
 
@@ -38,6 +42,34 @@ def is_safe_url(value: str | None) -> bool:
         return match.group(1) in _SAFE_SCHEMES
     # No scheme and not "//": a bare relative path like "page" — safe.
     return True
+
+
+def normalize_phone(value: str | None) -> str | None:
+    """Strip spaces, dashes, and the optional leading country code (+91 or 91)
+    from a phone number string, then validate that the result is 8–20 digits.
+
+    Returns the normalized digit-only string, or raises ValueError for the
+    Pydantic field_validator to surface.  None passes through unchanged
+    (use a separate Required check when the field is mandatory).
+    """
+    if value is None:
+        return None
+    # Remove spaces, dashes, dots — common formatting characters.
+    cleaned = re.sub(r"[\s\-.]", "", value)
+    # Strip optional leading + sign.
+    if cleaned.startswith("+"):
+        cleaned = cleaned[1:]
+    # Strip optional Indian country code (91) if the result would still be
+    # a plausible 10-digit mobile number.  Only strip when it's followed by
+    # exactly 10 digits so "919191919191" (a 12-digit number starting with 91)
+    # is kept intact.
+    if re.match(r"^91\d{10}$", cleaned):
+        cleaned = cleaned[2:]
+    if not cleaned.isdigit():
+        raise ValueError("Phone number must contain only digits (and optional +91 prefix / spaces / dashes)")
+    if not (8 <= len(cleaned) <= 20):
+        raise ValueError("Phone number must be 8–20 digits")
+    return cleaned
 
 
 def validate_safe_url(value: str | None) -> str | None:

@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom';
 import { Heart } from 'lucide-react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils.js';
 import { useAuthStore } from '@/features/auth/store.js';
+import { buttonPress, attentionPulse } from '@/lib/motion.js';
 import {
   useAddToWishlist,
   useIsInWishlist,
@@ -31,6 +33,7 @@ export function WishlistButton({
   const isSaved = useIsInWishlist(productId);
   const add = useAddToWishlist();
   const remove = useRemoveFromWishlist();
+  const reducedMotion = useReducedMotion();
 
   const pending = add.isPending || remove.isPending;
 
@@ -50,59 +53,73 @@ export function WishlistButton({
 
   if (variant === 'inline') {
     return (
-      <button
+      <motion.button
         type="button"
         onClick={handleClick}
         aria-pressed={isSaved}
         aria-label={label}
         disabled={pending}
+        whileTap={reducedMotion ? undefined : buttonPress}
         className={cn(
-          'inline-flex h-11 w-full items-center justify-center gap-2 rounded-sm border border-line-subtle bg-bg-sunken text-sm font-medium transition-colors',
-          'hover:border-line-strong focus-visible:focus-ring',
+          'inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border text-sm font-medium transition-colors',
+          'focus-visible:focus-ring',
           'disabled:opacity-50 disabled:pointer-events-none',
-          isSaved ? 'text-danger' : 'text-ink-secondary hover:text-ink-primary',
+          isSaved
+            ? 'border-danger/30 bg-danger/8 text-danger hover:bg-danger/12'
+            : 'border-line-subtle bg-bg-sunken text-ink-secondary hover:border-line-strong hover:text-ink-primary',
           className,
         )}
       >
-        <Heart
-          className={cn('size-4 transition-transform', isSaved && 'fill-current')}
-          aria-hidden="true"
-        />
+        <motion.span
+          key={`heart-inline-${isSaved}`}
+          animate={!reducedMotion && isSaved ? attentionPulse : undefined}
+          className="flex items-center"
+        >
+          <Heart
+            className={cn('size-4 transition-transform', isSaved && 'fill-current')}
+            aria-hidden="true"
+          />
+        </motion.span>
         {isSaved ? 'Saved to wishlist' : 'Save to wishlist'}
-      </button>
+      </motion.button>
     );
   }
 
   // overlay — circular glass button
   const sizeClass = size === 'sm' ? 'size-8' : 'size-9';
+  const iconSize = size === 'sm' ? 'size-4' : 'size-[18px]';
+
   return (
-    <button
+    <motion.button
       type="button"
       onClick={handleClick}
       aria-pressed={isSaved}
       aria-label={label}
       disabled={pending}
+      whileTap={reducedMotion ? undefined : buttonPress}
       className={cn(
         'grid place-items-center rounded-full',
         'bg-bg-elevated/85 backdrop-blur border border-line-subtle shadow-sm',
-        'transition-[transform,background-color,color] duration-150',
-        'hover:-translate-y-px focus-visible:focus-ring',
+        'transition-[background-color,color,border-color] duration-150',
+        'focus-visible:focus-ring',
         'disabled:opacity-60 disabled:pointer-events-none',
         isSaved
-          ? 'text-danger hover:bg-danger/10'
-          : 'text-ink-secondary hover:text-ink-primary',
+          ? 'border-danger/30 text-danger hover:bg-danger/12'
+          : 'text-ink-secondary hover:bg-fill hover:text-ink-primary',
         sizeClass,
         className,
       )}
     >
-      <Heart
-        className={cn(
-          size === 'sm' ? 'size-4' : 'size-[18px]',
-          'transition-transform',
-          isSaved && 'fill-current',
-        )}
-        aria-hidden="true"
-      />
-    </button>
+      <motion.span
+        key={`heart-overlay-${isSaved}`}
+        animate={!reducedMotion && isSaved ? attentionPulse : undefined}
+        className="flex items-center"
+      >
+        <Heart
+          className={cn(iconSize, 'transition-transform', isSaved && 'fill-current')}
+          aria-hidden="true"
+        />
+      </motion.span>
+    </motion.button>
   );
 }

@@ -1,9 +1,10 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.order import OrderStatus
+from app.schemas.address import AddressCreate
 from app.schemas.order import OrderItemCreate
 
 
@@ -12,7 +13,18 @@ class CheckoutRequest(BaseModel):
     `currency` override (kept for symmetry; defaults to INR for PhonePe)."""
 
     items: list[OrderItemCreate] = Field(min_length=1)
-    shipping_address: str = Field(min_length=3, max_length=512)
+    # DEPRECATED legacy path: free-text address string. Accepted this release
+    # for stale SPA bundles that haven't yet adopted address_id / address.
+    # Will be removed in the next release. When address_id or address is
+    # supplied this field is overwritten by the rendered address text.
+    shipping_address: str | None = Field(default=None, min_length=3, max_length=512)
+    # Structured address: one of three mutually-exclusive sources.
+    # address_id: a saved address belonging to the current user.
+    # address: an inline one-off address (optionally saved via save_address).
+    # (legacy) shipping_address: deprecated free-text fallback (see above).
+    address_id: int | None = None
+    address: AddressCreate | None = None
+    save_address: bool = False
     # Destination pin. Optional so legacy callers (or stores running
     # shipping.provider=none) still work. When present + provider is
     # configured, the order persists a real shipping_amount.
@@ -38,6 +50,18 @@ class CheckoutRequest(BaseModel):
     # was sent to). Optional for prepaid; required for COD when the
     # `cod.require_otp` setting is on.
     customer_phone: str | None = Field(default=None, min_length=8, max_length=20)
+    # Optional gateway selection. When provided the customer's preferred gateway
+    # is used (it must be enabled + implemented + ready). When omitted the
+    # factory selects the lowest sort_order qualifying gateway automatically.
+    gateway_code: str | None = Field(default=None, max_length=40)
+
+    @field_validator("gateway_code", mode="before")
+    @classmethod
+    def _normalize_gateway_code(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        stripped = v.strip().lower()
+        return stripped or None
 
 
 class CheckoutResponse(BaseModel):

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import {
   Search,
   Plus,
@@ -20,14 +21,18 @@ import {
   Clock,
   Award,
   TrendingUp,
+  ArrowUpRight,
+  ArrowDownRight,
 } from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Input } from '@/components/ui/Input.jsx';
 import { Select } from '@/components/ui/Select.jsx';
+import { Badge } from '@/components/ui/Badge.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { cn, formatPrice } from '@/lib/utils.js';
+import { fadeUp, scaleIn, listStagger, staggerContainer } from '@/lib/motion.js';
 import { useUsers } from '@/features/users/hooks.js';
 import {
   useAdminUserLoyalty,
@@ -47,13 +52,13 @@ import {
 } from '@/features/loyalty/hooks.js';
 
 const REASON_LABELS = {
-  signup_bonus: { label: 'Welcome bonus', icon: Sparkles },
-  place_order: { label: 'Order', icon: ShoppingBag },
-  write_review: { label: 'Review', icon: Star },
-  redeem: { label: 'Redeemed', icon: TicketPercent },
-  refund_reversal: { label: 'Refund reversal', icon: RefreshCw },
-  expiry: { label: 'Expired', icon: RefreshCw },
-  admin_adjust: { label: 'Admin adjustment', icon: Pencil },
+  signup_bonus:   { label: 'Welcome bonus',    icon: Sparkles },
+  place_order:    { label: 'Order',            icon: ShoppingBag },
+  write_review:   { label: 'Review',           icon: Star },
+  redeem:         { label: 'Redeemed',         icon: TicketPercent },
+  refund_reversal:{ label: 'Refund reversal',  icon: RefreshCw },
+  expiry:         { label: 'Expired',          icon: RefreshCw },
+  admin_adjust:   { label: 'Admin adjustment', icon: Pencil },
 };
 
 function useDebounced(v, ms = 250) {
@@ -85,34 +90,38 @@ function UserPicker({ onPick, picked }) {
   const users = data?.items || [];
 
   return (
-    <div className="rounded-lg border border-line-subtle bg-bg-elevated p-4">
-      <p className="text-sm font-medium text-ink-primary">Find a customer</p>
-      <div className="mt-3">
-        <Input
-          icon={Search}
-          placeholder="Search by email or name…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-      </div>
+    <div className="rounded-xl border border-line-subtle bg-bg-elevated p-5 shadow-sm">
+      <p className="mb-1 text-sm font-semibold text-ink-primary">Find a customer</p>
+      <p className="mb-4 text-xs text-ink-tertiary">Search to load their balance and ledger.</p>
+      <Input
+        icon={Search}
+        placeholder="Search by email or name…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
       {q.trim() && (
-        <ul className="mt-1 divide-y divide-line-subtle">
+        <motion.ul
+          variants={listStagger(0.03)}
+          initial="hidden"
+          animate="show"
+          className="mt-2 divide-y divide-line-subtle"
+        >
           {isLoading ? (
             <li className="px-2 py-3 text-xs text-ink-tertiary">Searching…</li>
           ) : users.length === 0 ? (
             <li className="px-2 py-3 text-xs text-ink-tertiary">No matches.</li>
           ) : (
             users.map((u) => (
-              <li key={u.id}>
+              <motion.li key={u.id} variants={fadeUp}>
                 <button
                   type="button"
                   onClick={() => onPick(u)}
                   className={cn(
-                    'flex w-full items-center gap-3 rounded-sm px-2 py-2 text-left transition-colors',
+                    'flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors',
                     picked?.id === u.id ? 'bg-accent/10' : 'hover:bg-fill',
                   )}
                 >
-                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent/15 text-xs font-semibold text-accent">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent/12 text-xs font-semibold text-accent">
                     {(u.email || '?').charAt(0).toUpperCase()}
                   </span>
                   <span className="min-w-0 flex-1">
@@ -123,20 +132,20 @@ function UserPicker({ onPick, picked }) {
                       </span>
                     )}
                   </span>
-                  <span className="text-[10px] uppercase tracking-wide text-ink-tertiary">
+                  <span className="nums text-[10px] uppercase tracking-wide text-ink-tertiary">
                     #{u.id}
                   </span>
                 </button>
-              </li>
+              </motion.li>
             ))
           )}
-        </ul>
+        </motion.ul>
       )}
     </div>
   );
 }
 
-function AdjustForm({ userId, onDone }) {
+function AdjustForm({ userId }) {
   const [delta, setDelta] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState(null);
@@ -158,32 +167,46 @@ function AdjustForm({ userId, onDone }) {
       await adjust.mutateAsync({ userId, delta: n, description: description.trim() });
       setDelta('');
       setDescription('');
-      onDone?.();
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Could not adjust.');
     }
   }
 
+  const parsedDelta = Number(delta);
+  const isCredit = parsedDelta > 0;
+
   return (
-    <form onSubmit={submit} className="rounded-sm border border-line-subtle bg-bg-sunken p-4">
-      <p className="text-sm font-medium text-ink-primary">Adjust points</p>
+    <form onSubmit={submit} className="rounded-xl border border-line-subtle bg-bg-sunken p-4">
+      <p className="text-sm font-semibold text-ink-primary">Adjust points</p>
       <p className="mt-0.5 text-xs text-ink-tertiary">
         Positive = credit, negative = debit. Lifetime points won&apos;t change.
       </p>
-      <div className="mt-3 grid gap-2 sm:grid-cols-[140px_1fr_auto]">
+      <div className="mt-3 grid gap-2 sm:grid-cols-[160px_1fr_auto] sm:items-end">
+        <div>
+          <Input
+            type="number"
+            step="1"
+            label="Delta"
+            placeholder="e.g. 100 or -50"
+            value={delta}
+            onChange={(e) => setDelta(e.target.value)}
+          />
+          {delta && !isNaN(parsedDelta) && parsedDelta !== 0 && (
+            <p className={cn('mt-1 flex items-center gap-1 text-xs', isCredit ? 'text-success' : 'text-danger')}>
+              {isCredit
+                ? <ArrowUpRight className="size-3" aria-hidden="true" />
+                : <ArrowDownRight className="size-3" aria-hidden="true" />}
+              {isCredit ? '+' : ''}<span className="nums">{parsedDelta.toLocaleString()}</span> pts
+            </p>
+          )}
+        </div>
         <Input
-          type="number"
-          step="1"
-          placeholder="±points"
-          value={delta}
-          onChange={(e) => setDelta(e.target.value)}
-        />
-        <Input
+          label="Reason"
           placeholder="Reason (required)"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
-        <Button type="submit" loading={adjust.isPending}>
+        <Button type="submit" loading={adjust.isPending} className="mb-px">
           Apply
         </Button>
       </div>
@@ -197,13 +220,13 @@ function LedgerRow({ tx }) {
   const Icon = meta.icon;
   const isCredit = tx.delta > 0;
   return (
-    <tr className="border-t border-line-subtle">
+    <tr className="border-t border-line-subtle transition-colors duration-150 hover:bg-fill/40">
       <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <span
             className={cn(
               'grid size-7 place-items-center rounded-full',
-              isCredit ? 'bg-success/15 text-success' : 'bg-fill text-ink-secondary',
+              isCredit ? 'bg-success/12 text-success' : 'bg-fill text-ink-secondary',
             )}
           >
             <Icon className="size-3.5" aria-hidden="true" />
@@ -212,13 +235,13 @@ function LedgerRow({ tx }) {
         </div>
       </td>
       <td className="px-4 py-3 text-xs text-ink-tertiary">{tx.description || '—'}</td>
-      <td className="px-4 py-3 text-xs text-ink-tertiary">
+      <td className="px-4 py-3 font-mono text-xs text-ink-tertiary">
         {tx.ref_type ? `${tx.ref_type} #${tx.ref_id}` : '—'}
       </td>
       <td className="px-4 py-3 text-xs text-ink-tertiary">{formatDate(tx.created_at)}</td>
       <td
         className={cn(
-          'px-4 py-3 text-right text-sm font-semibold tabular-nums',
+          'px-4 py-3 text-right text-sm font-semibold nums',
           isCredit ? 'text-success' : 'text-ink-secondary',
         )}
       >
@@ -233,90 +256,119 @@ function UserLoyaltyPanel({ user, onChange }) {
   const { data, isLoading, refetch } = useAdminUserLoyalty(user.id);
 
   return (
-    <div className="rounded-lg border border-line-subtle bg-bg-elevated">
+    <motion.div
+      variants={scaleIn}
+      initial="hidden"
+      animate="show"
+      className="rounded-xl border border-line-subtle bg-bg-elevated shadow-md"
+    >
+      {/* Header */}
       <div className="flex flex-wrap items-center gap-3 border-b border-line-subtle px-5 py-4">
-        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent/15 text-sm font-semibold text-accent">
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-accent/12 text-sm font-semibold text-accent">
           {(user.email || '?').charAt(0).toUpperCase()}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-ink-primary">{user.email}</p>
+          <p className="truncate text-sm font-semibold text-ink-primary">{user.email}</p>
           {user.full_name && (
             <p className="truncate text-xs text-ink-tertiary">{user.full_name}</p>
           )}
         </div>
         <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading}>
-          <RefreshCw className="size-3.5" /> Refresh
+          <RefreshCw className="size-3.5" aria-hidden="true" /> Refresh
         </Button>
         <button
           type="button"
-          aria-label="Clear"
+          aria-label="Clear selection"
           onClick={() => onChange(null)}
-          className="grid size-9 place-items-center rounded-sm text-ink-tertiary hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+          className="grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
         >
           <X className="size-4" />
         </button>
       </div>
 
-      <div className="grid gap-4 border-b border-line-subtle p-5 sm:grid-cols-2">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-ink-tertiary">Balance</p>
-          <p className="mt-1 text-[1.75rem] font-semibold text-ink-primary tabular-nums">
+      {/* Balance KPIs */}
+      <div className="grid gap-px border-b border-line-subtle bg-line-subtle sm:grid-cols-2">
+        <div className="bg-bg-elevated p-5">
+          <p className="text-xs font-medium uppercase tracking-wider text-ink-tertiary">Balance</p>
+          <p className="mt-2 flex items-baseline gap-1.5">
             {isLoading
-              ? <Skeleton className="h-7 w-24" />
-              : (data?.balance ?? 0).toLocaleString()}{' '}
-            <span className="text-sm font-normal text-ink-tertiary">pts</span>
+              ? <Skeleton className="h-8 w-24" />
+              : (
+                <>
+                  <span className="nums text-3xl font-bold tracking-tight text-ink-primary">
+                    {(data?.balance ?? 0).toLocaleString()}
+                  </span>
+                  <span className="text-sm font-normal text-ink-tertiary">pts</span>
+                </>
+              )}
           </p>
         </div>
-        <div>
-          <p className="text-xs uppercase tracking-wide text-ink-tertiary">Lifetime</p>
-          <p className="mt-1 text-[1.25rem] font-semibold text-ink-secondary tabular-nums">
+        <div className="bg-bg-elevated p-5">
+          <p className="text-xs font-medium uppercase tracking-wider text-ink-tertiary">Lifetime</p>
+          <p className="mt-2 flex items-baseline gap-1.5">
             {isLoading
-              ? <Skeleton className="h-6 w-20" />
-              : (data?.lifetime ?? 0).toLocaleString()}{' '}
-            <span className="text-sm font-normal text-ink-tertiary">pts</span>
+              ? <Skeleton className="h-7 w-20" />
+              : (
+                <>
+                  <span className="nums text-2xl font-semibold tracking-tight text-ink-secondary">
+                    {(data?.lifetime ?? 0).toLocaleString()}
+                  </span>
+                  <span className="text-sm font-normal text-ink-tertiary">pts</span>
+                </>
+              )}
           </p>
         </div>
       </div>
 
+      {/* Adjust form */}
       <div className="p-5">
         <AdjustForm userId={user.id} />
       </div>
 
+      {/* Ledger */}
       <div className="border-t border-line-subtle px-5 py-4">
-        <p className="text-sm font-medium text-ink-primary">Ledger</p>
+        <p className="text-sm font-semibold text-ink-primary">Transaction ledger</p>
         <p className="mt-0.5 text-xs text-ink-tertiary">
           Most recent first. Append-only — every row is preserved.
         </p>
         <div className="mt-3 overflow-x-auto">
           {isLoading ? (
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-12" />
+                <Skeleton key={i} className="h-11" />
               ))}
             </div>
           ) : (data?.transactions || []).length === 0 ? (
-            <p className="text-sm text-ink-tertiary">No activity yet.</p>
+            <EmptyState
+              icon={Coins}
+              size="sm"
+              bordered={false}
+              title="No activity yet"
+              description="Transactions will appear here once the customer earns or redeems points."
+            />
           ) : (
-            <table className="w-full min-w-[640px]">
-              <thead>
-                <tr className="text-left text-[10px] uppercase tracking-wide text-ink-tertiary">
-                  <th className="px-4 py-2 font-medium">Reason</th>
-                  <th className="px-4 py-2 font-medium">Description</th>
-                  <th className="px-4 py-2 font-medium">Ref</th>
-                  <th className="px-4 py-2 font-medium">When</th>
-                  <th className="px-4 py-2 text-right font-medium">Delta</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.transactions.map((t) => (
-                  <LedgerRow key={t.id} tx={t} />
-                ))}
-              </tbody>
-            </table>
+            <div className="rounded-xl border border-line-subtle bg-bg-elevated overflow-hidden">
+              <table className="w-full min-w-[640px]">
+                <thead>
+                  <tr className="border-b border-line-subtle bg-bg-sunken/60 text-left">
+                    <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-ink-tertiary">Reason</th>
+                    <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-ink-tertiary">Description</th>
+                    <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-ink-tertiary">Ref</th>
+                    <th className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-ink-tertiary">When</th>
+                    <th className="px-4 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-ink-tertiary">Delta</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.transactions.map((t) => (
+                    <LedgerRow key={t.id} tx={t} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -328,11 +380,14 @@ function UsersTab() {
       {picked ? (
         <UserLoyaltyPanel user={picked} onChange={setPicked} />
       ) : (
-        <EmptyState
-          icon={UsersIcon}
-          title="Pick a customer to view their loyalty"
-          description="Search above to load their balance, ledger, and adjustment controls."
-        />
+        <div className="rounded-xl border border-line-subtle bg-bg-elevated p-8">
+          <EmptyState
+            icon={UsersIcon}
+            bordered={false}
+            title="Pick a customer"
+            description="Search and select a customer on the left to view their balance, ledger, and adjustment controls."
+          />
+        </div>
       )}
     </div>
   );
@@ -403,19 +458,27 @@ function TierForm({ initial, mode, onCancel, onSaved }) {
   }
 
   return (
-    <form
+    <motion.form
+      variants={scaleIn}
+      initial="hidden"
+      animate="show"
       onSubmit={submit}
-      className="mb-6 rounded-lg border border-line-subtle bg-bg-elevated p-6"
+      className="mb-6 rounded-xl border border-line-subtle bg-bg-elevated p-6 shadow-md"
     >
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-h3 text-ink-primary">
-          {mode === 'edit' ? 'Edit tier' : 'New tier'}
-        </h2>
+      <div className="mb-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="grid size-10 place-items-center rounded-full bg-accent/12 text-accent">
+            <Gift className="size-5" aria-hidden="true" />
+          </div>
+          <h2 className="text-h3 font-semibold tracking-tight text-ink-primary">
+            {mode === 'edit' ? 'Edit tier' : 'New redemption tier'}
+          </h2>
+        </div>
         <button
           type="button"
           aria-label="Close"
           onClick={onCancel}
-          className="grid size-9 place-items-center rounded-sm text-ink-tertiary hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+          className="grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
         >
           <X className="size-4" />
         </button>
@@ -424,6 +487,7 @@ function TierForm({ initial, mode, onCancel, onSaved }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <Input
           label="Name"
+          required
           placeholder="10% off"
           value={form.name}
           onChange={set('name')}
@@ -434,6 +498,7 @@ function TierForm({ initial, mode, onCancel, onSaved }) {
           type="number"
           min="1"
           step="1"
+          required
           value={form.cost_points}
           onChange={set('cost_points')}
         />
@@ -446,6 +511,7 @@ function TierForm({ initial, mode, onCancel, onSaved }) {
           type="number"
           step="0.01"
           min="0"
+          required
           value={form.discount_value}
           onChange={set('discount_value')}
         />
@@ -473,19 +539,41 @@ function TierForm({ initial, mode, onCancel, onSaved }) {
         />
       </div>
 
-      <label className="mt-2 flex items-center gap-2 text-sm text-ink-secondary">
+      <label
+        className={cn(
+          'mt-4 flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm transition-all duration-150',
+          form.is_active
+            ? 'border-success/40 bg-success/8 text-success'
+            : 'border-line-subtle bg-bg-sunken text-ink-secondary',
+        )}
+      >
         <input
           type="checkbox"
           checked={form.is_active}
           onChange={set('is_active')}
-          className="size-4 rounded-sm border border-line-subtle bg-bg-sunken text-accent focus-visible:focus-ring"
+          className="sr-only"
         />
-        Active — customers can redeem this tier
+        <span
+          className={cn(
+            'grid size-5 place-items-center rounded border transition-colors',
+            form.is_active ? 'border-success bg-success text-white' : 'border-line-strong bg-bg-elevated',
+          )}
+        >
+          {form.is_active && <CheckCircle2 className="size-3.5" strokeWidth={2.5} />}
+        </span>
+        <span>
+          <span className="block font-medium">Active</span>
+          <span className="text-xs text-ink-tertiary">Customers can redeem this tier</span>
+        </span>
       </label>
 
-      {error && <p className="mt-3 text-xs text-danger">{error}</p>}
+      {error && (
+        <p className="mt-4 rounded-lg border border-danger/30 bg-danger/8 px-3 py-2 text-xs text-danger">
+          {error}
+        </p>
+      )}
 
-      <div className="mt-5 flex justify-end gap-3">
+      <div className="mt-6 flex justify-end gap-3">
         <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
           Cancel
         </Button>
@@ -493,7 +581,7 @@ function TierForm({ initial, mode, onCancel, onSaved }) {
           {mode === 'edit' ? 'Save changes' : 'Create tier'}
         </Button>
       </div>
-    </form>
+    </motion.form>
   );
 }
 
@@ -516,40 +604,47 @@ function TierRow({ tier, onEdit }) {
   }
 
   return (
-    <tr className="border-t border-line-subtle">
-      <td className="px-4 py-3">
-        <p className="text-sm font-medium text-ink-primary">{tier.name}</p>
+    <tr className="group border-t border-line-subtle transition-colors duration-150 hover:bg-fill/60">
+      <td className="px-5 py-3.5">
+        <p className="text-sm font-semibold text-ink-primary">{tier.name}</p>
       </td>
-      <td className="px-4 py-3 text-sm tabular-nums text-ink-secondary">
-        {tier.cost_points.toLocaleString()} pts
+      <td className="px-5 py-3.5">
+        <span className="nums text-sm text-ink-secondary">
+          {tier.cost_points.toLocaleString()} pts
+        </span>
       </td>
-      <td className="px-4 py-3 text-sm text-ink-secondary">{describeTierReward(tier)}</td>
-      <td className="px-4 py-3 text-sm tabular-nums text-ink-secondary">
-        {tier.expires_after_days}d
+      <td className="px-5 py-3.5 text-sm text-ink-secondary">{describeTierReward(tier)}</td>
+      <td className="px-5 py-3.5">
+        <span className="nums text-sm text-ink-tertiary">{tier.expires_after_days}d</span>
       </td>
-      <td className="px-4 py-3">
-        <button
-          type="button"
-          role="switch"
-          aria-checked={tier.is_active}
-          aria-label={tier.is_active ? 'Deactivate' : 'Activate'}
-          disabled={pending}
-          onClick={toggleActive}
-          className={cn(
-            'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
-            'focus-visible:focus-ring disabled:opacity-40 disabled:pointer-events-none',
-            tier.is_active ? 'bg-accent' : 'bg-fill-strong',
-          )}
-        >
-          <span
+      <td className="px-5 py-3.5">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={tier.is_active}
+            aria-label={tier.is_active ? 'Deactivate' : 'Activate'}
+            disabled={pending}
+            onClick={toggleActive}
             className={cn(
-              'pointer-events-none block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200',
-              tier.is_active ? 'translate-x-4' : 'translate-x-0',
+              'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
+              'focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-40',
+              tier.is_active ? 'bg-accent' : 'bg-fill-strong',
             )}
-          />
-        </button>
+          >
+            <span
+              className={cn(
+                'pointer-events-none block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200',
+                tier.is_active ? 'translate-x-4' : 'translate-x-0',
+              )}
+            />
+          </button>
+          <Badge tone={tier.is_active ? 'success' : 'neutral'} size="sm">
+            {tier.is_active ? 'Active' : 'Off'}
+          </Badge>
+        </div>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-5 py-3.5">
         <div className="flex items-center justify-end gap-1">
           {confirming ? (
             <>
@@ -579,7 +674,7 @@ function TierRow({ tier, onEdit }) {
                 aria-label="Edit"
                 disabled={pending}
                 onClick={() => onEdit(tier)}
-                className="grid size-9 place-items-center rounded-sm text-ink-tertiary hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+                className="grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
               >
                 <Pencil className="size-4" />
               </button>
@@ -588,7 +683,7 @@ function TierRow({ tier, onEdit }) {
                 aria-label="Delete"
                 disabled={pending}
                 onClick={() => setConfirming(true)}
-                className="grid size-9 place-items-center rounded-sm text-ink-tertiary hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
+                className="grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
               >
                 <Trash2 className="size-4" />
               </button>
@@ -621,16 +716,13 @@ function TiersTab() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <p className="text-sm text-ink-secondary">
-            Customers see active tiers on the /rewards page and redeem them for one-time
-            coupons.
-          </p>
-        </div>
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <p className="text-sm text-ink-secondary">
+          Customers see active tiers on the /rewards page and redeem them for one-time coupons.
+        </p>
         {!isFormOpen && (
           <Button onClick={() => setEditing('new')}>
-            <Plus className="size-4" /> New tier
+            <Plus className="size-4" aria-hidden="true" /> New tier
           </Button>
         )}
       </div>
@@ -647,6 +739,7 @@ function TiersTab() {
       {isError ? (
         <EmptyState
           icon={Gift}
+          iconTone="danger"
           title="Couldn't load tiers"
           description="Please try again."
           action={<Button size="sm" onClick={() => refetch()}>Retry</Button>}
@@ -662,21 +755,21 @@ function TiersTab() {
           description="Create one so customers can spend their points."
           action={!isFormOpen && (
             <Button onClick={() => setEditing('new')}>
-              <Plus className="size-4" /> New tier
+              <Plus className="size-4" aria-hidden="true" /> New tier
             </Button>
           )}
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-line-subtle bg-bg-elevated">
+        <div className="overflow-x-auto rounded-xl border border-line-subtle bg-bg-elevated shadow-md">
           <table className="w-full min-w-[640px]">
             <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-ink-tertiary">
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Cost</th>
-                <th className="px-4 py-3 font-medium">Reward</th>
-                <th className="px-4 py-3 font-medium">Valid</th>
-                <th className="px-4 py-3 font-medium">Active</th>
-                <th className="px-4 py-3 text-right font-medium">Actions</th>
+              <tr className="border-b border-line-subtle bg-bg-sunken/60 text-left">
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Name</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Cost</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Reward</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Valid</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Status</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -734,54 +827,38 @@ function ReferralsTab() {
       ) : (
         <>
           <p className="mb-2 text-xs text-ink-tertiary">
-            {total.toLocaleString()} total
+            <span className="nums font-medium text-ink-secondary">{total.toLocaleString()}</span> total
           </p>
-          <div className="overflow-x-auto rounded-lg border border-line-subtle bg-bg-elevated">
+          <div className="overflow-x-auto rounded-xl border border-line-subtle bg-bg-elevated shadow-md">
             <table className="w-full min-w-[720px]">
               <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-ink-tertiary">
-                  <th className="px-4 py-3 font-medium">Referrer</th>
-                  <th className="px-4 py-3 font-medium">Friend</th>
-                  <th className="px-4 py-3 font-medium">Code</th>
-                  <th className="px-4 py-3 font-medium">Signed up</th>
-                  <th className="px-4 py-3 font-medium">Completed</th>
-                  <th className="px-4 py-3 text-right font-medium">Status</th>
+                <tr className="border-b border-line-subtle bg-bg-sunken/60 text-left">
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Referrer</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Friend</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Code</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Signed up</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Completed</th>
+                  <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((r) => (
-                  <tr key={r.id} className="border-t border-line-subtle">
-                    <td className="px-4 py-3 text-sm text-ink-primary">
-                      {r.referrer_email}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-ink-primary">
-                      {r.referred_email}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-ink-tertiary">
-                      {r.code}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-ink-tertiary">
-                      {formatDate(r.created_at)}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-ink-tertiary">
+                  <tr key={r.id} className="border-t border-line-subtle transition-colors duration-150 hover:bg-fill/60">
+                    <td className="px-5 py-3 text-sm text-ink-primary">{r.referrer_email}</td>
+                    <td className="px-5 py-3 text-sm text-ink-primary">{r.referred_email}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-ink-tertiary">{r.code}</td>
+                    <td className="px-5 py-3 text-xs text-ink-tertiary">{formatDate(r.created_at)}</td>
+                    <td className="px-5 py-3 text-xs text-ink-tertiary">
                       {formatDate(r.completed_at) || '—'}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <span
-                        className={cn(
-                          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                          r.status === 'completed'
-                            ? 'bg-success/15 text-success'
-                            : 'bg-fill text-ink-secondary',
-                        )}
+                    <td className="px-5 py-3 text-right">
+                      <Badge
+                        tone={r.status === 'completed' ? 'success' : 'info'}
+                        dot
+                        size="sm"
                       >
-                        {r.status === 'completed' ? (
-                          <CheckCircle2 className="size-3" />
-                        ) : (
-                          <Clock className="size-3" />
-                        )}
                         {r.status}
-                      </span>
+                      </Badge>
                     </td>
                   </tr>
                 ))}
@@ -794,7 +871,7 @@ function ReferralsTab() {
   );
 }
 
-// ---- Maintenance tab (expiry) ----
+// ---- Maintenance tab ----
 
 function MaintenanceTab() {
   const expire = useAdminExpirePoints();
@@ -815,58 +892,64 @@ function MaintenanceTab() {
 
   return (
     <div className="max-w-2xl">
-      <div className="rounded-lg border border-line-subtle bg-bg-elevated p-6">
-        <div className="flex items-start gap-3">
-          <span className="grid size-10 place-items-center rounded-full bg-warning/15 text-warning">
-            <Timer className="size-5" aria-hidden="true" />
+      <div className="rounded-xl border border-line-subtle bg-bg-elevated p-6 shadow-sm">
+        <div className="flex items-start gap-4">
+          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-warning/12 text-warning">
+            <Timer className="size-6" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
-            <h3 className="text-h3 text-ink-primary">Run points expiry</h3>
-            <p className="mt-1 text-sm text-ink-secondary">
+            <h3 className="text-h3 font-semibold tracking-tight text-ink-primary">Run points expiry</h3>
+            <p className="mt-1.5 text-sm text-ink-secondary">
               Walks every customer&apos;s ledger oldest-first. Earn rows past
               their <code className="font-mono text-xs">expires_at</code> that
               haven&apos;t been fully consumed produce an <code className="font-mono text-xs">EXPIRY</code> debit.
               Idempotent — safe to run any time. Schedule this nightly in production.
             </p>
-            <div className="mt-4">
+            <div className="mt-5">
               <Button onClick={run} loading={expire.isPending}>
-                <Timer className="size-4" /> Run expiry sweep now
+                <Timer className="size-4" aria-hidden="true" /> Run expiry sweep now
               </Button>
             </div>
           </div>
         </div>
 
         {lastResult && (
-          <div
+          <motion.div
+            variants={fadeUp}
+            initial="hidden"
+            animate="show"
             className={cn(
-              'mt-5 rounded-sm border p-3 text-sm',
+              'mt-5 rounded-lg border p-4 text-sm',
               lastResult.ok
-                ? 'border-success/30 bg-success/10 text-ink-primary'
-                : 'border-danger/30 bg-danger/10 text-danger',
+                ? 'border-success/30 bg-success/8 text-ink-primary'
+                : 'border-danger/30 bg-danger/8 text-danger',
             )}
           >
             {lastResult.ok ? (
               <>
-                <p className="font-medium">Expiry complete</p>
-                <p className="mt-1 text-xs text-ink-secondary">
-                  Users processed:{' '}
-                  <strong className="text-ink-primary">
-                    {lastResult.users_processed}
-                  </strong>{' '}
-                  · Rows expired:{' '}
-                  <strong className="text-ink-primary">
-                    {lastResult.rows_expired}
-                  </strong>{' '}
-                  · Points expired:{' '}
-                  <strong className="text-ink-primary">
-                    {lastResult.points_expired.toLocaleString()}
-                  </strong>
+                <p className="flex items-center gap-2 font-semibold">
+                  <CheckCircle2 className="size-4 text-success" aria-hidden="true" />
+                  Expiry complete
                 </p>
+                <div className="mt-2 grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Users processed', value: lastResult.users_processed },
+                    { label: 'Rows expired', value: lastResult.rows_expired },
+                    { label: 'Points expired', value: lastResult.points_expired?.toLocaleString() },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="rounded-lg bg-bg-elevated p-3 text-center">
+                      <p className="nums text-lg font-bold text-ink-primary">{value}</p>
+                      <p className="text-[10px] text-ink-tertiary">{label}</p>
+                    </div>
+                  ))}
+                </div>
               </>
             ) : (
-              <p>{lastResult.message}</p>
+              <p className="flex items-center gap-2">
+                <span>{lastResult.message}</span>
+              </p>
             )}
-          </div>
+          </motion.div>
         )}
       </div>
     </div>
@@ -884,7 +967,7 @@ const RULE_ICONS = {
 function EarnRulesTab() {
   const { data: rules = [], isLoading } = useAdminEarnRules();
   const update = useAdminUpdateEarnRule();
-  const [edits, setEdits] = useState({}); // ruleId -> partial form
+  const [edits, setEdits] = useState({});
   const [savedRule, setSavedRule] = useState(null);
 
   function localEdit(rule, patch) {
@@ -915,7 +998,7 @@ function EarnRulesTab() {
       setSavedRule(rule.id);
       setTimeout(() => setSavedRule((cur) => (cur === rule.id ? null : cur)), 1500);
     } catch (_err) {
-      /* swallow — Button shows pending state, errors surface in dev tools */
+      /* swallow */
     }
   }
 
@@ -923,7 +1006,7 @@ function EarnRulesTab() {
     return (
       <div className="flex flex-col gap-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-24" />
+          <Skeleton key={i} className="h-28" />
         ))}
       </div>
     );
@@ -931,13 +1014,18 @@ function EarnRulesTab() {
 
   return (
     <div className="max-w-3xl">
-      <p className="mb-4 text-sm text-ink-secondary">
+      <p className="mb-5 text-sm text-ink-secondary">
         Each rule is triggered by a domain event (signup, paid order, review).
         Adjust the points value or toggle a rule off to disable it without a
-        code change. Customers see updated values on their next earn.
+        code change.
       </p>
 
-      <div className="flex flex-col gap-3">
+      <motion.div
+        className="flex flex-col gap-3"
+        variants={staggerContainer(0.06)}
+        initial="hidden"
+        animate="show"
+      >
         {rules.map((rule) => {
           const draft = edits[rule.id] || rule;
           const dirty =
@@ -950,13 +1038,23 @@ function EarnRulesTab() {
               : rule.key === 'signup_bonus'
                 ? 'One-time bonus on account registration.'
                 : 'Points per submitted review.';
+          const isSaved = savedRule === rule.id;
           return (
-            <div
+            <motion.div
               key={rule.id}
-              className="rounded-lg border border-line-subtle bg-bg-elevated p-5"
+              variants={fadeUp}
+              className={cn(
+                'rounded-xl border bg-bg-elevated p-5 transition-colors duration-200',
+                draft.is_active ? 'border-line-subtle' : 'border-line-subtle opacity-60',
+              )}
             >
-              <div className="flex items-start gap-3">
-                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-accent/15 text-accent">
+              <div className="flex items-start gap-4">
+                <span
+                  className={cn(
+                    'grid size-10 shrink-0 place-items-center rounded-full transition-colors',
+                    draft.is_active ? 'bg-accent/12 text-accent' : 'bg-fill text-ink-tertiary',
+                  )}
+                >
                   <Icon className="size-5" aria-hidden="true" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -964,15 +1062,18 @@ function EarnRulesTab() {
                     <h3 className="text-sm font-semibold text-ink-primary">
                       {rule.display_name}
                     </h3>
-                    <code className="font-mono text-[10px] text-ink-tertiary">
+                    <code className="rounded bg-fill px-1.5 py-0.5 font-mono text-[10px] text-ink-tertiary">
                       {rule.key}
                     </code>
+                    <Badge tone={draft.is_active ? 'success' : 'neutral'} size="sm" dot>
+                      {draft.is_active ? 'Active' : 'Off'}
+                    </Badge>
                   </div>
                   <p className="mt-0.5 text-xs text-ink-tertiary">{hint}</p>
 
-                  <div className="mt-3 grid gap-3 sm:grid-cols-[180px_1fr_auto] sm:items-end">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-[180px_auto_auto] sm:items-end">
                     <Input
-                      label="Points"
+                      label="Points value"
                       type="number"
                       min="0"
                       step="1"
@@ -981,26 +1082,37 @@ function EarnRulesTab() {
                         localEdit(rule, { points_value: e.target.value })
                       }
                     />
-                    <label className="inline-flex items-center gap-2 self-center text-sm text-ink-secondary">
-                      <input
-                        type="checkbox"
-                        checked={!!draft.is_active}
-                        onChange={(e) =>
-                          localEdit(rule, { is_active: e.target.checked })
-                        }
-                        className="size-4 rounded-sm border border-line-subtle bg-bg-sunken text-accent focus-visible:focus-ring"
-                      />
+                    <label className="flex cursor-pointer items-center gap-2 self-center pb-px text-sm text-ink-secondary">
+                      <span
+                        className={cn(
+                          'grid size-5 place-items-center rounded border transition-colors',
+                          draft.is_active
+                            ? 'border-accent bg-accent text-white'
+                            : 'border-line-strong bg-bg-elevated',
+                        )}
+                      >
+                        {draft.is_active && <CheckCircle2 className="size-3" strokeWidth={2.5} />}
+                        <input
+                          type="checkbox"
+                          checked={!!draft.is_active}
+                          onChange={(e) =>
+                            localEdit(rule, { is_active: e.target.checked })
+                          }
+                          className="sr-only"
+                        />
+                      </span>
                       Active
                     </label>
                     <Button
                       size="sm"
-                      disabled={!dirty}
+                      variant={isSaved ? 'secondary' : 'primary'}
+                      disabled={!dirty && !isSaved}
                       loading={update.isPending && update.variables?.ruleId === rule.id}
                       onClick={() => save(rule)}
                     >
-                      {savedRule === rule.id ? (
+                      {isSaved ? (
                         <>
-                          <CheckCircle2 className="size-4" /> Saved
+                          <CheckCircle2 className="size-4" aria-hidden="true" /> Saved
                         </>
                       ) : (
                         'Save'
@@ -1009,10 +1121,10 @@ function EarnRulesTab() {
                   </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           );
         })}
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -1076,31 +1188,34 @@ function VipTierForm({ initial, mode, onCancel, onSaved }) {
   }
 
   return (
-    <form
+    <motion.form
+      variants={scaleIn}
+      initial="hidden"
+      animate="show"
       onSubmit={submit}
-      className="mb-6 rounded-lg border border-line-subtle bg-bg-elevated p-6"
+      className="mb-6 rounded-xl border border-line-subtle bg-bg-elevated p-6 shadow-md"
     >
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-h3 text-ink-primary">
-          {mode === 'edit' ? 'Edit VIP tier' : 'New VIP tier'}
-        </h2>
+      <div className="mb-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="grid size-10 place-items-center rounded-full bg-warning/12 text-warning">
+            <Award className="size-5" aria-hidden="true" />
+          </div>
+          <h2 className="text-h3 font-semibold tracking-tight text-ink-primary">
+            {mode === 'edit' ? 'Edit VIP tier' : 'New VIP tier'}
+          </h2>
+        </div>
         <button
           type="button"
           aria-label="Close"
           onClick={onCancel}
-          className="grid size-9 place-items-center rounded-sm text-ink-tertiary hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+          className="grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
         >
           <X className="size-4" />
         </button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Input
-          label="Name"
-          placeholder="Silver"
-          value={form.name}
-          onChange={set('name')}
-        />
+        <Input label="Name" required placeholder="Silver" value={form.name} onChange={set('name')} />
         <Input
           label="Threshold (lifetime pts)"
           type="number"
@@ -1150,9 +1265,13 @@ function VipTierForm({ initial, mode, onCancel, onSaved }) {
         helper="Lower numbers appear first in the storefront ladder."
       />
 
-      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+      {error && (
+        <p className="mt-4 rounded-lg border border-danger/30 bg-danger/8 px-3 py-2 text-xs text-danger">
+          {error}
+        </p>
+      )}
 
-      <div className="mt-5 flex justify-end gap-3">
+      <div className="mt-6 flex justify-end gap-3">
         <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
           Cancel
         </Button>
@@ -1160,7 +1279,7 @@ function VipTierForm({ initial, mode, onCancel, onSaved }) {
           {mode === 'edit' ? 'Save changes' : 'Create tier'}
         </Button>
       </div>
-    </form>
+    </motion.form>
   );
 }
 
@@ -1168,30 +1287,36 @@ function VipTierRow({ tier, onEdit }) {
   const del = useAdminDeleteVipTier();
   const [confirming, setConfirming] = useState(false);
   return (
-    <tr className="border-t border-line-subtle">
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
+    <tr className="group border-t border-line-subtle transition-colors duration-150 hover:bg-fill/60">
+      <td className="px-5 py-3.5">
+        <div className="flex items-center gap-2.5">
           <span
-            className="inline-block size-3 rounded-full border border-line-subtle"
+            className="inline-block size-3 rounded-full border border-line-subtle shadow-sm"
             style={{ backgroundColor: tier.color || 'transparent' }}
             aria-hidden="true"
           />
-          <p className="text-sm font-medium text-ink-primary">{tier.name}</p>
+          <div>
+            <p className="text-sm font-semibold text-ink-primary">{tier.name}</p>
+            {tier.benefits && (
+              <p className="mt-0.5 text-xs text-ink-tertiary">{tier.benefits}</p>
+            )}
+          </div>
         </div>
-        {tier.benefits && (
-          <p className="mt-0.5 text-xs text-ink-tertiary">{tier.benefits}</p>
-        )}
       </td>
-      <td className="px-4 py-3 text-sm tabular-nums text-ink-secondary">
-        {tier.threshold_lifetime_points.toLocaleString()}
+      <td className="px-5 py-3.5">
+        <span className="nums text-sm text-ink-secondary">
+          {tier.threshold_lifetime_points.toLocaleString()}
+        </span>
       </td>
-      <td className="px-4 py-3 text-sm tabular-nums text-ink-secondary">
-        {Number(tier.earn_multiplier).toFixed(2)}×
+      <td className="px-5 py-3.5">
+        <Badge tone="accent" size="sm">
+          <span className="nums">{Number(tier.earn_multiplier).toFixed(2)}</span>×
+        </Badge>
       </td>
-      <td className="px-4 py-3 text-sm tabular-nums text-ink-tertiary">
-        {tier.sort_order}
+      <td className="px-5 py-3.5">
+        <span className="nums text-sm text-ink-tertiary">{tier.sort_order}</span>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-5 py-3.5">
         <div className="flex items-center justify-end gap-1">
           {confirming ? (
             <>
@@ -1220,7 +1345,7 @@ function VipTierRow({ tier, onEdit }) {
                 type="button"
                 aria-label="Edit"
                 onClick={() => onEdit(tier)}
-                className="grid size-9 place-items-center rounded-sm text-ink-tertiary hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+                className="grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
               >
                 <Pencil className="size-4" />
               </button>
@@ -1228,7 +1353,7 @@ function VipTierRow({ tier, onEdit }) {
                 type="button"
                 aria-label="Delete"
                 onClick={() => setConfirming(true)}
-                className="grid size-9 place-items-center rounded-sm text-ink-tertiary hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
+                className="grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
               >
                 <Trash2 className="size-4" />
               </button>
@@ -1259,15 +1384,13 @@ function VipTiersTab() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-5 flex items-center justify-between gap-4">
         <p className="text-sm text-ink-secondary">
-          Customers move up automatically when their lifetime points cross a
-          threshold. The multiplier applies to every positive earn at or above
-          that tier.
+          Customers move up automatically when their lifetime points cross a threshold. The multiplier applies to every positive earn.
         </p>
         {!isFormOpen && (
           <Button onClick={() => setEditing('new')}>
-            <Plus className="size-4" /> New tier
+            <Plus className="size-4" aria-hidden="true" /> New tier
           </Button>
         )}
       </div>
@@ -1294,15 +1417,15 @@ function VipTiersTab() {
           description="Add at least one tier with threshold 0 so every customer has a starting tier."
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-line-subtle bg-bg-elevated">
+        <div className="overflow-x-auto rounded-xl border border-line-subtle bg-bg-elevated shadow-md">
           <table className="w-full min-w-[640px]">
             <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-ink-tertiary">
-                <th className="px-4 py-3 font-medium">Tier</th>
-                <th className="px-4 py-3 font-medium">Threshold</th>
-                <th className="px-4 py-3 font-medium">Multiplier</th>
-                <th className="px-4 py-3 font-medium">Sort</th>
-                <th className="px-4 py-3 text-right font-medium">Actions</th>
+              <tr className="border-b border-line-subtle bg-bg-sunken/60 text-left">
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Tier</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Threshold</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Multiplier</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Sort</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-ink-tertiary">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1323,12 +1446,12 @@ export default function AdminLoyaltyPage() {
   const [tab, setTab] = useState('users');
 
   const tabs = [
-    { id: 'users', label: 'Customers', icon: UsersIcon },
-    { id: 'tiers', label: 'Redemption tiers', icon: Coins },
-    { id: 'earn-rules', label: 'Earn rules', icon: TrendingUp },
-    { id: 'vip-tiers', label: 'VIP tiers', icon: Award },
-    { id: 'referrals', label: 'Referrals', icon: Send },
-    { id: 'maintenance', label: 'Maintenance', icon: Timer },
+    { id: 'users',       label: 'Customers',        icon: UsersIcon },
+    { id: 'tiers',       label: 'Redemption tiers', icon: Coins },
+    { id: 'earn-rules',  label: 'Earn rules',        icon: TrendingUp },
+    { id: 'vip-tiers',  label: 'VIP tiers',         icon: Award },
+    { id: 'referrals',  label: 'Referrals',         icon: Send },
+    { id: 'maintenance',label: 'Maintenance',        icon: Timer },
   ];
 
   return (
@@ -1336,37 +1459,41 @@ export default function AdminLoyaltyPage() {
       title="Loyalty"
       description="Track customer points balances, configure redemption tiers, and manage the referral program."
     >
+      {/* Tab bar */}
       <div
         role="tablist"
-        className="mb-6 inline-flex flex-wrap rounded-sm border border-line-subtle bg-bg-elevated p-1"
+        aria-label="Loyalty sections"
+        className="mb-6 flex flex-wrap gap-1 rounded-xl border border-line-subtle bg-bg-elevated p-1.5"
       >
         {tabs.map((t) => {
           const Icon = t.icon;
+          const active = tab === t.id;
           return (
             <button
               key={t.id}
               type="button"
               role="tab"
-              aria-selected={tab === t.id}
+              aria-selected={active}
               onClick={() => setTab(t.id)}
               className={cn(
-                'inline-flex items-center gap-2 rounded-sm px-3 py-1.5 text-sm transition-colors focus-visible:focus-ring',
-                tab === t.id
-                  ? 'bg-accent/15 text-accent'
-                  : 'text-ink-secondary hover:text-ink-primary',
+                'inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-all duration-150 focus-visible:focus-ring',
+                active
+                  ? 'bg-accent/12 text-accent shadow-sm'
+                  : 'text-ink-secondary hover:bg-fill hover:text-ink-primary',
               )}
             >
-              <Icon className="size-4" /> {t.label}
+              <Icon className="size-4" aria-hidden="true" />
+              {t.label}
             </button>
           );
         })}
       </div>
 
-      {tab === 'users' && <UsersTab />}
-      {tab === 'tiers' && <TiersTab />}
-      {tab === 'earn-rules' && <EarnRulesTab />}
-      {tab === 'vip-tiers' && <VipTiersTab />}
-      {tab === 'referrals' && <ReferralsTab />}
+      {tab === 'users'       && <UsersTab />}
+      {tab === 'tiers'       && <TiersTab />}
+      {tab === 'earn-rules'  && <EarnRulesTab />}
+      {tab === 'vip-tiers'   && <VipTiersTab />}
+      {tab === 'referrals'   && <ReferralsTab />}
       {tab === 'maintenance' && <MaintenanceTab />}
     </AdminPage>
   );

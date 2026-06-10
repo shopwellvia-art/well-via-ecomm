@@ -1,52 +1,79 @@
 import { useEffect, useState } from 'react';
-import { Check, AlertTriangle, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Check,
+  AlertTriangle,
+  Plus,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  Globe,
+} from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Input } from '@/components/ui/Input.jsx';
 import { Textarea } from '@/components/ui/Textarea.jsx';
+import { Badge } from '@/components/ui/Badge.jsx';
 import { Card, CardBody } from '@/components/ui/Card.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { cn } from '@/lib/utils.js';
+import { fadeUp, fadeIn, scaleIn } from '@/lib/motion.js';
 import { useSitePages, useUpdateSitePages } from '@/features/site-pages/hooks.js';
 import { SITE_PAGES_DEFAULTS, PAGE_ICON_NAMES } from '@/features/site-pages/defaults.js';
 
 // ---------------------------------------------------------------------------
-// Reusable primitives (shared visual language with AdminFooterPage)
+// Reusable primitives
 // ---------------------------------------------------------------------------
 
 const inputCls =
-  'h-9 w-full rounded-sm border border-line-subtle bg-bg-elevated px-3 text-sm text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring transition-colors';
+  'h-9 w-full rounded-md border border-line-subtle bg-bg-elevated px-3 text-sm text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:outline-none focus-visible:focus-ring transition-colors';
 
 function SectionCard({ title, description, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <Card>
+    <Card flat className="border border-line-subtle">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
         className="flex w-full items-center justify-between px-5 py-4 text-left focus-visible:focus-ring"
       >
         <div>
-          <p className="font-semibold text-ink-primary">{title}</p>
+          <p className="text-sm font-semibold text-ink-primary">{title}</p>
           {description && <p className="mt-0.5 text-xs text-ink-tertiary">{description}</p>}
         </div>
-        {open ? (
-          <ChevronUp className="size-4 text-ink-tertiary" aria-hidden="true" />
-        ) : (
-          <ChevronDown className="size-4 text-ink-tertiary" aria-hidden="true" />
-        )}
+        <span className="grid size-6 place-items-center rounded text-ink-tertiary transition-colors hover:bg-fill">
+          {open
+            ? <ChevronUp className="size-4" aria-hidden="true" />
+            : <ChevronDown className="size-4" aria-hidden="true" />}
+        </span>
       </button>
-      {open && (
-        <div className="border-t border-line-subtle">
-          <CardBody>{children}</CardBody>
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="content"
+            variants={fadeIn}
+            initial="hidden"
+            animate="show"
+            exit="hidden"
+            className="border-t border-line-subtle"
+          >
+            <CardBody>{children}</CardBody>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Card>
   );
 }
 
-function FieldLabel({ children }) {
-  return <label className="mb-1.5 block text-xs font-medium text-ink-secondary">{children}</label>;
+function FieldLabel({ children, required }) {
+  return (
+    <label className="mb-1.5 block text-xs font-medium text-ink-secondary">
+      {children}
+      {required && <span className="ml-0.5 text-danger" aria-hidden="true">*</span>}
+    </label>
+  );
 }
 
 function AddButton({ onClick, children }) {
@@ -54,7 +81,7 @@ function AddButton({ onClick, children }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-1.5 self-start rounded-sm px-3 py-1.5 text-sm text-accent hover:bg-accent/10 focus-visible:focus-ring transition-colors"
+      className="flex items-center gap-1.5 self-start rounded-md px-3 py-1.5 text-sm text-accent transition-colors hover:bg-accent/10 focus-visible:focus-ring"
     >
       <Plus className="size-4" aria-hidden="true" />
       {children}
@@ -62,15 +89,15 @@ function AddButton({ onClick, children }) {
   );
 }
 
-function RemoveButton({ onClick }) {
+function RemoveButton({ onClick, label = 'Remove' }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label="Remove"
-      className="grid size-9 shrink-0 place-items-center rounded-sm text-ink-tertiary hover:bg-danger/10 hover:text-danger focus-visible:focus-ring transition-colors"
+      aria-label={label}
+      className="grid size-8 shrink-0 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
     >
-      <Trash2 className="size-4" aria-hidden="true" />
+      <Trash2 className="size-3.5" aria-hidden="true" />
     </button>
   );
 }
@@ -88,7 +115,10 @@ function StringList({ items = [], onChange, placeholder = 'Enter value', addLabe
             placeholder={placeholder}
             className={inputCls}
           />
-          <RemoveButton onClick={() => onChange(items.filter((_, idx) => idx !== i))} />
+          <RemoveButton
+            label="Remove item"
+            onClick={() => onChange(items.filter((_, idx) => idx !== i))}
+          />
         </div>
       ))}
       <AddButton onClick={() => onChange([...items, ''])}>{addLabel}</AddButton>
@@ -98,7 +128,6 @@ function StringList({ items = [], onChange, placeholder = 'Enter value', addLabe
 
 /**
  * Generic editor for a list of objects.
- *
  * `fields` describes each editable property:
  *   { key, label, type: 'text'|'textarea'|'icon'|'lines', placeholder, full }
  */
@@ -113,13 +142,21 @@ function ObjectList({ items = [], onChange, fields, template, addLabel }) {
   return (
     <div className="flex flex-col gap-3">
       {items.map((item, i) => (
-        <div key={i} className="relative rounded-sm border border-line-subtle bg-bg-sunken p-3 pr-12">
-          <div className="absolute right-2 top-2">
-            <RemoveButton onClick={() => removeRow(i)} />
+        <div
+          key={i}
+          className="relative rounded-lg border border-line-subtle bg-bg-sunken p-4 pr-12"
+        >
+          <div className="absolute right-2.5 top-2.5">
+            <RemoveButton label="Remove row" onClick={() => removeRow(i)} />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {fields.map((f) => (
-              <div key={f.key} className={cn(f.full || f.type === 'textarea' || f.type === 'lines' ? 'sm:col-span-2' : '')}>
+              <div
+                key={f.key}
+                className={cn(
+                  f.full || f.type === 'textarea' || f.type === 'lines' ? 'sm:col-span-2' : '',
+                )}
+              >
                 <FieldLabel>{f.label}</FieldLabel>
                 {f.type === 'textarea' ? (
                   <textarea
@@ -215,15 +252,24 @@ function ProseEditor({ value, onChange }) {
 
 function EnabledToggle({ enabled, onChange }) {
   return (
-    <label className="flex items-center gap-3">
+    <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-line-subtle bg-bg-sunken px-4 py-3 transition-colors hover:border-line-strong">
       <input
         type="checkbox"
         checked={enabled !== false}
         onChange={(e) => onChange(e.target.checked)}
         className="size-4 rounded-sm border border-line-subtle bg-bg-elevated text-accent focus-visible:focus-ring"
       />
-      <span className="text-sm font-medium text-ink-primary">Page published</span>
-      <span className="text-xs text-ink-tertiary">When off, visitors see an "unavailable" message.</span>
+      <div>
+        <span className="text-sm font-medium text-ink-primary">Page published</span>
+        <p className="mt-0.5 text-xs text-ink-tertiary">
+          When off, visitors see an "unavailable" message.
+        </p>
+      </div>
+      <div className="ml-auto">
+        {enabled !== false
+          ? <Badge tone="success" dot>Live</Badge>
+          : <Badge tone="neutral">Draft</Badge>}
+      </div>
     </label>
   );
 }
@@ -242,7 +288,12 @@ function AboutEditor({ page, set }) {
         </div>
       </SectionCard>
       <SectionCard title="Story paragraphs" defaultOpen={false}>
-        <StringList items={page.intro} onChange={(v) => set('intro', v)} placeholder="A paragraph of your story" addLabel="Add paragraph" />
+        <StringList
+          items={page.intro}
+          onChange={(v) => set('intro', v)}
+          placeholder="A paragraph of your story"
+          addLabel="Add paragraph"
+        />
       </SectionCard>
       <SectionCard title="Stats" description="Headline numbers." defaultOpen={false}>
         <ObjectList
@@ -285,7 +336,12 @@ function ContactEditor({ page, set }) {
           <HeroEditor hero={page.hero} onChange={(v) => set('hero', v)} />
         </div>
         <div className="mt-4">
-          <Textarea label="Intro" rows={2} value={page.intro} onChange={(e) => set('intro', e.target.value)} />
+          <Textarea
+            label="Intro"
+            rows={2}
+            value={page.intro}
+            onChange={(e) => set('intro', e.target.value)}
+          />
         </div>
       </SectionCard>
       <SectionCard title="Contact methods" description="Email, phone, chat, address cards.">
@@ -304,9 +360,21 @@ function ContactEditor({ page, set }) {
       </SectionCard>
       <SectionCard title="Enquiry form" description="Copy for the on-page contact form.">
         <div className="grid gap-4">
-          <Input label="Heading" value={page.form.heading} onChange={(e) => set('form', { ...page.form, heading: e.target.value })} />
-          <Input label="Note" value={page.form.note} onChange={(e) => set('form', { ...page.form, note: e.target.value })} />
-          <Input label="Success message" value={page.form.success} onChange={(e) => set('form', { ...page.form, success: e.target.value })} />
+          <Input
+            label="Heading"
+            value={page.form.heading}
+            onChange={(e) => set('form', { ...page.form, heading: e.target.value })}
+          />
+          <Input
+            label="Note"
+            value={page.form.note}
+            onChange={(e) => set('form', { ...page.form, note: e.target.value })}
+          />
+          <Input
+            label="Success message"
+            value={page.form.success}
+            onChange={(e) => set('form', { ...page.form, success: e.target.value })}
+          />
         </div>
       </SectionCard>
       <SectionCard title="Offices" defaultOpen={false}>
@@ -334,7 +402,12 @@ function CareersEditor({ page, set }) {
           <HeroEditor hero={page.hero} onChange={(v) => set('hero', v)} />
         </div>
         <div className="mt-4">
-          <Textarea label="Intro" rows={2} value={page.intro} onChange={(e) => set('intro', e.target.value)} />
+          <Textarea
+            label="Intro"
+            rows={2}
+            value={page.intro}
+            onChange={(e) => set('intro', e.target.value)}
+          />
         </div>
       </SectionCard>
       <SectionCard title="Perks">
@@ -381,7 +454,12 @@ function StoriesEditor({ page, set }) {
           <HeroEditor hero={page.hero} onChange={(v) => set('hero', v)} />
         </div>
         <div className="mt-4">
-          <Textarea label="Intro" rows={2} value={page.intro} onChange={(e) => set('intro', e.target.value)} />
+          <Textarea
+            label="Intro"
+            rows={2}
+            value={page.intro}
+            onChange={(e) => set('intro', e.target.value)}
+          />
         </div>
       </SectionCard>
       <SectionCard title="Posts">
@@ -413,7 +491,12 @@ function PressEditor({ page, set }) {
           <HeroEditor hero={page.hero} onChange={(v) => set('hero', v)} />
         </div>
         <div className="mt-4">
-          <Textarea label="Intro" rows={2} value={page.intro} onChange={(e) => set('intro', e.target.value)} />
+          <Textarea
+            label="Intro"
+            rows={2}
+            value={page.intro}
+            onChange={(e) => set('intro', e.target.value)}
+          />
         </div>
       </SectionCard>
       <SectionCard title="Releases & coverage">
@@ -432,10 +515,27 @@ function PressEditor({ page, set }) {
       </SectionCard>
       <SectionCard title="Media contact & kit" defaultOpen={false}>
         <div className="grid gap-4">
-          <Input label="Heading" value={page.contact.heading} onChange={(e) => set('contact', { ...page.contact, heading: e.target.value })} />
-          <Input label="Email" value={page.contact.email} onChange={(e) => set('contact', { ...page.contact, email: e.target.value })} />
-          <Input label="Phone" value={page.contact.phone} onChange={(e) => set('contact', { ...page.contact, phone: e.target.value })} />
-          <Input label="Media kit URL" value={page.kit_url} onChange={(e) => set('kit_url', e.target.value)} helper="Leave blank to hide the media-kit card." />
+          <Input
+            label="Heading"
+            value={page.contact.heading}
+            onChange={(e) => set('contact', { ...page.contact, heading: e.target.value })}
+          />
+          <Input
+            label="Email"
+            value={page.contact.email}
+            onChange={(e) => set('contact', { ...page.contact, email: e.target.value })}
+          />
+          <Input
+            label="Phone"
+            value={page.contact.phone}
+            onChange={(e) => set('contact', { ...page.contact, phone: e.target.value })}
+          />
+          <Input
+            label="Media kit URL"
+            value={page.kit_url}
+            onChange={(e) => set('kit_url', e.target.value)}
+            helper="Leave blank to hide the media-kit card."
+          />
         </div>
       </SectionCard>
     </div>
@@ -478,8 +578,16 @@ function CorporateEditor({ page, set }) {
       </SectionCard>
       <SectionCard title="Registered entity" defaultOpen={false}>
         <div className="flex flex-col gap-4">
-          <Input label="Legal name" value={page.entity.name} onChange={(e) => set('entity', { ...page.entity, name: e.target.value })} />
-          <Input label="CIN" value={page.entity.cin} onChange={(e) => set('entity', { ...page.entity, cin: e.target.value })} />
+          <Input
+            label="Legal name"
+            value={page.entity.name}
+            onChange={(e) => set('entity', { ...page.entity, name: e.target.value })}
+          />
+          <Input
+            label="CIN"
+            value={page.entity.cin}
+            onChange={(e) => set('entity', { ...page.entity, cin: e.target.value })}
+          />
           <div>
             <p className="mb-2 text-sm font-medium text-ink-secondary">Registered office lines</p>
             <StringList
@@ -489,8 +597,16 @@ function CorporateEditor({ page, set }) {
               addLabel="Add line"
             />
           </div>
-          <Input label="Email" value={page.entity.email} onChange={(e) => set('entity', { ...page.entity, email: e.target.value })} />
-          <Input label="Phone" value={page.entity.phone} onChange={(e) => set('entity', { ...page.entity, phone: e.target.value })} />
+          <Input
+            label="Email"
+            value={page.entity.email}
+            onChange={(e) => set('entity', { ...page.entity, email: e.target.value })}
+          />
+          <Input
+            label="Phone"
+            value={page.entity.phone}
+            onChange={(e) => set('entity', { ...page.entity, phone: e.target.value })}
+          />
         </div>
       </SectionCard>
       <SectionCard title="Documents" description="Downloadable / linked documents." defaultOpen={false}>
@@ -576,12 +692,18 @@ export default function AdminPagesPage() {
   if (isError && !draft) {
     return (
       <AdminPage title="Company Pages" description="Storefront company pages.">
-        <div className="flex items-start gap-3 rounded-sm border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+        <div className="flex items-start gap-3 rounded-lg border border-danger/30 bg-danger/8 px-4 py-3 text-sm text-danger">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div>
             <p className="font-medium">Could not load company pages</p>
-            <p className="mt-0.5 text-xs opacity-80">Showing defaults. Save to persist your changes.</p>
-            <button type="button" onClick={() => refetch()} className="mt-2 text-xs underline hover:no-underline focus-visible:focus-ring">
+            <p className="mt-0.5 text-xs opacity-80">
+              Showing defaults. Save to persist your changes.
+            </p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="mt-2 text-xs underline hover:no-underline focus-visible:focus-ring"
+            >
               Retry
             </button>
           </div>
@@ -602,14 +724,24 @@ export default function AdminPagesPage() {
     >
       {/* Sticky save toolbar */}
       <div className="sticky top-0 z-10 -mx-6 mb-6 flex items-center justify-between gap-4 border-b border-line-subtle bg-bg-elevated/95 px-6 py-3 backdrop-blur">
-        <p className="text-sm text-ink-secondary">
-          Editing <span className="font-medium text-ink-primary">{activeTab.label}</span>
-          {' · '}
-          <a href={activeTab.path} target="_blank" rel="noreferrer" className="text-accent hover:underline">
-            view live ↗
+        <div className="flex items-center gap-2 min-w-0">
+          <FileText className="size-4 shrink-0 text-ink-tertiary" aria-hidden="true" />
+          <p className="truncate text-sm text-ink-secondary">
+            Editing{' '}
+            <span className="font-medium text-ink-primary">{activeTab.label}</span>
+          </p>
+          <a
+            href={activeTab.path}
+            target="_blank"
+            rel="noreferrer"
+            className="hidden shrink-0 items-center gap-1 text-xs text-accent hover:underline sm:flex focus-visible:focus-ring"
+            aria-label={`View ${activeTab.label} live`}
+          >
+            <Globe className="size-3" aria-hidden="true" />
+            view live
           </a>
-        </p>
-        <div className="flex items-center gap-3">
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
           {savedAt && (
             <span className="flex items-center gap-1.5 text-xs text-success">
               <Check className="size-4" aria-hidden="true" />
@@ -619,7 +751,7 @@ export default function AdminPagesPage() {
           {saveError && (
             <span className="flex items-center gap-1.5 text-xs text-danger">
               <AlertTriangle className="size-4" aria-hidden="true" />
-              {saveError}
+              <span className="hidden sm:inline">{saveError}</span>
             </span>
           )}
           <Button onClick={handleSave} loading={update.isPending}>
@@ -628,7 +760,7 @@ export default function AdminPagesPage() {
         </div>
       </div>
 
-      {/* Page switcher */}
+      {/* Page switcher pills */}
       <div className="mb-6 flex flex-wrap gap-2">
         {TABS.map((t) => {
           const isActive = t.key === active;
@@ -639,30 +771,39 @@ export default function AdminPagesPage() {
               type="button"
               onClick={() => setActive(t.key)}
               className={cn(
-                'inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition-colors focus-visible:focus-ring',
+                'inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:focus-ring',
                 isActive
-                  ? 'border-accent bg-accent/15 text-accent'
+                  ? 'border-accent bg-accent/12 text-accent shadow-glow-sm'
                   : 'border-line-subtle text-ink-secondary hover:border-line-strong hover:text-ink-primary',
               )}
             >
               {t.label}
               {!published && (
-                <span className="rounded-full bg-fill-strong px-1.5 py-0.5 text-[10px] uppercase text-ink-tertiary">
-                  Off
-                </span>
+                <Badge tone="neutral" size="sm">Off</Badge>
               )}
             </button>
           );
         })}
       </div>
 
-      <div className="max-w-3xl">
-        <ActiveEditor
-          page={draft[active]}
-          set={(key, value) => setField(active, key, value)}
-        />
-      </div>
+      {/* Editor panel */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={active}
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+          exit="hidden"
+          className="max-w-3xl"
+        >
+          <ActiveEditor
+            page={draft[active]}
+            set={(key, value) => setField(active, key, value)}
+          />
+        </motion.div>
+      </AnimatePresence>
 
+      {/* Bottom save strip */}
       <div className="mt-8 flex max-w-3xl items-center justify-end gap-3">
         {savedAt && (
           <span className="flex items-center gap-1.5 text-xs text-success">

@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Search, PackageX, AlertTriangle, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Search, PackageX, AlertTriangle, ChevronLeft, ChevronRight, X, SlidersHorizontal } from 'lucide-react';
 import { Page } from '@/components/layout/Page.jsx';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs.jsx';
 import { Input } from '@/components/ui/Input.jsx';
 import { Button } from '@/components/ui/Button.jsx';
+import { Badge } from '@/components/ui/Badge.jsx';
 import { ProductGrid } from '@/features/products/components/ProductGrid.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { useProducts } from '@/features/products/hooks.js';
 import { useCategories } from '@/features/categories/hooks.js';
 import { useAddToCart } from '@/features/cart/hooks.js';
+import { fadeUp, heroContainer } from '@/lib/motion.js';
 
 const PAGE_SIZE = 12;
 
@@ -76,43 +79,98 @@ export default function ProductListPage() {
         current={heading}
         className="mb-6"
       />
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-h1 text-ink-primary">{heading}</h1>
-            {isFiltered && (
+
+      {/* Page header — title + search + filter strip */}
+      <motion.header
+        variants={heroContainer}
+        initial="hidden"
+        animate="show"
+        className="flex flex-col gap-5"
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <motion.div variants={fadeUp}>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-h1 tracking-tight text-ink-primary">{heading}</h1>
+              {isFiltered && (
+                <Link
+                  to="/products"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line-subtle bg-fill px-3 py-1 text-xs font-medium text-ink-secondary transition-colors hover:bg-fill-strong hover:text-ink-primary focus-visible:focus-ring"
+                >
+                  <X className="size-3.5" aria-hidden="true" />
+                  Clear filter
+                </Link>
+              )}
+            </div>
+            <p className="mt-1.5 text-sm text-ink-secondary">
+              {isLoading ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block size-1.5 animate-pulse rounded-full bg-accent" />
+                  Loading the collection…
+                </span>
+              ) : (
+                <>
+                  <span className="nums font-medium text-ink-primary">{total.toLocaleString()}</span>
+                  {' '}product{total === 1 ? '' : 's'}
+                  {activeCategory?.name ? ` in ${activeCategory.name}` : ''}
+                </>
+              )}
+            </p>
+          </motion.div>
+
+          <motion.div variants={fadeUp} className="w-full sm:w-72">
+            <Input
+              type="search"
+              label="Search"
+              icon={Search}
+              placeholder="Search products…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </motion.div>
+        </div>
+
+        {/* Category chip rail — only when we have categories loaded */}
+        {categories.length > 0 && !isFiltered && (
+          <motion.div
+            variants={fadeUp}
+            className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"
+            aria-label="Browse by category"
+          >
+            <span className="flex shrink-0 items-center gap-1.5 text-xs text-ink-tertiary">
+              <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+              Browse
+            </span>
+            <div className="mx-2 h-4 w-px bg-line-subtle" aria-hidden="true" />
+            {categories.slice(0, 10).map((cat) => (
               <Link
-                to="/products"
-                className="inline-flex items-center gap-1.5 rounded-full border border-line-subtle bg-fill px-3 py-1 text-xs font-medium text-ink-secondary transition-colors hover:text-ink-primary focus-visible:focus-ring"
+                key={cat.id}
+                to={`/products?category_id=${cat.id}`}
+                className="shrink-0 rounded-full border border-line-subtle bg-bg-elevated px-3.5 py-1.5 text-xs font-medium text-ink-secondary transition-colors hover:border-accent/50 hover:bg-accent-soft hover:text-accent focus-visible:focus-ring"
               >
-                <X className="size-3.5" aria-hidden="true" />
-                Clear filter
+                {cat.name}
               </Link>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-ink-secondary">
-            {isLoading
-              ? 'Loading the collection…'
-              : `${total} product${total === 1 ? '' : 's'}${
-                  activeCategory?.name ? ` in ${activeCategory.name}` : ''
-                }`}
-          </p>
-        </div>
-        <div className="w-full sm:w-72">
-          <Input
-            type="search"
-            label="Search"
-            icon={Search}
-            placeholder="Search products…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-      </header>
+            ))}
+          </motion.div>
+        )}
+
+        {/* Active category badge */}
+        {isFiltered && activeCategory?.name && (
+          <motion.div variants={fadeUp} className="flex items-center gap-2">
+            <span className="text-xs text-ink-tertiary">Showing</span>
+            <Badge tone="accent" outline>
+              {activeCategory.name}
+            </Badge>
+          </motion.div>
+        )}
+      </motion.header>
+
+      {/* Divider */}
+      <div className="mt-6 border-t border-line-subtle" />
 
       <div className="mt-6">
         {isError ? (
           <EmptyState
+            iconTone="danger"
             icon={AlertTriangle}
             title="We couldn't load products"
             description="Something went wrong on our end. Please try again."
@@ -155,7 +213,7 @@ export default function ProductListPage() {
 
       {!isLoading && !isError && totalPages > 1 && (
         <nav
-          className="mt-10 flex items-center justify-center gap-3"
+          className="mt-12 flex items-center justify-center gap-4"
           aria-label="Pagination"
         >
           <Button
@@ -167,9 +225,34 @@ export default function ProductListPage() {
             <ChevronLeft className="size-4" aria-hidden="true" />
             Previous
           </Button>
-          <span className="text-sm text-ink-secondary">
-            Page {page} of {totalPages}
-          </span>
+
+          {/* Page indicator pills */}
+          <div className="flex items-center gap-1.5" aria-hidden="true">
+            {Array.from({ length: Math.min(totalPages, 7) }).map((_, i) => {
+              const pg = i + 1;
+              return (
+                <button
+                  key={pg}
+                  type="button"
+                  onClick={() => setPage(pg)}
+                  className={[
+                    'nums size-8 rounded-sm text-xs font-medium transition-colors focus-visible:focus-ring',
+                    pg === page
+                      ? 'bg-accent text-white shadow-glow-sm'
+                      : 'text-ink-secondary hover:bg-fill hover:text-ink-primary',
+                  ].join(' ')}
+                  aria-label={`Go to page ${pg}`}
+                  aria-current={pg === page ? 'page' : undefined}
+                >
+                  {pg}
+                </button>
+              );
+            })}
+            {totalPages > 7 && (
+              <span className="text-xs text-ink-tertiary">… {totalPages}</span>
+            )}
+          </div>
+
           <Button
             variant="secondary"
             size="sm"

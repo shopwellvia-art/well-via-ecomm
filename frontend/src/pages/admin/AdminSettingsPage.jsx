@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import {
   Mail,
   MessageSquare,
@@ -15,13 +16,17 @@ import {
   CreditCard,
   LogIn,
   PiggyBank,
+  AlertOctagon,
 } from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Input } from '@/components/ui/Input.jsx';
 import { Select } from '@/components/ui/Select.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
+import { Card, CardHeader, CardBody } from '@/components/ui/Card.jsx';
+import { Badge } from '@/components/ui/Badge.jsx';
 import { cn } from '@/lib/utils.js';
+import { fadeIn, scaleIn } from '@/lib/motion.js';
 import {
   useSettings,
   useUpdateSettings,
@@ -40,8 +45,6 @@ const _ICON_OPTIONS = [
   { value: 'badge',   label: 'Badge' },
 ];
 
-// Small helper to keep the FIELD_META block readable — produces two entries
-// per badge slot (label + icon select).
 function _loginBadgeMeta(n) {
   return {
     [`login.trust_badge_${n}_label`]: {
@@ -57,10 +60,7 @@ function _loginBadgeMeta(n) {
   };
 }
 
-// Per-category schema. Without this the form would be an opaque list of keys;
-// declaring labels + types here is what makes the page useful.
 const FIELD_META = {
-  // Email
   'email.backend':  { label: 'Backend', type: 'select', options: [
     { value: 'console', label: 'Console (dev only — logs the email)' },
     { value: 'smtp',    label: 'SMTP (real delivery)' },
@@ -72,7 +72,6 @@ const FIELD_META = {
   'smtp.use_tls':   { label: 'Use STARTTLS', type: 'bool' },
   'email.from':     { label: 'From address', type: 'text', placeholder: 'orders@yourdomain.com' },
 
-  // SMS
   'sms.backend':         { label: 'Backend', type: 'select', options: [
     { value: 'console', label: 'Console (dev only — logs the SMS)' },
     { value: 'twilio',  label: 'Twilio' },
@@ -81,24 +80,17 @@ const FIELD_META = {
   'twilio.auth_token':   { label: 'Auth Token', type: 'password' },
   'twilio.from_number':  { label: 'From phone number', type: 'text', placeholder: '+14155551234' },
 
-  // Security
   'auth.totp_mode': { label: 'Two-factor authentication', type: 'select', options: [
     { value: 'off',      label: 'Off — disabled for everyone' },
     { value: 'optional', label: 'Optional — users may enable on their account' },
   ]},
 
-  // Notifications — per-event master switches. Email always goes out when on;
-  // SMS only fires if the customer has saved a phone number on their account.
   'notifications.order_paid':      { label: 'Order paid',      type: 'bool' },
   'notifications.order_shipped':   { label: 'Order shipped',   type: 'bool' },
   'notifications.order_delivered': { label: 'Order delivered', type: 'bool' },
   'notifications.order_cancelled': { label: 'Order cancelled', type: 'bool' },
   'notifications.order_refunded':  { label: 'Order refunded',  type: 'bool' },
 
-  // Shipping. Selecting 'none' leaves the store on manual fulfillment;
-  // 'mock' runs the in-process simulator (great for demoing without
-  // credentials); 'delhivery' calls the live carrier — requires the
-  // credentials below.
   'shipping.provider': { label: 'Provider', type: 'select', options: [
     { value: 'none',      label: 'None — disabled (manual fulfillment)' },
     { value: 'mock',      label: 'Mock — in-process simulator (dev only)' },
@@ -126,15 +118,11 @@ const FIELD_META = {
   'shipping.free_threshold':        { label: 'Free shipping when cart subtotal ≥ (₹)', type: 'number',
     placeholder: '999' },
 
-  // Login page polish — admin-tunable trust badges. Empty label hides
-  // the slot. Icon picker stays consistent with the frontend's allowlist.
   ..._loginBadgeMeta(1),
   ..._loginBadgeMeta(2),
   ..._loginBadgeMeta(3),
   ..._loginBadgeMeta(4),
 
-  // COD (Cash on Delivery). Master switch + surcharge + the bounds and
-  // customer-risk gates the checkout will enforce.
   'cod.enabled':                  { label: 'Allow Cash on Delivery', type: 'bool' },
   'cod.flat_surcharge':           { label: 'COD flat surcharge (₹)', type: 'number',
     placeholder: '40' },
@@ -144,30 +132,17 @@ const FIELD_META = {
     placeholder: '5000' },
   'cod.block_first_time_customer':{ label: 'Block COD for first-time customers', type: 'bool' },
   'cod.block_rto_customers':      { label: 'Block COD for customers with prior refunded returns', type: 'bool' },
-  // Split COD (Phase 9). When enabled, the checkout offers a third payment
-  // method that collects `split_prepaid_amount` via the gateway and the
-  // balance on delivery — lowering RTO risk by giving the customer skin
-  // in the game.
   'cod.split_enabled':            { label: 'Offer Split COD (partial prepaid)', type: 'bool' },
   'cod.split_prepaid_amount':     { label: 'Split COD upfront amount (₹)', type: 'number',
     placeholder: '100' },
   'cod.require_otp':              { label: 'Require SMS OTP for COD orders', type: 'bool' },
 
-  // Payment gateway config (provider + PhonePe credentials) now lives on its
-  // own dedicated screen — Admin → Payment Gateway — backed by the
-  // payment_gateway_config table, not these key/value settings.
-
-  // Costs / Profitability. These values feed the /analytics/profit endpoint.
-  // All are stored as numeric strings; the backend converts on read.
   'costs.packing_per_order':  { label: 'Packing cost per order (₹)', type: 'number', placeholder: '20' },
   'costs.handling_per_order': { label: 'Handling cost per order (₹)', type: 'number', placeholder: '10' },
   'costs.gateway_fee_pct':    { label: 'Payment gateway fee (%)', type: 'number', placeholder: '2' },
   'costs.monthly_overheads':  { label: 'Monthly overheads (₹)', type: 'number', placeholder: '20000' },
   'costs.monthly_ad_spend':   { label: 'Monthly ad spend (₹)', type: 'number', placeholder: '8000' },
 
-  // Payment instruments (Phase 10). Each rail can be enabled/disabled
-  // independently and can carry its own % discount — UPI typically gets
-  // the discount because UPI MDR is ~0% in India.
   'payments.suggested_instrument': { label: 'Suggested instrument', type: 'select', options: [
     { value: 'upi',         label: 'UPI' },
     { value: 'netbanking',  label: 'Netbanking' },
@@ -188,23 +163,28 @@ const FIELD_META = {
     placeholder: '0' },
 };
 
+// Tabs that carry a danger-zone extra section (visual cue)
+const DANGER_ZONE_CATEGORIES = new Set(['security', 'cod']);
+
 const CATEGORY_ORDER = ['costs', 'payments', 'shipping', 'cod', 'login', 'email', 'sms', 'notifications', 'security', 'general'];
 const TAB_META = {
-  costs:         { label: 'Costs / Profitability', icon: PiggyBank },
-  payments:      { label: 'Payments',         icon: CreditCard },
-  shipping:      { label: 'Shipping',         icon: Truck },
-  cod:           { label: 'Cash on Delivery', icon: Wallet },
-  login:         { label: 'Login Page',       icon: LogIn },
-  email:         { label: 'Email & SMTP',     icon: Mail },
-  sms:           { label: 'SMS (Twilio)',     icon: MessageSquare },
-  notifications: { label: 'Notifications',    icon: Bell },
-  security:      { label: 'Security',         icon: ShieldCheck },
-  general:       { label: 'General',          icon: SettingsIcon },
+  costs:         { label: 'Costs',         icon: PiggyBank  },
+  payments:      { label: 'Payments',      icon: CreditCard },
+  shipping:      { label: 'Shipping',      icon: Truck      },
+  cod:           { label: 'Cash on Delivery', icon: Wallet  },
+  login:         { label: 'Login Page',    icon: LogIn      },
+  email:         { label: 'Email & SMTP',  icon: Mail       },
+  sms:           { label: 'SMS',           icon: MessageSquare },
+  notifications: { label: 'Notifications', icon: Bell       },
+  security:      { label: 'Security',      icon: ShieldCheck },
+  general:       { label: 'General',       icon: SettingsIcon },
 };
 
 function fieldType(key) {
   return FIELD_META[key]?.type || 'text';
 }
+
+// ─── FieldRow ─────────────────────────────────────────────────────────────────
 
 function FieldRow({ item, draft, onChange }) {
   const meta = FIELD_META[item.key];
@@ -215,19 +195,26 @@ function FieldRow({ item, draft, onChange }) {
 
   if (type === 'bool') {
     return (
-      <label className="flex items-start gap-2 rounded-sm border border-line-subtle bg-bg-sunken px-3 py-3">
+      <label
+        className={cn(
+          'flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 text-sm transition-all duration-150',
+          (value === 'true' || value === '1' || value === 'on' || value === true)
+            ? 'border-accent/30 bg-accent/8'
+            : 'border-line-subtle bg-bg-sunken hover:border-line-strong hover:bg-fill',
+        )}
+      >
         <input
           type="checkbox"
           checked={value === 'true' || value === '1' || value === 'on' || value === true}
           onChange={(e) => onChange(item.key, e.target.checked ? 'true' : 'false')}
-          className="mt-0.5 size-4 rounded-sm border border-line-subtle bg-bg-elevated text-accent focus-visible:focus-ring"
+          className="mt-0.5 size-4 rounded-sm border border-line-subtle bg-bg-elevated text-accent"
         />
-        <span className="flex-1">
+        <span className="flex-1 min-w-0">
           <span className="block text-sm font-medium text-ink-primary">{label}</span>
           {item.description && (
-            <span className="block text-xs text-ink-tertiary">{item.description}</span>
+            <span className="mt-0.5 block text-xs text-ink-secondary">{item.description}</span>
           )}
-          <span className="block font-mono text-[10px] text-ink-tertiary">{item.key}</span>
+          <span className="mt-0.5 block font-mono text-[10px] text-ink-tertiary">{item.key}</span>
         </span>
       </label>
     );
@@ -253,13 +240,13 @@ function FieldRow({ item, draft, onChange }) {
   if (type === 'textarea') {
     return (
       <label className="block">
-        <span className="mb-1 block text-sm font-medium text-ink-primary">{label}</span>
+        <span className="mb-1.5 block text-sm font-medium text-ink-primary">{label}</span>
         <textarea
           value={value ?? ''}
           onChange={(e) => onChange(item.key, e.target.value)}
           placeholder={meta?.placeholder}
           rows={3}
-          className="block w-full rounded-sm border border-line-subtle bg-bg-elevated px-3 py-2 text-sm text-ink-primary placeholder:text-ink-tertiary focus-visible:focus-ring"
+          className="block w-full rounded-lg border border-line-subtle bg-bg-elevated px-3 py-2.5 text-sm text-ink-primary placeholder:text-ink-tertiary transition-colors hover:border-line-strong"
         />
         {item.description && (
           <span className="mt-1 block text-xs text-ink-tertiary">{item.description}</span>
@@ -279,9 +266,6 @@ function FieldRow({ item, draft, onChange }) {
         onChange={(e) => onChange(item.key, e.target.value)}
         placeholder={placeholder}
         helper={item.description}
-        // Secret fields ship masked. If the admin doesn't touch the value
-        // we send the *** sentinel back and the server treats that as
-        // "leave it alone".
         autoComplete={isSecret ? 'new-password' : undefined}
       />
       {isSecret && value === REDACTED && (
@@ -294,6 +278,8 @@ function FieldRow({ item, draft, onChange }) {
   );
 }
 
+// ─── TestSendBanner ───────────────────────────────────────────────────────────
+
 function TestSendBanner({ pending, result, kind }) {
   if (pending) {
     return (
@@ -302,12 +288,15 @@ function TestSendBanner({ pending, result, kind }) {
   }
   if (!result) return null;
   return (
-    <div
+    <motion.div
+      variants={scaleIn}
+      initial="hidden"
+      animate="show"
       className={cn(
-        'mt-3 flex items-start gap-2 rounded-sm border px-3 py-2 text-xs',
+        'mt-3 flex items-start gap-2 rounded-lg border px-3.5 py-3 text-xs',
         result.ok
-          ? 'border-success/30 bg-success/10 text-success'
-          : 'border-danger/30 bg-danger/10 text-danger',
+          ? 'border-success/30 bg-success/8 text-success'
+          : 'border-danger/30 bg-danger/8 text-danger',
       )}
     >
       {result.ok ? (
@@ -316,47 +305,85 @@ function TestSendBanner({ pending, result, kind }) {
         <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
       )}
       <span>{result.message}</span>
+    </motion.div>
+  );
+}
+
+// ─── SaveBar ──────────────────────────────────────────────────────────────────
+
+function SaveBar({ dirty, saving, savedAt, onSave }) {
+  return (
+    <div className="mt-6 flex items-center justify-between gap-3 border-t border-line-subtle pt-5">
+      <div className="text-xs">
+        {dirty ? (
+          <span className="inline-flex items-center gap-1.5 text-warning">
+            <span className="size-2 animate-pulseRing rounded-full bg-warning" />
+            Unsaved changes
+          </span>
+        ) : savedAt ? (
+          <motion.span
+            variants={fadeIn}
+            initial="hidden"
+            animate="show"
+            className="inline-flex items-center gap-1.5 text-success"
+          >
+            <CheckCircle2 className="size-3.5" aria-hidden="true" />
+            Saved
+          </motion.span>
+        ) : (
+          <span className="text-ink-tertiary">All changes saved</span>
+        )}
+      </div>
+      <Button onClick={onSave} loading={saving} disabled={!dirty}>
+        <Save className="size-4" aria-hidden="true" />
+        Save changes
+      </Button>
     </div>
   );
 }
+
+// ─── CategoryEditor ───────────────────────────────────────────────────────────
 
 function CategoryEditor({ category, items, draft, dirty, onChange, onSave, saving, savedAt, extras }) {
-  return (
-    <div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {items.map((it) => (
-          <FieldRow
-            key={it.key}
-            item={it}
-            draft={draft}
-            onChange={onChange}
-          />
-        ))}
-      </div>
+  // Separate bool fields from input fields — bools span full width in their own group
+  const boolItems = items.filter((it) => fieldType(it.key) === 'bool');
+  const inputItems = items.filter((it) => fieldType(it.key) !== 'bool');
 
-      <div className="mt-5 flex items-center justify-between gap-3">
-        <p className="text-xs text-ink-tertiary">
-          {dirty ? (
-            <span className="inline-flex items-center gap-1 text-warning">
-              Unsaved changes
-            </span>
-          ) : savedAt ? (
-            <span className="inline-flex items-center gap-1 text-success">
-              <CheckCircle2 className="size-3.5" /> Saved
-            </span>
-          ) : (
-            <span>&nbsp;</span>
+  return (
+    <motion.div variants={fadeIn} initial="hidden" animate="show">
+      {/* Input / select fields in a 2-col grid */}
+      {inputItems.length > 0 && (
+        <div className="mb-5 grid gap-4 sm:grid-cols-2">
+          {inputItems.map((it) => (
+            <FieldRow key={it.key} item={it} draft={draft} onChange={onChange} />
+          ))}
+        </div>
+      )}
+
+      {/* Bool toggles in a separate section */}
+      {boolItems.length > 0 && (
+        <>
+          {inputItems.length > 0 && (
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-ink-tertiary">
+              Toggles
+            </p>
           )}
-        </p>
-        <Button onClick={onSave} loading={saving} disabled={!dirty}>
-          <Save className="size-4" /> Save changes
-        </Button>
-      </div>
+          <div className="mb-5 grid gap-2 sm:grid-cols-2">
+            {boolItems.map((it) => (
+              <FieldRow key={it.key} item={it} draft={draft} onChange={onChange} />
+            ))}
+          </div>
+        </>
+      )}
+
+      <SaveBar dirty={dirty} saving={saving} savedAt={savedAt} onSave={onSave} />
 
       {extras}
-    </div>
+    </motion.div>
   );
 }
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AdminSettingsPage() {
   const { data, isLoading } = useSettings();
@@ -365,8 +392,6 @@ export default function AdminSettingsPage() {
   const [draft, setDraft] = useState({});
   const [savedAt, setSavedAt] = useState(null);
 
-  // Build the form draft from the server snapshot — preserving keystrokes so
-  // a re-fetch (after save) doesn't blow away user input on a different tab.
   useEffect(() => {
     if (!data) return;
     setDraft((cur) => {
@@ -380,7 +405,6 @@ export default function AdminSettingsPage() {
     });
   }, [data]);
 
-  // ---- Per-category save ----
   const itemsByCategory = useMemo(() => {
     const out = {};
     for (const it of data?.items || []) {
@@ -394,15 +418,12 @@ export default function AdminSettingsPage() {
   }
 
   function buildPayload(category) {
-    // Only ship keys for the active category that diverge from server state.
     const items = itemsByCategory[category] || [];
     const updates = {};
     for (const it of items) {
       const cur = draft[it.key];
       const server = it.value ?? '';
       if (cur === undefined) continue;
-      // Sentinel: secret field left untouched → omit so the server doesn't
-      // clobber the existing password. The backend ignores *** anyway.
       if (it.is_secret && cur === REDACTED) continue;
       if (cur !== server) updates[it.key] = cur;
     }
@@ -418,7 +439,6 @@ export default function AdminSettingsPage() {
     if (Object.keys(updates).length === 0) return;
     try {
       const fresh = await update.mutateAsync(updates);
-      // Refresh draft with server-truth for the keys we just saved.
       setDraft((d) => {
         const next = { ...d };
         for (const it of fresh.items) {
@@ -435,7 +455,7 @@ export default function AdminSettingsPage() {
     }
   }
 
-  // ---- Test send ----
+  // Test send
   const testEmail = useTestEmail();
   const testSms = useTestSms();
   const [testEmailTo, setTestEmailTo] = useState('');
@@ -459,10 +479,22 @@ export default function AdminSettingsPage() {
   if (isLoading) {
     return (
       <AdminPage title="Settings" description="Loading…">
-        <div className="flex flex-col gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-16" />
-          ))}
+        <div className="overflow-hidden rounded-xl border border-line-subtle bg-bg-elevated shadow-md">
+          <div className="flex flex-wrap gap-1 border-b border-line-subtle bg-bg-sunken/60 px-4 py-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-8 w-24 rounded-md" />
+            ))}
+          </div>
+          <div className="p-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i}>
+                  <Skeleton variant="text" lines={1} className="mb-2 w-28" />
+                  <Skeleton className="h-10 rounded-lg" />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </AdminPage>
     );
@@ -475,135 +507,164 @@ export default function AdminSettingsPage() {
       title="Settings"
       description="Runtime configuration — changes take effect immediately. Sensitive values are masked once saved."
     >
-      <div
-        role="tablist"
-        className="mb-6 inline-flex flex-wrap rounded-sm border border-line-subtle bg-bg-elevated p-1"
-      >
-        {tabs.map((cat) => {
-          const meta = TAB_META[cat] || { label: cat, icon: SettingsIcon };
-          const Icon = meta.icon;
-          return (
-            <button
-              key={cat}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === cat}
-              onClick={() => setActiveTab(cat)}
-              className={cn(
-                'inline-flex items-center gap-2 rounded-sm px-3 py-1.5 text-sm transition-colors focus-visible:focus-ring',
-                activeTab === cat
-                  ? 'bg-accent/15 text-accent'
-                  : 'text-ink-secondary hover:text-ink-primary',
-              )}
-            >
-              <Icon className="size-4" /> {meta.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Tab bar + content card */}
+      <Card>
+        {/* Tab strip */}
+        <div
+          role="tablist"
+          className="flex flex-wrap gap-1 border-b border-line-subtle bg-bg-sunken/40 px-4 py-3"
+        >
+          {tabs.map((cat) => {
+            const meta = TAB_META[cat] || { label: cat, icon: SettingsIcon };
+            const Icon = meta.icon;
+            const isDirty = isCategoryDirty(cat);
+            return (
+              <button
+                key={cat}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === cat}
+                onClick={() => setActiveTab(cat)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:focus-ring',
+                  activeTab === cat
+                    ? 'bg-accent/12 font-medium text-accent'
+                    : 'text-ink-secondary hover:bg-fill hover:text-ink-primary',
+                )}
+              >
+                <Icon className="size-4" aria-hidden="true" />
+                {meta.label}
+                {isDirty && activeTab !== cat && (
+                  <span className="size-1.5 rounded-full bg-warning" aria-label="unsaved changes" />
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-      <div className="rounded-lg border border-line-subtle bg-bg-elevated p-6">
-        {tabs.map((cat) =>
-          activeTab !== cat ? null : (
-            <CategoryEditor
-              key={cat}
-              category={cat}
-              items={itemsByCategory[cat] || []}
-              draft={draft}
-              dirty={isCategoryDirty(cat)}
-              onChange={setField}
-              onSave={() => saveCategory(cat)}
-              saving={update.isPending}
-              savedAt={savedAt}
-              extras={
-                cat === 'email' ? (
-                  <div className="mt-6 border-t border-line-subtle pt-5">
-                    <p className="text-sm font-medium text-ink-primary">
-                      Send a test email
-                    </p>
-                    <p className="mt-0.5 text-xs text-ink-tertiary">
-                      Uses your saved SMTP credentials. Save changes first if you just edited them.
-                    </p>
-                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                      <Input
-                        type="email"
-                        placeholder="you@example.com"
-                        value={testEmailTo}
-                        onChange={(e) => setTestEmailTo(e.target.value)}
-                        className="!h-11"
-                      />
-                      <Button
-                        variant="secondary"
-                        onClick={() => testEmail.mutate(testEmailTo)}
-                        loading={testEmail.isPending}
-                        disabled={!testEmailTo}
-                      >
-                        <Send className="size-4" /> Send test
-                      </Button>
-                    </div>
-                    <TestSendBanner
-                      pending={testEmail.isPending}
-                      result={emailResult()}
-                      kind="email"
-                    />
-                  </div>
-                ) : cat === 'sms' ? (
-                  <div className="mt-6 border-t border-line-subtle pt-5">
-                    <p className="text-sm font-medium text-ink-primary">
-                      Send a test SMS
-                    </p>
-                    <p className="mt-0.5 text-xs text-ink-tertiary">
-                      Sends "Test SMS from your Lumen admin panel." via the active backend.
-                    </p>
-                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                      <Input
-                        placeholder="+14155551234"
-                        value={testSmsTo}
-                        onChange={(e) => setTestSmsTo(e.target.value)}
-                        className="!h-11"
-                      />
-                      <Button
-                        variant="secondary"
-                        onClick={() =>
-                          testSms.mutate({
-                            to: testSmsTo,
-                            body: 'Test SMS from your Lumen admin panel.',
-                          })
+        {/* Active tab content */}
+        <CardBody className="p-6">
+          {tabs.map((cat) =>
+            activeTab !== cat ? null : (
+              <CategoryEditor
+                key={cat}
+                category={cat}
+                items={itemsByCategory[cat] || []}
+                draft={draft}
+                dirty={isCategoryDirty(cat)}
+                onChange={setField}
+                onSave={() => saveCategory(cat)}
+                saving={update.isPending}
+                savedAt={savedAt}
+                extras={
+                  cat === 'email' ? (
+                    <div className="mt-6 rounded-xl border border-line-subtle bg-bg-sunken p-5">
+                      <CardHeader
+                        title="Send a test email"
+                        className="mb-4 border-none px-0 py-0"
+                        action={
+                          <Badge tone="info" size="sm">Test</Badge>
                         }
-                        loading={testSms.isPending}
-                        disabled={!testSmsTo}
-                      >
-                        <Send className="size-4" /> Send test
-                      </Button>
+                      />
+                      <p className="mb-4 text-xs text-ink-secondary">
+                        Uses your saved SMTP credentials. Save changes first if you just edited them.
+                      </p>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Input
+                          type="email"
+                          placeholder="you@example.com"
+                          value={testEmailTo}
+                          onChange={(e) => setTestEmailTo(e.target.value)}
+                          aria-label="Test email recipient address"
+                        />
+                        <Button
+                          variant="outline"
+                          onClick={() => testEmail.mutate(testEmailTo)}
+                          loading={testEmail.isPending}
+                          disabled={!testEmailTo}
+                        >
+                          <Send className="size-4" aria-hidden="true" />
+                          Send test
+                        </Button>
+                      </div>
+                      <TestSendBanner
+                        pending={testEmail.isPending}
+                        result={emailResult()}
+                        kind="email"
+                      />
                     </div>
-                    <TestSendBanner
-                      pending={testSms.isPending}
-                      result={smsResult()}
-                      kind="SMS"
-                    />
-                  </div>
-                ) : cat === 'security' ? (
-                  <div className="mt-6 border-t border-line-subtle pt-5">
-                    <p className="text-sm font-medium text-ink-primary">
-                      About two-factor authentication
-                    </p>
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-ink-secondary">
-                      <li>
-                        <strong>Off</strong>: 2FA is unavailable. Existing enrolled users
-                        log in with just their password.
-                      </li>
-                      <li>
-                        <strong>Optional</strong>: each user can enable it on their
-                        Account → Security page.
-                      </li>
-                    </ul>
-                  </div>
-                ) : null
-              }
-            />
-          ),
-        )}
-      </div>
+                  ) : cat === 'sms' ? (
+                    <div className="mt-6 rounded-xl border border-line-subtle bg-bg-sunken p-5">
+                      <CardHeader
+                        title="Send a test SMS"
+                        className="mb-4 border-none px-0 py-0"
+                        action={
+                          <Badge tone="info" size="sm">Test</Badge>
+                        }
+                      />
+                      <p className="mb-4 text-xs text-ink-secondary">
+                        Sends "Test SMS from your Lumen admin panel." via the active backend.
+                      </p>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Input
+                          placeholder="+14155551234"
+                          value={testSmsTo}
+                          onChange={(e) => setTestSmsTo(e.target.value)}
+                          aria-label="Test SMS recipient phone number"
+                        />
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            testSms.mutate({
+                              to: testSmsTo,
+                              body: 'Test SMS from your Lumen admin panel.',
+                            })
+                          }
+                          loading={testSms.isPending}
+                          disabled={!testSmsTo}
+                        >
+                          <Send className="size-4" aria-hidden="true" />
+                          Send test
+                        </Button>
+                      </div>
+                      <TestSendBanner
+                        pending={testSms.isPending}
+                        result={smsResult()}
+                        kind="SMS"
+                      />
+                    </div>
+                  ) : cat === 'security' ? (
+                    <div className="mt-6 rounded-xl border border-danger/30 bg-danger/4 p-5">
+                      <div className="mb-3 flex items-center gap-2">
+                        <AlertOctagon className="size-4 text-danger" aria-hidden="true" />
+                        <p className="text-sm font-semibold text-danger">
+                          Two-factor authentication notes
+                        </p>
+                      </div>
+                      <ul className="space-y-2 pl-1 text-xs text-ink-secondary">
+                        <li className="flex items-start gap-2">
+                          <span className="mt-1 size-1.5 shrink-0 rounded-full bg-ink-tertiary" />
+                          <span>
+                            <strong className="text-ink-primary">Off</strong>: 2FA is unavailable.
+                            Existing enrolled users log in with just their password.
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="mt-1 size-1.5 shrink-0 rounded-full bg-ink-tertiary" />
+                          <span>
+                            <strong className="text-ink-primary">Optional</strong>: each user can
+                            enable it on their Account → Security page.
+                          </span>
+                        </li>
+                      </ul>
+                    </div>
+                  ) : null
+                }
+              />
+            ),
+          )}
+        </CardBody>
+      </Card>
     </AdminPage>
   );
 }

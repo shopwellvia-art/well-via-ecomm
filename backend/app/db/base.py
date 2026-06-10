@@ -1,3 +1,4 @@
+from app.models.address import Address  # noqa: F401
 from app.models.audit import AuditEvent  # noqa: F401
 from app.models.base import Base  # noqa: F401
 from app.models.coupon import Coupon, CouponUsage  # noqa: F401
@@ -9,6 +10,7 @@ from app.models.loyalty import (  # noqa: F401
     VipTier,
 )
 from app.models.order import Order, OrderItem  # noqa: F401
+from app.models.payment_method import PaymentMethod  # noqa: F401
 from app.models.product import Category, Product, ProductImage  # noqa: F401
 from app.models.rbac import Permission, Role  # noqa: F401
 from app.models.referral import Referral  # noqa: F401

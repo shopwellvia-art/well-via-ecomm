@@ -69,7 +69,7 @@ PERMISSIONS: tuple[PermissionDef, ...] = (
     # Payments
     PermissionDef(
         "payments.manage",
-        "Configure the payment gateway (PhonePe credentials)",
+        "Configure payment gateways (credentials, enable/disable, environment)",
         "Payments",
     ),
     # Settings

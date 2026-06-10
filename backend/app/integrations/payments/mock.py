@@ -55,7 +55,9 @@ class MockProvider:
         redirect = f"{self.frontend_url}/payments/mock/{req.merchant_transaction_id}?{params}"
         return InitiateResponse(redirect_url=redirect, provider_transaction_id=None)
 
-    def fetch_status(self, merchant_transaction_id: str) -> StatusResponse:
+    def fetch_status(
+        self, merchant_transaction_id: str, provider_ref: str | None = None
+    ) -> StatusResponse:
         raw = self._redis.get(_KEY_PREFIX + merchant_transaction_id)
         if not raw:
             return StatusResponse(

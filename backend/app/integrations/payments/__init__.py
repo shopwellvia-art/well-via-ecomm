@@ -5,7 +5,7 @@ from app.integrations.payments.base import (
     PaymentStatus,
     StatusResponse,
 )
-from app.integrations.payments.factory import get_payment_provider
+from app.integrations.payments.factory import get_payment_provider, get_provider_for_order
 
 __all__ = [
     "InitiateRequest",
@@ -14,4 +14,5 @@ __all__ = [
     "PaymentStatus",
     "StatusResponse",
     "get_payment_provider",
+    "get_provider_for_order",
 ]

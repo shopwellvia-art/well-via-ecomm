@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Pencil, X, ShieldCheck, Lock, Users as UsersIcon } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Plus, Trash2, Pencil, X, ShieldCheck, Lock, Users as UsersIcon, Check } from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Input } from '@/components/ui/Input.jsx';
+import { Badge } from '@/components/ui/Badge.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { cn } from '@/lib/utils.js';
+import { fadeUp, scaleIn, listStagger, staggerContainer } from '@/lib/motion.js';
 import {
   useRoles,
   usePermissions,
@@ -16,14 +19,12 @@ import {
 
 const EMPTY_FORM = { name: '', description: '', permission_ids: [] };
 
-// Group permissions by their `group_name` for the checklist UI.
 function groupPermissions(permissions) {
   const groups = {};
   for (const p of permissions) {
     const key = p.group_name || 'Other';
     (groups[key] ||= []).push(p);
   }
-  // Sort group names alphabetically; within each group, sort by name.
   return Object.entries(groups)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, perms]) => [name, perms.sort((a, b) => a.name.localeCompare(b.name))]);
@@ -51,60 +52,89 @@ function PermissionPicker({ permissions, selected, onChange, disabled }) {
 
   if (!permissions?.length) {
     return (
-      <p className="text-sm text-ink-tertiary">
-        Permissions list isn't loaded yet.
-      </p>
+      <p className="text-sm text-ink-tertiary">Permissions list isn&apos;t loaded yet.</p>
     );
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid gap-3 md:grid-cols-2">
       {grouped.map(([groupName, perms]) => {
         const allSelected = perms.every((p) => selectedSet.has(p.id));
         const someSelected = !allSelected && perms.some((p) => selectedSet.has(p.id));
+        const selectedCount = perms.filter((p) => selectedSet.has(p.id)).length;
         return (
           <fieldset
             key={groupName}
-            className="rounded-sm border border-line-subtle bg-bg-sunken p-4"
+            className={cn(
+              'rounded-xl border bg-bg-sunken p-4 transition-colors duration-150',
+              allSelected ? 'border-accent/30 bg-accent/4' : 'border-line-subtle',
+            )}
           >
-            <legend className="-mt-2 mb-2 flex items-center gap-2 bg-bg-elevated px-2 text-xs font-semibold uppercase tracking-wide text-ink-secondary">
-              {groupName}
+            {/* Group header */}
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <legend className="text-xs font-semibold uppercase tracking-wider text-ink-secondary">
+                  {groupName}
+                </legend>
+                {(allSelected || someSelected) && (
+                  <span className="nums rounded-full bg-accent/12 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                    {selectedCount}/{perms.length}
+                  </span>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => toggleGroup(perms)}
                 disabled={disabled}
-                className="rounded-sm px-1 py-0.5 text-[10px] font-medium text-accent normal-case tracking-normal hover:bg-fill focus-visible:focus-ring disabled:opacity-40 disabled:pointer-events-none"
+                className={cn(
+                  'rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-40',
+                  allSelected
+                    ? 'bg-accent/12 text-accent hover:bg-accent/25'
+                    : 'text-ink-tertiary hover:bg-fill hover:text-ink-secondary',
+                )}
               >
                 {allSelected ? 'Clear all' : 'Select all'}
               </button>
-            </legend>
-            <div className="flex flex-col gap-2">
+            </div>
+
+            <div className="flex flex-col gap-1.5">
               {perms.map((p) => {
                 const checked = selectedSet.has(p.id);
                 return (
                   <label
                     key={p.id}
                     className={cn(
-                      'flex cursor-pointer items-start gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors',
+                      'flex cursor-pointer items-start gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-150',
                       checked
                         ? 'bg-accent/10 text-ink-primary'
-                        : 'text-ink-secondary hover:bg-fill',
+                        : 'text-ink-secondary hover:bg-fill hover:text-ink-primary',
                       disabled && 'cursor-not-allowed opacity-50',
                     )}
                   >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={disabled}
-                      onChange={() => toggle(p.id)}
-                      className="mt-0.5 size-4 rounded-sm border border-line-subtle bg-bg-elevated text-accent focus-visible:focus-ring"
-                    />
+                    {/* Custom checkbox visual */}
+                    <span
+                      className={cn(
+                        'mt-0.5 grid size-4 shrink-0 place-items-center rounded border transition-colors',
+                        checked
+                          ? 'border-accent bg-accent'
+                          : 'border-line-strong bg-bg-elevated',
+                      )}
+                    >
+                      {checked && <Check className="size-2.5 text-white" strokeWidth={3} />}
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={disabled}
+                        onChange={() => toggle(p.id)}
+                        className="sr-only"
+                      />
+                    </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block font-mono text-xs text-ink-primary">
+                      <span className="block font-mono text-xs font-medium text-ink-primary">
                         {p.name}
                       </span>
                       {p.description && (
-                        <span className="block text-xs text-ink-tertiary">
+                        <span className="block text-[11px] text-ink-tertiary">
                           {p.description}
                         </span>
                       )}
@@ -113,11 +143,6 @@ function PermissionPicker({ permissions, selected, onChange, disabled }) {
                 );
               })}
             </div>
-            {someSelected && (
-              <p className="mt-2 text-[10px] text-ink-tertiary">
-                {perms.filter((p) => selectedSet.has(p.id)).length}/{perms.length} selected
-              </p>
-            )}
           </fieldset>
         );
       })}
@@ -151,7 +176,6 @@ function RoleForm({ initial, mode, permissions, onCancel, onSaved }) {
         await update.mutateAsync({
           id: initial.id,
           data: {
-            // System roles can't be renamed — drop the field on the wire.
             ...(isSystem ? {} : { name: form.name.trim() }),
             description: form.description.trim() || null,
             permission_ids: form.permission_ids,
@@ -171,26 +195,37 @@ function RoleForm({ initial, mode, permissions, onCancel, onSaved }) {
   }
 
   return (
-    <form
+    <motion.form
+      variants={scaleIn}
+      initial="hidden"
+      animate="show"
       onSubmit={handleSubmit}
-      className="mb-6 rounded-lg border border-line-subtle bg-bg-elevated p-6"
+      className="mb-6 rounded-xl border border-line-subtle bg-bg-elevated p-6 shadow-md"
     >
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2 className="text-h3 text-ink-primary">
-            {mode === 'edit' ? 'Edit role' : 'New role'}
-          </h2>
-          {isSystem && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-fill px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-secondary">
-              <Lock className="size-3" /> System
-            </span>
-          )}
+      <div className="mb-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="grid size-10 place-items-center rounded-full bg-accent/12 text-accent">
+            <ShieldCheck className="size-5" aria-hidden="true" />
+          </div>
+          <div>
+            <h2 className="text-h3 font-semibold tracking-tight text-ink-primary">
+              {mode === 'edit' ? 'Edit role' : 'New role'}
+            </h2>
+            {isSystem && (
+              <div className="mt-0.5 flex items-center gap-1">
+                <Badge tone="neutral" size="sm">
+                  <Lock className="size-2.5" aria-hidden="true" /> System
+                </Badge>
+                <span className="text-xs text-ink-tertiary">cannot be renamed or deleted</span>
+              </div>
+            )}
+          </div>
         </div>
         <button
           type="button"
           aria-label="Close"
           onClick={onCancel}
-          className="grid size-9 place-items-center rounded-sm text-ink-tertiary hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+          className="grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
         >
           <X className="size-4" />
         </button>
@@ -199,6 +234,7 @@ function RoleForm({ initial, mode, permissions, onCancel, onSaved }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <Input
           label="Name"
+          required
           placeholder="manager"
           value={form.name}
           disabled={isSystem}
@@ -213,10 +249,15 @@ function RoleForm({ initial, mode, permissions, onCancel, onSaved }) {
         />
       </div>
 
-      <div className="mt-4">
-        <p className="mb-2 text-sm font-medium text-ink-secondary">
-          Permissions ({form.permission_ids.length} selected)
-        </p>
+      <div className="mt-5">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-semibold text-ink-secondary">
+            Permissions
+          </p>
+          <Badge tone={form.permission_ids.length > 0 ? 'accent' : 'neutral'} size="sm">
+            <span className="nums">{form.permission_ids.length}</span> selected
+          </Badge>
+        </div>
         <PermissionPicker
           permissions={permissions}
           selected={form.permission_ids}
@@ -225,9 +266,13 @@ function RoleForm({ initial, mode, permissions, onCancel, onSaved }) {
         />
       </div>
 
-      {error && <p className="mt-3 text-xs text-danger">{error}</p>}
+      {error && (
+        <p className="mt-4 rounded-lg border border-danger/30 bg-danger/8 px-3 py-2 text-xs text-danger">
+          {error}
+        </p>
+      )}
 
-      <div className="mt-5 flex justify-end gap-3">
+      <div className="mt-6 flex justify-end gap-3">
         <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
           Cancel
         </Button>
@@ -235,7 +280,7 @@ function RoleForm({ initial, mode, permissions, onCancel, onSaved }) {
           {mode === 'edit' ? 'Save changes' : 'Create role'}
         </Button>
       </div>
-    </form>
+    </motion.form>
   );
 }
 
@@ -244,30 +289,42 @@ function RoleRow({ role, onEdit }) {
   const [confirming, setConfirming] = useState(false);
 
   return (
-    <tr className="border-t border-line-subtle">
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-ink-primary">{role.name}</p>
-          {role.is_system && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full bg-fill px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-secondary"
-              title="System role — locked"
-            >
-              <Lock className="size-3" /> System
-            </span>
-          )}
+    <motion.tr variants={fadeUp} className="group border-t border-line-subtle transition-colors duration-150 hover:bg-fill/60">
+      <td className="px-5 py-4">
+        <div className="flex items-center gap-3">
+          <div
+            className={cn(
+              'grid size-8 shrink-0 place-items-center rounded-full',
+              role.is_system ? 'bg-fill text-ink-tertiary' : 'bg-accent/12 text-accent',
+            )}
+          >
+            <ShieldCheck className="size-4" aria-hidden="true" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-ink-primary">{role.name}</p>
+              {role.is_system && (
+                <Badge tone="neutral" size="sm">
+                  <Lock className="size-2.5" aria-hidden="true" /> System
+                </Badge>
+              )}
+            </div>
+            {role.description && (
+              <p className="mt-0.5 text-xs text-ink-tertiary">{role.description}</p>
+            )}
+          </div>
         </div>
-        {role.description && (
-          <p className="mt-0.5 text-xs text-ink-tertiary">{role.description}</p>
-        )}
       </td>
-      <td className="px-4 py-3 text-sm tabular-nums text-ink-secondary">
-        {role.permissions?.length ?? 0}
+      <td className="px-5 py-4">
+        <Badge tone={role.permissions?.length > 0 ? 'accent' : 'neutral'} size="sm">
+          <span className="nums">{role.permissions?.length ?? 0}</span> permission{role.permissions?.length === 1 ? '' : 's'}
+        </Badge>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-5 py-4">
         <div className="flex items-center justify-end gap-1">
           {confirming ? (
-            <>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-ink-secondary">Delete this role?</p>
               <Button
                 variant="destructive"
                 size="sm"
@@ -276,7 +333,7 @@ function RoleRow({ role, onEdit }) {
                   del.mutate(role.id, { onSuccess: () => setConfirming(false) })
                 }
               >
-                Confirm
+                Confirm delete
               </Button>
               <Button
                 variant="ghost"
@@ -286,14 +343,14 @@ function RoleRow({ role, onEdit }) {
               >
                 Cancel
               </Button>
-            </>
+            </div>
           ) : (
             <>
               <button
                 type="button"
                 aria-label={`Edit ${role.name}`}
                 onClick={() => onEdit(role)}
-                className="grid size-9 place-items-center rounded-sm text-ink-tertiary hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+                className="grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
               >
                 <Pencil className="size-4" />
               </button>
@@ -303,7 +360,7 @@ function RoleRow({ role, onEdit }) {
                 disabled={role.is_system}
                 title={role.is_system ? 'System roles cannot be deleted' : undefined}
                 onClick={() => setConfirming(true)}
-                className="grid size-9 place-items-center rounded-sm text-ink-tertiary hover:bg-danger/10 hover:text-danger focus-visible:focus-ring disabled:opacity-30 disabled:pointer-events-none"
+                className="grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-30"
               >
                 <Trash2 className="size-4" />
               </button>
@@ -311,14 +368,13 @@ function RoleRow({ role, onEdit }) {
           )}
         </div>
       </td>
-    </tr>
+    </motion.tr>
   );
 }
 
 export default function AdminRolesPage() {
   const { data: roles = [], isLoading, isError, refetch } = useRoles();
   const { data: permissions = [], isLoading: permsLoading } = usePermissions();
-  // null = closed, 'new' = creating, role obj = editing
   const [editing, setEditing] = useState(null);
 
   const isFormOpen = editing !== null;
@@ -363,6 +419,7 @@ export default function AdminRolesPage() {
       {isError ? (
         <EmptyState
           icon={ShieldCheck}
+          iconTone="danger"
           title="Couldn't load roles"
           description="Something went wrong. Please try again."
           action={
@@ -372,9 +429,19 @@ export default function AdminRolesPage() {
           }
         />
       ) : isLoading || permsLoading ? (
-        <div className="flex flex-col gap-2">
+        <div className="overflow-hidden rounded-xl border border-line-subtle bg-bg-elevated shadow-md">
+          <div className="border-b border-line-subtle px-5 py-3 bg-bg-sunken/60">
+            <Skeleton variant="text" lines={1} className="w-40" />
+          </div>
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-16" />
+            <div key={i} className="flex items-center gap-4 border-t border-line-subtle px-5 py-4">
+              <Skeleton variant="circle" className="size-8 shrink-0" />
+              <div className="flex-1">
+                <Skeleton variant="text" lines={1} className="w-32 mb-1" />
+                <Skeleton variant="text" lines={1} className="w-52" />
+              </div>
+              <Skeleton className="h-5 w-24 rounded-full" />
+            </div>
           ))}
         </div>
       ) : roles.length === 0 ? (
@@ -385,13 +452,24 @@ export default function AdminRolesPage() {
         />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border border-line-subtle bg-bg-elevated">
+          <motion.div
+            className="overflow-x-auto rounded-xl border border-line-subtle bg-bg-elevated shadow-md"
+            variants={listStagger(0.03)}
+            initial="hidden"
+            animate="show"
+          >
             <table className="w-full min-w-[560px]">
               <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-ink-tertiary">
-                  <th className="px-4 py-3 font-medium">Role</th>
-                  <th className="px-4 py-3 font-medium">Permissions</th>
-                  <th className="px-4 py-3 text-right font-medium">Actions</th>
+                <tr className="border-b border-line-subtle bg-bg-sunken/60 text-left">
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+                    Role
+                  </th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+                    Permissions
+                  </th>
+                  <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -400,10 +478,10 @@ export default function AdminRolesPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </motion.div>
 
           <p className="mt-4 flex items-center gap-2 text-xs text-ink-tertiary">
-            <UsersIcon className="size-3.5" />
+            <UsersIcon className="size-3.5" aria-hidden="true" />
             Assign roles to individual staff from the Users page.
           </p>
         </>

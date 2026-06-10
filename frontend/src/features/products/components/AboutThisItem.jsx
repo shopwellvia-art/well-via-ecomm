@@ -1,31 +1,47 @@
+import { motion } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
+import { listStagger, fadeUp } from '@/lib/motion.js';
 
 /**
  * "About this item" bullets.
  *
- * We don't have a structured bullets field on Product, so we derive an honest
- * list from data we *do* have: the description (split into sentences) plus a
- * couple of factual auto-bullets (category, in-stock count). Skipped if the
- * product has no description.
+ * Derives an honest list from data we have: the description (split into
+ * sentences) plus factual auto-bullets (category, stock, SKU). Skipped
+ * if the product has no description.
  */
 export function AboutThisItem({ product, categoryName }) {
   const bullets = extractBullets(product, categoryName);
   if (bullets.length === 0) return null;
 
   return (
-    <section className="mt-8">
-      <h2 className="text-h3 text-ink-primary">About this item</h2>
-      <ul className="mt-3 flex flex-col gap-2">
+    <section className="mt-8" aria-labelledby="about-heading">
+      <h2 id="about-heading" className="text-h3 tracking-tight text-ink-primary">
+        About this item
+      </h2>
+
+      <motion.ul
+        className="mt-4 flex flex-col gap-3"
+        variants={listStagger(0.05)}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.2 }}
+      >
         {bullets.map((b, i) => (
-          <li key={i} className="flex items-start gap-2.5 text-sm text-ink-secondary">
-            <Sparkles
-              className="mt-0.5 size-4 shrink-0 text-accent"
+          <motion.li
+            key={i}
+            variants={fadeUp}
+            className="flex items-start gap-3 text-sm text-ink-secondary"
+          >
+            <span
+              className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-sm bg-accent-soft text-accent"
               aria-hidden="true"
-            />
-            <span>{b}</span>
-          </li>
+            >
+              <Sparkles className="size-3" />
+            </span>
+            <span className="leading-relaxed">{b}</span>
+          </motion.li>
         ))}
-      </ul>
+      </motion.ul>
     </section>
   );
 }

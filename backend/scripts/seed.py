@@ -25,6 +25,13 @@ ADMIN = {
     "password": "Admin123!",
 }
 
+# Fixed storefront account for local/dev testing (quick-login button on /login).
+CUSTOMER = {
+    "email": "customer@lumen.store",
+    "full_name": "Lumen Customer",
+    "password": "Customer123!",
+}
+
 CATEGORIES = [
     ("Audio", "audio"),
     ("Wearables", "wearables"),
@@ -63,7 +70,7 @@ PRODUCTS = [
 
 def seed() -> None:
     db = SessionLocal()
-    created = {"admin": 0, "categories": 0, "products": 0}
+    created = {"admin": 0, "customer": 0, "categories": 0, "products": 0}
     try:
         # Admin user
         admin = db.query(User).filter(User.email == ADMIN["email"]).one_or_none()
@@ -89,6 +96,29 @@ def seed() -> None:
             created["admin"] = 1
         elif not admin.is_admin:
             admin.is_admin = True
+
+        # Test customer (plain storefront account, no admin rights)
+        customer = (
+            db.query(User).filter(User.email == CUSTOMER["email"]).one_or_none()
+        )
+        if customer is None:
+            customer = User(
+                email=CUSTOMER["email"],
+                hashed_password=hash_password(CUSTOMER["password"]),
+                is_active=True,
+                is_admin=False,
+            )
+            db.add(customer)
+            db.flush()
+            first, _, last = CUSTOMER["full_name"].partition(" ")
+            db.add(
+                Customer(
+                    user_id=customer.id,
+                    first_name=first or None,
+                    last_name=last or None,
+                )
+            )
+            created["customer"] = 1
 
         # Categories
         cat_by_slug = {}
@@ -123,10 +153,11 @@ def seed() -> None:
         db.close()
 
     print(
-        f"Seed complete — admin: +{created['admin']}, "
+        f"Seed complete — admin: +{created['admin']}, customer: +{created['customer']}, "
         f"categories: +{created['categories']}, products: +{created['products']}"
     )
     print(f"Admin login: {ADMIN['email']} / {ADMIN['password']}")
+    print(f"Customer login: {CUSTOMER['email']} / {CUSTOMER['password']}")
 
 
 if __name__ == "__main__":

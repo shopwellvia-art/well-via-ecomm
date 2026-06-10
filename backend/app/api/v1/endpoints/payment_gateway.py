@@ -1,8 +1,13 @@
 """Payment gateway configuration (singleton GET/PUT).
 
-The active provider + PhonePe credentials live in one DB row. The salt key is
-write-only over the API: it's accepted on PUT (encrypted at rest) but never
-returned — reads only report whether one is set.
+DEPRECATED: This endpoint manages the legacy PaymentGatewayConfig table which
+stored a single active provider and PhonePe credentials.  New code should use
+the payment_methods endpoints (GET/PUT /admin/payment-methods) which manage the
+multi-gateway payment_methods table.  This endpoint will be removed in a future
+release.
+
+The salt key is write-only over the API: it's accepted on PUT (encrypted at
+rest) but never returned — reads only report whether one is set.
 """
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session

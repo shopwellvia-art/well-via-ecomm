@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Check,
   AlertTriangle,
@@ -10,6 +11,7 @@ import {
   Upload,
   ImageOff,
   Loader2,
+  LayoutTemplate,
 } from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Button } from '@/components/ui/Button.jsx';
@@ -19,6 +21,7 @@ import { Textarea } from '@/components/ui/Textarea.jsx';
 import { Card, CardBody } from '@/components/ui/Card.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { cn } from '@/lib/utils.js';
+import { fadeIn, fadeUp } from '@/lib/motion.js';
 import {
   useFooterConfig,
   useUpdateFooterConfig,
@@ -38,29 +41,39 @@ import {
 function SectionCard({ title, description, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <Card>
+    <Card flat className="border border-line-subtle">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
         className="flex w-full items-center justify-between px-5 py-4 text-left focus-visible:focus-ring"
       >
         <div>
-          <p className="font-semibold text-ink-primary">{title}</p>
+          <p className="text-sm font-semibold text-ink-primary">{title}</p>
           {description && (
             <p className="mt-0.5 text-xs text-ink-tertiary">{description}</p>
           )}
         </div>
-        {open ? (
-          <ChevronUp className="size-4 text-ink-tertiary" aria-hidden="true" />
-        ) : (
-          <ChevronDown className="size-4 text-ink-tertiary" aria-hidden="true" />
-        )}
+        <span className="grid size-6 place-items-center rounded text-ink-tertiary transition-colors hover:bg-fill">
+          {open
+            ? <ChevronUp className="size-4" aria-hidden="true" />
+            : <ChevronDown className="size-4" aria-hidden="true" />}
+        </span>
       </button>
-      {open && (
-        <div className="border-t border-line-subtle">
-          <CardBody>{children}</CardBody>
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="content"
+            variants={fadeIn}
+            initial="hidden"
+            animate="show"
+            exit="hidden"
+            className="border-t border-line-subtle"
+          >
+            <CardBody>{children}</CardBody>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Card>
   );
 }
@@ -87,22 +100,22 @@ function StringList({ items, onChange, placeholder = 'Enter value', addLabel = '
             value={item}
             onChange={(e) => update(i, e.target.value)}
             placeholder={placeholder}
-            className="h-9 flex-1 rounded-sm border border-line-subtle bg-bg-sunken px-3 text-sm text-ink-primary placeholder:text-ink-tertiary focus-visible:border-accent focus-visible:focus-ring hover:border-line-strong transition-colors"
+            className="h-9 flex-1 rounded-md border border-line-subtle bg-bg-sunken px-3 text-sm text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:outline-none focus-visible:focus-ring transition-colors"
           />
           <button
             type="button"
             onClick={() => remove(i)}
             aria-label="Remove"
-            className="grid size-9 place-items-center rounded-sm text-ink-tertiary hover:bg-danger/10 hover:text-danger focus-visible:focus-ring transition-colors"
+            className="grid size-8 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
           >
-            <Trash2 className="size-4" aria-hidden="true" />
+            <Trash2 className="size-3.5" aria-hidden="true" />
           </button>
         </div>
       ))}
       <button
         type="button"
         onClick={add}
-        className="flex items-center gap-1.5 self-start rounded-sm px-3 py-1.5 text-sm text-accent hover:bg-accent/10 focus-visible:focus-ring transition-colors"
+        className="flex items-center gap-1.5 self-start rounded-md px-3 py-1.5 text-sm text-accent transition-colors hover:bg-accent/10 focus-visible:focus-ring"
       >
         <Plus className="size-4" aria-hidden="true" />
         {addLabel}
@@ -111,12 +124,12 @@ function StringList({ items, onChange, placeholder = 'Enter value', addLabel = '
   );
 }
 
-/** A row inside a list of objects. Renders a delete button + drag handle slot. */
+/** A row inside a list of objects with a delete button. */
 function ListRow({ children, onRemove, className }) {
   return (
     <div
       className={cn(
-        'relative rounded-sm border border-line-subtle bg-bg-sunken p-3',
+        'relative rounded-lg border border-line-subtle bg-bg-sunken p-4',
         className,
       )}
     >
@@ -124,7 +137,7 @@ function ListRow({ children, onRemove, className }) {
         type="button"
         onClick={onRemove}
         aria-label="Remove row"
-        className="absolute right-2 top-2 grid size-7 place-items-center rounded-sm text-ink-tertiary hover:bg-danger/10 hover:text-danger focus-visible:focus-ring transition-colors"
+        className="absolute right-2.5 top-2.5 grid size-7 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
       >
         <Trash2 className="size-3.5" aria-hidden="true" />
       </button>
@@ -132,6 +145,12 @@ function ListRow({ children, onRemove, className }) {
     </div>
   );
 }
+
+// Shared inline input class for raw <input> elements inside row editors
+const rowInput =
+  'h-9 w-full rounded-md border border-line-subtle bg-bg-elevated px-3 text-sm text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:outline-none focus-visible:focus-ring transition-colors';
+
+const rowSelect = cn(rowInput, 'appearance-none');
 
 // ---------------------------------------------------------------------------
 // Section editors
@@ -160,10 +179,10 @@ function LogoUploader({ brand, onChange }) {
 
   return (
     <div className="sm:col-span-2">
-      <p className="mb-1.5 text-sm font-medium text-ink-secondary">Logo</p>
-      <div className="flex flex-wrap items-center gap-4">
+      <p className="mb-2 text-xs font-medium text-ink-secondary">Logo</p>
+      <div className="flex flex-wrap items-start gap-4">
         {/* Preview */}
-        <div className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-sm border border-line-subtle bg-bg-sunken">
+        <div className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-lg border border-line-subtle bg-bg-sunken">
           {brand.logo_url ? (
             <img
               src={brand.logo_url}
@@ -176,7 +195,7 @@ function LogoUploader({ brand, onChange }) {
         </div>
 
         <div className="flex flex-col items-start gap-2">
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-sm border border-line-subtle bg-bg-elevated px-3 py-2 text-sm text-ink-primary transition-colors hover:border-line-strong focus-within:focus-ring">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-line-subtle bg-bg-elevated px-3 py-2 text-sm text-ink-primary transition-colors hover:border-line-strong focus-within:focus-ring">
             {upload.isPending ? (
               <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             ) : (
@@ -195,7 +214,7 @@ function LogoUploader({ brand, onChange }) {
             <button
               type="button"
               onClick={() => onChange({ ...brand, logo_url: '' })}
-              className="flex items-center gap-1.5 text-xs text-ink-tertiary hover:text-danger focus-visible:focus-ring transition-colors"
+              className="flex items-center gap-1.5 text-xs text-ink-tertiary transition-colors hover:text-danger focus-visible:focus-ring"
             >
               <Trash2 className="size-3.5" aria-hidden="true" />
               Remove logo
@@ -203,9 +222,8 @@ function LogoUploader({ brand, onChange }) {
           )}
         </div>
       </div>
-      <p className="mt-1.5 text-xs text-ink-tertiary">
-        Shown in the navbar and footer in place of the name. Use a transparent PNG or SVG —
-        works best on both light and dark backgrounds. Leave empty to show the brand name instead.
+      <p className="mt-2 text-xs text-ink-tertiary">
+        Shown in the navbar and footer. Use a transparent PNG or SVG. Leave empty to show the brand name.
       </p>
       {err && <p className="mt-1 text-xs text-danger">{err}</p>}
     </div>
@@ -221,7 +239,7 @@ function BrandEditor({ brand, onChange }) {
         value={brand.name}
         onChange={(e) => onChange({ ...brand, name: e.target.value })}
         placeholder="Lumen"
-        helper="Used as the alt text / fallback when no logo is uploaded."
+        helper="Used as alt text / fallback when no logo is uploaded."
       />
       <div className="sm:col-span-2">
         <Textarea
@@ -240,18 +258,20 @@ function NewsletterEditor({ newsletter, onChange }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <div className="sm:col-span-2">
-        <label className="flex items-center gap-3">
+        <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-line-subtle bg-bg-sunken px-4 py-3 transition-colors hover:border-line-strong">
           <input
             type="checkbox"
             checked={newsletter.enabled !== false}
             onChange={(e) => onChange({ ...newsletter, enabled: e.target.checked })}
             className="size-4 rounded-sm border border-line-subtle bg-bg-elevated text-accent focus-visible:focus-ring"
           />
-          <span className="text-sm font-medium text-ink-primary">Newsletter sign-up enabled</span>
+          <div>
+            <span className="text-sm font-medium text-ink-primary">Newsletter sign-up enabled</span>
+            <p className="mt-0.5 text-xs text-ink-tertiary">
+              When disabled, the sign-up form is hidden from the footer.
+            </p>
+          </div>
         </label>
-        <p className="mt-1 pl-7 text-xs text-ink-tertiary">
-          When disabled, the sign-up form is hidden from the footer.
-        </p>
       </div>
       <Input
         label="Email placeholder"
@@ -301,12 +321,10 @@ function TrustFeaturesEditor({ features, onChange }) {
               <select
                 value={f.icon}
                 onChange={(e) => updateRow(i, 'icon', e.target.value)}
-                className="h-9 w-full appearance-none rounded-sm border border-line-subtle bg-bg-elevated px-3 text-sm text-ink-primary hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring transition-colors"
+                className={rowSelect}
               >
                 {TRUST_ICON_NAMES.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
+                  <option key={name} value={name}>{name}</option>
                 ))}
               </select>
             </div>
@@ -317,7 +335,7 @@ function TrustFeaturesEditor({ features, onChange }) {
                 value={f.title}
                 onChange={(e) => updateRow(i, 'title', e.target.value)}
                 placeholder="Free Shipping"
-                className="h-9 w-full rounded-sm border border-line-subtle bg-bg-elevated px-3 text-sm text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring transition-colors"
+                className={rowInput}
               />
             </div>
             <div>
@@ -327,7 +345,7 @@ function TrustFeaturesEditor({ features, onChange }) {
                 value={f.sub}
                 onChange={(e) => updateRow(i, 'sub', e.target.value)}
                 placeholder="On orders over ₹500"
-                className="h-9 w-full rounded-sm border border-line-subtle bg-bg-elevated px-3 text-sm text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring transition-colors"
+                className={rowInput}
               />
             </div>
           </div>
@@ -336,7 +354,7 @@ function TrustFeaturesEditor({ features, onChange }) {
       <button
         type="button"
         onClick={addRow}
-        className="flex items-center gap-1.5 self-start rounded-sm px-3 py-1.5 text-sm text-accent hover:bg-accent/10 focus-visible:focus-ring transition-colors"
+        className="flex items-center gap-1.5 self-start rounded-md px-3 py-1.5 text-sm text-accent transition-colors hover:bg-accent/10 focus-visible:focus-ring"
       >
         <Plus className="size-4" aria-hidden="true" />
         Add trust badge
@@ -383,20 +401,20 @@ function LinkColumnsEditor({ columns, onChange }) {
   return (
     <div className="flex flex-col gap-4">
       {columns.map((col, ci) => (
-        <div key={ci} className="rounded-sm border border-line-subtle bg-bg-sunken p-4">
+        <div key={ci} className="rounded-lg border border-line-subtle bg-bg-sunken p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <input
               type="text"
               value={col.title}
               onChange={(e) => updateColumn(ci, 'title', e.target.value)}
               placeholder="Column title"
-              className="h-9 flex-1 rounded-sm border border-line-subtle bg-bg-elevated px-3 text-sm font-medium text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring transition-colors"
+              className={cn(rowInput, 'flex-1 font-medium')}
             />
             <button
               type="button"
               onClick={() => removeColumn(ci)}
               aria-label="Remove column"
-              className="grid size-9 shrink-0 place-items-center rounded-sm text-ink-tertiary hover:bg-danger/10 hover:text-danger focus-visible:focus-ring transition-colors"
+              className="grid size-8 shrink-0 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
             >
               <Trash2 className="size-4" aria-hidden="true" />
             </button>
@@ -410,20 +428,20 @@ function LinkColumnsEditor({ columns, onChange }) {
                   value={link.label}
                   onChange={(e) => updateLink(ci, li, 'label', e.target.value)}
                   placeholder="Label"
-                  className="h-8 flex-1 rounded-sm border border-line-subtle bg-bg-elevated px-2.5 text-xs text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring transition-colors"
+                  className="h-8 flex-1 rounded-md border border-line-subtle bg-bg-elevated px-2.5 text-xs text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:outline-none focus-visible:focus-ring transition-colors"
                 />
                 <input
                   type="text"
                   value={link.to}
                   onChange={(e) => updateLink(ci, li, 'to', e.target.value)}
                   placeholder="/path"
-                  className="h-8 w-32 rounded-sm border border-line-subtle bg-bg-elevated px-2.5 text-xs text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring transition-colors"
+                  className="h-8 w-32 rounded-md border border-line-subtle bg-bg-elevated px-2.5 text-xs text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:outline-none focus-visible:focus-ring transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => removeLink(ci, li)}
                   aria-label="Remove link"
-                  className="grid size-8 place-items-center rounded-sm text-ink-tertiary hover:bg-danger/10 hover:text-danger focus-visible:focus-ring transition-colors"
+                  className="grid size-8 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
                 >
                   <Trash2 className="size-3.5" aria-hidden="true" />
                 </button>
@@ -432,7 +450,7 @@ function LinkColumnsEditor({ columns, onChange }) {
             <button
               type="button"
               onClick={() => addLink(ci)}
-              className="mt-1 flex items-center gap-1 self-start text-xs text-accent hover:underline focus-visible:focus-ring"
+              className="mt-1 flex items-center gap-1 self-start text-xs text-accent transition-colors hover:underline focus-visible:focus-ring"
             >
               <Plus className="size-3" aria-hidden="true" />
               Add link
@@ -443,7 +461,7 @@ function LinkColumnsEditor({ columns, onChange }) {
       <button
         type="button"
         onClick={addColumn}
-        className="flex items-center gap-1.5 self-start rounded-sm px-3 py-1.5 text-sm text-accent hover:bg-accent/10 focus-visible:focus-ring transition-colors"
+        className="flex items-center gap-1.5 self-start rounded-md px-3 py-1.5 text-sm text-accent transition-colors hover:bg-accent/10 focus-visible:focus-ring"
       >
         <Plus className="size-4" aria-hidden="true" />
         Add column
@@ -519,7 +537,7 @@ function RegisteredOfficeEditor({ value, onChange }) {
                 onChange={(e) => updatePhone(i, 'display', e.target.value)}
                 placeholder="044-4561 4700"
                 aria-label="Display number"
-                className="h-9 flex-1 rounded-sm border border-line-subtle bg-bg-sunken px-3 text-sm text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring transition-colors"
+                className={cn(rowInput, 'flex-1')}
               />
               <input
                 type="text"
@@ -527,13 +545,13 @@ function RegisteredOfficeEditor({ value, onChange }) {
                 onChange={(e) => updatePhone(i, 'tel', e.target.value)}
                 placeholder="+914445614700"
                 aria-label="tel: link value"
-                className="h-9 flex-1 rounded-sm border border-line-subtle bg-bg-sunken px-3 text-sm text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring transition-colors"
+                className={cn(rowInput, 'flex-1')}
               />
               <button
                 type="button"
                 onClick={() => removePhone(i)}
                 aria-label="Remove phone"
-                className="grid size-9 place-items-center rounded-sm text-ink-tertiary hover:bg-danger/10 hover:text-danger focus-visible:focus-ring transition-colors"
+                className="grid size-8 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
               >
                 <Trash2 className="size-4" aria-hidden="true" />
               </button>
@@ -542,7 +560,7 @@ function RegisteredOfficeEditor({ value, onChange }) {
           <button
             type="button"
             onClick={addPhone}
-            className="flex items-center gap-1.5 self-start rounded-sm px-3 py-1.5 text-sm text-accent hover:bg-accent/10 focus-visible:focus-ring transition-colors"
+            className="flex items-center gap-1.5 self-start rounded-md px-3 py-1.5 text-sm text-accent transition-colors hover:bg-accent/10 focus-visible:focus-ring"
           >
             <Plus className="size-4" aria-hidden="true" />
             Add phone
@@ -574,12 +592,10 @@ function SocialLinksEditor({ links, onChange }) {
               <select
                 value={link.icon}
                 onChange={(e) => updateRow(i, 'icon', e.target.value)}
-                className="h-9 w-full appearance-none rounded-sm border border-line-subtle bg-bg-elevated px-3 text-sm text-ink-primary hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring transition-colors"
+                className={rowSelect}
               >
                 {SOCIAL_ICON_NAMES.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
+                  <option key={name} value={name}>{name}</option>
                 ))}
               </select>
             </div>
@@ -590,7 +606,7 @@ function SocialLinksEditor({ links, onChange }) {
                 value={link.label}
                 onChange={(e) => updateRow(i, 'label', e.target.value)}
                 placeholder="Facebook"
-                className="h-9 w-full rounded-sm border border-line-subtle bg-bg-elevated px-3 text-sm text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring transition-colors"
+                className={rowInput}
               />
             </div>
             <div>
@@ -600,7 +616,7 @@ function SocialLinksEditor({ links, onChange }) {
                 value={link.href}
                 onChange={(e) => updateRow(i, 'href', e.target.value)}
                 placeholder="https://facebook.com/lumen"
-                className="h-9 w-full rounded-sm border border-line-subtle bg-bg-elevated px-3 text-sm text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring transition-colors"
+                className={rowInput}
               />
             </div>
           </div>
@@ -609,7 +625,7 @@ function SocialLinksEditor({ links, onChange }) {
       <button
         type="button"
         onClick={addRow}
-        className="flex items-center gap-1.5 self-start rounded-sm px-3 py-1.5 text-sm text-accent hover:bg-accent/10 focus-visible:focus-ring transition-colors"
+        className="flex items-center gap-1.5 self-start rounded-md px-3 py-1.5 text-sm text-accent transition-colors hover:bg-accent/10 focus-visible:focus-ring"
       >
         <Plus className="size-4" aria-hidden="true" />
         Add social link
@@ -639,12 +655,10 @@ function BottomLinksEditor({ links, onChange }) {
               <select
                 value={link.icon}
                 onChange={(e) => updateRow(i, 'icon', e.target.value)}
-                className="h-9 w-full appearance-none rounded-sm border border-line-subtle bg-bg-elevated px-3 text-sm text-ink-primary hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring transition-colors"
+                className={rowSelect}
               >
                 {BOTTOM_ICON_NAMES.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
+                  <option key={name} value={name}>{name}</option>
                 ))}
               </select>
             </div>
@@ -655,7 +669,7 @@ function BottomLinksEditor({ links, onChange }) {
                 value={link.label}
                 onChange={(e) => updateRow(i, 'label', e.target.value)}
                 placeholder="Become a Seller"
-                className="h-9 w-full rounded-sm border border-line-subtle bg-bg-elevated px-3 text-sm text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring transition-colors"
+                className={rowInput}
               />
             </div>
             <div>
@@ -665,7 +679,7 @@ function BottomLinksEditor({ links, onChange }) {
                 value={link.to}
                 onChange={(e) => updateRow(i, 'to', e.target.value)}
                 placeholder="/sell"
-                className="h-9 w-full rounded-sm border border-line-subtle bg-bg-elevated px-3 text-sm text-ink-primary placeholder:text-ink-tertiary hover:border-line-strong focus-visible:border-accent focus-visible:focus-ring transition-colors"
+                className={rowInput}
               />
             </div>
           </div>
@@ -674,7 +688,7 @@ function BottomLinksEditor({ links, onChange }) {
       <button
         type="button"
         onClick={addRow}
-        className="flex items-center gap-1.5 self-start rounded-sm px-3 py-1.5 text-sm text-accent hover:bg-accent/10 focus-visible:focus-ring transition-colors"
+        className="flex items-center gap-1.5 self-start rounded-md px-3 py-1.5 text-sm text-accent transition-colors hover:bg-accent/10 focus-visible:focus-ring"
       >
         <Plus className="size-4" aria-hidden="true" />
         Add bottom link
@@ -737,7 +751,7 @@ export default function AdminFooterPage() {
   if (isLoading && !draft) {
     return (
       <AdminPage title="Footer" description="Loading footer configuration…">
-        <div className="flex flex-col gap-3 max-w-3xl">
+        <div className="flex max-w-3xl flex-col gap-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-16" />
           ))}
@@ -749,7 +763,7 @@ export default function AdminFooterPage() {
   if (isError && !draft) {
     return (
       <AdminPage title="Footer" description="Storefront footer configuration.">
-        <div className="flex items-start gap-3 rounded-sm border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+        <div className="flex items-start gap-3 rounded-lg border border-danger/30 bg-danger/8 px-4 py-3 text-sm text-danger">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div>
             <p className="font-medium">Could not load footer config</p>
@@ -759,7 +773,7 @@ export default function AdminFooterPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="mt-2 underline text-xs hover:no-underline focus-visible:focus-ring"
+              className="mt-2 text-xs underline hover:no-underline focus-visible:focus-ring"
             >
               Retry
             </button>
@@ -778,10 +792,13 @@ export default function AdminFooterPage() {
     >
       {/* Sticky save toolbar */}
       <div className="sticky top-0 z-10 -mx-6 mb-6 flex items-center justify-between gap-4 border-b border-line-subtle bg-bg-elevated/95 px-6 py-3 backdrop-blur">
-        <p className="text-sm text-ink-secondary">
-          Edit any section below, then save all changes at once.
-        </p>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <LayoutTemplate className="size-4 shrink-0 text-ink-tertiary" aria-hidden="true" />
+          <p className="truncate text-sm text-ink-secondary">
+            Edit any section below, then save all at once.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
           {savedAt && (
             <span className="flex items-center gap-1.5 text-xs text-success">
               <Check className="size-4" aria-hidden="true" />
@@ -791,7 +808,7 @@ export default function AdminFooterPage() {
           {saveError && (
             <span className="flex items-center gap-1.5 text-xs text-danger">
               <AlertTriangle className="size-4" aria-hidden="true" />
-              {saveError}
+              <span className="hidden sm:inline">{saveError}</span>
             </span>
           )}
           <Button onClick={handleSave} loading={update.isPending}>
@@ -800,30 +817,18 @@ export default function AdminFooterPage() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 max-w-3xl">
-        {/* Brand */}
-        <SectionCard
-          title="Brand"
-          description="Name and tagline shown in the footer brand block."
-        >
+      <div className="flex max-w-3xl flex-col gap-4">
+        <SectionCard title="Brand" description="Name and tagline shown in the footer brand block.">
           <BrandEditor brand={draft.brand} onChange={(v) => set('brand', v)} />
         </SectionCard>
 
-        {/* Newsletter */}
-        <SectionCard
-          title="Newsletter"
-          description="Sign-up form copy and toggle."
-        >
-          <NewsletterEditor
-            newsletter={draft.newsletter}
-            onChange={(v) => set('newsletter', v)}
-          />
+        <SectionCard title="Newsletter" description="Sign-up form copy and toggle.">
+          <NewsletterEditor newsletter={draft.newsletter} onChange={(v) => set('newsletter', v)} />
         </SectionCard>
 
-        {/* Trust features */}
         <SectionCard
           title="Trust features"
-          description="The four badges shown at the top of the footer (e.g. Free Shipping, Easy Returns)."
+          description="Badges shown at the top of the footer (e.g. Free Shipping, Easy Returns)."
         >
           <TrustFeaturesEditor
             features={draft.trust_features}
@@ -831,34 +836,25 @@ export default function AdminFooterPage() {
           />
         </SectionCard>
 
-        {/* Link columns */}
         <SectionCard
           title="Link columns"
-          description="Footer navigation columns — each has a heading and a list of internal links."
+          description="Navigation columns — each has a heading and a list of internal links."
           defaultOpen={false}
         >
-          <LinkColumnsEditor
-            columns={draft.link_columns}
-            onChange={(v) => set('link_columns', v)}
-          />
+          <LinkColumnsEditor columns={draft.link_columns} onChange={(v) => set('link_columns', v)} />
         </SectionCard>
 
-        {/* Mail Us */}
         <SectionCard
           title="Mail Us"
           description="Address block shown below the link columns."
           defaultOpen={false}
         >
-          <AddressBlockEditor
-            value={draft.mail_us}
-            onChange={(v) => set('mail_us', v)}
-          />
+          <AddressBlockEditor value={draft.mail_us} onChange={(v) => set('mail_us', v)} />
         </SectionCard>
 
-        {/* Registered Office */}
         <SectionCard
           title="Registered Office"
-          description="Registered office address, CIN, and telephone numbers."
+          description="Registered address, CIN, and telephone numbers."
           defaultOpen={false}
         >
           <RegisteredOfficeEditor
@@ -867,29 +863,17 @@ export default function AdminFooterPage() {
           />
         </SectionCard>
 
-        {/* Social links */}
-        <SectionCard
-          title="Social links"
-          description="Icon buttons linking to social profiles."
-        >
-          <SocialLinksEditor
-            links={draft.social_links}
-            onChange={(v) => set('social_links', v)}
-          />
+        <SectionCard title="Social links" description="Icon buttons linking to social profiles.">
+          <SocialLinksEditor links={draft.social_links} onChange={(v) => set('social_links', v)} />
         </SectionCard>
 
-        {/* Bottom links */}
         <SectionCard
           title="Bottom links"
-          description="Utility links shown in the footer bottom bar (e.g. Become a Seller)."
+          description="Utility links in the footer bottom bar (e.g. Become a Seller)."
         >
-          <BottomLinksEditor
-            links={draft.bottom_links}
-            onChange={(v) => set('bottom_links', v)}
-          />
+          <BottomLinksEditor links={draft.bottom_links} onChange={(v) => set('bottom_links', v)} />
         </SectionCard>
 
-        {/* Payment methods */}
         <SectionCard
           title="Payment methods"
           description="Badge labels shown in the footer bottom bar."
@@ -900,32 +884,26 @@ export default function AdminFooterPage() {
           />
         </SectionCard>
 
-        {/* Copyright */}
-        <SectionCard
-          title="Copyright"
-          description="Bottom bar copyright text."
-        >
+        <SectionCard title="Copyright" description="Bottom bar copyright text.">
           <Input
             label="Copyright text"
             value={draft.copyright}
             onChange={(e) => set('copyright', e.target.value)}
             placeholder="© 2007–{year} Lumen.com"
-            helper="Use {year} as a token — it will be replaced with the current year at render time."
+            helper="Use {year} as a token — replaced with the current year at render time."
           />
         </SectionCard>
       </div>
 
       {/* Bottom save button for long pages */}
-      <div className="mt-8 flex items-center justify-end gap-3 max-w-3xl">
+      <div className="mt-8 flex max-w-3xl items-center justify-end gap-3">
         {savedAt && (
           <span className="flex items-center gap-1.5 text-xs text-success">
             <Check className="size-4" aria-hidden="true" />
             Saved
           </span>
         )}
-        {saveError && (
-          <p className="text-xs text-danger">{saveError}</p>
-        )}
+        {saveError && <p className="text-xs text-danger">{saveError}</p>}
         <Button onClick={handleSave} loading={update.isPending}>
           Save all changes
         </Button>

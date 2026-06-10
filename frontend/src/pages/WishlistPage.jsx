@@ -14,7 +14,7 @@ import {
 import { useAddToCart } from '@/features/cart/hooks.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { formatPrice } from '@/lib/utils.js';
-import { fadeUp, staggerContainer } from '@/lib/motion.js';
+import { fadeUp, staggerContainer, hoverLift, tapPress } from '@/lib/motion.js';
 
 function WishlistItem({ item }) {
   const remove = useRemoveFromWishlist();
@@ -26,8 +26,6 @@ function WishlistItem({ item }) {
       { productId: item.product_id, quantity: 1 },
       {
         onSuccess: () => {
-          // Remove from wishlist once it's safely in the cart — keeps the list
-          // focused on what the user is still considering.
           remove.mutate(item.product_id);
         },
       },
@@ -36,67 +34,72 @@ function WishlistItem({ item }) {
 
   return (
     <motion.li variants={fadeUp}>
-      <Card className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
-        <Link
-          to={`/products/${item.product_id}`}
-          className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-sm bg-gradient-to-br from-accent/25 via-bg-elevated to-bg-sunken focus-visible:focus-ring"
-        >
-          {item.image_url ? (
-            <img
-              src={item.image_url}
-              alt=""
-              loading="lazy"
-              className="size-full object-cover"
-            />
-          ) : (
-            <span className="text-xl font-semibold text-ink-primary/30">
-              {(item.name || '?').charAt(0).toUpperCase()}
-            </span>
-          )}
-        </Link>
-
-        <div className="min-w-0 flex-1">
+      <motion.div whileHover={hoverLift} whileTap={tapPress}>
+        <Card className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center transition-shadow duration-200">
+          {/* Thumbnail */}
           <Link
             to={`/products/${item.product_id}`}
-            className="text-sm font-semibold text-ink-primary hover:text-accent focus-visible:focus-ring"
+            className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-lg border border-line-subtle bg-gradient-to-br from-accent/20 via-bg-elevated to-bg-sunken focus-visible:focus-ring shadow-sm"
           >
-            {item.name}
-          </Link>
-          <p className="mt-1 text-h3 text-ink-primary tabular-nums">
-            {formatPrice(item.price)}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            onClick={handleMoveToCart}
-            loading={add.isPending}
-            disabled={remove.isPending || added}
-          >
-            {added ? (
-              <>
-                <Check className="size-4" aria-hidden="true" />
-                Moved
-              </>
+            {item.image_url ? (
+              <img
+                src={item.image_url}
+                alt=""
+                loading="lazy"
+                className="size-full object-cover"
+              />
             ) : (
-              <>
-                <ShoppingBag className="size-4" aria-hidden="true" />
-                Move to cart
-              </>
+              <span className="text-xl font-semibold text-ink-primary/25">
+                {(item.name || '?').charAt(0).toUpperCase()}
+              </span>
             )}
-          </Button>
-          <button
-            type="button"
-            aria-label={`Remove ${item.name} from wishlist`}
-            disabled={remove.isPending}
-            onClick={() => remove.mutate(item.product_id)}
-            className="grid size-9 place-items-center rounded-sm text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring disabled:opacity-40"
-          >
-            <Trash2 className="size-4" />
-          </button>
-        </div>
-      </Card>
+          </Link>
+
+          {/* Info */}
+          <div className="min-w-0 flex-1">
+            <Link
+              to={`/products/${item.product_id}`}
+              className="text-sm font-semibold text-ink-primary hover:text-accent transition-colors focus-visible:focus-ring"
+            >
+              {item.name}
+            </Link>
+            <p className="mt-1.5 text-lg font-semibold text-ink-primary nums">
+              {formatPrice(item.price)}
+            </p>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={handleMoveToCart}
+              loading={add.isPending}
+              disabled={remove.isPending || added}
+            >
+              {added ? (
+                <>
+                  <Check className="size-4" aria-hidden="true" />
+                  Moved
+                </>
+              ) : (
+                <>
+                  <ShoppingBag className="size-4" aria-hidden="true" />
+                  Move to cart
+                </>
+              )}
+            </Button>
+            <button
+              type="button"
+              aria-label={`Remove ${item.name} from wishlist`}
+              disabled={remove.isPending}
+              onClick={() => remove.mutate(item.product_id)}
+              className="grid size-9 place-items-center rounded-lg border border-transparent text-ink-tertiary transition-colors hover:border-danger/25 hover:bg-danger/8 hover:text-danger focus-visible:focus-ring disabled:opacity-40"
+            >
+              <Trash2 className="size-4" />
+            </button>
+          </div>
+        </Card>
+      </motion.div>
     </motion.li>
   );
 }
@@ -109,8 +112,8 @@ export default function WishlistPage() {
   if (!user || status === 401) {
     return (
       <Page>
-        <h1 className="text-h1 text-ink-primary">Your wishlist</h1>
-        <div className="mt-6">
+        <h1 className="text-h1 text-ink-primary tracking-tight">Your wishlist</h1>
+        <div className="mt-8">
           <EmptyState
             icon={Lock}
             title="Sign in to view your wishlist"
@@ -129,10 +132,11 @@ export default function WishlistPage() {
   if (isError) {
     return (
       <Page>
-        <h1 className="text-h1 text-ink-primary">Your wishlist</h1>
-        <div className="mt-6">
+        <h1 className="text-h1 text-ink-primary tracking-tight">Your wishlist</h1>
+        <div className="mt-8">
           <EmptyState
             icon={AlertTriangle}
+            iconTone="danger"
             title="We couldn't load your wishlist"
             description="Something went wrong on our end. Please try again."
             action={
@@ -148,26 +152,32 @@ export default function WishlistPage() {
 
   return (
     <Page>
-      <Breadcrumbs current="Wishlist" className="mb-6" />
+      <Breadcrumbs current="Wishlist" className="mb-5" />
+
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-h1 text-ink-primary">Your wishlist</h1>
+          <h1 className="text-h1 text-ink-primary tracking-tight">Your wishlist</h1>
           {!isLoading && items.length > 0 && (
             <p className="mt-1 text-sm text-ink-secondary">
-              {items.length} saved item{items.length === 1 ? '' : 's'}
+              <span className="nums">{items.length}</span> saved item{items.length === 1 ? '' : 's'}
             </p>
           )}
         </div>
+        {!isLoading && items.length > 0 && (
+          <Link to="/products" className="text-xs text-ink-secondary hover:text-accent transition-colors">
+            Continue shopping
+          </Link>
+        )}
       </div>
 
       {isLoading ? (
-        <div className="mt-6 flex flex-col gap-3">
+        <div className="mt-8 flex flex-col gap-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-28 rounded-lg" />
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="mt-6">
+        <div className="mt-8">
           <EmptyState
             icon={Heart}
             title="Nothing saved yet"

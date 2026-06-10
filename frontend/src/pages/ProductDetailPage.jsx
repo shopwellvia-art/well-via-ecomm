@@ -163,13 +163,31 @@ export default function ProductDetailPage() {
 function Loading() {
   return (
     <Page>
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-        <Skeleton className="aspect-square rounded-lg" />
-        <div className="flex flex-col gap-4">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-10 w-3/4" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-80 w-full rounded-lg" />
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-12">
+        {/* Gallery skeleton */}
+        <div className="flex flex-col gap-3">
+          <Skeleton className="aspect-[4/5] rounded-md" />
+          <div className="grid grid-cols-5 gap-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} variant="circle" className="aspect-square w-full rounded-sm" />
+            ))}
+          </div>
+        </div>
+
+        {/* Buy panel skeleton */}
+        <div className="flex flex-col gap-5">
+          <Skeleton className="h-3.5 w-20" />
+          <Skeleton className="h-10 w-4/5" />
+          <Skeleton variant="text" lines={3} className="w-full" />
+          <div className="mt-2 flex flex-col gap-3 rounded-lg border border-line-subtle p-5">
+            <Skeleton className="h-8 w-28" />
+            <Skeleton className="h-3 w-40" />
+            <Skeleton className="h-3 w-32" />
+            <div className="mt-2 h-px w-full bg-line-subtle" />
+            <Skeleton className="h-11 w-full rounded-full" />
+            <Skeleton className="h-11 w-full rounded-full" />
+            <Skeleton className="h-11 w-full rounded-sm" />
+          </div>
         </div>
       </div>
     </Page>
