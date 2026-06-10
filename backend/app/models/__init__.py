@@ -1,6 +1,7 @@
 from app.models.audit import AuditEvent
 from app.models.base import Base
 from app.models.coupon import Coupon, CouponUsage, DiscountType
+from app.models.customer import AccountStatus, Customer
 from app.models.footer_config import FooterConfig
 from app.models.hero_slide import HeroSlide
 from app.models.loyalty import (
@@ -26,14 +27,17 @@ from app.models.site_pages import SitePages
 from app.models.system_setting import SystemSetting
 from app.models.tax import Tax, product_taxes
 from app.models.user import User
+from app.models.user_security import UserSecurity
 from app.models.wishlist import Wishlist
 
 __all__ = [
+    "AccountStatus",
     "AuditEvent",
     "Base",
     "Category",
     "Coupon",
     "CouponUsage",
+    "Customer",
     "DiscountType",
     "EarnRule",
     "FooterConfig",
@@ -60,6 +64,7 @@ __all__ = [
     "SystemSetting",
     "Tax",
     "User",
+    "UserSecurity",
     "VipTier",
     "Wishlist",
     "product_taxes",

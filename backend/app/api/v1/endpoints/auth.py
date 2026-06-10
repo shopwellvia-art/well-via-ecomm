@@ -1,23 +1,26 @@
 import secrets
+from datetime import datetime, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import RedirectResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, rate_limit_by_ip, require_permission
 from app.core.config import settings
-from app.core.exceptions import NotFoundError, UnauthorizedError
+from app.core.exceptions import ConflictError, NotFoundError, UnauthorizedError
 from app.integrations import google
+from app.models.customer import AccountStatus
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import Token
 from app.schemas.user import (
+    CustomerProfileUpdate,
     ForgotPasswordRequest,
     LoginResponse,
     LoginTotpRequest,
     LogoutRequest,
-    ProfileUpdateRequest,
     RefreshRequest,
     ResetPasswordRequest,
     SessionsRevokedResponse,
@@ -70,7 +73,7 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
       returns `needs_totp=true` + a `pending_token` the caller submits to
       /auth/login/totp with the 6-digit code (or a backup code).
     """
-    outcome = AuthService(db).login(payload.email, payload.password)
+    outcome = AuthService(db).login(payload.identifier, payload.password)
     if outcome.needs_totp:
         return LoginResponse(needs_totp=True, pending_token=outcome.pending_token)
     return LoginResponse(
@@ -188,21 +191,91 @@ def me(user: User = Depends(get_current_user)):
 
 @router.patch("/me", response_model=UserRead)
 def update_my_profile(
-    payload: ProfileUpdateRequest,
+    payload: CustomerProfileUpdate,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Self-service profile edit. Currently `full_name` + `phone` — the phone
-    is the opt-in switch for SMS notifications."""
+    """Self-service profile edit. Profile fields (first/last name, gender, date
+    of birth, image) live on the customer satellite; `email` + `phone` are auth
+    credentials on the user and are uniqueness-checked (409 on collision)."""
     data = payload.model_dump(exclude_unset=True)
-    if "full_name" in data:
-        user.full_name = (data["full_name"] or None)
+    users = UserRepository(db)
+    customer = users.get_or_create_customer(user.id)
+
+    # ---- auth credentials on the user row (uniqueness-checked) ----
+    if "email" in data:
+        new_email = (data["email"] or "").strip()
+        if new_email and new_email.lower() != (user.email or "").lower():
+            existing = users.get_by_email(new_email)
+            if existing and existing.id != user.id:
+                raise ConflictError("Email already in use")
+            user.email = new_email
     if "phone" in data:
-        # Normalize empty string → None so "" clears the opt-in.
-        user.phone = (data["phone"] or "").strip() or None
-    db.commit()
+        # Empty string → None so "" clears the number (and the SMS opt-in).
+        new_phone = (data["phone"] or "").strip() or None
+        if new_phone != user.phone:
+            if new_phone is not None:
+                other = users.get_by_email_or_phone(new_phone)
+                if other and other.id != user.id:
+                    raise ConflictError("Phone number already in use")
+            user.phone = new_phone
+
+    # ---- profile fields on the customer row ----
+    if "first_name" in data:
+        customer.first_name = (data["first_name"] or "").strip() or None
+    if "last_name" in data:
+        customer.last_name = (data["last_name"] or "").strip() or None
+    if "gender" in data:
+        customer.gender = (data["gender"] or "").strip() or None
+    if "date_of_birth" in data:
+        customer.date_of_birth = data["date_of_birth"]
+    if "profile_image" in data:
+        customer.profile_image = (data["profile_image"] or "").strip() or None
+
+    try:
+        db.commit()
+    except IntegrityError:
+        # Backstop for the unique email/phone constraints (covers races the
+        # pre-checks above can't).
+        db.rollback()
+        raise ConflictError("Email or phone already in use")
     db.refresh(user)
     return user
+
+
+@router.post("/me/deactivate", status_code=status.HTTP_204_NO_CONTENT)
+def deactivate_my_account(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Self-service deactivate. Flips the account to DEACTIVATED, blocks future
+    logins (is_active=False), and revokes every session. Reversible by an admin
+    (no data is removed)."""
+    customer = UserRepository(db).get_or_create_customer(user.id)
+    customer.account_status = AccountStatus.DEACTIVATED
+    customer.deactivated_at = datetime.now(timezone.utc)
+    user.is_active = False
+    db.commit()
+    AuthService(db).revoke_all_sessions(user.id)
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_my_account(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Self-service soft delete. Flips the account to DELETED and blocks login.
+    PII (email, name) is intentionally preserved so order/loyalty history stays
+    accurate and the email stays reserved — there is no hard delete."""
+    now = datetime.now(timezone.utc)
+    customer = UserRepository(db).get_or_create_customer(user.id)
+    customer.account_status = AccountStatus.DELETED
+    customer.deleted_at = now
+    if customer.deactivated_at is None:
+        customer.deactivated_at = now
+    user.is_active = False
+    db.commit()
+    AuthService(db).revoke_all_sessions(user.id)
 
 
 @router.get("/config")

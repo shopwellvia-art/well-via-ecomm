@@ -23,8 +23,9 @@ from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.core.exceptions import ConflictError
 from app.models.coupon import Coupon, DiscountType
+from app.models.customer import Customer
 from app.models.referral import Referral, ReferralStatus
 from app.models.user import User
 from app.repositories.referral_repository import ReferralRepository
@@ -48,21 +49,21 @@ class ReferralService:
     # ---- Code management ----
 
     def get_or_create_code(self, user: User) -> str:
-        if user.referral_code:
-            return user.referral_code
+        # The referral code now lives on the customer satellite.
+        customer = self.users.get_or_create_customer(user.id)
+        if customer.referral_code:
+            return customer.referral_code
         # Up to 5 attempts to dodge a unique-collision.
         for _ in range(5):
             candidate = f"REF-{_random_suffix(6)}"
-            user.referral_code = candidate
+            customer.referral_code = candidate
             try:
                 self.db.flush()
                 return candidate
             except IntegrityError:
                 self.db.rollback()
-                # Re-fetch — flush may have invalidated session state.
-                user = self.users.get(user.id)
-                if user is None:
-                    raise NotFoundError("User no longer exists")
+                # Re-fetch — rollback expires session state.
+                customer = self.users.get_or_create_customer(user.id)
                 continue
         raise ConflictError("Could not assign a referral code; try again")
 
@@ -72,7 +73,12 @@ class ReferralService:
             return None
         from sqlalchemy import select
 
-        stmt = select(User).where(User.referral_code == cleaned)
+        # Referral codes live on customers; join back to the owning user.
+        stmt = (
+            select(User)
+            .join(Customer, Customer.user_id == User.id)
+            .where(Customer.referral_code == cleaned)
+        )
         return self.db.execute(stmt).scalar_one_or_none()
 
     # ---- Lifecycle ----

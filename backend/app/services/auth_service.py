@@ -18,6 +18,7 @@ from app.core.security import (
     verify_password,
 )
 from app.email import send_email
+from app.models.customer import AccountStatus, Customer
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import Token
@@ -52,6 +53,18 @@ def _hash_otp(otp: str) -> str:
     return hashlib.sha256(otp.encode("utf-8")).hexdigest()
 
 
+def _split_name(full_name: str | None) -> tuple[str | None, str | None]:
+    """Split a free-form display name into (first, last) on the first space —
+    mirrors the SQL split used to backfill the customers table at migration."""
+    cleaned = (full_name or "").strip()
+    if not cleaned:
+        return None, None
+    parts = cleaned.split(None, 1)
+    first = parts[0] or None
+    last = parts[1].strip() if len(parts) > 1 else None
+    return first, (last or None)
+
+
 class AuthService:
     def __init__(self, db: Session, redis_client: redis.Redis | None = None):
         self.db = db
@@ -68,11 +81,22 @@ class AuthService:
             raise ConflictError("Email already registered")
         user = User(
             email=data.email,
-            full_name=data.full_name,
             hashed_password=hash_password(data.password),
         )
         self.users.add(user)
         self.db.flush()  # so user.id is set when we award the bonus
+        # Every user is a customer — create the profile row eagerly, splitting
+        # the provided name into first/last. Flushed before the loyalty/referral
+        # hooks so their points/lifetime/referral writes land on this row.
+        first, last = _split_name(data.full_name)
+        customer = Customer(
+            user_id=user.id,
+            first_name=first,
+            last_name=last,
+            account_status=AccountStatus.ACTIVE,
+        )
+        self.db.add(customer)
+        self.db.flush()
         # Sign-up bonus runs inside the same transaction so a failure here
         # rolls the user creation back too — easier to debug than a half-baked
         # account with no points row.
@@ -94,13 +118,14 @@ class AuthService:
         self.db.refresh(user)
         return user
 
-    def login(self, email: str, password: str) -> "LoginOutcome":
+    def login(self, identifier: str, password: str) -> "LoginOutcome":
+        # `identifier` is an email OR a phone — users can sign in with either.
         # Three gates layered cheapest-first so we never run bcrypt on an
         # already-blocked request:
         #   1. Account lockout (a previous failure streak)
-        #   2. Per-email sliding window (slows enumeration attacks)
+        #   2. Per-identifier sliding window (slows enumeration attacks)
         #   3. The actual password verify
-        normalised = (email or "").strip().lower()
+        normalised = (identifier or "").strip().lower()
         self.rl.check_lockout(normalised)
         self.rl.enforce(
             scope="login.email",
@@ -109,7 +134,7 @@ class AuthService:
             window_sec=15 * 60,
         )
 
-        user = self.users.get_by_email(email)
+        user = self.users.get_by_email_or_phone(identifier)
         if not user or not verify_password(password, user.hashed_password):
             # Bump the failure counter (15-minute reset window) and lock the
             # account if the threshold is crossed. We deliberately count
@@ -131,6 +156,14 @@ class AuthService:
                 )
             raise UnauthorizedError("Invalid credentials")
         if not user.is_active:
+            raise UnauthorizedError("Account disabled")
+        # Lifecycle gate. Deactivate / soft-delete also flip is_active=False
+        # (above), so this is defense-in-depth on the eagerly-loaded customer
+        # row — no extra query — and gives a precise reason for the block.
+        if user.customer is not None and user.customer.account_status in (
+            AccountStatus.DEACTIVATED,
+            AccountStatus.DELETED,
+        ):
             raise UnauthorizedError("Account disabled")
 
         # Password is good. If the user has TOTP enabled AND the system has
@@ -361,13 +394,22 @@ class AuthService:
         if not user:
             user = User(
                 email=email,
-                full_name=full_name,
                 # No usable password — a Google user signs in via Google
                 # (or sets a password later through the reset flow).
                 hashed_password=hash_password(secrets.token_urlsafe(32)),
                 is_active=True,
             )
             self.users.add(user)
+            self.db.flush()
+            # Eager customer row, name split from the Google profile.
+            first, last = _split_name(full_name)
+            customer = Customer(
+                user_id=user.id,
+                first_name=first,
+                last_name=last,
+                account_status=AccountStatus.ACTIVE,
+            )
+            self.db.add(customer)
             self.db.flush()
             try:
                 LoyaltyService(self.db, self.redis).award_signup_bonus(user)

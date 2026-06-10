@@ -16,4 +16,5 @@ from app.models.review import Review  # noqa: F401
 from app.models.system_setting import SystemSetting  # noqa: F401
 from app.models.tax import Tax  # noqa: F401
 from app.models.user import User  # noqa: F401
+from app.models.user_security import UserSecurity  # noqa: F401
 from app.models.wishlist import Wishlist  # noqa: F401

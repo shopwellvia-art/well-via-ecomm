@@ -1,6 +1,8 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field
+
+from app.models.customer import AccountStatus
 
 
 class RoleBrief(BaseModel):
@@ -40,7 +42,9 @@ class ProfileUpdateRequest(BaseModel):
 
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    # Accepts an email OR a phone number. The `email` alias keeps existing
+    # clients that post {"email": ..., "password": ...} working unchanged.
+    identifier: str = Field(validation_alias=AliasChoices("identifier", "email"))
     password: str
 
 
@@ -99,8 +103,16 @@ class UserRead(UserBase):
     id: int
     is_active: bool
     is_admin: bool
-    # Optional. When present the customer opts into SMS notifications.
+    # Login + contact phone (also the SMS opt-in when present).
     phone: str | None = None
+    # Profile fields — physically on the customer satellite, surfaced flat here
+    # via the read proxies on User so the existing response shape is preserved.
+    first_name: str | None = None
+    last_name: str | None = None
+    gender: str | None = None
+    date_of_birth: date | None = None
+    profile_image: str | None = None
+    account_status: str = "active"
     roles: list[RoleBrief] = []
     # Flat list of permission names. Populated from User.permissions_list so the
     # frontend can mirror server-side checks without an extra round-trip.
@@ -111,3 +123,43 @@ class UserRead(UserBase):
     # 2FA state — used by the Account/Security page to show whether TOTP is on.
     totp_enabled: bool = False
     created_at: datetime
+
+
+class CustomerProfileUpdate(BaseModel):
+    """Body of PATCH /auth/me — the self-service profile editor.
+
+    All fields optional; only the ones provided are changed. `email` and `phone`
+    update the auth `users` row (each uniqueness-checked); the rest update the
+    customer profile. The client pre-fills `email` from /auth/me and may edit it.
+    """
+
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=32)
+    first_name: str | None = Field(default=None, max_length=120)
+    last_name: str | None = Field(default=None, max_length=120)
+    gender: str | None = Field(default=None, max_length=16)
+    date_of_birth: date | None = None
+    profile_image: str | None = Field(default=None, max_length=512)
+
+
+class CustomerRead(BaseModel):
+    """Full customer profile + loyalty record (admin / dedicated profile view)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    first_name: str | None = None
+    last_name: str | None = None
+    gender: str | None = None
+    date_of_birth: date | None = None
+    profile_image: str | None = None
+    points_balance: int = 0
+    lifetime_points: int = 0
+    referral_code: str | None = None
+    vip_tier_id: int | None = None
+    account_status: AccountStatus = AccountStatus.ACTIVE
+    deactivated_at: datetime | None = None
+    deleted_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime

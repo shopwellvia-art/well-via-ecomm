@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.security import hash_password  # noqa: E402
 from app.db.session import SessionLocal  # noqa: E402
+from app.models.customer import Customer  # noqa: E402
 from app.models.product import Category, Product  # noqa: E402
 from app.models.user import User  # noqa: E402
 
@@ -69,12 +70,22 @@ def seed() -> None:
         if admin is None:
             admin = User(
                 email=ADMIN["email"],
-                full_name=ADMIN["full_name"],
                 hashed_password=hash_password(ADMIN["password"]),
                 is_active=True,
                 is_admin=True,
             )
             db.add(admin)
+            db.flush()  # need admin.id for the customer row
+            # Profile now lives on the customer satellite. account_status
+            # defaults to ACTIVE at the model level.
+            first, _, last = ADMIN["full_name"].partition(" ")
+            db.add(
+                Customer(
+                    user_id=admin.id,
+                    first_name=first or None,
+                    last_name=last or None,
+                )
+            )
             created["admin"] = 1
         elif not admin.is_admin:
             admin.is_admin = True

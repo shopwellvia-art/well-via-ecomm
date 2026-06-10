@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError, ValidationError
 from app.models.coupon import Coupon, DiscountType
+from app.models.customer import Customer
 from app.models.loyalty import EarnRule, PointsReason, PointsTransaction, RedemptionTier, VipTier
 from app.models.order import Order
 from app.models.review import Review
@@ -86,8 +87,8 @@ class LoyaltyService:
     # ---- Reads ----
 
     def get_balance(self, user_id: int) -> int:
-        user = self.users.get(user_id)
-        return user.points_balance if user else 0
+        customer = self.users.get_customer(user_id)
+        return customer.points_balance if customer else 0
 
     def list_transactions(
         self, user_id: int, *, offset: int = 0, limit: int = 50
@@ -103,9 +104,10 @@ class LoyaltyService:
         user = self.users.get(user_id)
         if not user:
             raise NotFoundError("User not found")
-        user.points_balance = self.tx_repo.sum_for_user(user_id)
+        customer = self.users.get_or_create_customer(user_id)
+        customer.points_balance = self.tx_repo.sum_for_user(user_id)
         self.db.flush()
-        return user.points_balance
+        return customer.points_balance
 
     # ---- Earn (idempotent) ----
 
@@ -207,9 +209,10 @@ class LoyaltyService:
             fresh = self.users.get(user.id)
             if not fresh:
                 raise NotFoundError("User not found")
-            if fresh.points_balance < tier.cost_points:
+            customer = self.users.get_or_create_customer(user.id)
+            if customer.points_balance < tier.cost_points:
                 raise ValidationError(
-                    f"Not enough points — need {tier.cost_points}, have {fresh.points_balance}"
+                    f"Not enough points — need {tier.cost_points}, have {customer.points_balance}"
                 )
 
             coupon = self._mint_loyalty_coupon(fresh, tier)
@@ -297,7 +300,7 @@ class LoyaltyService:
             if existing is not None:
                 return None
 
-        user = self.users.get(user_id)
+        customer = self.users.get_or_create_customer(user_id)
 
         # VIP multiplier — apply to positive earns only, skip expiry / reversal.
         # Refund reversals and expiry should remove EXACTLY what was previously
@@ -308,10 +311,9 @@ class LoyaltyService:
             delta > 0
             and reason
             not in (PointsReason.REFUND_REVERSAL, PointsReason.EXPIRY)
-            and user is not None
-            and user.vip_tier is not None
+            and customer.vip_tier is not None
         ):
-            mult = Decimal(user.vip_tier.earn_multiplier or 1)
+            mult = Decimal(customer.vip_tier.earn_multiplier or 1)
             if mult != Decimal("1.00"):
                 multiplied = int(
                     (Decimal(delta) * mult).quantize(
@@ -338,12 +340,11 @@ class LoyaltyService:
         )
         try:
             self.tx_repo.add(tx)
-            if user is not None:
-                user.points_balance = (user.points_balance or 0) + multiplied
-                if affects_lifetime and multiplied > 0:
-                    user.lifetime_points = (user.lifetime_points or 0) + multiplied
-                    # Lifetime moved → may have crossed a tier threshold.
-                    self._maybe_promote_tier(user)
+            customer.points_balance = (customer.points_balance or 0) + multiplied
+            if affects_lifetime and multiplied > 0:
+                customer.lifetime_points = (customer.lifetime_points or 0) + multiplied
+                # Lifetime moved → may have crossed a tier threshold.
+                self._maybe_promote_tier(customer)
             self.db.flush()
             return tx
         except IntegrityError:
@@ -352,14 +353,14 @@ class LoyaltyService:
             self.db.rollback()
             return None
 
-    def _maybe_promote_tier(self, user: User) -> None:
-        """Pick the highest tier whose threshold ≤ user.lifetime_points and
-        cache it on the user row. Idempotent — re-assigning the same id is a
+    def _maybe_promote_tier(self, customer: Customer) -> None:
+        """Pick the highest tier whose threshold ≤ customer.lifetime_points and
+        cache it on the customer row. Idempotent — re-assigning the same id is a
         no-op."""
-        tier = self.vip_repo.find_for_points(user.lifetime_points or 0)
+        tier = self.vip_repo.find_for_points(customer.lifetime_points or 0)
         new_id = tier.id if tier else None
-        if new_id != user.vip_tier_id:
-            user.vip_tier_id = new_id
+        if new_id != customer.vip_tier_id:
+            customer.vip_tier_id = new_id
 
     # ---- Expiry ----
 

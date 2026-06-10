@@ -30,6 +30,7 @@ from app.core.config import settings as env_settings
 from app.core.crypto import decrypt_secret, encrypt_secret
 from app.core.exceptions import ConflictError, ForbiddenError, ValidationError
 from app.models.user import User
+from app.models.user_security import UserSecurity
 from app.services.settings_service import SettingsService
 
 _BACKUP_CODE_COUNT = 10
@@ -66,6 +67,19 @@ class TotpService:
         if not self.is_enabled_system_wide():
             raise ForbiddenError("Two-factor authentication is disabled by the administrator.")
 
+    # ---- Satellite row access ----
+
+    def _security(self, user: User, *, create: bool = False) -> UserSecurity | None:
+        """The user's 2FA row, or None if they've never enrolled. Pass
+        create=True on the write path to lazily attach a fresh row — the
+        relationship cascade persists it when the session flushes."""
+        sec = user.security
+        if sec is None and create:
+            sec = UserSecurity(user_id=user.id)
+            user.security = sec
+            self.db.add(sec)
+        return sec
+
     # ---- Enrollment ----
 
     def start_enrollment(self, user: User) -> dict:
@@ -77,10 +91,11 @@ class TotpService:
             raise ConflictError("Two-factor is already enabled. Disable it first to re-enroll.")
 
         secret_plain = pyotp.random_base32()
-        user.totp_secret = encrypt_secret(secret_plain)
-        user.totp_enabled = False
-        user.totp_confirmed_at = None
-        user.backup_codes = None
+        sec = self._security(user, create=True)
+        sec.totp_secret = encrypt_secret(secret_plain)
+        sec.totp_enabled = False
+        sec.totp_confirmed_at = None
+        sec.backup_codes = None
         self.db.flush()
 
         totp = pyotp.TOTP(secret_plain)
@@ -93,12 +108,13 @@ class TotpService:
         store them on the client.
         """
         self.assert_system_enabled()
-        if not user.totp_secret:
+        sec = user.security
+        if not sec or not sec.totp_secret:
             raise ValidationError("Start enrollment first.")
-        if user.totp_enabled:
+        if sec.totp_enabled:
             raise ConflictError("Two-factor is already enabled.")
 
-        secret = decrypt_secret(user.totp_secret)
+        secret = decrypt_secret(sec.totp_secret)
         totp = pyotp.TOTP(secret)
         # `valid_window=1` accepts the previous and next 30s windows too —
         # forgiving of small client clock skew without weakening security.
@@ -106,9 +122,9 @@ class TotpService:
             raise ValidationError("Code didn't match. Double-check your authenticator.")
 
         backup_plain = [_new_backup_code() for _ in range(_BACKUP_CODE_COUNT)]
-        user.backup_codes = [_hash_backup(c) for c in backup_plain]
-        user.totp_enabled = True
-        user.totp_confirmed_at = datetime.now(timezone.utc)
+        sec.backup_codes = [_hash_backup(c) for c in backup_plain]
+        sec.totp_enabled = True
+        sec.totp_confirmed_at = datetime.now(timezone.utc)
         self.db.flush()
         return backup_plain
 
@@ -118,7 +134,8 @@ class TotpService:
         """True iff the code is a valid current TOTP OR an unused backup code.
         Backup codes self-consume on a successful match.
         """
-        if not user.totp_enabled or not user.totp_secret:
+        sec = user.security
+        if not sec or not sec.totp_enabled or not sec.totp_secret:
             return False
         cleaned = (code or "").strip().replace(" ", "").replace("-", "").upper()
         if not cleaned:
@@ -128,19 +145,19 @@ class TotpService:
         # We try the cheaper check first.
         if cleaned.isdigit():
             try:
-                secret = decrypt_secret(user.totp_secret)
+                secret = decrypt_secret(sec.totp_secret)
             except ValueError:
                 return False
             totp = pyotp.TOTP(secret)
             return totp.verify(cleaned, valid_window=1)
 
         # Backup-code path
-        if not user.backup_codes:
+        if not sec.backup_codes:
             return False
         target = _hash_backup(cleaned)
-        if target in user.backup_codes:
-            remaining = [c for c in user.backup_codes if c != target]
-            user.backup_codes = remaining
+        if target in sec.backup_codes:
+            remaining = [c for c in sec.backup_codes if c != target]
+            sec.backup_codes = remaining
             self.db.flush()
             return True
         return False
@@ -148,8 +165,8 @@ class TotpService:
     # ---- Disable ----
 
     def disable(self, user: User) -> None:
-        user.totp_secret = None
-        user.totp_enabled = False
-        user.totp_confirmed_at = None
-        user.backup_codes = None
+        # Drop the whole satellite row rather than blanking fields — keeps the
+        # data clean (no row == never-enrolled). delete-orphan does the DELETE.
+        if user.security is not None:
+            user.security = None
         self.db.flush()
