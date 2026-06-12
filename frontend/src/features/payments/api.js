@@ -24,6 +24,9 @@ export const paymentsApi = {
     address_id,
     address,
     save_address,
+    // Billing address — absent means backend copies shipping (default)
+    billing_address_id,
+    billing_address,
     // Legacy free-text fields — kept for backward compat (stale bundles)
     shipping_address,
     shipping_pincode,
@@ -44,6 +47,10 @@ export const paymentsApi = {
         ...(address_id == null && address && save_address != null
           ? { save_address }
           : {}),
+        // Billing address — only include when explicitly provided; absence
+        // signals "billing = shipping" to the backend.
+        ...(billing_address_id != null ? { billing_address_id } : {}),
+        ...(billing_address_id == null && billing_address ? { billing_address } : {}),
         // Legacy passthrough — never sent by the new CheckoutPage path
         ...(address_id == null && !address && shipping_address
           ? { shipping_address }

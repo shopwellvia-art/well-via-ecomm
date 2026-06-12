@@ -85,6 +85,20 @@ class Order(Base, IDMixin, TimestampMixin):
         index=True,
     )
     shipping_address_snapshot: Mapped[dict | None] = mapped_column(JSON)
+    # `billing_address_snapshot` is the frozen, structured copy of the billing
+    # address at checkout time — it is the source of truth for invoice display.
+    # `billing_address_id` is provenance-only (SET NULL on delete); never read
+    # for fulfillment so that editing or deleting the saved address never
+    # rewrites historical order data.
+    # NULL billing means "same as shipping" — callers must copy the shipping
+    # snapshot for display; the absence is intentional (no redundant data).
+    billing_address_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("addresses.id", ondelete="SET NULL", name="fk_orders_billing_address_id"),
+        nullable=True,
+        index=True,
+    )
+    billing_address_snapshot: Mapped[dict | None] = mapped_column(JSON)
     payment_intent_id: Mapped[str | None] = mapped_column(String(255), unique=True)
     # Which payment gateway routed this order (matches payment_methods.gateway_code).
     # Null for legacy orders and COD orders that bypass the gateway entirely.

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
   Lock,
@@ -81,6 +81,8 @@ export default function CheckoutPage() {
   const checkout = useCheckout();
 
   const [addressPayload, setAddressPayload] = useState({});
+  const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
+  const [billingPayload, setBillingPayload] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('prepaid');
@@ -219,7 +221,11 @@ export default function CheckoutPage() {
   const hasValidAddress =
     addressPayload.address_id != null ||
     (addressPayload.address != null && addressPayload.pincode);
-  const canSubmit = items.length > 0 && hasValidAddress && !submitting;
+  const hasValidBilling =
+    billingSameAsShipping ||
+    billingPayload.address_id != null ||
+    billingPayload.address != null;
+  const canSubmit = items.length > 0 && hasValidAddress && hasValidBilling && !submitting;
 
   if (!user) return <Navigate to="/login" replace />;
 
@@ -282,6 +288,16 @@ export default function CheckoutPage() {
         ...(instrumentApplies && resolvedGateway
           ? { gateway_code: resolvedGateway }
           : {}),
+        // Billing address: only send when unchecked. Backend defaults billing
+        // = shipping when absent. billing_address_id takes precedence over inline.
+        ...(!billingSameAsShipping && billingPayload.address_id != null
+          ? { billing_address_id: billingPayload.address_id }
+          : {}),
+        ...(!billingSameAsShipping &&
+        billingPayload.address_id == null &&
+        billingPayload.address
+          ? { billing_address: billingPayload.address }
+          : {}),
       });
       window.location.assign(resp.redirect_url);
     } catch (err) {
@@ -337,6 +353,46 @@ export default function CheckoutPage() {
                 <AddressPicker
                   onChange={(payload) => setAddressPayload(payload)}
                 />
+
+                {/* Billing address same as shipping checkbox */}
+                <div className="mt-4">
+                  <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-line-subtle bg-bg-sunken px-4 py-3 text-sm transition-colors hover:border-line-strong">
+                    <input
+                      type="checkbox"
+                      checked={billingSameAsShipping}
+                      onChange={(e) => {
+                        setBillingSameAsShipping(e.target.checked);
+                        if (e.target.checked) setBillingPayload({});
+                      }}
+                      className="size-4 rounded border-line-subtle bg-bg-elevated text-accent"
+                    />
+                    <span className="font-medium text-ink-primary">
+                      Billing address same as delivery address
+                    </span>
+                  </label>
+
+                  <AnimatePresence initial={false}>
+                    {!billingSameAsShipping && (
+                      <motion.div
+                        key="billing-form"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: 'easeInOut' }}
+                        className="overflow-hidden"
+                      >
+                        <div className="mt-3 rounded-lg border border-line-subtle bg-bg-elevated p-4">
+                          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
+                            Billing address
+                          </p>
+                          <AddressPicker
+                            onChange={(payload) => setBillingPayload(payload)}
+                          />
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
 
                 <div className="mt-5 border-t border-line-subtle pt-5">
                   <label className="block text-sm font-medium text-ink-primary" htmlFor="ship-phone">

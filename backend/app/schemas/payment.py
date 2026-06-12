@@ -54,6 +54,15 @@ class CheckoutRequest(BaseModel):
     # is used (it must be enabled + implemented + ready). When omitted the
     # factory selects the lowest sort_order qualifying gateway automatically.
     gateway_code: str | None = Field(default=None, max_length=40)
+    # Billing address for this order. Two optional, mutually-exclusive sources:
+    #   billing_address_id: a saved address the user owns.
+    #   billing_address: an inline one-off address (never saved to the book).
+    # Precedence when both are sent: billing_address_id wins (mirrors shipping).
+    # Absence of BOTH ⇒ billing is copied from the resolved shipping address at
+    # service layer; no billing_same_as_shipping flag is needed. No
+    # save_billing_address in v1.
+    billing_address_id: int | None = None
+    billing_address: AddressCreate | None = None
 
     @field_validator("gateway_code", mode="before")
     @classmethod

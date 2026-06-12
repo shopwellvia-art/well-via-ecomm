@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Home, Briefcase, MapPin } from 'lucide-react';
+import { Home, Briefcase, MapPin, LocateFixed, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/Input.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { cn } from '@/lib/utils.js';
-import { usePincodeLookup } from '../hooks.js';
+import { usePincodeLookup, useCurrentLocation, friendlyGeoError } from '../hooks.js';
 
 // API label values are lowercase ("home"/"work"/"other") — AddressLabel is a
 // str-enum validated by value, so the payload must use these exact strings.
@@ -76,6 +76,8 @@ export default function AddressForm({
     return v;
   });
   const [errors, setErrors] = useState({});
+  const [geoError, setGeoError] = useState(null);
+  const currentLocation = useCurrentLocation();
   // Track whether the user has manually changed city/state so autofill won't
   // clobber their edits.
   const userEditedCity = useRef(!!(initialValues?.city));
@@ -120,6 +122,33 @@ export default function AddressForm({
   function handleStateChange(val) {
     userEditedState.current = true;
     set('state', val);
+  }
+
+  function handleUseLocation() {
+    setGeoError(null);
+    currentLocation.mutate(undefined, {
+      onSuccess(data) {
+        if (data.found) {
+          setValues((prev) => ({
+            ...prev,
+            pincode: data.pincode || prev.pincode,
+            city: data.city || prev.city,
+            state: data.state || prev.state,
+          }));
+          // Reset edit-guards so pincode lookup can refine and edit-protection
+          // keeps working — mirrors the handlePincodeChange semantics.
+          userEditedCity.current = false;
+          userEditedState.current = false;
+        } else {
+          setGeoError(
+            "We couldn't find a pincode for your location — please enter it manually.",
+          );
+        }
+      },
+      onError(err) {
+        setGeoError(friendlyGeoError(err));
+      },
+    });
   }
 
   function handleSubmit(e) {
@@ -226,9 +255,27 @@ export default function AddressForm({
 
       {/* ── Section: Location ── */}
       <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
-          Location
-        </p>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
+            Location
+          </p>
+          <button
+            type="button"
+            disabled={currentLocation.isPending}
+            onClick={handleUseLocation}
+            className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent/80 focus-visible:focus-ring disabled:opacity-50"
+          >
+            {currentLocation.isPending ? (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <LocateFixed className="size-3.5" aria-hidden="true" />
+            )}
+            {currentLocation.isPending ? 'Detecting…' : 'Use my current location'}
+          </button>
+        </div>
+        {geoError && (
+          <p className="mb-2 text-xs text-danger">{geoError}</p>
+        )}
         <div className="grid gap-4 sm:grid-cols-3">
           <Input
             label="Pincode"

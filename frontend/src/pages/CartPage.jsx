@@ -12,6 +12,8 @@ import {
   ShieldCheck,
   Zap,
   Info,
+  LocateFixed,
+  Loader2,
 } from 'lucide-react';
 import { Page } from '@/components/layout/Page.jsx';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs.jsx';
@@ -28,7 +30,7 @@ import {
   useUpdateCartQuantity,
 } from '@/features/cart/hooks.js';
 import { useWishlist, useAddToWishlist } from '@/features/wishlist/hooks.js';
-import { useAddresses } from '@/features/addresses/hooks.js';
+import { useAddresses, useCurrentLocation, friendlyGeoError } from '@/features/addresses/hooks.js';
 import AddressSelectDrawer from '@/features/addresses/components/AddressSelectDrawer.jsx';
 import { useAuthStore } from '@/features/auth/store.js';
 import FreeShippingNudge from '@/features/shipping/components/FreeShippingNudge.jsx';
@@ -122,18 +124,48 @@ function deliveryByText(serviceability) {
 }
 
 /** Flipkart-style "Deliver to:" bar with the address-change drawer trigger. */
-function DeliverToBar({ address, serviceability, onChange }) {
+function DeliverToBar({ address, detectedPincode, serviceability, onChange, onDetect, detectPending, detectError }) {
   if (!address) {
     return (
-      <Card className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <div className="flex items-center gap-2.5 text-sm text-ink-secondary">
-          <MapPin className="size-4 text-ink-tertiary" aria-hidden="true" />
-          Add a delivery address to see delivery dates and charges.
-        </div>
-        <Button type="button" size="sm" variant="outline" onClick={onChange}>
-          Add address
-        </Button>
-      </Card>
+      <div className="flex flex-col gap-1.5">
+        <Card className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div className="flex items-center gap-2.5 text-sm text-ink-secondary">
+            <MapPin className="size-4 text-ink-tertiary" aria-hidden="true" />
+            {detectedPincode
+              ? (
+                <span>
+                  Deliver to{' '}
+                  <span className="font-semibold text-ink-primary nums">{detectedPincode}</span>
+                  <span className="ml-1 text-ink-tertiary">(your location)</span>
+                </span>
+              )
+              : 'Add a delivery address to see delivery dates and charges.'
+            }
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={detectPending}
+              onClick={onDetect}
+              className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent/80 focus-visible:focus-ring disabled:opacity-50"
+            >
+              {detectPending ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <LocateFixed className="size-3.5" aria-hidden="true" />
+              )}
+              {detectPending ? 'Detecting…' : 'Detect my location'}
+            </button>
+            <span className="text-line-strong text-xs">·</span>
+            <Button type="button" size="sm" variant="outline" onClick={onChange}>
+              Add address
+            </Button>
+          </div>
+        </Card>
+        {detectError && (
+          <p className="px-1 text-xs text-danger">{detectError}</p>
+        )}
+      </div>
     );
   }
 
@@ -207,6 +239,10 @@ export default function CartPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Which item's "Save for later" is in flight (product_id).
   const [savingForLater, setSavingForLater] = useState(null);
+  // Pincode detected via geolocation (no saved address path).
+  const [detectedPincode, setDetectedPincode] = useState('');
+  const [detectError, setDetectError] = useState(null);
+  const detectLocation = useCurrentLocation();
 
   const selectedAddress = useMemo(() => {
     if (!addresses?.length) return null;
@@ -225,7 +261,7 @@ export default function CartPage() {
   const couponCode = data?.coupon_code;
   const status = error?.response?.status;
 
-  const pincode = selectedAddress?.pincode || '';
+  const pincode = selectedAddress?.pincode || detectedPincode || '';
   const { data: serviceability } = useServiceability(pincode);
   const serviceable = serviceability?.serviceable ?? null;
 
@@ -275,6 +311,24 @@ export default function CartPage() {
     } finally {
       setSavingForLater(null);
     }
+  }
+
+  function handleDetectLocation() {
+    setDetectError(null);
+    detectLocation.mutate(undefined, {
+      onSuccess(data) {
+        if (data.found) {
+          setDetectedPincode(data.pincode || '');
+        } else {
+          setDetectError(
+            "We couldn't find a pincode for your location — please enter your address manually.",
+          );
+        }
+      },
+      onError(err) {
+        setDetectError(friendlyGeoError(err));
+      },
+    });
   }
 
   function placeOrder() {
@@ -367,8 +421,12 @@ export default function CartPage() {
           <div className="flex flex-col gap-3">
             <DeliverToBar
               address={selectedAddress}
+              detectedPincode={detectedPincode}
               serviceability={serviceability}
               onChange={() => setDrawerOpen(true)}
+              onDetect={handleDetectLocation}
+              detectPending={detectLocation.isPending}
+              detectError={detectError}
             />
 
             <Card className="overflow-hidden p-0">

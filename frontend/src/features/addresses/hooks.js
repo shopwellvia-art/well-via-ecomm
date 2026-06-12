@@ -2,6 +2,61 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { addressApi } from './api.js';
 import { useAuthStore } from '@/features/auth/store.js';
 
+/**
+ * Maps a geolocation / custom error to a human-friendly string.
+ * Never throws.
+ */
+export function friendlyGeoError(error) {
+  if (!error) return 'Could not determine your location.';
+  // Custom codes from useCurrentLocation's mutationFn
+  if (error.code === 'unsupported') {
+    return "Your browser doesn't support location detection.";
+  }
+  if (error.code === 'insecure') {
+    return 'Location detection needs a secure (https) connection.';
+  }
+  // GeolocationPositionError codes (1 = PERMISSION_DENIED, 2 = POSITION_UNAVAILABLE, 3 = TIMEOUT)
+  if (error.code === 1) {
+    return 'Location permission denied — allow location access in your browser, or enter your pincode manually.';
+  }
+  if (error.code === 2 || error.code === 3) {
+    return "Couldn't determine your location. Please enter your pincode manually.";
+  }
+  return "Couldn't determine your location. Please enter your pincode manually.";
+}
+
+/**
+ * User-triggered geolocation → reverse geocode.
+ * Use as a mutation (call `.mutate()` / `.mutateAsync()` on user action).
+ * Returns the reverseGeocode response: { found, pincode, city, state }.
+ */
+export function useCurrentLocation() {
+  return useMutation({
+    mutationFn: () =>
+      new Promise((resolve, reject) => {
+        if (!('geolocation' in navigator)) {
+          reject({ code: 'unsupported' });
+          return;
+        }
+        if (!window.isSecureContext) {
+          reject({ code: 'insecure' });
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            addressApi
+              .reverseGeocode(pos.coords.latitude, pos.coords.longitude)
+              .then(resolve)
+              .catch(reject);
+          },
+          (err) => reject(err),
+          { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+        );
+      }),
+    retry: false,
+  });
+}
+
 const ADDR_KEY = ['addresses'];
 
 function useInvalidateAddresses() {

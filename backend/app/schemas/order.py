@@ -40,6 +40,15 @@ class OrderRead(BaseModel):
     currency: str
     shipping_address: str | None
     shipping_pincode: str | None = None
+    # Frozen JSON snapshot of the shipping address at order time.
+    # snapshot = truth; shipping_address_id is provenance only.
+    shipping_address_snapshot: dict | None = None
+    shipping_address_id: int | None = None
+    # Billing address. None means billing was the same as shipping (legacy
+    # or pre-billing-feature orders). billing_address_id is provenance FK;
+    # billing_address_snapshot is the frozen truth.
+    billing_address_snapshot: dict | None = None
+    billing_address_id: int | None = None
     # Payment-method snapshot. 'cod_balance' is the amount the carrier will
     # collect on delivery (zero for prepaid orders).
     payment_method: str = "prepaid"
@@ -107,6 +116,15 @@ class AdminOrderRead(BaseModel):
     currency: str
     shipping_address: str | None
     shipping_pincode: str | None = None
+    # Frozen JSON snapshot of the shipping address at order time.
+    # snapshot = truth; shipping_address_id is provenance only.
+    shipping_address_snapshot: dict | None = None
+    shipping_address_id: int | None = None
+    # Billing address. None means billing was the same as shipping (legacy
+    # or pre-billing-feature orders). billing_address_id is provenance FK;
+    # billing_address_snapshot is the frozen truth.
+    billing_address_snapshot: dict | None = None
+    billing_address_id: int | None = None
     payment_method: str = "prepaid"
     payment_instrument: str | None = None
     payment_discount_amount: Decimal = Decimal("0")

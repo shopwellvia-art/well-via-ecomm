@@ -81,9 +81,19 @@ class PaymentService:
         # call when save_address=True, but the session is clean at this point
         # (no order rows have been added yet), so the early commit is safe.
         snapshot, resolved_address_id = self._resolve_shipping_address(user, data)
+        billing_snapshot, billing_addr_id = self._resolve_billing_address(
+            user, data, snapshot, resolved_address_id
+        )
 
         method = (data.payment_method or "prepaid").lower()
-        order, total = self._build_order(user.id, data, snapshot=snapshot, resolved_address_id=resolved_address_id)
+        order, total = self._build_order(
+            user.id,
+            data,
+            snapshot=snapshot,
+            resolved_address_id=resolved_address_id,
+            billing_snapshot=billing_snapshot,
+            billing_address_id=billing_addr_id,
+        )
         mtid = _new_mtid()
         order.payment_intent_id = mtid
         self.orders.add(order)
@@ -354,6 +364,49 @@ class PaymentService:
 
         raise ValidationError("A shipping address is required")
 
+    def _resolve_billing_address(
+        self,
+        user: User,
+        data: CheckoutRequest,
+        shipping_snapshot: dict | None,
+        shipping_address_id: int | None,
+    ) -> tuple[dict | None, int | None]:
+        """Determine the billing address for this checkout.
+
+        Precedence (first match wins):
+          1. data.billing_address_id — a saved address the user owns.
+             Calls AddressService.get_owned; NotFoundError propagates (404).
+             No existence leak: the error message is the same for missing
+             and other-user addresses.
+          2. data.billing_address — inline AddressCreate. Snapshot is built
+             in memory; never written to the address book.
+          3. Neither supplied — billing copies the resolved shipping snapshot.
+             A fresh dict() copy is returned so the two JSON columns never
+             share a mutable object reference.
+
+        Legacy free-text shipping path (shipping_snapshot is None) with no
+        explicit billing → returns (None, None); billing stays NULL on the
+        order (nothing structured to copy).
+
+        No session writes, no commits — callers assume the session is clean
+        before order rows are appended.
+        """
+        if data.billing_address_id is not None:
+            addr = AddressService(self.db).get_owned(user.id, data.billing_address_id)
+            snap = snapshot_of(addr)
+            return snap, addr.id
+
+        if data.billing_address is not None:
+            snap = snapshot_of(data.billing_address)
+            return snap, None
+
+        # Default: copy shipping.
+        if shipping_snapshot is not None:
+            return dict(shipping_snapshot), shipping_address_id
+
+        # Legacy free-text shipping with no explicit billing — nothing to copy.
+        return None, None
+
     def _build_order(
         self,
         user_id: int,
@@ -361,6 +414,8 @@ class PaymentService:
         *,
         snapshot: dict | None = None,
         resolved_address_id: int | None = None,
+        billing_snapshot: dict | None = None,
+        billing_address_id: int | None = None,
     ) -> tuple[Order, Decimal]:
         order = Order(user_id=user_id, shipping_address=data.shipping_address)
         subtotal = Decimal("0.00")
@@ -501,6 +556,11 @@ class PaymentService:
         if snapshot is not None:
             order.shipping_address_snapshot = snapshot
             order.shipping_address_id = resolved_address_id
+        # Billing address — stored independently of the shipping block so that
+        # explicit billing works even on the legacy free-text shipping path.
+        if billing_snapshot is not None:
+            order.billing_address_snapshot = billing_snapshot
+            order.billing_address_id = billing_address_id
         return order, total
 
     def _order_for_mtid(self, mtid: str) -> Order:

@@ -33,8 +33,10 @@ from app.schemas.shipping import (
     PincodeLookupResponse,
     RateQuoteRequest as RateQuoteRequestSchema,
     RateQuoteResponse,
+    ReverseGeocodeResponse,
     ServiceabilityResponse,
 )
+from app.services.geocode_service import GeocodeService
 from app.services.pincode_service import PincodeService
 from app.services.settings_service import SettingsService
 from app.services.shipping_service import ShippingService
@@ -234,6 +236,37 @@ def lookup_pincode(
     )
     result = PincodeService().lookup(pincode)
     return PincodeLookupResponse(**result)
+
+
+@router.get(
+    "/geocode/reverse",
+    response_model=ReverseGeocodeResponse,
+)
+def reverse_geocode(
+    lat: float = Query(ge=-90, le=90, description="Latitude in decimal degrees"),
+    lng: float = Query(ge=-180, le=180, description="Longitude in decimal degrees"),
+    request: Request = None,
+):
+    """Resolve a browser geolocation coordinate pair to pincode/city/state.
+
+    Public endpoint — no auth required.  Returns HTTP 200 in all cases;
+    ``found=False`` signals that no valid Indian pincode could be determined
+    (outside India, postcode unavailable, upstream error, etc.).  Autofill is
+    purely cosmetic; checkout is never blocked by a lookup failure.
+
+    Out-of-range coordinates (lat outside [-90,90] or lng outside [-180,180])
+    → FastAPI 422 before the handler runs.
+
+    Rate-limited 60 req/min/IP — same policy as the pincode lookup.
+    """
+    RateLimiter().enforce(
+        scope="shipping.reverse_geocode",
+        identifier=get_client_ip(request),
+        limit=60,
+        window_sec=60,
+    )
+    result = GeocodeService().reverse(lat, lng)
+    return ReverseGeocodeResponse(**result)
 
 
 # ---- Mock simulator (dev only) ------------------------------------------

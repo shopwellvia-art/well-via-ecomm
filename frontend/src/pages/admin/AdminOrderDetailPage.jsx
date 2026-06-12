@@ -837,6 +837,51 @@ export default function AdminOrderDetailPage() {
             </div>
           </Card>
 
+          {/* Billing address — show block only when present; indicate same/different */}
+          {(() => {
+            const bill = order.billing_address_snapshot;
+            const ship = order.shipping_address_snapshot;
+            if (!bill && order.billing_address_id == null) return null;
+            const differs = bill
+              ? order.billing_address_id != null &&
+                order.billing_address_id !== order.shipping_address_id
+                ? true
+                : JSON.stringify(ship) !== JSON.stringify(bill)
+              : false;
+            const parts = bill
+              ? [
+                  bill.full_name,
+                  bill.line1,
+                  bill.line2,
+                  bill.landmark,
+                  bill.city,
+                  bill.state,
+                  bill.pincode,
+                  bill.country,
+                ]
+                  .filter(Boolean)
+                  .join('\n')
+              : null;
+            return (
+              <Card>
+                <CardHeader
+                  title={<SectionLabel icon={Package}>Billing address</SectionLabel>}
+                />
+                <div className="p-5">
+                  {!differs ? (
+                    <p className="text-sm text-ink-tertiary italic">
+                      Same as delivery address.
+                    </p>
+                  ) : parts ? (
+                    <p className="whitespace-pre-line text-sm text-ink-primary">{parts}</p>
+                  ) : (
+                    <p className="text-sm text-ink-tertiary">No billing address on record.</p>
+                  )}
+                </div>
+              </Card>
+            );
+          })()}
+
           {/* Payment */}
           <Card>
             <CardHeader title={<SectionLabel icon={CreditCard}>Payment</SectionLabel>} />

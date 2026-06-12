@@ -74,3 +74,21 @@ class PincodeLookupResponse(BaseModel):
     found: bool
     city: str | None = None
     state: str | None = None
+
+
+class ReverseGeocodeResponse(BaseModel):
+    """Result of GET /shipping/geocode/reverse?lat=&lng=.
+
+    Always returns HTTP 200 — `found=False` is the degraded-but-safe response
+    when coordinates are outside India, no postcode is available, the upstream
+    API is down, or geolocation permission was denied on the client.  Autofill
+    is cosmetic; checkout is never blocked by a lookup failure.
+
+    `found=True` guarantees that pincode matches ^[1-9][0-9]{5}$ and
+    countryCode == "IN" in the upstream response.
+    """
+
+    found: bool
+    pincode: str | None = None
+    city: str | None = None
+    state: str | None = None

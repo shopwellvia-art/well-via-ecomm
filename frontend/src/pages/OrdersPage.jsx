@@ -282,6 +282,36 @@ export default function OrdersPage() {
                             {o.shipping_address}
                           </p>
                         )}
+                        {/* Billing address — only shown when it differs from shipping */}
+                        {o.billing_address_snapshot &&
+                          (() => {
+                            const ship = o.shipping_address_snapshot;
+                            const bill = o.billing_address_snapshot;
+                            const differs =
+                              o.billing_address_id != null &&
+                              o.billing_address_id !== o.shipping_address_id
+                                ? true
+                                : JSON.stringify(ship) !== JSON.stringify(bill);
+                            if (!differs) return null;
+                            const parts = [
+                              bill.full_name,
+                              bill.line1,
+                              bill.line2,
+                              bill.city,
+                              bill.state,
+                              bill.pincode,
+                            ]
+                              .filter(Boolean)
+                              .join(', ');
+                            return (
+                              <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-ink-tertiary">
+                                <MapPin className="size-3 shrink-0" aria-hidden="true" />
+                                <span className="font-medium">Bill to:</span>{' '}
+                                {parts}
+                              </p>
+                            );
+                          })()
+                        }
                       </div>
                     </div>
 

@@ -15,4 +15,12 @@ export const addressApi = {
   // Always resolves (never throws); { found: false } on miss/error.
   lookupPincode: (pincode) =>
     apiClient.get(`/shipping/pincode/${pincode}`).then((r) => r.data),
+
+  // Reverse geocode — browser coords → pincode/city/state.
+  // Always resolves (never throws); { found: false } when outside India or
+  // no valid 6-digit postcode found.
+  reverseGeocode: (lat, lng) =>
+    apiClient
+      .get('/shipping/geocode/reverse', { params: { lat, lng } })
+      .then((r) => r.data),
 };
