@@ -1,4 +1,4 @@
-import { Home, Briefcase, MapPin, Star, Pencil, Trash2 } from 'lucide-react';
+import { Home, Briefcase, MapPin, MapPinned, Star, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button.jsx';
 import { Badge } from '@/components/ui/Badge.jsx';
 import { cn } from '@/lib/utils.js';
@@ -64,6 +64,14 @@ export default function AddressCard({
           <Badge tone="accent" dot size="sm">
             Default
           </Badge>
+        )}
+
+        {/* Pinned badge — shown when a map-pinned coordinate is stored */}
+        {address.latitude != null && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-ink-tertiary">
+            <MapPinned className="size-3 shrink-0" aria-hidden="true" />
+            Pinned
+          </span>
         )}
       </div>
 

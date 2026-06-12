@@ -30,6 +30,8 @@ const EMPTY = {
   country: 'IN',
   label: 'home',
   is_default: false,
+  latitude: null,
+  longitude: null,
 };
 
 function validate(v) {
@@ -115,7 +117,9 @@ export default function AddressForm({
   function handlePincodeChange(val) {
     userEditedCity.current = false;
     userEditedState.current = false;
-    set('pincode', val);
+    // A hand-typed pincode invalidates any previously map-pinned coordinates.
+    setValues((prev) => ({ ...prev, pincode: val, latitude: null, longitude: null }));
+    if (errors.pincode) setErrors((prev) => { const n = { ...prev }; delete n.pincode; return n; });
   }
 
   function handleCityChange(val) {
@@ -138,6 +142,8 @@ export default function AddressForm({
             pincode: data.pincode || prev.pincode,
             city: data.city || prev.city,
             state: data.state || prev.state,
+            latitude: data.lat ?? prev.latitude,
+            longitude: data.lng ?? prev.longitude,
           }));
           // Reset edit-guards so pincode lookup can refine and edit-protection
           // keeps working — mirrors the handlePincodeChange semantics.
@@ -155,13 +161,15 @@ export default function AddressForm({
     });
   }
 
-  function handleMapSelect({ pincode, city, state, area, road }) {
+  function handleMapSelect({ pincode, city, state, area, road, lat, lng }) {
     setValues((prev) => {
       const next = {
         ...prev,
-        pincode: pincode || prev.pincode,
-        city:    city    || prev.city,
-        state:   state   || prev.state,
+        pincode:   pincode || prev.pincode,
+        city:      city    || prev.city,
+        state:     state   || prev.state,
+        latitude:  lat     ?? prev.latitude,
+        longitude: lng     ?? prev.longitude,
       };
       // Seed line2 only when it's currently empty — never overwrite user text.
       const streetHint = [road, area].filter(Boolean).join(', ');

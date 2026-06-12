@@ -26,6 +26,12 @@ class AddressCreate(BaseModel):
     country: str = Field(default="IN", max_length=2)
     label: AddressLabel = AddressLabel.HOME
     is_default: bool = False
+    # GPS coordinates set by the map-pin picker or the browser geolocation API.
+    # Optional — manually entered addresses will never have these.  Nothing reads
+    # them for fulfilment (pincode drives shipping zone lookup); they flow into
+    # order snapshots as plain floats for display / analytics use only.
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
 
     @field_validator("full_name", mode="before")
     @classmethod
@@ -62,6 +68,11 @@ class AddressUpdate(BaseModel):
     country: str | None = Field(default=None, max_length=2)
     label: AddressLabel | None = None
     is_default: bool | None = None
+    # GPS coordinates — None means 'unchanged', consistent with the existing
+    # pattern for all other nullable fields.  Note: coords cannot be cleared
+    # back to NULL via update (send None to leave them as-is, not to nullify).
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
 
     @field_validator("full_name", mode="before")
     @classmethod
@@ -95,5 +106,7 @@ class AddressRead(BaseModel):
     country: str
     label: AddressLabel
     is_default: bool
+    latitude: float | None
+    longitude: float | None
     created_at: datetime
     updated_at: datetime

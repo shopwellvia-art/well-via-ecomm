@@ -454,6 +454,7 @@ class TestSnapshotOf:
         expected_keys = {
             "full_name", "phone", "line1", "line2", "landmark",
             "city", "state", "pincode", "country", "label",
+            "latitude", "longitude",
         }
         assert expected_keys == set(snap.keys()), (
             f"Snapshot missing keys: {expected_keys - set(snap.keys())}"
@@ -491,3 +492,282 @@ class TestSnapshotOf:
         snap = snapshot_of(data)
         assert snap["line2"] is None
         assert snap["landmark"] is None
+
+
+# ---------------------------------------------------------------------------
+# Latitude / longitude — new tests (migration j1f2a3b4c5d6)
+# ---------------------------------------------------------------------------
+
+class TestCoordinateStorage:
+
+    def test_create_address_with_coords_stores_and_reads_them(self) -> None:
+        """AddressService.create with lat/lng → row stores them; AddressRead returns them."""
+        user_ids: list[int] = []
+        db = SessionLocal()
+        try:
+            user = _make_user(db)
+            user_ids.append(user.id)
+            db.commit()
+
+            payload = AddressCreate(
+                full_name="Map User",
+                phone="9876543210",
+                line1="1 Coord Lane",
+                city="Bangalore",
+                state="Karnataka",
+                pincode="560001",
+                country="IN",
+                label=AddressLabel.HOME,
+                latitude=12.9716,
+                longitude=77.5946,
+            )
+            svc = AddressService(db)
+            addr = svc.create(user.id, payload)
+
+            assert addr.latitude == pytest.approx(12.9716, rel=1e-6)
+            assert addr.longitude == pytest.approx(77.5946, rel=1e-6)
+
+            from app.schemas.address import AddressRead
+            read = AddressRead.model_validate(addr)
+            assert read.latitude == pytest.approx(12.9716, rel=1e-6)
+            assert read.longitude == pytest.approx(77.5946, rel=1e-6)
+        finally:
+            _cleanup(user_ids)
+            db.close()
+
+    def test_snapshot_of_address_with_coords_includes_plain_float_coords(self) -> None:
+        """snapshot_of(orm_address_with_coords) must include latitude/longitude as
+        plain Python floats (not Decimal — json.dumps must not raise)."""
+        import json as _json
+
+        user_ids: list[int] = []
+        db = SessionLocal()
+        try:
+            user = _make_user(db)
+            user_ids.append(user.id)
+            db.commit()
+
+            payload = AddressCreate(
+                full_name="Snap User",
+                phone="9876543210",
+                line1="2 Snapshot Rd",
+                city="Bangalore",
+                state="Karnataka",
+                pincode="560001",
+                country="IN",
+                label=AddressLabel.HOME,
+                latitude=12.9716,
+                longitude=77.5946,
+            )
+            addr = AddressService(db).create(user.id, payload)
+            snap = snapshot_of(addr)
+
+            assert snap["latitude"] == pytest.approx(12.9716, rel=1e-6)
+            assert snap["longitude"] == pytest.approx(77.5946, rel=1e-6)
+            assert isinstance(snap["latitude"], float), "latitude must be a plain float"
+            assert isinstance(snap["longitude"], float), "longitude must be a plain float"
+
+            # Must be JSON-serializable without raising (catches Decimal pitfall).
+            serialized = _json.dumps(snap)
+            roundtripped = _json.loads(serialized)
+            assert roundtripped["latitude"] == pytest.approx(12.9716, rel=1e-6)
+            assert roundtripped["longitude"] == pytest.approx(77.5946, rel=1e-6)
+        finally:
+            _cleanup(user_ids)
+            db.close()
+
+    def test_snapshot_of_address_without_coords_has_none_values(self) -> None:
+        """Address created without coordinates → snapshot has latitude=None, longitude=None."""
+        data = _addr_create()  # no lat/lng
+        snap = snapshot_of(data)
+        assert snap["latitude"] is None
+        assert snap["longitude"] is None
+
+    def test_address_create_rejects_latitude_out_of_range(self) -> None:
+        """AddressCreate with latitude=91 (> 90) must raise a Pydantic ValidationError."""
+        from pydantic import ValidationError as PydanticValidationError
+
+        with pytest.raises(PydanticValidationError):
+            AddressCreate(
+                full_name="Bad Lat",
+                phone="9876543210",
+                line1="1 Bad Lane",
+                city="Bangalore",
+                state="Karnataka",
+                pincode="560001",
+                country="IN",
+                latitude=91.0,  # out of range
+            )
+
+    def test_address_create_rejects_longitude_out_of_range(self) -> None:
+        """AddressCreate with longitude=181 (> 180) must raise a Pydantic ValidationError."""
+        from pydantic import ValidationError as PydanticValidationError
+
+        with pytest.raises(PydanticValidationError):
+            AddressCreate(
+                full_name="Bad Lng",
+                phone="9876543210",
+                line1="1 Bad Lane",
+                city="Bangalore",
+                state="Karnataka",
+                pincode="560001",
+                country="IN",
+                longitude=181.0,  # out of range
+            )
+
+
+class TestCoordinateSnapshotInOrder:
+
+    def test_checkout_order_snapshot_carries_coords_and_is_json_serializable(
+        self,
+    ) -> None:
+        """Full checkout path: address with lat/lng → order.shipping_address_snapshot
+        carries latitude/longitude AND survives a json.dumps round-trip (catches the
+        Decimal pitfall at the point where the order JSON column is serialized).
+
+        The order row is committed to the DB via raw SQL (same pattern as
+        TestSnapshotImmutability) so the MySQL JSON column serialization is exercised.
+        """
+        import json as _json
+        from decimal import Decimal as _Decimal
+        from unittest.mock import MagicMock, patch
+        from sqlalchemy import text as _text
+
+        from app.db.session import SessionLocal as _SL
+        from app.models.product import Product
+        from app.schemas.order import OrderItemCreate
+        from app.schemas.payment import CheckoutRequest
+        from app.services.payment_service import PaymentService
+
+        user_ids: list[int] = []
+        product_ids: list[int] = []
+        order_ids: list[int] = []
+
+        db = _SL()
+        try:
+            user = _make_user(db)
+            user_ids.append(user.id)
+            prod = Product(
+                sku=f"SKU-COORD-{_uid()}",
+                name=f"CoordProd {_uid()}",
+                price=_Decimal("100.00"),
+                stock=10,
+            )
+            db.add(prod)
+            db.commit()
+            product_ids.append(prod.id)
+
+            payload = AddressCreate(
+                full_name="Coord Buyer",
+                phone="9876543210",
+                line1="3 GPS Road",
+                city="Bangalore",
+                state="Karnataka",
+                pincode="560001",
+                country="IN",
+                label=AddressLabel.HOME,
+                latitude=12.9716,
+                longitude=77.5946,
+            )
+            addr = AddressService(db).create(user.id, payload)
+
+            mock_provider = MagicMock()
+            with patch(
+                "app.services.payment_service.get_payment_provider",
+                return_value=mock_provider,
+            ):
+                svc = PaymentService(db)
+
+            req = CheckoutRequest(
+                items=[OrderItemCreate(product_id=prod.id, quantity=1)],
+                address_id=addr.id,
+                payment_method="prepaid",
+            )
+            snap, resolved_id = svc._resolve_shipping_address(user, req)
+
+            assert snap["latitude"] == pytest.approx(12.9716, rel=1e-6)
+            assert snap["longitude"] == pytest.approx(77.5946, rel=1e-6)
+            assert isinstance(snap["latitude"], float)
+            assert isinstance(snap["longitude"], float)
+
+            order, _ = svc._build_order(
+                user.id, req, snapshot=snap, resolved_address_id=resolved_id
+            )
+
+            # Insert via raw SQL and commit — exercises MySQL JSON column serialization.
+            db.execute(
+                _text(
+                    "INSERT INTO orders "
+                    "(user_id, status, subtotal, tax_amount, discount_amount, "
+                    " shipping_amount, total_amount, currency, payment_method, "
+                    " cod_surcharge_amount, cod_balance, payment_discount_amount, "
+                    " shipping_address, shipping_pincode, "
+                    " shipping_address_id, shipping_address_snapshot) "
+                    "VALUES "
+                    "(:user_id, :status, :subtotal, :tax_amount, :discount_amount, "
+                    " :shipping_amount, :total_amount, :currency, :payment_method, "
+                    " :cod_surcharge_amount, :cod_balance, :payment_discount_amount, "
+                    " :shipping_address, :shipping_pincode, "
+                    " :shipping_address_id, :shipping_address_snapshot)"
+                ),
+                {
+                    "user_id": user.id,
+                    "status": "PENDING",
+                    "subtotal": float(order.subtotal),
+                    "tax_amount": float(order.tax_amount),
+                    "discount_amount": float(order.discount_amount),
+                    "shipping_amount": float(order.shipping_amount),
+                    "total_amount": float(order.total_amount),
+                    "currency": "INR",
+                    "payment_method": "prepaid",
+                    "cod_surcharge_amount": 0,
+                    "cod_balance": 0,
+                    "payment_discount_amount": 0,
+                    "shipping_address": order.shipping_address,
+                    "shipping_pincode": order.shipping_pincode,
+                    "shipping_address_id": addr.id,
+                    "shipping_address_snapshot": _json.dumps(snap),
+                },
+            )
+            db.commit()
+
+            order_id = db.execute(
+                _text(
+                    "SELECT id FROM orders WHERE user_id = :uid "
+                    "ORDER BY id DESC LIMIT 1"
+                ),
+                {"uid": user.id},
+            ).scalar_one()
+            order_ids.append(order_id)
+
+            # Re-read the snapshot from the DB and check it has coords.
+            row = db.execute(
+                _text(
+                    "SELECT shipping_address_snapshot FROM orders WHERE id = :id"
+                ),
+                {"id": order_id},
+            ).mappings().one()
+
+            stored_snap = _json.loads(row["shipping_address_snapshot"])
+            assert stored_snap["latitude"] == pytest.approx(12.9716, rel=1e-6)
+            assert stored_snap["longitude"] == pytest.approx(77.5946, rel=1e-6)
+        finally:
+            # Close the test session before cleanup to release any locks.
+            db.close()
+            with _SL() as s:
+                if order_ids:
+                    s.execute(
+                        _text("DELETE FROM order_items WHERE order_id IN :ids"),
+                        {"ids": tuple(order_ids)},
+                    )
+                    s.execute(
+                        _text("DELETE FROM orders WHERE id IN :ids"),
+                        {"ids": tuple(order_ids)},
+                    )
+                if product_ids:
+                    s.execute(
+                        _text("DELETE FROM products WHERE id IN :ids"),
+                        {"ids": tuple(product_ids)},
+                    )
+                s.commit()
+            _cleanup(user_ids)

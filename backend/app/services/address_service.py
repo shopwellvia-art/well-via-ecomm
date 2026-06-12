@@ -49,6 +49,13 @@ def snapshot_of(addr: Union[Address, "AddressCreate"]) -> dict:
     else:
         label_str = "home"
 
+    # Coordinates: cast to plain float() when present — ORM rows may carry a
+    # Decimal-like type from MySQL DOUBLE; json.dumps chokes on Decimal but is
+    # safe with float.  getattr with None default handles AddressCreate payloads
+    # that don't have coordinates set.
+    raw_lat = getattr(addr, "latitude", None)
+    raw_lng = getattr(addr, "longitude", None)
+
     return {
         "full_name": addr.full_name,
         "phone": addr.phone,
@@ -60,6 +67,8 @@ def snapshot_of(addr: Union[Address, "AddressCreate"]) -> dict:
         "pincode": addr.pincode,
         "country": getattr(addr, "country", "IN") or "IN",
         "label": label_str,
+        "latitude": float(raw_lat) if raw_lat is not None else None,
+        "longitude": float(raw_lng) if raw_lng is not None else None,
     }
 
 
@@ -188,6 +197,8 @@ class AddressService:
             country=data.country,
             label=data.label,
             is_default=force_default or data.is_default,
+            latitude=data.latitude,
+            longitude=data.longitude,
         )
         self.repo.add(addr)
         self.db.commit()
@@ -218,6 +229,11 @@ class AddressService:
             addr.country = data.country
         if data.label is not None:
             addr.label = data.label
+
+        if data.latitude is not None:
+            addr.latitude = data.latitude
+        if data.longitude is not None:
+            addr.longitude = data.longitude
 
         if data.is_default is True and not addr.is_default:
             # Becoming the default — clear others first.

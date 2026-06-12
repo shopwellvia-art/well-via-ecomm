@@ -67,6 +67,17 @@ class Address(Base, IDMixin, TimestampMixin):
         sa.String(2), nullable=False, default="IN", server_default=sa.text("'IN'")
     )
 
+    # ---- Map / geolocation coordinates ----
+    # Set only when the address was placed via the map picker or the browser
+    # geolocation API.  Nullable — the vast majority of addresses are entered
+    # manually and will never have coordinates.  Nothing reads these for
+    # fulfilment (pincode drives shipping zone lookup); they flow into order
+    # snapshots as plain floats for display / analytics use only.
+    # Double (MySQL DOUBLE, 8-byte IEEE 754) is required for GPS precision;
+    # sa.Float maps to MySQL FLOAT (4-byte) and loses ~5 m of accuracy.
+    latitude: Mapped[float | None] = mapped_column(sa.Double(), nullable=True)
+    longitude: Mapped[float | None] = mapped_column(sa.Double(), nullable=True)
+
     # ---- Classification ----
     label: Mapped[AddressLabel] = mapped_column(
         sa.Enum(AddressLabel),

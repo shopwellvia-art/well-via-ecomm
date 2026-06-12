@@ -59,7 +59,13 @@ export function useCurrentLocation() {
   return useMutation({
     mutationFn: () =>
       getDevicePosition().then((coords) =>
-        addressApi.reverseGeocode(coords.latitude, coords.longitude),
+        addressApi
+          .reverseGeocode(coords.latitude, coords.longitude)
+          .then((geocodeResult) => ({
+            ...geocodeResult,
+            lat: coords.latitude,
+            lng: coords.longitude,
+          })),
       ),
     retry: false,
   });
