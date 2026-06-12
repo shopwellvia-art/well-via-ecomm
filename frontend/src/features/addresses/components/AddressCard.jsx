@@ -3,10 +3,11 @@ import { Button } from '@/components/ui/Button.jsx';
 import { Badge } from '@/components/ui/Badge.jsx';
 import { cn } from '@/lib/utils.js';
 
+// Keys match the API's lowercase AddressLabel values ("home"/"work"/"other").
 const LABEL_META = {
-  HOME:  { icon: Home,      tone: 'accent',   iconBg: 'bg-accent/12 text-accent'          },
-  WORK:  { icon: Briefcase, tone: 'info',      iconBg: 'bg-info/12 text-info'              },
-  OTHER: { icon: MapPin,    tone: 'neutral',   iconBg: 'bg-fill-strong text-ink-secondary' },
+  home:  { icon: Home,      tone: 'accent',   iconBg: 'bg-accent/12 text-accent'          },
+  work:  { icon: Briefcase, tone: 'info',      iconBg: 'bg-info/12 text-info'              },
+  other: { icon: MapPin,    tone: 'neutral',   iconBg: 'bg-fill-strong text-ink-secondary' },
 };
 
 /**
@@ -30,9 +31,10 @@ export default function AddressCard({
   selected = false,
   deleting = false,
 }) {
-  const meta = LABEL_META[address.label] || LABEL_META.OTHER;
+  const labelKey = String(address.label || 'other').toLowerCase();
+  const meta = LABEL_META[labelKey] || LABEL_META.other;
   const Icon = meta.icon;
-  const labelText = address.label.charAt(0) + address.label.slice(1).toLowerCase();
+  const labelText = labelKey.charAt(0).toUpperCase() + labelKey.slice(1);
 
   return (
     <div

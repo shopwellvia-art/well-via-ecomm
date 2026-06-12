@@ -40,6 +40,13 @@ class AddressCreate(BaseModel):
             raise ValueError("Phone number is required")
         return result
 
+    @field_validator("label", mode="before")
+    @classmethod
+    def normalize_label(cls, v):
+        # Accept "HOME"/"Home"/"home" alike — the SPA historically sent the
+        # enum *name* while AddressLabel validates by *value* (lowercase).
+        return v.lower() if isinstance(v, str) else v
+
 
 class AddressUpdate(BaseModel):
     """Same fields as AddressCreate but all optional; None means 'unchanged'."""
@@ -65,6 +72,11 @@ class AddressUpdate(BaseModel):
     @classmethod
     def validate_phone(cls, v: str | None) -> str | None:
         return normalize_phone(v)
+
+    @field_validator("label", mode="before")
+    @classmethod
+    def normalize_label(cls, v):
+        return v.lower() if isinstance(v, str) else v
 
 
 class AddressRead(BaseModel):

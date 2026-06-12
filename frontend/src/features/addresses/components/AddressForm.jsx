@@ -5,12 +5,14 @@ import { Button } from '@/components/ui/Button.jsx';
 import { cn } from '@/lib/utils.js';
 import { usePincodeLookup } from '../hooks.js';
 
-const LABELS = ['HOME', 'WORK', 'OTHER'];
+// API label values are lowercase ("home"/"work"/"other") — AddressLabel is a
+// str-enum validated by value, so the payload must use these exact strings.
+const LABELS = ['home', 'work', 'other'];
 
 const LABEL_META = {
-  HOME:  { icon: Home,      label: 'Home'  },
-  WORK:  { icon: Briefcase, label: 'Work'  },
-  OTHER: { icon: MapPin,    label: 'Other' },
+  home:  { icon: Home,      label: 'Home'  },
+  work:  { icon: Briefcase, label: 'Work'  },
+  other: { icon: MapPin,    label: 'Other' },
 };
 
 const EMPTY = {
@@ -23,7 +25,7 @@ const EMPTY = {
   state: '',
   pincode: '',
   country: 'IN',
-  label: 'HOME',
+  label: 'home',
   is_default: false,
 };
 
@@ -67,7 +69,12 @@ export default function AddressForm({
   busy = false,
   showSetDefault = true,
 }) {
-  const [values, setValues] = useState(() => ({ ...EMPTY, ...initialValues }));
+  const [values, setValues] = useState(() => {
+    const v = { ...EMPTY, ...initialValues };
+    // Tolerate legacy uppercase labels ("HOME") from older saved drafts.
+    v.label = String(v.label || 'home').toLowerCase();
+    return v;
+  });
   const [errors, setErrors] = useState({});
   // Track whether the user has manually changed city/state so autofill won't
   // clobber their edits.
