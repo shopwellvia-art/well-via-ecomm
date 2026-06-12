@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
-import { Home, Briefcase, MapPin, LocateFixed, Loader2 } from 'lucide-react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { Home, Briefcase, MapPin, LocateFixed, Loader2, MapPinned } from 'lucide-react';
 import { Input } from '@/components/ui/Input.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { cn } from '@/lib/utils.js';
 import { usePincodeLookup, useCurrentLocation, friendlyGeoError } from '../hooks.js';
+
+// Lazy-load the map picker so the ~150 KB leaflet chunk is only fetched when opened.
+const MapAddressPicker = lazy(() => import('./MapAddressPicker.jsx'));
 
 // API label values are lowercase ("home"/"work"/"other") — AddressLabel is a
 // str-enum validated by value, so the payload must use these exact strings.
@@ -77,6 +80,7 @@ export default function AddressForm({
   });
   const [errors, setErrors] = useState({});
   const [geoError, setGeoError] = useState(null);
+  const [mapOpen, setMapOpen] = useState(false);
   const currentLocation = useCurrentLocation();
   // Track whether the user has manually changed city/state so autofill won't
   // clobber their edits.
@@ -149,6 +153,35 @@ export default function AddressForm({
         setGeoError(friendlyGeoError(err));
       },
     });
+  }
+
+  function handleMapSelect({ pincode, city, state, area, road }) {
+    setValues((prev) => {
+      const next = {
+        ...prev,
+        pincode: pincode || prev.pincode,
+        city:    city    || prev.city,
+        state:   state   || prev.state,
+      };
+      // Seed line2 only when it's currently empty — never overwrite user text.
+      const streetHint = [road, area].filter(Boolean).join(', ');
+      if (!prev.line2.trim() && streetHint) {
+        next.line2 = streetHint;
+      }
+      return next;
+    });
+    // Reset edit-guards so pincode lookup can refine, same as geolocate fill.
+    userEditedCity.current = false;
+    userEditedState.current = false;
+    // Clear any field errors that were just filled.
+    setErrors((prev) => {
+      const n = { ...prev };
+      delete n.pincode;
+      delete n.city;
+      delete n.state;
+      return n;
+    });
+    setGeoError(null);
   }
 
   function handleSubmit(e) {
@@ -259,19 +292,29 @@ export default function AddressForm({
           <p className="text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
             Location
           </p>
-          <button
-            type="button"
-            disabled={currentLocation.isPending}
-            onClick={handleUseLocation}
-            className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent/80 focus-visible:focus-ring disabled:opacity-50"
-          >
-            {currentLocation.isPending ? (
-              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-            ) : (
-              <LocateFixed className="size-3.5" aria-hidden="true" />
-            )}
-            {currentLocation.isPending ? 'Detecting…' : 'Use my current location'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setMapOpen(true)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent/80 focus-visible:focus-ring"
+            >
+              <MapPinned className="size-3.5" aria-hidden="true" />
+              Pick on map
+            </button>
+            <button
+              type="button"
+              disabled={currentLocation.isPending}
+              onClick={handleUseLocation}
+              className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent/80 focus-visible:focus-ring disabled:opacity-50"
+            >
+              {currentLocation.isPending ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <LocateFixed className="size-3.5" aria-hidden="true" />
+              )}
+              {currentLocation.isPending ? 'Detecting…' : 'Use my current location'}
+            </button>
+          </div>
         </div>
         {geoError && (
           <p className="mb-2 text-xs text-danger">{geoError}</p>
@@ -333,6 +376,17 @@ export default function AddressForm({
           {submitLabel}
         </Button>
       </div>
+
+      {/* ── Map picker — lazy-loaded, only mounts when opened ── */}
+      {mapOpen && (
+        <Suspense fallback={null}>
+          <MapAddressPicker
+            open={mapOpen}
+            onClose={() => setMapOpen(false)}
+            onSelect={handleMapSelect}
+          />
+        </Suspense>
+      )}
     </form>
   );
 }

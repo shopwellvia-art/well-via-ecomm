@@ -86,9 +86,15 @@ class ReverseGeocodeResponse(BaseModel):
 
     `found=True` guarantees that pincode matches ^[1-9][0-9]{5}$ and
     countryCode == "IN" in the upstream response.
+
+    Street-level fields (from Nominatim/OSM); may be None even when found=True
+    because OSM coverage is incomplete, especially for rural India.
     """
 
     found: bool
     pincode: str | None = None
     city: str | None = None
     state: str | None = None
+    # Street-level detail from Nominatim — may be None even when found=True.
+    area: str | None = None   # suburb / neighbourhood / quarter / locality
+    road: str | None = None   # road / street name

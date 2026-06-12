@@ -8,7 +8,7 @@ import { useAuthStore } from '@/features/auth/store.js';
  */
 export function friendlyGeoError(error) {
   if (!error) return 'Could not determine your location.';
-  // Custom codes from useCurrentLocation's mutationFn
+  // Custom codes from getDevicePosition
   if (error.code === 'unsupported') {
     return "Your browser doesn't support location detection.";
   }
@@ -26,33 +26,41 @@ export function friendlyGeoError(error) {
 }
 
 /**
+ * Raw promise that resolves to { latitude, longitude } from the browser
+ * Geolocation API. Rejects with a typed error ({ code: string | number })
+ * that `friendlyGeoError` understands.
+ *
+ * Shared by useCurrentLocation (mutation) and MapAddressPicker (direct call).
+ */
+export function getDevicePosition() {
+  return new Promise((resolve, reject) => {
+    if (!('geolocation' in navigator)) {
+      reject({ code: 'unsupported' });
+      return;
+    }
+    if (!window.isSecureContext) {
+      reject({ code: 'insecure' });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      (err) => reject(err),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+    );
+  });
+}
+
+/**
  * User-triggered geolocation → reverse geocode.
  * Use as a mutation (call `.mutate()` / `.mutateAsync()` on user action).
- * Returns the reverseGeocode response: { found, pincode, city, state }.
+ * Returns the reverseGeocode response: { found, pincode, city, state, area, road }.
  */
 export function useCurrentLocation() {
   return useMutation({
     mutationFn: () =>
-      new Promise((resolve, reject) => {
-        if (!('geolocation' in navigator)) {
-          reject({ code: 'unsupported' });
-          return;
-        }
-        if (!window.isSecureContext) {
-          reject({ code: 'insecure' });
-          return;
-        }
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            addressApi
-              .reverseGeocode(pos.coords.latitude, pos.coords.longitude)
-              .then(resolve)
-              .catch(reject);
-          },
-          (err) => reject(err),
-          { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
-        );
-      }),
+      getDevicePosition().then((coords) =>
+        addressApi.reverseGeocode(coords.latitude, coords.longitude),
+      ),
     retry: false,
   });
 }
