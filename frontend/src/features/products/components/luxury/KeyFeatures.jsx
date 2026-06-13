@@ -1,61 +1,48 @@
-import { motion, useReducedMotion } from 'framer-motion';
 import { Sparkles, Zap, ShieldCheck, Package, Award, Leaf } from 'lucide-react';
-import { staggerContainer, fadeUp } from '@/lib/motion.js';
-import { GlassCard, SectionHeading } from './luxe.jsx';
 
 const ICONS = [Sparkles, Zap, ShieldCheck, Package, Award, Leaf];
 
 /**
- * "Highlights" — icon feature cards.
- *
- * There's no structured key-features field on Product, so rather than invent
- * specs (battery life, ANC…) we surface the product's OWN description, split
- * into its strongest short sentences. Honest by construction: every word here
- * was written for this product. The section hides itself when the description
- * yields fewer than two usable highlights.
+ * "Highlights" — flat icon feature cards, Flipkart/Amazon style.
+ * Derives bullets from product's own description; never fabricates data.
+ * Hidden when fewer than 2 usable highlights exist.
  */
 export function KeyFeatures({ product }) {
-  const reduce = useReducedMotion();
   const highlights = extractHighlights(product.description);
   if (highlights.length < 2) return null;
 
   return (
-    <section aria-labelledby="highlights-heading" className="mt-20">
-      <SectionHeading
-        eyebrow="Why you'll love it"
-        title="Highlights"
-        className="items-start"
-      />
-      <p className="sr-only" id="highlights-heading">
-        Product highlights
-      </p>
-
-      <motion.ul
-        className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-        variants={reduce ? undefined : staggerContainer(0.08)}
-        initial={reduce ? false : 'hidden'}
-        whileInView={reduce ? undefined : 'show'}
-        viewport={{ once: true, margin: '-80px' }}
+    <section aria-labelledby="highlights-heading" className="mt-10">
+      <h2
+        id="highlights-heading"
+        className="mb-4 text-base font-semibold text-ink-primary"
       >
+        Product highlights
+      </h2>
+
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {highlights.map((text, i) => {
           const Icon = ICONS[i % ICONS.length];
           return (
-            <motion.li key={i} variants={reduce ? undefined : fadeUp}>
-              <GlassCard className="h-full p-6 transition-transform duration-300 hover:-translate-y-1">
-                <span className="grid size-11 place-items-center rounded-md bg-accent/12 text-accent">
-                  <Icon className="size-5" aria-hidden="true" />
-                </span>
-                <p className="mt-4 text-sm leading-relaxed text-ink-secondary">{text}</p>
-              </GlassCard>
-            </motion.li>
+            <li
+              key={i}
+              className="flex items-start gap-3 rounded-sm border border-line-subtle bg-bg-elevated p-4 transition-shadow hover:shadow-md"
+            >
+              <span
+                className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-sm bg-accent/10 text-accent"
+                aria-hidden="true"
+              >
+                <Icon className="size-4" />
+              </span>
+              <p className="text-xs leading-relaxed text-ink-secondary">{text}</p>
+            </li>
           );
         })}
-      </motion.ul>
+      </ul>
     </section>
   );
 }
 
-/** Split the description into up to four punchy, distinct highlight lines. */
 function extractHighlights(description) {
   const raw = (description || '').trim();
   if (!raw) return [];

@@ -31,13 +31,14 @@ export function Card({
   return (
     <div
       className={cn(
-        'rounded-lg',
+        // Flipkart cards are near-square with a hairline edge and minimal lift.
+        'rounded-sm',
         // Base surface
         glass
           ? 'glass'
           : [
               'border border-line-subtle bg-bg-elevated',
-              flat ? 'shadow-none' : 'shadow-md',
+              flat ? 'shadow-none' : 'shadow-sm',
             ],
         // Interactive variant — lift on hover
         interactive && 'card-interactive',

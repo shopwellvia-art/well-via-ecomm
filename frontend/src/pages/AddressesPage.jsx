@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { MapPin, Plus, X } from 'lucide-react';
 import { Page } from '@/components/layout/Page.jsx';
-import { Card, CardHeader, CardBody } from '@/components/ui/Card.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
@@ -18,6 +16,7 @@ import {
 import AddressCard from '@/features/addresses/components/AddressCard.jsx';
 import AddressForm from '@/features/addresses/components/AddressForm.jsx';
 import { fadeUp, staggerContainer, scaleIn } from '@/lib/motion.js';
+import { motion } from 'framer-motion';
 
 export default function AddressesPage() {
   const user = useAuthStore((s) => s.user);
@@ -35,34 +34,30 @@ export default function AddressesPage() {
   // inline error message
   const [formError, setFormError] = useState(null);
 
-  // Redirect when signed out — mirror AccountSecurityPage pattern.
   if (!user) {
     return (
       <Page>
-        <div className="mb-8 border-b border-line-subtle pb-6">
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-accent/12 text-accent">
-              <MapPin className="size-5" aria-hidden="true" />
-            </span>
-            <div>
-              <h1 className="text-h1 tracking-tight text-ink-primary">My addresses</h1>
-              <p className="mt-0.5 text-sm text-ink-secondary">
-                Saved delivery addresses — pick one at checkout.
-              </p>
-            </div>
+        {/* Page header */}
+        <div className="mb-6 flex items-center gap-3 border-b border-line-subtle pb-5">
+          <span className="grid size-9 place-items-center rounded-sm bg-accent/10 text-accent">
+            <MapPin className="size-5" aria-hidden="true" />
+          </span>
+          <div>
+            <h1 className="text-lg font-semibold text-ink-primary">Manage Addresses</h1>
+            <p className="text-xs text-ink-secondary">
+              Saved delivery addresses — pick one at checkout.
+            </p>
           </div>
         </div>
-        <div className="mt-6">
-          <EmptyState
-            icon={MapPin}
-            title="Sign in first"
-            action={
-              <Link to="/login?next=/account/addresses">
-                <Button size="sm">Sign in</Button>
-              </Link>
-            }
-          />
-        </div>
+        <EmptyState
+          icon={MapPin}
+          title="Sign in first"
+          action={
+            <Link to="/login?next=/account/addresses">
+              <Button size="sm">Sign in</Button>
+            </Link>
+          }
+        />
       </Page>
     );
   }
@@ -114,58 +109,57 @@ export default function AddressesPage() {
 
   return (
     <Page>
-      {/* ── Page header ── */}
-      <div className="mb-8 border-b border-line-subtle pb-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-accent/12 text-accent">
-              <MapPin className="size-5" aria-hidden="true" />
-            </span>
-            <div>
-              <h1 className="text-h1 tracking-tight text-ink-primary">My addresses</h1>
-              <p className="mt-0.5 text-sm text-ink-secondary">
-                Saved delivery addresses — pick one at checkout.
-              </p>
-            </div>
+      {/* ── Page header bar ── */}
+      <div className="mb-5 flex items-center justify-between gap-4 border-b border-line-subtle pb-4">
+        <div className="flex items-center gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-accent/10 text-accent">
+            <MapPin className="size-5" aria-hidden="true" />
+          </span>
+          <div>
+            <h1 className="text-lg font-semibold text-ink-primary">Manage Addresses</h1>
+            <p className="text-xs text-ink-secondary">
+              Saved delivery addresses — pick one at checkout.
+            </p>
           </div>
-          {formMode === null && (
-            <Button
-              size="sm"
-              onClick={() => { setFormMode('create'); setFormError(null); }}
-            >
-              <Plus className="size-4" aria-hidden="true" />
-              Add address
-            </Button>
-          )}
         </div>
+        {formMode === null && (
+          <Button
+            size="sm"
+            onClick={() => { setFormMode('create'); setFormError(null); }}
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            Add new address
+          </Button>
+        )}
       </div>
 
       <motion.div
         variants={staggerContainer(0.06)}
         initial="hidden"
         animate="show"
-        className="max-w-2xl space-y-5"
+        className="max-w-2xl space-y-4"
       >
         {/* ── Add / Edit form ── */}
         {formMode !== null && (
           <motion.div variants={scaleIn}>
-            <Card className="overflow-hidden p-0">
-              <CardHeader
-                title={formMode === 'create' ? 'New address' : 'Edit address'}
-                action={
-                  <button
-                    type="button"
-                    aria-label="Close form"
-                    onClick={() => { setFormMode(null); setFormError(null); }}
-                    className="grid size-8 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
-                  >
-                    <X className="size-4" aria-hidden="true" />
-                  </button>
-                }
-              />
-              <CardBody className="p-5">
+            <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
+              {/* Form header */}
+              <div className="flex items-center justify-between border-b border-line-subtle bg-bg-sunken px-4 py-3">
+                <h2 className="text-sm font-semibold text-ink-primary">
+                  {formMode === 'create' ? 'Add new address' : 'Edit address'}
+                </h2>
+                <button
+                  type="button"
+                  aria-label="Close form"
+                  onClick={() => { setFormMode(null); setFormError(null); }}
+                  className="grid size-7 place-items-center rounded-xs text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+                >
+                  <X className="size-4" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="p-4">
                 {formError && (
-                  <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-danger/30 bg-danger/8 px-3.5 py-3 text-sm text-danger">
+                  <div className="mb-4 flex items-start gap-2.5 rounded-sm border border-danger/30 bg-danger/8 px-3.5 py-3 text-sm text-danger">
                     {formError}
                   </div>
                 )}
@@ -177,8 +171,8 @@ export default function AddressesPage() {
                   busy={createAddress.isPending || updateAddress.isPending}
                   showSetDefault
                 />
-              </CardBody>
-            </Card>
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -186,31 +180,32 @@ export default function AddressesPage() {
         {isLoading ? (
           <motion.div variants={fadeUp} className="flex flex-col gap-3">
             {Array.from({ length: 2 }).map((_, i) => (
-              <Skeleton key={i} className="h-32 rounded-lg" />
+              <Skeleton key={i} className="h-32 rounded-sm" />
             ))}
           </motion.div>
         ) : isError ? (
           <motion.div variants={fadeUp}>
-            <div className="flex items-start gap-2.5 rounded-lg border border-danger/30 bg-danger/8 p-4 text-sm text-danger">
+            <div className="flex items-start gap-2.5 rounded-sm border border-danger/30 bg-danger/8 p-4 text-sm text-danger">
               Could not load your addresses. Please refresh the page.
             </div>
           </motion.div>
         ) : !addresses?.length && formMode === null ? (
           <motion.div variants={fadeUp}>
-            <EmptyState
-              icon={MapPin}
-              title="No saved addresses yet"
-              description="Add a delivery address to make checkout faster."
-              action={
-                <Button
-                  size="sm"
-                  onClick={() => { setFormMode('create'); setFormError(null); }}
-                >
-                  <Plus className="size-4" aria-hidden="true" />
-                  Add address
-                </Button>
-              }
-            />
+            <div className="rounded-sm border border-line-subtle bg-bg-elevated p-8 text-center shadow-sm">
+              <MapPin className="mx-auto mb-3 size-10 text-ink-tertiary" aria-hidden="true" />
+              <p className="text-sm font-medium text-ink-primary">No saved addresses yet</p>
+              <p className="mt-1 text-xs text-ink-secondary">
+                Add a delivery address to make checkout faster.
+              </p>
+              <Button
+                size="sm"
+                className="mt-4"
+                onClick={() => { setFormMode('create'); setFormError(null); }}
+              >
+                <Plus className="size-4" aria-hidden="true" />
+                Add new address
+              </Button>
+            </div>
           </motion.div>
         ) : (
           <motion.div

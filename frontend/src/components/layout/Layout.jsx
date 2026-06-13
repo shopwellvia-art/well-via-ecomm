@@ -24,7 +24,8 @@ export default function Layout() {
   return (
     <div className="flex min-h-full flex-col bg-bg-base">
       <Navbar />
-      <div className="flex-1 pt-16">
+      {/* Clears the fixed header. Mobile is taller — it has a second search row. */}
+      <div className="flex-1 pt-[8.5rem] md:pt-16">
         <Outlet />
       </div>
       <Footer />

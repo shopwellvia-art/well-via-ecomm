@@ -4,13 +4,15 @@ import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 
 /**
- * Primary interactive button.
+ * Primary interactive button — Flipkart/marketplace flat style.
  *
  * Variants:
- *   primary    — filled accent, main CTAs
- *   secondary  — glass/translucent, secondary actions
- *   outline    — accent-bordered, lower emphasis than secondary
- *   ghost      — text-only, tertiary actions and inline links
+ *   primary     — filled Flipkart blue, general primary actions
+ *   cta         — filled orange, the "Buy Now" / "Place Order" action
+ *   cart        — filled amber/yellow, the "Add to Cart" action
+ *   secondary   — white with a hairline border + subtle shadow
+ *   outline     — blue-bordered, lower emphasis
+ *   ghost       — text-only, tertiary actions and inline links
  *   destructive — danger-filled, destructive confirmations
  *
  * Props:
@@ -21,12 +23,10 @@ import { cn } from '@/lib/utils.js';
 const buttonVariants = cva(
   [
     'inline-flex items-center justify-center gap-2 whitespace-nowrap select-none',
-    'font-semibold rounded-sm',
-    // All transitioned properties in one declaration for GPU compositing
-    'transition-[transform,background-color,border-color,box-shadow,opacity,filter]',
-    'duration-200',
+    'font-medium rounded-xs',
+    'transition-[background-color,border-color,box-shadow,opacity,filter] duration-150',
     'focus-visible:focus-ring',
-    'disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed',
+    'disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed',
     // Prevents text-flicker during loading state change
     'relative overflow-hidden',
   ],
@@ -34,19 +34,24 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary: [
-          'bg-accent text-ink-inverse',
-          'hover:bg-accent-hover hover:-translate-y-px hover:shadow-glow-sm',
-          'active:bg-accent-press active:translate-y-0 active:shadow-none',
+          'bg-accent text-ink-inverse shadow-sm',
+          'hover:bg-accent-hover active:bg-accent-press',
+        ],
+        cta: [
+          'bg-cta text-white shadow-sm font-semibold uppercase tracking-wide',
+          'hover:bg-cta-hover active:bg-cta-press',
+        ],
+        cart: [
+          'bg-accent text-white shadow-sm font-semibold',
+          'hover:bg-accent-hover active:bg-accent-press',
         ],
         secondary: [
-          'glass text-ink-primary',
-          'hover:border-line-strong hover:-translate-y-px',
-          'active:translate-y-0',
+          'bg-bg-elevated text-ink-primary border border-line-subtle shadow-sm',
+          'hover:bg-bg-sunken hover:border-line-strong',
         ],
         outline: [
-          'border border-accent/50 text-accent bg-transparent',
-          'hover:bg-accent/8 hover:border-accent hover:-translate-y-px',
-          'active:bg-accent/12 active:translate-y-0',
+          'border border-accent text-accent bg-bg-elevated',
+          'hover:bg-accent/8 active:bg-accent/12',
         ],
         ghost: [
           'text-ink-secondary bg-transparent border-transparent',
@@ -54,9 +59,8 @@ const buttonVariants = cva(
           'active:bg-fill-strong',
         ],
         destructive: [
-          'bg-danger text-white border-transparent',
-          'hover:brightness-110 hover:-translate-y-px hover:shadow-glow-danger',
-          'active:translate-y-0 active:brightness-100 active:shadow-none',
+          'bg-danger text-white border-transparent shadow-sm',
+          'hover:brightness-110 active:brightness-100',
         ],
       },
       size: {

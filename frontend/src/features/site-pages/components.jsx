@@ -9,34 +9,35 @@ import { duration, ease } from '@/lib/motion.js';
  * every page shares one consistent header, prose and section rhythm.
  */
 
-/** Page header: frosted breadcrumb, eyebrow, display title, subtitle, over a
- *  soft accent aura. */
+/**
+ * Page header band: white bar with breadcrumb, eyebrow, title, subtitle.
+ * Flipkart/Amazon style — flat white on grey, blue accent for eyebrow/links,
+ * no glow or gradient backgrounds.
+ */
 export function CompanyHero({ hero = {}, current, children }) {
   const reduce = useReducedMotion();
   return (
-    <header className="relative isolate overflow-hidden">
-      <div
-        aria-hidden="true"
-        className="absolute -top-24 left-1/2 -z-10 size-[520px] -translate-x-1/2 rounded-full bg-accent/12 blur-[140px]"
-      />
-      <Breadcrumbs current={current} />
-      <motion.div
-        initial={reduce ? false : { opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: duration.base, ease: ease.entrance }}
-        className="mt-7 max-w-3xl"
-      >
-        {hero.eyebrow && (
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-            {hero.eyebrow}
-          </p>
-        )}
-        <h1 className="mt-3 text-display text-ink-primary">{hero.title}</h1>
-        {hero.subtitle && (
-          <p className="mt-4 text-lg leading-relaxed text-ink-secondary">{hero.subtitle}</p>
-        )}
-        {children}
-      </motion.div>
+    <header className="border-b border-line-subtle bg-bg-elevated">
+      <div className="mx-auto w-full max-w-content px-6 py-8">
+        <Breadcrumbs current={current} />
+        <motion.div
+          initial={reduce ? false : { opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: duration.base, ease: ease.entrance }}
+          className="mt-4 max-w-3xl"
+        >
+          {hero.eyebrow && (
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+              {hero.eyebrow}
+            </p>
+          )}
+          <h1 className="mt-2 text-h1 font-semibold text-ink-primary">{hero.title}</h1>
+          {hero.subtitle && (
+            <p className="mt-3 text-base leading-relaxed text-ink-secondary">{hero.subtitle}</p>
+          )}
+          {children}
+        </motion.div>
+      </div>
     </header>
   );
 }
@@ -60,13 +61,13 @@ export function Prose({ text, className }) {
 /** Small uppercase section label. */
 export function SectionLabel({ children, className }) {
   return (
-    <h2 className={cn('text-h2 text-ink-primary', className)}>{children}</h2>
+    <h2 className={cn('text-lg font-semibold text-ink-primary', className)}>{children}</h2>
   );
 }
 
 /** A light section wrapper that adds top spacing between major blocks. */
 export function Section({ children, className }) {
-  return <section className={cn('mt-16', className)}>{children}</section>;
+  return <section className={cn('mt-8', className)}>{children}</section>;
 }
 
 /** Shown when an admin has toggled a page off. */
@@ -75,7 +76,7 @@ export function PageDisabled({ title = 'Page unavailable' }) {
     <div className="mx-auto flex min-h-[40vh] max-w-md flex-col items-center justify-center text-center">
       <h1 className="text-h2 text-ink-primary">{title}</h1>
       <p className="mt-2 text-sm text-ink-secondary">
-        This page isn't available right now. Please check back soon.
+        This page isn&apos;t available right now. Please check back soon.
       </p>
     </div>
   );

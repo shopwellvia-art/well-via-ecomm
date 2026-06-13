@@ -110,7 +110,12 @@
       "Bash(awk '{print $NF}')",
       "PowerShell(Get-ChildItem -Path \"D:\\\\ng\\\\simple ecomers\" -Force | Select-Object Name, @{Name=\"Type\"; Expression={if\\($_.PSIsContainer\\){\"Dir\"}else{\"File\"}}})",
       "Bash(docker port *)",
-      "PowerShell(docker compose up *)"
+      "PowerShell(docker compose up *)",
+      "PowerShell(docker restart simpleecomers-backend-1 *)",
+      "PowerShell(docker exec *)",
+      "PowerShell($r = Invoke-WebRequest -Uri http://localhost:8000/health -UseBasicParsing -TimeoutSec 15; Write-Output \"backend health: $\\($r.StatusCode\\)\"; $f = Invoke-WebRequest -Uri http://localhost:5174/cart -UseBasicParsing -TimeoutSec 15; Write-Output \"frontend /cart: $\\($f.StatusCode\\)\")",
+      "PowerShell(try { \\(Invoke-WebRequest -Uri \"http://localhost:5174/\" -UseBasicParsing -TimeoutSec 5\\).StatusCode } catch { \"5174 ERROR: $\\($_.Exception.Message\\)\" }; try { \\(Invoke-WebRequest -Uri \"http://localhost:5173/\" -UseBasicParsing -TimeoutSec 5\\).StatusCode } catch { \"5173 ERROR: $\\($_.Exception.Message\\)\" })",
+      "PowerShell(Start-Sleep -Seconds 3; try { \\(Invoke-WebRequest -Uri \"http://localhost:8000/health\" -UseBasicParsing -TimeoutSec 5\\).Content } catch { \"ERROR: $\\($_.Exception.Message\\)\" }; docker ps --filter \"name=simpleecomers-backend-1\" --format \"{{.Status}}\")"
     ]
   }
 }

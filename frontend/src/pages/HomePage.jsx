@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { ArrowRight, PackageX, TrendingUp, ShieldCheck, Truck, HeartHandshake } from 'lucide-react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { PackageX, Truck, ShieldCheck, HeartHandshake, TrendingUp } from 'lucide-react';
 import Hero from '@/components/marketing/Hero.jsx';
 import CategoryMarquee from '@/components/marketing/CategoryMarquee.jsx';
 import DealsBanner from '@/components/marketing/DealsBanner.jsx';
@@ -13,7 +13,6 @@ import { buttonVariants } from '@/components/ui/Button.jsx';
 import { useProducts } from '@/features/products/hooks.js';
 import { useAddToCart } from '@/features/cart/hooks.js';
 import { cn } from '@/lib/utils.js';
-import { fadeUp, staggerContainer } from '@/lib/motion.js';
 
 /* ── Trust strip data ──────────────────────────────────────────────────────── */
 
@@ -40,134 +39,122 @@ const TRUST_ITEMS = [
   },
 ];
 
-/* ── Trust strip ────────────────────────────────────────────────────────────── */
+/* ── Trust strip — thin white icon+label bar ────────────────────────────────── */
 
 function TrustStrip() {
   return (
     <section
       aria-label="Why shop with us"
-      className="mx-auto mt-16 max-w-content px-4 sm:px-6"
+      className="mx-auto mt-3 max-w-content px-4 sm:px-6"
     >
-      <motion.ul
-        variants={staggerContainer(0.06)}
-        initial="hidden"
-        whileInView="show"
-        viewport={{ once: true, amount: 0.3 }}
-        className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4"
+      <ul
+        className="grid grid-cols-2 divide-x divide-line-subtle overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm sm:grid-cols-4"
         role="list"
       >
         {TRUST_ITEMS.map(({ icon: Icon, title, sub }) => (
-          <motion.li
+          <li
             key={title}
-            variants={fadeUp}
-            className="flex items-center gap-3 rounded-md border border-line-subtle bg-bg-elevated p-4 shadow-sm"
+            className="flex items-center gap-2.5 px-4 py-3"
           >
-            <span className="grid size-10 shrink-0 place-items-center rounded-md bg-accent-soft text-accent">
-              <Icon className="size-5" aria-hidden="true" />
+            <span className="grid size-8 shrink-0 place-items-center rounded-xs bg-accent/10 text-accent">
+              <Icon className="size-4" aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-ink-primary leading-snug">
+              <p className="truncate text-xs font-semibold text-ink-primary leading-snug">
                 {title}
               </p>
-              <p className="truncate text-xs text-ink-tertiary mt-0.5 leading-snug">{sub}</p>
+              <p className="truncate text-[11px] text-ink-tertiary leading-snug">{sub}</p>
             </div>
-          </motion.li>
+          </li>
         ))}
-      </motion.ul>
+      </ul>
     </section>
   );
 }
 
-/* ── Section header ─────────────────────────────────────────────────────────── */
+/* ── Section header — Flipkart-style bold left title + VIEW ALL right ───────── */
 
-function SectionHeader({ heading, sub, viewAllTo, viewAllLabel = 'View all' }) {
+function SectionHeader({ heading, viewAllTo, viewAllLabel = 'VIEW ALL' }) {
   return (
-    <motion.header
-      className="flex items-end justify-between gap-4"
-      variants={fadeUp}
-      initial="hidden"
-      whileInView="show"
-      viewport={{ once: true, amount: 0.5 }}
-    >
-      <div>
-        <h2 className="text-h2 tracking-tight text-ink-primary">{heading}</h2>
-        {sub && (
-          <p className="mt-1 text-sm text-ink-secondary">{sub}</p>
-        )}
-      </div>
+    <div className="flex items-center justify-between border-b border-line-subtle px-5 py-3">
+      <h2 className="text-sm font-bold text-ink-primary">{heading}</h2>
       {viewAllTo && (
         <Link
           to={viewAllTo}
-          className={cn(
-            buttonVariants({ variant: 'ghost', size: 'sm' }),
-            'shrink-0 gap-1',
-          )}
+          className="text-xs font-semibold text-accent transition-colors hover:text-accent-hover focus-visible:focus-ring"
         >
-          {viewAllLabel}
-          <ArrowRight className="size-4" aria-hidden="true" />
+          {viewAllLabel} ›
         </Link>
       )}
-    </motion.header>
+    </div>
   );
 }
 
 /* ── Page ────────────────────────────────────────────────────────────────────── */
 
 export default function HomePage() {
+  const reduce = useReducedMotion();
   const { data, isLoading } = useProducts({ page: 1, page_size: 8 });
   const addToCart = useAddToCart();
   const products = data?.items ?? [];
 
   return (
     <Page bleed>
-      {/* A) Hero carousel — product showcase + mega-sale countdown */}
+      {/* A) Hero carousel — full-width banner with dots + arrows */}
       <Hero />
 
-      {/* B) Trust strip — beneath the fold on mobile, immediately after hero */}
-      <TrustStrip />
-
-      {/* C) Category marquee — "Curated for You" scrolling carousel */}
+      {/* B) Category strip — circular icons + labels */}
       <CategoryMarquee />
 
-      {/* D) Deals banner — biggest sale of the season */}
+      {/* C) Trust strip — thin icon+label bar */}
+      <TrustStrip />
+
+      {/* D) Deals of the Day — orange header + horizontal product rail */}
       <DealsBanner />
 
       {/* E) Bestsellers rail */}
       <BestsellersSection />
 
       {/* F) Featured products grid */}
-      <section className="mx-auto mt-20 max-w-content px-4 sm:px-6">
-        <SectionHeader
-          heading="Featured"
-          sub="Hand-picked for you this week."
-          viewAllTo="/products"
-          viewAllLabel="View all"
-        />
+      <section className="mx-auto mt-3 max-w-content px-4 sm:px-6">
+        <motion.div
+          initial={reduce ? false : { opacity: 0, y: 16 }}
+          whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.1 }}
+          transition={{ duration: 0.4 }}
+          className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm"
+        >
+          <SectionHeader
+            heading="Featured Products"
+            viewAllTo="/products"
+            viewAllLabel="VIEW ALL"
+          />
 
-        <div className="mt-8">
-          {!isLoading && products.length === 0 ? (
-            <EmptyState
-              icon={PackageX}
-              title="No products yet"
-              description="The catalog is being stocked. Check back shortly."
-              size="sm"
-              action={
-                <Link to="/products" className={cn(buttonVariants({ size: 'sm' }))}>
-                  Browse the shop
-                </Link>
-              }
-            />
-          ) : (
-            <ProductGrid
-              products={products}
-              loading={isLoading}
-              onQuickAdd={(p) => addToCart.mutate({ productId: p.id })}
-            />
-          )}
-        </div>
+          <div className="px-4 pb-5 pt-4">
+            {!isLoading && products.length === 0 ? (
+              <EmptyState
+                icon={PackageX}
+                title="No products yet"
+                description="The catalog is being stocked. Check back shortly."
+                size="sm"
+                action={
+                  <Link to="/products" className={cn(buttonVariants({ variant: 'primary', size: 'sm' }))}>
+                    Browse the shop
+                  </Link>
+                }
+              />
+            ) : (
+              <ProductGrid
+                products={products}
+                loading={isLoading}
+                onQuickAdd={(p) => addToCart.mutate({ productId: p.id })}
+              />
+            )}
+          </div>
+        </motion.div>
       </section>
 
-      {/* G) Join the community — newsletter band */}
+      {/* G) Newsletter band */}
       <CommunityBand />
     </Page>
   );

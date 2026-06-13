@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import {
   ShoppingBag,
   ArrowRight,
@@ -36,7 +35,6 @@ import { useAuthStore } from '@/features/auth/store.js';
 import FreeShippingNudge from '@/features/shipping/components/FreeShippingNudge.jsx';
 import { useRateQuote, useServiceability } from '@/features/shipping/hooks.js';
 import { formatPrice } from '@/lib/utils.js';
-import { fadeUp, staggerContainer } from '@/lib/motion.js';
 
 const LABEL_TEXT = { home: 'Home', work: 'Work', other: 'Other' };
 
@@ -64,9 +62,9 @@ function CouponBlock({ appliedCode, discount }) {
 
   if (appliedCode) {
     return (
-      <div className="flex items-center justify-between rounded-lg border border-success/25 bg-success/8 px-3 py-2.5 text-sm shadow-glow-success">
+      <div className="flex items-center justify-between rounded-sm border border-success/25 bg-success/8 px-3 py-2.5 text-sm">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="grid size-7 shrink-0 place-items-center rounded-md bg-success/12 text-success">
+          <span className="grid size-7 shrink-0 place-items-center rounded-sm bg-success/12 text-success">
             <TicketPercent className="size-3.5" aria-hidden="true" />
           </span>
           <div className="min-w-0">
@@ -81,7 +79,7 @@ function CouponBlock({ appliedCode, discount }) {
           aria-label={`Remove coupon ${appliedCode}`}
           disabled={remove.isPending}
           onClick={() => remove.mutate()}
-          className="grid size-8 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring disabled:opacity-50"
+          className="grid size-8 place-items-center rounded-sm text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring disabled:opacity-50"
         >
           <X className="size-4" />
         </button>
@@ -181,7 +179,7 @@ function DeliverToBar({ address, detectedPincode, serviceability, onChange, onDe
             <span className="font-semibold text-ink-primary">
               {address.full_name}, <span className="nums">{address.pincode}</span>
             </span>
-            <span className="rounded-sm bg-fill px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">
+            <span className="rounded-xs bg-fill px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">
               {labelText}
             </span>
           </p>
@@ -205,19 +203,14 @@ function DeliverToBar({ address, detectedPincode, serviceability, onChange, onDe
 }
 
 /** Bottom "Place Order" bar — totals on the left, CTA on the right. */
-function PlaceOrderBar({ mrpTotal, total, disabled, onPlaceOrder, className = '' }) {
+function PlaceOrderBar({ total, disabled, onPlaceOrder, className = '' }) {
   return (
     <div className={`flex items-center justify-between gap-4 ${className}`}>
       <div className="flex items-baseline gap-2">
-        {mrpTotal > total && (
-          <span className="text-xs text-ink-tertiary line-through nums">
-            {formatPrice(mrpTotal)}
-          </span>
-        )}
         <span className="text-lg font-bold text-ink-primary nums">{formatPrice(total)}</span>
         <Info className="size-3.5 text-ink-tertiary" aria-hidden="true" />
       </div>
-      <Button size="lg" className="accent-halo px-8" disabled={disabled} onClick={onPlaceOrder}>
+      <Button variant="cta" size="lg" className="px-8" disabled={disabled} onClick={onPlaceOrder}>
         Place Order
       </Button>
     </div>
@@ -338,7 +331,7 @@ export default function CartPage() {
   if (!user || status === 401) {
     return (
       <Page>
-        <h1 className="text-h1 text-ink-primary tracking-tight">Your cart</h1>
+        <h1 className="text-xl font-semibold text-ink-primary">Your cart</h1>
         <div className="mt-8">
           <EmptyState
             icon={Lock}
@@ -358,7 +351,7 @@ export default function CartPage() {
   if (isError) {
     return (
       <Page>
-        <h1 className="text-h1 text-ink-primary tracking-tight">Your cart</h1>
+        <h1 className="text-xl font-semibold text-ink-primary">Your cart</h1>
         <div className="mt-8">
           <EmptyState
             icon={AlertTriangle}
@@ -378,26 +371,28 @@ export default function CartPage() {
 
   return (
     <Page>
-      <Breadcrumbs current="Cart" className="mb-5" />
+      <Breadcrumbs current="Cart" className="mb-4" />
 
       <div className="flex items-baseline justify-between gap-3">
-        <h1 className="text-h1 text-ink-primary tracking-tight">Your cart</h1>
-        {!isLoading && items.length > 0 && (
-          <p className="text-sm text-ink-tertiary nums">
-            {items.length} item{items.length === 1 ? '' : 's'}
-          </p>
-        )}
+        <h1 className="text-xl font-semibold text-ink-primary">
+          My Cart
+          {!isLoading && items.length > 0 && (
+            <span className="ml-2 text-sm font-normal text-ink-tertiary nums">
+              ({items.length} item{items.length === 1 ? '' : 's'})
+            </span>
+          )}
+        </h1>
       </div>
 
       {isLoading ? (
-        <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_340px]">
+        <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_340px]">
           <div className="flex flex-col gap-3">
-            <Skeleton className="h-14 rounded-lg" />
+            <Skeleton className="h-14 rounded-sm" />
             {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-36 rounded-lg" />
+              <Skeleton key={i} className="h-36 rounded-sm" />
             ))}
           </div>
-          <Skeleton className="h-72 rounded-lg" />
+          <Skeleton className="h-72 rounded-sm" />
         </div>
       ) : items.length === 0 ? (
         <div className="mt-8">
@@ -416,7 +411,7 @@ export default function CartPage() {
           />
         </div>
       ) : (
-        <div className="mt-8 grid items-start gap-6 lg:grid-cols-[1fr_340px]">
+        <div className="mt-6 grid items-start gap-4 lg:grid-cols-[1fr_340px]">
           {/* ── Left column: deliver-to bar + item list ── */}
           <div className="flex flex-col gap-3">
             <DeliverToBar
@@ -430,12 +425,7 @@ export default function CartPage() {
             />
 
             <Card className="overflow-hidden p-0">
-              <motion.ul
-                variants={staggerContainer(0.06)}
-                initial="hidden"
-                animate="show"
-                className="divide-y divide-line-subtle"
-              >
+              <ul className="divide-y divide-line-subtle">
                 {items.map((item) => {
                   const mrp =
                     item.compare_at_price &&
@@ -455,13 +445,13 @@ export default function CartPage() {
                     updateQty.isPending;
 
                   return (
-                    <motion.li key={item.product_id} variants={fadeUp} className="p-4 sm:p-5">
+                    <li key={item.product_id} className="p-4 sm:p-5">
                       <div className="flex gap-4">
                         {/* Thumbnail + qty dropdown below it (Flipkart layout) */}
                         <div className="flex w-[88px] shrink-0 flex-col items-center gap-2.5 sm:w-[104px]">
                           <Link
                             to={`/products/${item.product_id}`}
-                            className="grid aspect-square w-full place-items-center overflow-hidden rounded-lg border border-line-subtle bg-gradient-to-br from-accent/20 via-bg-elevated to-bg-sunken text-xl font-semibold text-ink-primary/25"
+                            className="grid aspect-square w-full place-items-center overflow-hidden rounded-sm border border-line-subtle bg-bg-sunken text-xl font-semibold text-ink-tertiary"
                           >
                             {item.image_url ? (
                               <img
@@ -486,7 +476,7 @@ export default function CartPage() {
                                 })
                               }
                               aria-label={`Quantity for ${item.name}`}
-                              className="rounded-md border border-line-subtle bg-bg-elevated px-1.5 py-1 text-xs font-semibold text-ink-primary nums transition-colors hover:border-line-strong focus-visible:focus-ring disabled:opacity-50"
+                              className="rounded-xs border border-line-subtle bg-bg-elevated px-1.5 py-1 text-xs font-semibold text-ink-primary nums transition-colors hover:border-line-strong focus-visible:focus-ring disabled:opacity-50"
                             >
                               {qtyOptions.map((n) => (
                                 <option key={n} value={n}>
@@ -507,19 +497,19 @@ export default function CartPage() {
                           </Link>
 
                           <div className="mt-2 flex flex-wrap items-baseline gap-2">
-                            {savePct > 0 && (
-                              <span className="text-sm font-bold text-success">
-                                ↓{savePct}%
-                              </span>
-                            )}
+                            <span className="text-lg font-bold text-ink-primary nums">
+                              {formatPrice(item.unit_price)}
+                            </span>
                             {mrp && (
                               <span className="text-sm text-ink-tertiary line-through nums">
                                 {formatPrice(mrp)}
                               </span>
                             )}
-                            <span className="text-lg font-bold text-ink-primary nums">
-                              {formatPrice(item.unit_price)}
-                            </span>
+                            {savePct > 0 && (
+                              <span className="text-sm font-bold text-success">
+                                {savePct}% off
+                              </span>
+                            )}
                           </div>
 
                           {Number(item.line_tax) > 0 && (
@@ -531,14 +521,15 @@ export default function CartPage() {
 
                           {deliveryBy && (
                             <p className="mt-1.5 text-xs text-ink-secondary">
-                              Delivery by <span className="font-semibold">{deliveryBy}</span>
+                              Delivery by{' '}
+                              <span className="font-semibold text-success">{deliveryBy}</span>
                             </p>
                           )}
                         </div>
                       </div>
 
                       {/* Action bar: Save for later | Remove | Buy this now */}
-                      <div className="mt-4 grid grid-cols-3 divide-x divide-line-subtle rounded-lg border border-line-subtle bg-bg-sunken text-center">
+                      <div className="mt-4 grid grid-cols-3 divide-x divide-line-subtle rounded-xs border border-line-subtle bg-bg-sunken text-center">
                         <button
                           type="button"
                           disabled={busy}
@@ -569,17 +560,18 @@ export default function CartPage() {
                           Buy this now
                         </button>
                       </div>
-                    </motion.li>
+                    </li>
                   );
                 })}
-              </motion.ul>
+              </ul>
             </Card>
           </div>
 
           {/* ── Right rail: price details ── */}
           <div className="flex flex-col gap-3 lg:sticky lg:top-24">
+            {/* Price Details card */}
             <Card className="p-0">
-              <h2 className="border-b border-line-subtle px-5 py-3.5 text-xs font-bold uppercase tracking-widest text-ink-tertiary">
+              <h2 className="border-b border-line-subtle px-5 py-3 text-[11px] font-bold uppercase tracking-widest text-ink-tertiary">
                 Price Details
               </h2>
 
@@ -645,49 +637,52 @@ export default function CartPage() {
                 </dl>
 
                 <div className="mt-4 flex items-baseline justify-between border-t border-dashed border-line-strong pt-4">
-                  <span className="text-sm font-semibold text-ink-primary">Total Amount</span>
-                  <span className="text-h3 font-bold text-ink-primary nums">
+                  <span className="text-sm font-bold text-ink-primary">Total Amount</span>
+                  <span className="text-lg font-bold text-ink-primary nums">
                     {formatPrice(total)}
                   </span>
                 </div>
 
                 {totalSavings > 0 && (
-                  <p className="mt-3 rounded-md bg-success/12 px-3 py-2 text-center text-xs font-semibold text-success">
-                    You&apos;ll save {formatPrice(totalSavings)} on this order!
+                  <p className="mt-3 rounded-sm bg-success/10 px-3 py-2 text-center text-xs font-semibold text-success">
+                    You will save {formatPrice(totalSavings)} on this order
                   </p>
                 )}
               </div>
 
-              <p className="flex items-start gap-2.5 border-t border-line-subtle px-5 py-3.5 text-xs text-ink-tertiary">
+              <p className="flex items-start gap-2.5 border-t border-line-subtle px-5 py-3 text-xs text-ink-tertiary">
                 <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                 Safe and secure payments. Easy returns. 100% authentic products.
               </p>
             </Card>
 
+            {/* Coupon */}
             <Card className="p-4">
               <CouponBlock appliedCode={couponCode} discount={discountAmount} />
             </Card>
 
-            {/* Desktop place-order bar */}
-            <Card className="hidden p-4 lg:block">
-              <PlaceOrderBar
-                mrpTotal={mrpTotal + taxAmount + shippingAmount}
-                total={total}
+            {/* Desktop place-order CTA */}
+            <div className="hidden lg:block">
+              <Button
+                variant="cta"
+                block
+                size="lg"
                 disabled={serviceable === false}
-                onPlaceOrder={placeOrder}
-              />
+                onClick={placeOrder}
+              >
+                PLACE ORDER
+              </Button>
               {serviceable === false && (
                 <p className="mt-2 text-center text-xs text-danger">
                   Delivery isn&apos;t available at the selected address.
                 </p>
               )}
-            </Card>
+            </div>
           </div>
 
           {/* Mobile sticky place-order bar */}
-          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line-subtle bg-bg-elevated px-4 py-3 shadow-xl lg:hidden">
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line-subtle bg-bg-elevated px-4 py-3 shadow-md lg:hidden">
             <PlaceOrderBar
-              mrpTotal={mrpTotal + taxAmount + shippingAmount}
               total={total}
               disabled={serviceable === false}
               onPlaceOrder={placeOrder}

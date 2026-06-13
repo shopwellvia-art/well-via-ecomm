@@ -13,13 +13,13 @@ import {
 /**
  * Reusable heart button. Two visual variants:
  *
- * - "overlay" — circular, glassy, semi-transparent. Sits over product imagery
- *   (e.g. top-right of a ProductCard). Stops link navigation on click.
+ * - "overlay" — circular white button, sits over product imagery. Red when active.
+ *   Stops link navigation on click.
  *
  * - "inline" — flat row with a label, used inside panels like BuyBox.
  *
  * Signed-out users are bounced to /login with a `next` param back to the page
- * they came from. We never silently fail.
+ * they came from.
  */
 export function WishlistButton({
   productId,
@@ -61,7 +61,7 @@ export function WishlistButton({
         disabled={pending}
         whileTap={reducedMotion ? undefined : buttonPress}
         className={cn(
-          'inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border text-sm font-medium transition-colors',
+          'inline-flex h-11 w-full items-center justify-center gap-2 rounded-xs border text-sm font-medium transition-colors',
           'focus-visible:focus-ring',
           'disabled:opacity-50 disabled:pointer-events-none',
           isSaved
@@ -85,7 +85,7 @@ export function WishlistButton({
     );
   }
 
-  // overlay — circular glass button
+  // overlay — solid white circular button; red fill when active
   const sizeClass = size === 'sm' ? 'size-8' : 'size-9';
   const iconSize = size === 'sm' ? 'size-4' : 'size-[18px]';
 
@@ -99,13 +99,14 @@ export function WishlistButton({
       whileTap={reducedMotion ? undefined : buttonPress}
       className={cn(
         'grid place-items-center rounded-full',
-        'bg-bg-elevated/85 backdrop-blur border border-line-subtle shadow-sm',
-        'transition-[background-color,color,border-color] duration-150',
+        // Solid white — visible over product images without needing backdrop blur
+        'bg-white border border-line-subtle shadow-sm',
+        'transition-[color,border-color,background-color] duration-150',
         'focus-visible:focus-ring',
         'disabled:opacity-60 disabled:pointer-events-none',
         isSaved
-          ? 'border-danger/30 text-danger hover:bg-danger/12'
-          : 'text-ink-secondary hover:bg-fill hover:text-ink-primary',
+          ? 'text-danger hover:bg-danger/8'
+          : 'text-ink-secondary hover:text-danger hover:border-danger/30',
         sizeClass,
         className,
       )}

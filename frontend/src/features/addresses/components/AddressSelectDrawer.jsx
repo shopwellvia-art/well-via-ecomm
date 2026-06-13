@@ -149,9 +149,9 @@ export default function AddressSelectDrawer({ open, onClose, selectedId, onSelec
                               onClose?.();
                             }}
                             className={cn(
-                              'w-full rounded-lg border p-3.5 text-left transition-all duration-150',
+                              'w-full rounded-sm border p-3.5 text-left transition-colors duration-150',
                               isSelected
-                                ? 'border-accent bg-accent/12 shadow-glow-sm'
+                                ? 'border-accent bg-accent/8'
                                 : 'border-line-subtle bg-bg-elevated hover:border-line-strong hover:shadow-sm',
                             )}
                           >

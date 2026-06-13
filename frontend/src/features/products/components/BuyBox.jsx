@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import {
-  Minus, Plus, ShoppingBag, Zap, Lock, Truck,
+  Minus, Plus, ShoppingCart, Zap, Lock, Truck,
   RotateCcw, ShieldCheck, Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button.jsx';
@@ -10,17 +9,11 @@ import { useAddToCart } from '@/features/cart/hooks.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { formatPrice } from '@/lib/utils.js';
 import { WishlistButton } from '@/features/wishlist/WishlistButton.jsx';
-import { attentionPulse, tapPress } from '@/lib/motion.js';
 
 /**
- * Right-rail buy box — the "convert" panel.
- *
- * Two actions stacked:
- *   1. Add to Cart  — adds to the persistent cart, stays on page.
- *   2. Buy Now      — skips the cart and jumps to /checkout.
- *
- * Uses design-system tokens throughout (no hardcoded hex). The warm CTA
- * colours come from warning/accent tokens so both themes stay correct.
+ * Right-rail buy box — flat Flipkart/Amazon style.
+ * ADD TO CART uses bg-cart (amber), BUY NOW uses bg-cta (orange).
+ * All logic unchanged; only presentation restyled.
  */
 export function BuyBox({ product }) {
   const navigate = useNavigate();
@@ -57,135 +50,149 @@ export function BuyBox({ product }) {
   return (
     <aside
       aria-label="Purchase options"
-      className="rounded-lg border border-line-subtle bg-bg-elevated p-5 shadow-md lg:sticky lg:top-24"
+      className="rounded-sm border border-line-subtle bg-bg-elevated shadow-sm lg:sticky lg:top-20"
     >
       {/* Price block */}
-      <div className="flex items-baseline gap-2">
-        <p className="nums text-h2 font-semibold text-ink-primary">
-          {formatPrice(product.price)}
-        </p>
-        {product.compare_at_price && Number(product.compare_at_price) > Number(product.price) && (
-          <s className="nums text-sm text-ink-tertiary" aria-label={`Was ${formatPrice(product.compare_at_price)}`}>
-            {formatPrice(product.compare_at_price)}
-          </s>
-        )}
-      </div>
-      <p className="mt-0.5 text-xs text-ink-tertiary">Inclusive of all taxes.</p>
-
-      {/* Delivery estimate */}
-      <div className="mt-4 space-y-1.5 rounded-sm bg-bg-sunken px-3 py-2.5 text-sm">
-        <p>
-          <span className="text-ink-tertiary">Free delivery </span>
-          <strong className="text-ink-primary">{deliveryDates.free}</strong>
-        </p>
-        <p>
-          <span className="text-ink-tertiary">Or fastest by </span>
-          <strong className="text-accent">{deliveryDates.fast}</strong>
-        </p>
-      </div>
-
-      {/* Stock status */}
-      <p
-        className={[
-          'mt-4 text-sm font-semibold',
-          outOfStock ? 'text-danger' : product.stock <= 5 ? 'text-warning' : 'text-success',
-        ].join(' ')}
-      >
-        {outOfStock
-          ? 'Out of stock'
-          : product.stock <= 5
-            ? `Only ${product.stock} left in stock — order soon`
-            : 'In stock'}
-      </p>
-
-      {/* Quantity stepper */}
-      <div className="mt-4">
-        <label className="text-xs font-medium text-ink-secondary" htmlFor="buybox-qty">
-          Quantity
-        </label>
-        <div className="mt-1.5 flex h-10 w-fit items-center rounded-sm border border-line-subtle bg-bg-sunken">
-          <button
-            type="button"
-            aria-label="Decrease quantity"
-            disabled={qty <= 1 || outOfStock}
-            onClick={() => setQty((q) => Math.max(1, q - 1))}
-            className="grid size-10 place-items-center text-ink-secondary transition-colors hover:text-ink-primary focus-visible:focus-ring disabled:opacity-30"
-          >
-            <Minus className="size-4" />
-          </button>
-          <span
-            id="buybox-qty"
-            className="nums w-10 text-center text-sm text-ink-primary"
-          >
-            {qty}
-          </span>
-          <button
-            type="button"
-            aria-label="Increase quantity"
-            disabled={qty >= maxQty || outOfStock}
-            onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
-            className="grid size-10 place-items-center text-ink-secondary transition-colors hover:text-ink-primary focus-visible:focus-ring disabled:opacity-30"
-          >
-            <Plus className="size-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* CTAs */}
-      <div className="mt-5 flex flex-col gap-2.5">
-        {/* Add to Cart — warning-toned to match conventional ecomm hierarchy */}
-        <motion.button
-          type="button"
-          whileTap={tapPress}
-          onClick={handleAddToCart}
-          disabled={outOfStock || addToCart.isPending}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-warning text-sm font-semibold text-bg-base shadow-sm transition-[filter,opacity] hover:brightness-110 focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-40"
-        >
-          {added ? (
-            <motion.span
-              animate={attentionPulse}
-              className="inline-flex items-center gap-2"
-            >
-              <Check className="size-4" aria-hidden="true" />
-              Added to cart
-            </motion.span>
-          ) : (
+      <div className="border-b border-line-subtle px-4 py-4">
+        <div className="flex flex-wrap items-baseline gap-2">
+          <p className="nums text-2xl font-semibold text-accent">
+            {formatPrice(product.price)}
+          </p>
+          {product.compare_at_price && Number(product.compare_at_price) > Number(product.price) && (
             <>
-              <ShoppingBag className="size-4" aria-hidden="true" />
-              Add to Cart
+              <s
+                className="nums text-sm text-ink-tertiary"
+                aria-label={`Was ${formatPrice(product.compare_at_price)}`}
+              >
+                {formatPrice(product.compare_at_price)}
+              </s>
+              <span className="text-sm font-semibold text-rating">
+                {Math.round(
+                  (1 - Number(product.price) / Number(product.compare_at_price)) * 100,
+                )}
+                % off
+              </span>
             </>
           )}
-        </motion.button>
-
-        {/* Buy Now — accent-toned, slightly lower visual weight */}
-        <motion.button
-          type="button"
-          whileTap={tapPress}
-          onClick={handleBuyNow}
-          disabled={outOfStock}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-accent text-sm font-semibold text-white shadow-sm transition-[filter,opacity] hover:brightness-110 focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-40"
-        >
-          <Zap className="size-4" aria-hidden="true" />
-          Buy Now
-        </motion.button>
-
-        <WishlistButton productId={product.id} variant="inline" />
+        </div>
+        <p className="mt-0.5 text-xs text-ink-tertiary">Inclusive of all taxes.</p>
       </div>
 
-      <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-ink-tertiary">
-        <Lock className="size-3" aria-hidden="true" />
-        Secure transaction
-      </p>
+      <div className="px-4 py-4 space-y-4">
+        {/* Delivery estimate */}
+        <div className="rounded-sm bg-bg-sunken px-3 py-2.5 text-xs space-y-1">
+          <p className="text-ink-secondary">
+            Free delivery{' '}
+            <strong className="font-semibold text-ink-primary">{deliveryDates.free}</strong>
+          </p>
+          <p className="text-ink-secondary">
+            Or fastest by{' '}
+            <strong className="font-semibold text-accent">{deliveryDates.fast}</strong>
+          </p>
+        </div>
+
+        {/* Stock status */}
+        <p
+          className={[
+            'text-sm font-semibold',
+            outOfStock ? 'text-danger' : product.stock <= 5 ? 'text-warning' : 'text-success',
+          ].join(' ')}
+        >
+          {outOfStock
+            ? 'Out of stock'
+            : product.stock <= 5
+              ? `Only ${product.stock} left in stock — order soon`
+              : 'In stock'}
+        </p>
+
+        {/* Quantity stepper */}
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-ink-secondary" htmlFor="buybox-qty">
+            Quantity
+          </label>
+          <div className="inline-flex h-9 items-center rounded-sm border border-line-subtle bg-bg-sunken">
+            <button
+              type="button"
+              aria-label="Decrease quantity"
+              disabled={qty <= 1 || outOfStock}
+              onClick={() => setQty((q) => Math.max(1, q - 1))}
+              className="grid size-9 place-items-center text-ink-secondary transition-colors hover:text-ink-primary focus-visible:outline-none disabled:opacity-30"
+            >
+              <Minus className="size-4" />
+            </button>
+            <span
+              id="buybox-qty"
+              className="nums w-9 text-center text-sm font-medium text-ink-primary"
+            >
+              {qty}
+            </span>
+            <button
+              type="button"
+              aria-label="Increase quantity"
+              disabled={qty >= maxQty || outOfStock}
+              onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
+              className="grid size-9 place-items-center text-ink-secondary transition-colors hover:text-ink-primary focus-visible:outline-none disabled:opacity-30"
+            >
+              <Plus className="size-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* CTAs */}
+        <div className="flex flex-col gap-3">
+          {/* Add to Cart — amber (bg-cart) */}
+          <Button
+            variant="cart"
+            size="lg"
+            onClick={handleAddToCart}
+            disabled={outOfStock || addToCart.isPending}
+            className="w-full"
+          >
+            {added ? (
+              <span className="inline-flex items-center gap-2">
+                <Check className="size-4" aria-hidden="true" />
+                Added to Cart
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-2">
+                <ShoppingCart className="size-4" aria-hidden="true" />
+                Add to Cart
+              </span>
+            )}
+          </Button>
+
+          {/* Buy Now — orange (bg-cta) */}
+          <Button
+            variant="cta"
+            size="lg"
+            onClick={handleBuyNow}
+            disabled={outOfStock}
+            className="w-full"
+          >
+            <span className="inline-flex items-center gap-2">
+              <Zap className="size-4" aria-hidden="true" />
+              Buy Now
+            </span>
+          </Button>
+
+          <WishlistButton productId={product.id} variant="inline" />
+        </div>
+
+        <p className="flex items-center justify-center gap-1.5 text-xs text-ink-tertiary">
+          <Lock className="size-3" aria-hidden="true" />
+          Secure transaction
+        </p>
+      </div>
 
       {/* Seller info strip */}
-      <ul className="mt-5 flex flex-col gap-2 border-t border-line-subtle pt-4 text-xs">
+      <ul className="border-t border-line-subtle px-4 py-3 flex flex-col gap-2">
         <InfoRow icon={Truck} label="Ships from" value="ShopWell warehouse" />
         <InfoRow icon={ShieldCheck} label="Sold by" value="ShopWell Retail" />
         <InfoRow icon={RotateCcw} label="Returns" value="7 days from delivery" />
       </ul>
 
       {addToCart.isError && !addToCart.isPending && (
-        <p className="mt-3 text-xs text-danger">
+        <p className="border-t border-line-subtle px-4 pb-3 text-xs text-danger">
           Couldn't add to cart — try signing in again.
         </p>
       )}
@@ -195,17 +202,14 @@ export function BuyBox({ product }) {
 
 function InfoRow({ icon: Icon, label, value }) {
   return (
-    <li className="flex items-start gap-2 text-ink-secondary">
-      <Icon className="mt-0.5 size-3.5 shrink-0 text-ink-tertiary" aria-hidden="true" />
-      <div className="flex-1">
-        <span className="text-ink-tertiary">{label}:</span>{' '}
-        <span className="text-ink-primary">{value}</span>
-      </div>
+    <li className="flex items-center gap-2 text-xs text-ink-secondary">
+      <Icon className="size-3.5 shrink-0 text-ink-tertiary" aria-hidden="true" />
+      <span className="text-ink-tertiary">{label}:</span>{' '}
+      <span className="font-medium text-ink-primary">{value}</span>
     </li>
   );
 }
 
-/** Free delivery ~5 days out, fast delivery tomorrow. Format like "Sun, 31 May". */
 function makeDeliveryDates() {
   const fmt = (d) =>
     d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });

@@ -50,7 +50,9 @@ function ContactForm({ form }) {
     <Card>
       <CardHeader title={form?.heading || 'Send us a message'} />
       <CardBody className="p-6 sm:p-8">
-        {form?.note && <p className="mb-4 text-sm text-ink-secondary">{form.note}</p>}
+        {form?.note && (
+          <p className="mb-5 text-sm text-ink-secondary">{form.note}</p>
+        )}
 
         <form onSubmit={onSubmit} noValidate>
           <div className="grid gap-x-4 sm:grid-cols-2">
@@ -82,8 +84,8 @@ function ContactForm({ form }) {
             placeholder="How can we help?"
             required
           />
-          <div className="mt-4 flex items-center gap-4">
-            <Button type="submit">Send message</Button>
+          <div className="mt-5 flex items-center gap-4">
+            <Button type="submit" variant="primary">Send message</Button>
             {submitted && (
               <motion.span
                 initial={{ opacity: 0, x: -8 }}
@@ -92,7 +94,7 @@ function ContactForm({ form }) {
                 role="status"
               >
                 <Check className="size-4" aria-hidden="true" />
-                {form?.success || 'Thanks — we\'ll be in touch shortly.'}
+                {form?.success || "Thanks — we'll be in touch shortly."}
               </motion.span>
             )}
           </div>
@@ -115,95 +117,97 @@ export default function ContactPage() {
   }
 
   return (
-    <Page>
+    <>
       <CompanyHero hero={page.hero} current="Contact Us" />
 
-      {/* Contact method tiles */}
-      {page.methods?.length > 0 && (
-        <Section className="mt-12">
-          <motion.div
-            variants={staggerContainer(0.06)}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, margin: '-60px' }}
-            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-          >
-            {page.methods.map((m, i) => {
-              const Icon = resolvePageIcon(m.icon);
-              const body = (
-                <CardBody className="flex flex-col gap-3">
-                  <span className="grid size-11 place-items-center rounded-xl bg-accent-soft text-accent">
-                    <Icon className="size-5" aria-hidden="true" />
-                  </span>
-                  <div>
-                    <h3 className="font-semibold text-ink-primary">{m.title}</h3>
-                    <p className="mt-0.5 text-sm text-ink-secondary">{m.detail}</p>
-                  </div>
-                </CardBody>
-              );
-              return (
-                <motion.div key={i} variants={fadeUp}>
-                  <Card interactive className="h-full">
-                    {m.href ? (
-                      <a
-                        href={safeUrl(m.href)}
-                        className="block h-full rounded-lg focus-visible:focus-ring"
-                      >
-                        {body}
-                      </a>
-                    ) : (
-                      body
-                    )}
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </motion.div>
-        </Section>
-      )}
-
-      {/* Form + offices */}
-      <Section className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
-        <div>
-          {page.intro && (
-            <p className="mb-5 max-w-xl text-sm leading-relaxed text-ink-secondary">
-              {page.intro}
-            </p>
-          )}
-          <ContactForm form={page.form} />
-        </div>
-
-        {/* Offices */}
-        {page.offices?.length > 0 && (
-          <div>
-            <SectionLabel className="text-h3">Our offices</SectionLabel>
+      <Page>
+        {/* Contact method tiles */}
+        {page.methods?.length > 0 && (
+          <Section className="mt-6">
             <motion.div
-              variants={staggerContainer(0.07)}
+              variants={staggerContainer(0.06)}
               initial="hidden"
               whileInView="show"
               viewport={{ once: true, margin: '-60px' }}
-              className="mt-5 flex flex-col gap-4"
+              className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
             >
-              {page.offices.map((o, i) => (
-                <motion.div key={i} variants={fadeUp}>
-                  <Card>
-                    <CardBody>
-                      <h3 className="font-semibold text-ink-primary">{o.city}</h3>
-                      <address className="mt-1.5 not-italic text-sm leading-6 text-ink-secondary">
-                        {(o.lines || []).map((line, li) => (
-                          <span key={li} className="block">
-                            {line}
-                          </span>
-                        ))}
-                      </address>
-                    </CardBody>
-                  </Card>
-                </motion.div>
-              ))}
+              {page.methods.map((m, i) => {
+                const Icon = resolvePageIcon(m.icon);
+                const body = (
+                  <CardBody className="flex flex-col gap-3 p-5">
+                    <span className="grid size-10 place-items-center rounded-sm bg-accent-soft text-accent">
+                      <Icon className="size-5" aria-hidden="true" />
+                    </span>
+                    <div>
+                      <h3 className="font-semibold text-ink-primary">{m.title}</h3>
+                      <p className="mt-0.5 text-sm text-ink-secondary">{m.detail}</p>
+                    </div>
+                  </CardBody>
+                );
+                return (
+                  <motion.div key={i} variants={fadeUp}>
+                    <Card interactive className="h-full">
+                      {m.href ? (
+                        <a
+                          href={safeUrl(m.href)}
+                          className="block h-full rounded-sm focus-visible:focus-ring"
+                        >
+                          {body}
+                        </a>
+                      ) : (
+                        body
+                      )}
+                    </Card>
+                  </motion.div>
+                );
+              })}
             </motion.div>
-          </div>
+          </Section>
         )}
-      </Section>
-    </Page>
+
+        {/* Form + offices */}
+        <Section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+          <div>
+            {page.intro && (
+              <p className="mb-5 text-sm leading-relaxed text-ink-secondary">
+                {page.intro}
+              </p>
+            )}
+            <ContactForm form={page.form} />
+          </div>
+
+          {/* Offices */}
+          {page.offices?.length > 0 && (
+            <div>
+              <SectionLabel className="mb-4">Our offices</SectionLabel>
+              <motion.div
+                variants={staggerContainer(0.07)}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, margin: '-60px' }}
+                className="flex flex-col gap-3"
+              >
+                {page.offices.map((o, i) => (
+                  <motion.div key={i} variants={fadeUp}>
+                    <Card>
+                      <CardBody>
+                        <h3 className="font-semibold text-ink-primary">{o.city}</h3>
+                        <address className="mt-1.5 not-italic text-sm leading-6 text-ink-secondary">
+                          {(o.lines || []).map((line, li) => (
+                            <span key={li} className="block">
+                              {line}
+                            </span>
+                          ))}
+                        </address>
+                      </CardBody>
+                    </Card>
+                  </motion.div>
+                ))}
+              </motion.div>
+            </div>
+          )}
+        </Section>
+      </Page>
+    </>
   );
 }

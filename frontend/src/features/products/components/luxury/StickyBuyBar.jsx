@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { ShoppingBag, Zap, Check } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { ShoppingCart, Zap, Check } from 'lucide-react';
 import { formatPrice } from '@/lib/utils.js';
 import { useAddToCart } from '@/features/cart/hooks.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { ProductMedia } from '../ProductMedia.jsx';
 
 /**
- * Persistent buy bar that slides in once the user scrolls past the hero, so
- * the primary actions are always one tap away. Anchored to the bottom of the
- * viewport (the natural thumb zone on mobile, and unobtrusive on desktop).
+ * Persistent buy bar — slides in once the buy panel scrolls out of view.
+ * Flat Flipkart/Amazon style: white bar, border-top, cart=amber, cta=orange.
+ * All logic (IntersectionObserver, auth guard, navigate, mutate) unchanged.
  */
 export function StickyBuyBar({ product }) {
   const navigate = useNavigate();
@@ -21,13 +21,10 @@ export function StickyBuyBar({ product }) {
   const [added, setAdded] = useState(false);
 
   useEffect(() => {
-    // Prefer to key the bar off the main buy panel: show it ONLY once that
-    // panel has scrolled out of view, so the two never stack on screen.
     const anchor = document.getElementById('pdp-buybox');
     if (anchor && 'IntersectionObserver' in window) {
       const io = new IntersectionObserver(
         ([entry]) => {
-          // Visible only when the buy panel is above the viewport (scrolled past).
           setVisible(!entry.isIntersecting && entry.boundingClientRect.top < 0);
         },
         { threshold: 0 },
@@ -35,7 +32,6 @@ export function StickyBuyBar({ product }) {
       io.observe(anchor);
       return () => io.disconnect();
     }
-    // Fallback: simple scroll threshold.
     let ticking = false;
     const onScroll = () => {
       if (ticking) return;
@@ -82,48 +78,57 @@ export function StickyBuyBar({ product }) {
     <AnimatePresence>
       {visible && (
         <motion.div
-          initial={reduce ? false : { y: 100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={reduce ? { opacity: 0 } : { y: 100, opacity: 0 }}
-          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-          className="fixed inset-x-0 bottom-0 z-40 px-3 pb-3 sm:px-6 sm:pb-4"
+          initial={reduce ? false : { y: '100%' }}
+          animate={{ y: 0 }}
+          exit={reduce ? { opacity: 0 } : { y: '100%' }}
+          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-line-subtle bg-bg-elevated shadow-lg"
         >
-          <div className="glass mx-auto flex max-w-content items-center gap-3 rounded-lg p-3 sm:gap-4 sm:p-4">
-            <div className="hidden size-12 shrink-0 overflow-hidden rounded-md border border-line-subtle sm:block">
+          <div className="mx-auto flex max-w-content items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6">
+            {/* Product thumbnail */}
+            <div className="hidden size-11 shrink-0 overflow-hidden rounded-sm border border-line-subtle sm:block">
               <ProductMedia product={product} />
             </div>
+
+            {/* Name + price */}
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-ink-primary">
+              <p className="truncate text-sm font-medium text-ink-primary">
                 {product.name}
               </p>
-              <p className="text-sm text-ink-secondary tabular-nums">
+              <p className="nums text-sm font-semibold text-accent tabular-nums">
                 {formatPrice(product.price)}
               </p>
             </div>
 
+            {/* Buy Now — orange (cta), hidden on smallest mobile */}
             <button
               type="button"
               onClick={handleBuyNow}
               disabled={outOfStock}
-              className="hidden h-11 items-center justify-center gap-2 rounded-full border border-line-strong bg-bg-base/40 px-5 text-sm font-semibold text-ink-primary transition-colors hover:bg-fill focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-40 sm:inline-flex"
+              className="hidden h-10 items-center justify-center gap-1.5 rounded-sm bg-cta px-5 text-sm font-semibold uppercase tracking-wide text-white transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cta disabled:pointer-events-none disabled:opacity-40 sm:inline-flex"
             >
-              <Zap className="size-4 text-accent" aria-hidden="true" /> Buy Now
+              <Zap className="size-4" aria-hidden="true" />
+              Buy Now
             </button>
+
+            {/* Add to Cart — amber (cart) */}
             <button
               type="button"
               onClick={handleAdd}
               disabled={outOfStock || addToCart.isPending}
-              className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-accent px-5 text-sm font-semibold text-ink-inverse shadow-glow transition-[transform,filter] hover:brightness-105 focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-40 sm:flex-none"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-sm bg-accent px-5 text-sm font-semibold text-white transition-[background-color] hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-40 sm:flex-none"
             >
               {added ? (
                 <>
-                  <Check className="size-4" aria-hidden="true" /> Added
+                  <Check className="size-4" aria-hidden="true" />
+                  Added
                 </>
               ) : outOfStock ? (
                 'Out of stock'
               ) : (
                 <>
-                  <ShoppingBag className="size-4" aria-hidden="true" /> Add to Cart
+                  <ShoppingCart className="size-4" aria-hidden="true" />
+                  Add to Cart
                 </>
               )}
             </button>

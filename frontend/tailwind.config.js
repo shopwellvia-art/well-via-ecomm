@@ -28,21 +28,41 @@ export default {
           strong: 'var(--fill-strong)',
         },
         glass: 'var(--glass)',
-        // Brand + status colors are constant across both themes.
+        // Brand + status colors. Flipkart marketplace palette.
+        // accent = Flipkart blue — header, links, prices, selected states.
         accent: {
-          DEFAULT: '#6366F1',
-          hover: '#7C7FF5',
-          press: '#5457D6',
+          DEFAULT: '#2874F0',
+          hover: '#1F63D6',
+          press: '#1A55BA',
           // Mid-ramp of the gradient — useful as a standalone tint
-          mid: '#818CF8',
+          mid: '#5C97F5',
           // Light ramp — for tinted backgrounds in tonal badges
-          soft: 'rgba(99, 102, 241, 0.12)',
+          soft: 'rgba(40, 116, 240, 0.10)',
           // shadcn/ui token — used by the ghost/outline variants in button-base.jsx.
           foreground: 'hsl(var(--accent-foreground))',
         },
+        // CTA orange — "Buy Now" / "Place Order" primary action.
+        cta: {
+          DEFAULT: '#FB641E',
+          hover: '#E85610',
+          press: '#D44E0A',
+          soft: 'rgba(251, 100, 30, 0.10)',
+        },
+        // CTA yellow/amber — "Add to Cart".
+        cart: {
+          DEFAULT: '#FF9F00',
+          hover: '#F59300',
+          press: '#E08800',
+          soft: 'rgba(255, 159, 0, 0.12)',
+        },
+        // Rating / discount green — rating pills and "X% off" text.
+        rating: {
+          DEFAULT: '#388E3C',
+          soft: 'rgba(56, 142, 60, 0.12)',
+        },
         success: {
-          DEFAULT: '#22C55E',
-          soft: 'rgba(34, 197, 94, 0.12)',
+          DEFAULT: '#388E3C',
+          soft: 'rgba(56, 142, 60, 0.12)',
         },
         warning: {
           DEFAULT: '#F59E0B',
@@ -94,7 +114,7 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+        sans: ['Roboto', 'system-ui', '-apple-system', 'Segoe UI', 'Arial', 'sans-serif'],
       },
       fontSize: {
         display: ['clamp(2.5rem, 6vw, 3.5rem)', { lineHeight: '1.07', letterSpacing: '-0.02em', fontWeight: '600' }],
@@ -105,23 +125,24 @@ export default {
         sm: ['0.875rem', { lineHeight: '1.57' }],
         xs: ['0.75rem', { lineHeight: '1.5', fontWeight: '500' }],
       },
+      // Flipkart is near-square — small radii everywhere.
       borderRadius: {
-        xs: '8px',
-        sm: '12px',
-        md: '16px',
-        lg: '24px',
-        xl: '32px',
+        xs: '2px',
+        sm: '4px',
+        md: '6px',
+        lg: '8px',
+        xl: '12px',
       },
       boxShadow: {
         sm: 'var(--shadow-sm)',
         md: 'var(--shadow-md)',
         lg: 'var(--shadow-lg)',
         lift: 'var(--shadow-lift)',
-        glow: '0 0 0 1px rgba(99,102,241,0.4), 0 8px 32px rgba(99,102,241,0.25)',
+        glow: '0 0 0 1px rgba(40,116,240,0.35), 0 6px 20px rgba(40,116,240,0.2)',
         // Softer accent ring — use instead of glow when you want less saturation
-        'glow-sm': '0 0 0 1px rgba(99,102,241,0.25), 0 4px 16px rgba(99,102,241,0.15)',
+        'glow-sm': '0 0 0 1px rgba(40,116,240,0.22), 0 3px 12px rgba(40,116,240,0.14)',
         // Success/danger glow for inline feedback states
-        'glow-success': '0 0 0 1px rgba(34,197,94,0.35), 0 4px 16px rgba(34,197,94,0.15)',
+        'glow-success': '0 0 0 1px rgba(56,142,60,0.35), 0 4px 16px rgba(56,142,60,0.15)',
         'glow-danger': '0 0 0 1px rgba(239,68,68,0.35), 0 4px 16px rgba(239,68,68,0.15)',
       },
       maxWidth: {

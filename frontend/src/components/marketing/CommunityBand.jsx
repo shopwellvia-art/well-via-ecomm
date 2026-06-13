@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Mail, ArrowRight, Check, Sparkles } from 'lucide-react';
+import { Mail, ArrowRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 
 /**
- * "Join the community" newsletter band shown near the bottom of the homepage,
- * just above the footer. Client-side validation only — wires to a real list
- * later. Mirrors the dark, glowing aesthetic of the footer.
+ * Newsletter band — solid blue full-width strip (bg-accent).
+ * White heading + subtitle on the left, email input + Subscribe button on the right.
+ * Matches ShopFlow h6-featured.png bottom strip. Form logic unchanged.
  */
 export default function CommunityBand() {
   const reduce = useReducedMotion();
@@ -28,82 +28,94 @@ export default function CommunityBand() {
   }
 
   return (
-    <section className="mx-auto mt-20 max-w-content px-4 sm:px-6">
+    <section className="mx-auto mt-3 max-w-content px-4 sm:px-6">
       <motion.div
-        initial={reduce ? false : { opacity: 0, y: 24 }}
+        initial={reduce ? false : { opacity: 0, y: 16 }}
         whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.3 }}
-        transition={{ duration: 0.6 }}
-        className="relative isolate overflow-hidden rounded-lg border border-white/10 px-7 py-10 text-white sm:px-12 sm:py-12"
-        style={{ background: 'linear-gradient(115deg,#0d1230 0%,#1a1740 50%,#3a2a6b 100%)' }}
+        transition={{ duration: 0.4 }}
+        className="overflow-hidden rounded-sm bg-accent"
       >
-        <div aria-hidden="true" className="pointer-events-none absolute -left-12 -top-16 size-56 rounded-full bg-indigo-400/25 blur-3xl" />
-        <div aria-hidden="true" className="pointer-events-none absolute -right-10 bottom-0 size-56 rounded-full bg-fuchsia-400/20 blur-3xl" />
-
-        <div className="relative grid items-center gap-8 lg:grid-cols-[1fr_auto]">
-          <div className="flex items-start gap-4">
-            <span
-              className="grid size-12 shrink-0 place-items-center rounded-2xl text-white shadow-lg"
-              style={{ background: 'linear-gradient(135deg,#7C7FF5,#c084fc)' }}
-            >
-              <Sparkles className="size-6" aria-hidden="true" />
-            </span>
+        <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8 sm:py-6">
+          {/* Left — copy */}
+          <div className="flex items-center gap-4">
+            <Mail className="size-8 shrink-0 text-white/80" aria-hidden="true" />
             <div>
-              <h2 className="text-2xl font-bold sm:text-3xl">Join the community</h2>
-              <p className="mt-1.5 max-w-md text-sm text-white/70">
-                Be first to get new drops, member-only deals and styling tips —
-                straight to your inbox.
+              <h2 className="text-base font-bold text-white">
+                Get exclusive deals in your inbox
+              </h2>
+              <p className="mt-0.5 text-sm text-white/75">
+                Subscribe and never miss a sale. No spam — unsubscribe anytime.
               </p>
             </div>
           </div>
 
-          <form onSubmit={onSubmit} noValidate aria-label="Join the community" className="w-full lg:w-auto">
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <label htmlFor="community-email" className="sr-only">
-                Email address
-              </label>
-              <div className="relative sm:w-80">
-                <Mail className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-white/50" aria-hidden="true" />
-                <input
-                  id="community-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    if (error) setError('');
-                  }}
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  aria-invalid={error ? 'true' : undefined}
-                  className={cn(
-                    'h-12 w-full rounded-full border bg-white/10 pl-10 pr-4 text-sm text-white backdrop-blur',
-                    'placeholder:text-white/45 focus-visible:focus-ring',
-                    error ? 'border-danger' : 'border-white/15 hover:border-white/30',
-                  )}
-                />
-              </div>
-              <button
-                type="submit"
-                className="inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-full px-7 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 focus-visible:focus-ring"
-                style={{ background: 'linear-gradient(90deg,#7C7FF5,#c084fc)' }}
-              >
-                {submitted ? (
-                  <>
-                    <Check className="size-4" aria-hidden="true" /> Subscribed
-                  </>
-                ) : (
-                  <>
-                    Subscribe <ArrowRight className="size-4" aria-hidden="true" />
-                  </>
-                )}
-              </button>
-            </div>
+          {/* Right — form */}
+          <form
+            onSubmit={onSubmit}
+            noValidate
+            aria-label="Subscribe to newsletter"
+            className="relative flex shrink-0 flex-col gap-1.5 sm:flex-row sm:items-start"
+          >
+            <label htmlFor="community-email" className="sr-only">
+              Email address
+            </label>
+            <input
+              id="community-email"
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (error) setError('');
+              }}
+              placeholder="you@example.com"
+              autoComplete="email"
+              aria-invalid={error ? 'true' : undefined}
+              aria-describedby="community-email-msg"
+              className={cn(
+                'h-10 w-full rounded-xs border bg-white/10 px-3 text-sm text-white',
+                'placeholder:text-white/50',
+                'transition-colors duration-150',
+                'focus:outline-none focus:bg-white/15',
+                error
+                  ? 'border-red-300'
+                  : 'border-white/30 focus:border-white/60',
+                'sm:w-60',
+              )}
+            />
+
+            <button
+              type="submit"
+              className={cn(
+                'inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xs',
+                'bg-white px-5 text-sm font-semibold text-accent',
+                'transition-colors duration-150 hover:bg-white/90',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white',
+              )}
+            >
+              {submitted ? (
+                <>
+                  <Check className="size-4" aria-hidden="true" />
+                  Subscribed
+                </>
+              ) : (
+                <>
+                  Subscribe
+                  <ArrowRight className="size-4" aria-hidden="true" />
+                </>
+              )}
+            </button>
+
             <p
+              id="community-email-msg"
               role="status"
               aria-live="polite"
-              className={cn('mt-2 min-h-[1.1rem] text-xs', error ? 'text-danger' : 'text-white/55')}
+              className={cn(
+                'absolute -bottom-5 left-0 min-h-[1rem] text-xs sm:bottom-auto sm:top-full sm:mt-1',
+                error ? 'text-red-200' : submitted ? 'text-white/80' : 'sr-only',
+              )}
             >
-              {error || (submitted ? "You're in! Welcome to the community." : 'No spam — unsubscribe anytime.')}
+              {error || (submitted ? "You're in! Check your inbox soon." : '')}
             </p>
           </form>
         </div>

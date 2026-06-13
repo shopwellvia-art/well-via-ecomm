@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
 import {
   Mail,
   Lock,
@@ -27,11 +26,9 @@ import {
 } from '@/features/loyalty/referralCapture.js';
 import { cn } from '@/lib/utils.js';
 import { env } from '@/config/env.js';
-import { duration, ease, heroContainer, fadeUp, staggerContainer } from '@/lib/motion.js';
 import { usePublicSettings } from '@/features/settings/public.js';
 
-// Allowlisted icon keys for trust badges. Admin picks one of these in
-// Settings → Login; everything else falls back to a neutral badge.
+// Allowlisted icon keys for trust badges.
 const TRUST_ICONS = {
   star: Star,
   shield: Shield,
@@ -52,31 +49,23 @@ function TrustBadges() {
     .filter((b) => b.label);
   if (badges.length === 0) return null;
   return (
-    <motion.div
-      variants={staggerContainer(0.05)}
-      initial="hidden"
-      animate="show"
-      className="mt-6 grid grid-cols-2 gap-2"
-    >
+    <div className="mt-6 grid grid-cols-2 gap-2">
       {badges.map((b, i) => {
         const Icon = TRUST_ICONS[b.iconKey] || BadgeCheck;
         return (
-          <motion.div
+          <div
             key={i}
-            variants={fadeUp}
             className="flex items-center gap-2 rounded-sm border border-line-subtle bg-bg-sunken px-2.5 py-1.5 text-[11px] text-ink-secondary"
           >
             <Icon className="size-3.5 shrink-0 text-accent" aria-hidden="true" />
             <span className="truncate">{b.label}</span>
-          </motion.div>
+          </div>
         );
       })}
-    </motion.div>
+    </div>
   );
 }
 
-// Seeded accounts for one-click sign-in while testing (scripts/seed.py).
-// Rendered only outside production builds — see `showTestLogins` below.
 const TEST_ACCOUNTS = [
   {
     label: 'Admin',
@@ -120,8 +109,6 @@ export default function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '', full_name: '' });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
-  // 2FA challenge state. When the server tells us the account needs TOTP,
-  // we hold onto the pending_token and switch the form to the code prompt.
   const [pendingTotp, setPendingTotp] = useState(null); // { token, email }
   const [totpCode, setTotpCode] = useState('');
   const navigate = useNavigate();
@@ -142,8 +129,6 @@ export default function LoginPage() {
   const isRegister = mode === 'register';
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  // Show a "you were referred" banner when a code is sitting in sessionStorage.
-  // Visible on the register tab so the friend understands why they're signing up.
   const pendingReferral = isRegister ? getPendingReferralCode() : null;
 
   async function finishLogin(tokens, emailHint) {
@@ -176,14 +161,10 @@ export default function LoginPage() {
           full_name: form.full_name || undefined,
           referral_code: referralCode || undefined,
         });
-        // Clear the stashed code regardless — invalid codes won't help on
-        // retry, and successful ones already created the referral row.
         clearPendingReferralCode();
       }
       const resp = await authApi.login(form.email, form.password);
       if (resp.needs_totp) {
-        // Switch to the second-factor view; keep the email visible so the
-        // user knows which account they're confirming.
         setPendingTotp({ token: resp.pending_token, email: form.email });
         setTotpCode('');
         return;
@@ -243,83 +224,83 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-content items-center justify-center px-6 py-12">
-      {/* Background ambient glow */}
-      <div
-        aria-hidden="true"
-        className="absolute left-1/2 top-1/3 -z-10 size-[520px] -translate-x-1/2 rounded-full bg-accent/12 blur-[160px]"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute right-1/4 bottom-1/4 -z-10 size-[280px] rounded-full bg-accent/8 blur-[120px]"
-      />
+    <main className="flex min-h-[calc(100vh-4rem)] w-full items-stretch bg-bg-base">
+      {/* ── LEFT promo panel (hidden on mobile) ── */}
+      <div className="hidden w-[360px] shrink-0 flex-col justify-between bg-accent p-10 lg:flex">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <span className="grid size-9 place-items-center rounded-sm bg-white/20">
+              <Sparkles className="size-5 text-white" aria-hidden="true" />
+            </span>
+            <span className="text-lg font-bold text-white tracking-tight">ShopFlow</span>
+          </div>
 
-      <motion.div
-        variants={heroContainer}
-        initial="hidden"
-        animate="show"
-        className="w-full max-w-md"
-      >
-        {/* Card */}
-        <motion.div variants={fadeUp} className="gradient-border rounded-lg">
-          <div className="glass rounded-lg p-8">
-            {/* Brand mark + heading */}
-            <motion.div variants={fadeUp} className="flex flex-col items-center text-center">
-              <span className="grid size-12 place-items-center rounded-xl bg-accent text-ink-inverse shadow-glow-sm">
-                <Sparkles className="size-5" aria-hidden="true" />
-              </span>
-              <h1 className="mt-4 text-h2 tracking-tight text-ink-primary">
-                {isRegister ? 'Create your account' : 'Welcome back'}
-              </h1>
-              <p className="mt-1.5 text-sm text-ink-secondary">
-                {isRegister
-                  ? 'Join Lumen for a faster, saved checkout.'
-                  : 'Sign in to continue shopping.'}
+          <h2 className="mt-12 text-[2rem] font-bold leading-tight text-white">
+            India&apos;s fastest <br /> growing marketplace
+          </h2>
+          <p className="mt-4 text-sm leading-relaxed text-white/75">
+            Millions of products. Trusted sellers. Secure payments. All in one place.
+          </p>
+
+          <ul className="mt-10 flex flex-col gap-4">
+            {[
+              { icon: Package, text: '2-day delivery on eligible orders' },
+              { icon: Shield, text: 'Buyer protection on every order' },
+              { icon: Truck, text: 'Easy returns within 10 days' },
+              { icon: Star, text: 'Verified seller ratings & reviews' },
+            ].map(({ icon: Icon, text }) => (
+              <li key={text} className="flex items-center gap-3 text-sm text-white/80">
+                <Icon className="size-4 shrink-0 text-white" aria-hidden="true" />
+                {text}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="text-[11px] text-white/40">
+          New to ShopFlow?{' '}
+          <button
+            type="button"
+            onClick={() => { setMode('register'); setError(null); }}
+            className="font-semibold text-white/70 underline underline-offset-2 hover:text-white focus-visible:focus-ring"
+          >
+            Create a free account
+          </button>
+        </p>
+      </div>
+
+      {/* ── RIGHT form panel ── */}
+      <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
+        <div className="w-full max-w-sm">
+
+          {/* Mobile brand mark */}
+          <div className="mb-7 flex items-center gap-2 lg:hidden">
+            <span className="grid size-8 place-items-center rounded-sm bg-accent">
+              <Sparkles className="size-4 text-white" aria-hidden="true" />
+            </span>
+            <span className="text-base font-bold text-ink-primary">ShopFlow</span>
+          </div>
+
+          {/* TOTP step */}
+          {pendingTotp ? (
+            <div>
+              <h1 className="text-xl font-semibold text-ink-primary">Two-factor verification</h1>
+              <p className="mt-1 text-sm text-ink-secondary">
+                Enter the 6-digit code for{' '}
+                <span className="font-medium text-ink-primary">{pendingTotp.email}</span>.
               </p>
-            </motion.div>
 
-            {/* Mode toggle pills */}
-            {!pendingTotp && (
-              <motion.div variants={fadeUp} className="mt-6 flex rounded-sm bg-bg-sunken p-1">
-                {['login', 'register'].map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => {
-                      setMode(m);
-                      setError(null);
-                    }}
-                    className={cn(
-                      'flex-1 rounded-xs py-2 text-xs font-semibold transition-all duration-200 focus-visible:focus-ring',
-                      mode === m
-                        ? 'bg-bg-elevated text-ink-primary shadow-sm'
-                        : 'text-ink-tertiary hover:text-ink-secondary',
-                    )}
-                  >
-                    {m === 'login' ? 'Sign in' : 'Create account'}
-                  </button>
-                ))}
-              </motion.div>
-            )}
+              <div className="mt-5 rounded-sm border border-accent/25 bg-accent/5 px-4 py-3 text-xs text-ink-secondary">
+                <p className="flex items-center gap-2 font-semibold text-ink-primary">
+                  <ShieldCheck className="size-4 text-accent" aria-hidden="true" />
+                  Open your authenticator app
+                </p>
+                <p className="mt-1 leading-relaxed">
+                  No device? Use a backup code instead.
+                </p>
+              </div>
 
-            {/* TOTP step */}
-            {pendingTotp ? (
-              <motion.form
-                variants={fadeUp}
-                onSubmit={handleTotpSubmit}
-                className="mt-6"
-              >
-                <div className="mb-4 rounded-sm border border-accent/30 bg-accent/8 p-4 text-xs text-ink-secondary">
-                  <p className="flex items-center gap-2 font-semibold text-ink-primary">
-                    <ShieldCheck className="size-4 text-accent" aria-hidden="true" />
-                    Two-factor verification
-                  </p>
-                  <p className="mt-1.5 leading-relaxed">
-                    Open your authenticator app and enter the 6-digit code for{' '}
-                    <span className="font-mono font-medium text-ink-primary">{pendingTotp.email}</span>.
-                    No device? Use a backup code instead.
-                  </p>
-                </div>
+              <form onSubmit={handleTotpSubmit} className="mt-5">
                 <Input
                   label="6-digit code"
                   value={totpCode}
@@ -331,7 +312,7 @@ export default function LoginPage() {
                   autoFocus
                   required
                 />
-                <Button type="submit" block size="lg" loading={busy} className="mt-1">
+                <Button type="submit" block size="lg" loading={busy} className="mt-2">
                   Verify and sign in
                 </Button>
                 <button
@@ -345,140 +326,168 @@ export default function LoginPage() {
                 >
                   <ArrowLeft className="size-3" aria-hidden="true" /> Use a different account
                 </button>
-              </motion.form>
-            ) : (
-              <>
-                {/* Referral banner */}
-                {pendingReferral && (
-                  <motion.div
-                    variants={fadeUp}
-                    className="mt-5 flex items-start gap-2.5 rounded-sm border border-accent/30 bg-accent/8 px-3 py-2.5 text-xs text-ink-primary"
+              </form>
+            </div>
+          ) : (
+            <>
+              {/* Mode toggle */}
+              <div className="mb-6 flex rounded-sm border border-line-subtle bg-bg-elevated overflow-hidden">
+                {['login', 'register'].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      setMode(m);
+                      setError(null);
+                    }}
+                    className={cn(
+                      'flex-1 py-2.5 text-sm font-medium transition-colors duration-150 focus-visible:focus-ring',
+                      mode === m
+                        ? 'bg-accent text-white'
+                        : 'text-ink-secondary hover:text-ink-primary hover:bg-bg-sunken',
+                    )}
                   >
-                    <Gift className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden="true" />
-                    <span>
-                      You were invited by a friend. Sign up to claim your{' '}
-                      <strong>welcome reward</strong>.
-                      <span className="ml-1 font-mono text-[10px] text-ink-tertiary">
-                        {pendingReferral}
-                      </span>
+                    {m === 'login' ? 'Login' : 'New Customer? Sign up'}
+                  </button>
+                ))}
+              </div>
+
+              <h1 className="text-xl font-semibold text-ink-primary">
+                {isRegister ? 'Create account' : 'Login'}
+              </h1>
+              <p className="mt-0.5 text-xs text-ink-secondary">
+                {isRegister
+                  ? 'Get access to your Orders, Wishlist and Recommendations'
+                  : 'Get access to your Orders, Wishlist and Recommendations'}
+              </p>
+
+              {/* Referral banner */}
+              {pendingReferral && (
+                <div className="mt-4 flex items-start gap-2.5 rounded-sm border border-accent/25 bg-accent/5 px-3 py-2.5 text-xs text-ink-primary">
+                  <Gift className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden="true" />
+                  <span>
+                    You were invited by a friend. Sign up to claim your{' '}
+                    <strong>welcome reward</strong>.
+                    <span className="ml-1 font-mono text-[10px] text-ink-tertiary">
+                      {pendingReferral}
                     </span>
-                  </motion.div>
+                  </span>
+                </div>
+              )}
+
+              {/* Main form */}
+              <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-0.5">
+                {isRegister && (
+                  <Input
+                    label="Full name"
+                    icon={User}
+                    placeholder="Jane Doe"
+                    autoComplete="name"
+                    value={form.full_name}
+                    onChange={set('full_name')}
+                  />
                 )}
+                <Input
+                  label="Email"
+                  type="email"
+                  icon={Mail}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  required
+                  value={form.email}
+                  onChange={set('email')}
+                />
+                <Input
+                  label="Password"
+                  type="password"
+                  icon={Lock}
+                  placeholder="••••••••"
+                  autoComplete={isRegister ? 'new-password' : 'current-password'}
+                  required
+                  value={form.password}
+                  onChange={set('password')}
+                  error={error}
+                  helper={isRegister ? 'At least 8 characters.' : undefined}
+                />
 
-                {/* Main form */}
-                <motion.form variants={fadeUp} onSubmit={handleSubmit} className="mt-5">
-                  {isRegister && (
-                    <Input
-                      label="Full name"
-                      icon={User}
-                      placeholder="Jane Doe"
-                      autoComplete="name"
-                      value={form.full_name}
-                      onChange={set('full_name')}
-                    />
-                  )}
-                  <Input
-                    label="Email"
-                    type="email"
-                    icon={Mail}
-                    placeholder="you@example.com"
-                    autoComplete="email"
-                    required
-                    value={form.email}
-                    onChange={set('email')}
-                  />
-                  <Input
-                    label="Password"
-                    type="password"
-                    icon={Lock}
-                    placeholder="••••••••"
-                    autoComplete={isRegister ? 'new-password' : 'current-password'}
-                    required
-                    value={form.password}
-                    onChange={set('password')}
-                    error={error}
-                    helper={isRegister ? 'At least 8 characters.' : undefined}
-                  />
-
-                  {!isRegister && (
-                    <div className="-mt-1 mb-3 text-right">
-                      <Link
-                        to="/forgot-password"
-                        className="rounded-xs text-xs text-accent transition-colors hover:text-accent-hover focus-visible:focus-ring"
-                      >
-                        Forgot password?
-                      </Link>
-                    </div>
-                  )}
-
-                  <Button type="submit" block size="lg" loading={busy} className="mt-1">
-                    {isRegister ? 'Create account' : 'Sign in'}
-                  </Button>
-                </motion.form>
-
-                {/* Google OAuth */}
-                {googleEnabled && (
-                  <motion.div variants={fadeUp}>
-                    <div className="my-5 flex items-center gap-3">
-                      <span className="h-px flex-1 bg-line-subtle" />
-                      <span className="text-xs text-ink-tertiary">or continue with</span>
-                      <span className="h-px flex-1 bg-line-subtle" />
-                    </div>
-                    <a
-                      href={`${env.apiBaseUrl}/auth/google/login`}
-                      className={cn(
-                        buttonVariants({ variant: 'outline', size: 'lg', block: true }),
-                      )}
+                {!isRegister && (
+                  <div className="-mt-1 mb-3 text-right">
+                    <Link
+                      to="/forgot-password"
+                      className="rounded-xs text-xs text-accent transition-colors hover:text-accent-hover focus-visible:focus-ring"
                     >
-                      <GoogleIcon />
-                      Google
-                    </a>
-                  </motion.div>
+                      Forgot password?
+                    </Link>
+                  </div>
                 )}
 
-                {/* Dev/test quick logins — hidden in production builds */}
-                {showTestLogins && (
-                  <motion.div variants={fadeUp}>
-                    <div className="my-5 flex items-center gap-3">
-                      <span className="h-px flex-1 bg-line-subtle" />
-                      <span className="text-xs text-ink-tertiary">testing only</span>
-                      <span className="h-px flex-1 bg-line-subtle" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {TEST_ACCOUNTS.map((account) => (
-                        <Button
-                          key={account.email}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={busy}
-                          onClick={() => quickLogin(account)}
-                        >
-                          <account.icon className="size-4" aria-hidden="true" />
-                          {account.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </>
-            )}
+                <Button type="submit" block size="lg" loading={busy} className="mt-2">
+                  {isRegister ? 'Create account' : 'Login'}
+                </Button>
+              </form>
 
-            {/* Trust badges */}
-            {!pendingTotp && <TrustBadges />}
-          </div>
-        </motion.div>
+              {/* Google OAuth */}
+              {googleEnabled && (
+                <div>
+                  <div className="my-5 flex items-center gap-3">
+                    <span className="h-px flex-1 bg-line-subtle" />
+                    <span className="text-xs text-ink-tertiary">or</span>
+                    <span className="h-px flex-1 bg-line-subtle" />
+                  </div>
+                  <a
+                    href={`${env.apiBaseUrl}/auth/google/login`}
+                    className={cn(
+                      buttonVariants({ variant: 'outline', size: 'lg', block: true }),
+                    )}
+                  >
+                    <GoogleIcon />
+                    Continue with Google
+                  </a>
+                </div>
+              )}
 
-        {/* Footer link */}
-        <motion.p variants={fadeUp} className="mt-5 text-center text-xs text-ink-tertiary">
-          <Link
-            to="/products"
-            className="rounded-xs transition-colors hover:text-ink-secondary focus-visible:focus-ring"
-          >
-            Continue browsing without signing in
-          </Link>
-        </motion.p>
-      </motion.div>
+              {/* Dev/test quick logins */}
+              {showTestLogins && (
+                <div>
+                  <div className="my-5 flex items-center gap-3">
+                    <span className="h-px flex-1 bg-line-subtle" />
+                    <span className="text-xs text-ink-tertiary">testing only</span>
+                    <span className="h-px flex-1 bg-line-subtle" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {TEST_ACCOUNTS.map((account) => (
+                      <Button
+                        key={account.email}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => quickLogin(account)}
+                      >
+                        <account.icon className="size-4" aria-hidden="true" />
+                        {account.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Trust badges */}
+              <TrustBadges />
+            </>
+          )}
+
+          {/* Footer link */}
+          <p className="mt-6 text-center text-xs text-ink-tertiary">
+            <Link
+              to="/products"
+              className="rounded-xs transition-colors hover:text-ink-secondary focus-visible:focus-ring"
+            >
+              Continue browsing without signing in
+            </Link>
+          </p>
+        </div>
+      </div>
     </main>
   );
 }

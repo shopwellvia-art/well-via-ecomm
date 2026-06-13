@@ -21,16 +21,16 @@ function StoryCard({ post }) {
   const inner = (
     <>
       {/* Thumbnail */}
-      <div className="relative aspect-[16/9] overflow-hidden bg-fill">
+      <div className="relative aspect-[16/9] overflow-hidden bg-bg-sunken">
         {post.image ? (
           <img
             src={post.image}
             alt=""
             loading="lazy"
-            className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
           />
         ) : (
-          <div className="grid size-full place-items-center bg-gradient-to-br from-accent/20 to-accent/5 text-accent">
+          <div className="grid size-full place-items-center bg-accent-soft text-accent">
             <Newspaper className="size-8" aria-hidden="true" />
           </div>
         )}
@@ -42,7 +42,7 @@ function StoryCard({ post }) {
       </div>
 
       {/* Body */}
-      <CardBody className="flex flex-col gap-1.5">
+      <CardBody className="flex flex-col gap-1.5 p-4">
         {post.date && (
           <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-tertiary">
             {formatDate(post.date)}
@@ -69,7 +69,7 @@ function StoryCard({ post }) {
   return (
     <Card interactive className="group overflow-hidden">
       {post.url ? (
-        <a href={safeUrl(post.url)} className="block rounded-lg focus-visible:focus-ring">
+        <a href={safeUrl(post.url)} className="block rounded-sm focus-visible:focus-ring">
           {inner}
         </a>
       ) : (
@@ -92,40 +92,42 @@ export default function StoriesPage() {
   }
 
   return (
-    <Page>
+    <>
       <CompanyHero hero={page.hero} current="Lumen Stories">
         {page.intro && (
-          <p className="mt-5 max-w-2xl text-sm leading-relaxed text-ink-secondary">
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-secondary">
             {page.intro}
           </p>
         )}
       </CompanyHero>
 
-      <Section className="mt-12">
-        {page.posts?.length > 0 ? (
-          <motion.div
-            variants={staggerContainer(0.06)}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, margin: '-60px' }}
-            className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
-          >
-            {page.posts.map((post, i) => (
-              <motion.div key={i} variants={fadeUp}>
-                <StoryCard post={post} />
-              </motion.div>
-            ))}
-          </motion.div>
-        ) : (
-          <EmptyState
-            icon={Newspaper}
-            size="sm"
-            title="No stories yet"
-            description="No stories published yet. Check back soon."
-            bordered={false}
-          />
-        )}
-      </Section>
-    </Page>
+      <Page>
+        <Section className="mt-6">
+          {page.posts?.length > 0 ? (
+            <motion.div
+              variants={staggerContainer(0.06)}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, margin: '-60px' }}
+              className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            >
+              {page.posts.map((post, i) => (
+                <motion.div key={i} variants={fadeUp}>
+                  <StoryCard post={post} />
+                </motion.div>
+              ))}
+            </motion.div>
+          ) : (
+            <EmptyState
+              icon={Newspaper}
+              size="sm"
+              title="No stories yet"
+              description="No stories published yet. Check back soon."
+              bordered={false}
+            />
+          )}
+        </Section>
+      </Page>
+    </>
   );
 }

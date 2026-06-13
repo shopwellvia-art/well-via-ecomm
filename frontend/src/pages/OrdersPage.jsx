@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
 import {
   Package,
   ShoppingBag,
@@ -15,7 +14,6 @@ import {
 import { apiClient } from '@/services/apiClient.js';
 import { Page } from '@/components/layout/Page.jsx';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs.jsx';
-import { Card } from '@/components/ui/Card.jsx';
 import { Badge } from '@/components/ui/Badge.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
@@ -24,7 +22,6 @@ import { useAuthStore } from '@/features/auth/store.js';
 import RequestReturnModal from '@/features/returns/components/RequestReturnModal.jsx';
 import { useMyReturns } from '@/features/returns/hooks.js';
 import { formatPrice } from '@/lib/utils.js';
-import { fadeUp, staggerContainer, listStagger } from '@/lib/motion.js';
 
 const RETURN_STATUS_TONE = {
   requested: 'warning',
@@ -39,10 +36,24 @@ const RETURN_STATUS_TONE = {
 const STATUS_BADGE_TONE = {
   paid: 'success',
   pending: 'warning',
-  shipped: 'accent',
+  shipped: 'info',
   delivered: 'success',
   cancelled: 'danger',
   refunded: 'neutral',
+  processing: 'info',
+  failed: 'danger',
+};
+
+// Map status to a human-readable delivery line shown prominently
+const STATUS_DELIVERY_LINE = {
+  delivered: 'Delivered',
+  shipped: 'Shipped',
+  processing: 'Processing',
+  pending: 'Order placed',
+  paid: 'Payment confirmed',
+  cancelled: 'Cancelled',
+  refunded: 'Refunded',
+  failed: 'Payment failed',
 };
 
 function formatEventTime(iso) {
@@ -76,7 +87,7 @@ function TrackingDisclosure({ order }) {
   const events = order.tracking_events || [];
 
   return (
-    <div className="mt-3 rounded-lg border border-line-subtle bg-bg-sunken px-3 py-2.5">
+    <div className="mt-3 rounded-sm border border-line-subtle bg-bg-sunken px-3 py-2.5">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -84,8 +95,8 @@ function TrackingDisclosure({ order }) {
       >
         <span className="flex items-center gap-2 text-xs">
           <Truck className="size-3.5 text-ink-tertiary" aria-hidden="true" />
-          <span className="text-ink-secondary font-medium">Tracking</span>
-          <code className="font-mono text-[10px] text-ink-tertiary nums">
+          <span className="font-medium text-ink-secondary">Tracking</span>
+          <code className="nums font-mono text-[10px] text-ink-tertiary">
             {order.shipping_awb}
           </code>
         </span>
@@ -97,13 +108,7 @@ function TrackingDisclosure({ order }) {
       </button>
 
       {open && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.2 }}
-          className="mt-3 overflow-hidden"
-        >
+        <div className="mt-3 overflow-hidden">
           {events.length === 0 ? (
             <p className="text-xs text-ink-tertiary">No updates yet from the carrier.</p>
           ) : (
@@ -131,7 +136,7 @@ function TrackingDisclosure({ order }) {
                 ))}
             </ol>
           )}
-        </motion.div>
+        </div>
       )}
     </div>
   );
@@ -153,42 +158,41 @@ function ReturnsSummary() {
   if (!returns || returns.length === 0) return null;
 
   return (
-    <motion.div variants={fadeUp} initial="hidden" animate="show">
-      <Card className="mt-8 overflow-hidden p-0">
-        <div className="flex items-center gap-2.5 border-b border-line-subtle px-5 py-4">
-          <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-accent/12 text-accent">
-            <Undo2 className="size-4" aria-hidden="true" />
-          </span>
-          <h2 className="text-sm font-semibold text-ink-primary">Your returns</h2>
-        </div>
-        <ul className="flex flex-col divide-y divide-line-subtle">
-          {returns.map((r) => (
-            <li
-              key={r.id}
-              className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
+    <div className="mt-6 rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
+      {/* Header */}
+      <div className="flex items-center gap-2.5 border-b border-line-subtle px-4 py-3">
+        <span className="grid size-7 shrink-0 place-items-center rounded-sm bg-accent/10 text-accent">
+          <Undo2 className="size-4" aria-hidden="true" />
+        </span>
+        <h2 className="text-sm font-semibold text-ink-primary">Your returns</h2>
+      </div>
+      <ul className="flex flex-col divide-y divide-line-subtle">
+        {returns.map((r) => (
+          <li
+            key={r.id}
+            className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div>
+              <p className="text-sm font-medium text-ink-primary">
+                Return #{r.id}{' '}
+                <span className="text-ink-tertiary">· Order #{r.order_id}</span>
+              </p>
+              <p className="mt-0.5 text-[11px] capitalize text-ink-tertiary">
+                {r.reason.replace(/_/g, ' ')} · requested{' '}
+                {new Date(r.requested_at).toLocaleDateString()}
+              </p>
+            </div>
+            <Badge
+              tone={RETURN_STATUS_TONE[r.status] || 'neutral'}
+              size="md"
+              className="shrink-0 self-start capitalize sm:self-auto"
             >
-              <div>
-                <p className="text-sm font-medium text-ink-primary">
-                  Return #{r.id}{' '}
-                  <span className="text-ink-tertiary">· Order #{r.order_id}</span>
-                </p>
-                <p className="mt-0.5 text-[11px] text-ink-tertiary capitalize">
-                  {r.reason.replace(/_/g, ' ')} · requested{' '}
-                  {new Date(r.requested_at).toLocaleDateString()}
-                </p>
-              </div>
-              <Badge
-                tone={RETURN_STATUS_TONE[r.status] || 'neutral'}
-                size="md"
-                className="shrink-0 self-start capitalize sm:self-auto"
-              >
-                {r.status.replace(/_/g, ' ')}
-              </Badge>
-            </li>
-          ))}
-        </ul>
-      </Card>
-    </motion.div>
+              {r.status.replace(/_/g, ' ')}
+            </Badge>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -202,87 +206,125 @@ export default function OrdersPage() {
 
   return (
     <Page>
-      <Breadcrumbs current="Orders" className="mb-5" />
+      <Breadcrumbs current="Orders" className="mb-4" />
 
-      <h1 className="text-h1 text-ink-primary tracking-tight">Your orders</h1>
-      <p className="mt-1 text-sm text-ink-secondary">
-        Everything you've bought, newest first.
-      </p>
+      {/* Page title bar — Flipkart style */}
+      <div className="mb-5 flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-ink-primary">My Orders</h1>
+        {!isLoading && orders.length > 0 && (
+          <span className="text-xs text-ink-secondary">
+            {orders.length} order{orders.length === 1 ? '' : 's'}
+          </span>
+        )}
+      </div>
 
       {isLoading ? (
-        <div className="mt-8 grid gap-3">
+        <div className="flex flex-col gap-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 rounded-lg" />
+            <Skeleton key={i} className="h-32 rounded-sm" />
           ))}
         </div>
       ) : orders.length === 0 ? (
-        <div className="mt-8">
-          <EmptyState
-            icon={Package}
-            title="No orders yet"
-            description="Once you place an order it will show up here."
-            action={
-              <Link to="/products">
-                <Button size="sm">
-                  <ShoppingBag className="size-4" aria-hidden="true" />
-                  Start shopping
-                </Button>
-              </Link>
-            }
-          />
-        </div>
+        <EmptyState
+          icon={Package}
+          title="No orders yet"
+          description="Once you place an order it will show up here."
+          action={
+            <Link to="/products">
+              <Button size="sm">
+                <ShoppingBag className="size-4" aria-hidden="true" />
+                Start shopping
+              </Button>
+            </Link>
+          }
+        />
       ) : (
-        <motion.ul
-          variants={staggerContainer(0.05)}
-          initial="hidden"
-          animate="show"
-          className="mt-8 flex flex-col gap-3"
-        >
+        <ul className="flex flex-col gap-3">
           {orders.map((o) => {
             const badgeTone = STATUS_BADGE_TONE[o.status] ?? 'neutral';
+            const deliveryLine = STATUS_DELIVERY_LINE[o.status] ?? o.status;
+
             return (
-              <motion.li key={o.id} variants={fadeUp}>
-                <Card className="overflow-hidden p-0">
-                  <div className="p-5">
-                    {/* Header row */}
+              <li key={o.id}>
+                {/* Flipkart-style order card: white block, left accent strip on delivered */}
+                <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
+                  {/* Top meta row */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-subtle bg-bg-sunken px-4 py-2.5">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-tertiary">
+                        Order #{o.id}
+                      </span>
+                      <Badge tone={badgeTone} size="md" className="capitalize">
+                        {o.status}
+                      </Badge>
+                      {o.payment_method === 'cod' &&
+                        Number(o.cod_balance) > 0 &&
+                        o.status !== 'delivered' &&
+                        o.status !== 'cancelled' &&
+                        o.status !== 'refunded' && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
+                            <Banknote className="size-3" aria-hidden="true" />
+                            {formatPrice(o.cod_balance, o.currency)} COD
+                          </span>
+                        )}
+                    </div>
+                    <span className="text-[11px] text-ink-tertiary">
+                      {new Date(o.created_at).toLocaleDateString(undefined, {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </span>
+                  </div>
+
+                  <div className="px-4 py-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-tertiary">
-                            Order #{o.id}
-                          </p>
-                          <Badge tone={badgeTone} size="md" className="capitalize">
-                            {o.status}
-                          </Badge>
-                          {o.payment_method === 'cod' &&
-                            Number(o.cod_balance) > 0 &&
-                            o.status !== 'delivered' &&
-                            o.status !== 'cancelled' &&
-                            o.status !== 'refunded' && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-warning/12 px-2 py-0.5 text-[10px] font-semibold text-warning">
-                                <Banknote className="size-3" aria-hidden="true" />
-                                {formatPrice(o.cod_balance, o.currency)} on delivery
+                      {/* Item thumbnails + names */}
+                      <div className="flex min-w-0 flex-1 flex-col gap-2">
+                        {o.items.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {o.items.slice(0, 3).map((it, idx) => (
+                              <div key={idx} className="flex items-center gap-2">
+                                {/* Thumbnail placeholder */}
+                                <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-line-subtle bg-bg-sunken">
+                                  {it.image_url ? (
+                                    <img
+                                      src={it.image_url}
+                                      alt=""
+                                      loading="lazy"
+                                      className="size-full object-contain"
+                                    />
+                                  ) : (
+                                    <Package className="size-5 text-ink-tertiary" aria-hidden="true" />
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="max-w-[160px] truncate text-xs font-medium text-ink-primary">
+                                    {it.name || `Product #${it.product_id}`}
+                                  </p>
+                                  {it.quantity > 1 && (
+                                    <p className="nums text-[11px] text-ink-tertiary">
+                                      Qty: {it.quantity}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                            {o.items.length > 3 && (
+                              <span className="self-center rounded-sm border border-line-subtle bg-bg-sunken px-2 py-0.5 text-[11px] text-ink-tertiary">
+                                +{o.items.length - 3} more
                               </span>
                             )}
-                        </div>
+                          </div>
+                        )}
 
-                        <p className="mt-2 text-sm text-ink-primary">
-                          <span className="nums font-semibold">{o.items.length}</span>{' '}
-                          item{o.items.length === 1 ? '' : 's'} ·{' '}
-                          <strong className="nums">{formatPrice(o.total_amount, o.currency)}</strong>
-                        </p>
-
-                        <p className="mt-1 text-xs text-ink-tertiary">
-                          Placed {new Date(o.created_at).toLocaleString()}
-                        </p>
-
+                        {/* Address */}
                         {o.shipping_address && (
-                          <p className="mt-1 flex items-center gap-1 truncate text-xs text-ink-secondary">
+                          <p className="flex items-center gap-1 truncate text-xs text-ink-secondary">
                             <MapPin className="size-3 shrink-0 text-ink-tertiary" aria-hidden="true" />
                             {o.shipping_address}
                           </p>
                         )}
-                        {/* Billing address — only shown when it differs from shipping */}
                         {o.billing_address_snapshot &&
                           (() => {
                             const ship = o.shipping_address_snapshot;
@@ -304,53 +346,36 @@ export default function OrdersPage() {
                               .filter(Boolean)
                               .join(', ');
                             return (
-                              <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-ink-tertiary">
+                              <p className="flex items-center gap-1 truncate text-xs text-ink-tertiary">
                                 <MapPin className="size-3 shrink-0" aria-hidden="true" />
-                                <span className="font-medium">Bill to:</span>{' '}
-                                {parts}
+                                <span className="font-medium">Bill to:</span> {parts}
                               </p>
                             );
-                          })()
-                        }
+                          })()}
+                      </div>
+
+                      {/* Right: status + total */}
+                      <div className="flex shrink-0 flex-col items-end gap-1 sm:items-end">
+                        <p className="text-sm font-semibold text-ink-primary">
+                          {deliveryLine}
+                        </p>
+                        <p className="nums text-base font-semibold text-ink-primary">
+                          {formatPrice(o.total_amount, o.currency)}
+                        </p>
+                        <p className="text-[11px] text-ink-tertiary">
+                          {o.items.length} item{o.items.length === 1 ? '' : 's'}
+                        </p>
                       </div>
                     </div>
 
-                    {/* Item names preview */}
-                    {o.items.length > 0 && (
-                      <motion.ul
-                        variants={listStagger(0.03)}
-                        initial="hidden"
-                        animate="show"
-                        className="mt-3 flex flex-wrap gap-1.5"
-                      >
-                        {o.items.slice(0, 4).map((it, idx) => (
-                          <li key={idx}>
-                            <span className="rounded-md border border-line-subtle bg-bg-sunken px-2 py-0.5 text-[11px] text-ink-secondary">
-                              {it.name || `Product #${it.product_id}`}
-                              {it.quantity > 1 && (
-                                <span className="ml-1 text-ink-tertiary nums">×{it.quantity}</span>
-                              )}
-                            </span>
-                          </li>
-                        ))}
-                        {o.items.length > 4 && (
-                          <li>
-                            <span className="rounded-md border border-line-subtle bg-bg-sunken px-2 py-0.5 text-[11px] text-ink-tertiary">
-                              +{o.items.length - 4} more
-                            </span>
-                          </li>
-                        )}
-                      </motion.ul>
-                    )}
-
                     <TrackingDisclosure order={o} />
 
-                    {/* Return CTA */}
+                    {/* Actions */}
                     {o.status === 'delivered' && (
                       <div className="mt-4 flex justify-end border-t border-line-subtle pt-3">
                         <Button
                           size="sm"
-                          variant="ghost"
+                          variant="outline"
                           onClick={() => setReturnOrder(o)}
                         >
                           <Undo2 className="size-4" aria-hidden="true" />
@@ -359,11 +384,11 @@ export default function OrdersPage() {
                       </div>
                     )}
                   </div>
-                </Card>
-              </motion.li>
+                </div>
+              </li>
             );
           })}
-        </motion.ul>
+        </ul>
       )}
 
       <ReturnsSummary />

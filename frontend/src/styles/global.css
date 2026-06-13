@@ -72,40 +72,45 @@
   .light {
     color-scheme: light;
 
-    --bg-base: 249 250 252;
-    --bg-elevated: 255 255 255;
-    --bg-sunken: 241 242 245;
+    /* ── Flipkart / Amazon marketplace palette ──────────────────────────────
+       Light is the only storefront theme. Page sits on a cool grey; cards and
+       bars are pure white. Accent is Flipkart blue #2874F0 (header, links,
+       prices, selection). ink-inverse is WHITE — it backs text on the blue /
+       orange / yellow CTA fills. */
+    --bg-base: 241 243 246;        /* #F1F3F6 marketplace page grey */
+    --bg-elevated: 255 255 255;    /* white cards + bars */
+    --bg-sunken: 247 248 250;      /* near-white wells / input fills */
 
-    --ink-primary: 17 17 21;
-    --ink-secondary: 88 90 100;
-    --ink-tertiary: 138 140 150;
-    /* Text on the accent fill — kept dark in both themes: black on #6366F1
-       scores 4.70:1 (AA pass), white only 4.47:1 (fail). */
-    --ink-inverse: 11 11 15;
+    --ink-primary: 33 33 33;       /* #212121 */
+    --ink-secondary: 120 120 120;  /* #787878 muted label */
+    --ink-tertiary: 158 158 158;   /* #9E9E9E hint */
+    --ink-inverse: 255 255 255;    /* white text on blue/orange/yellow fills */
 
-    --line-subtle: rgba(17, 17, 26, 0.08);
-    --line-strong: rgba(17, 17, 26, 0.16);
-    --fill: rgba(17, 17, 26, 0.04);
-    --fill-strong: rgba(17, 17, 26, 0.07);
-    --glass: rgba(255, 255, 255, 0.7);
+    --line-subtle: rgba(0, 0, 0, 0.09);   /* ~#e4e4e4 hairline */
+    --line-strong: rgba(0, 0, 0, 0.16);
+    --fill: rgba(0, 0, 0, 0.035);
+    --fill-strong: rgba(0, 0, 0, 0.07);
+    /* Sticky bars stay near-opaque white — flat marketplace look, no frosting. */
+    --glass: rgba(255, 255, 255, 0.96);
     --glass-fallback: rgb(255 255 255);
-    --glass-highlight: rgba(255, 255, 255, 0.9);
-    --grid-line: rgba(17, 17, 26, 0.04);
+    --glass-highlight: rgba(255, 255, 255, 0);
+    --grid-line: rgba(0, 0, 0, 0.03);
 
-    --shadow-sm: 0 1px 2px rgba(17, 17, 26, 0.06);
-    --shadow-md: 0 10px 30px rgba(17, 17, 26, 0.1);
-    --shadow-lg: 0 24px 60px rgba(17, 17, 26, 0.14);
+    /* Shadows — Flipkart is nearly flat; cards lift only a hair on hover. */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 1px 4px rgba(0, 0, 0, 0.1), 0 2px 10px rgba(0, 0, 0, 0.05);
+    --shadow-lg: 0 4px 18px rgba(0, 0, 0, 0.14);
 
-    /* Elevation lift — lighter in light mode */
-    --shadow-lift: 0 16px 40px rgba(17, 17, 26, 0.18), 0 4px 12px rgba(17, 17, 26, 0.1);
+    /* Card hover lift — subtle */
+    --shadow-lift: 0 2px 14px rgba(0, 0, 0, 0.14);
 
-    /* Accent glow — same hue, lighter in light mode */
-    --accent-glow: 0 0 0 3px rgba(99, 102, 241, 0.14);
+    /* Accent focus ring — Flipkart blue */
+    --accent-glow: 0 0 0 3px rgba(40, 116, 240, 0.18);
 
-    /* Gradient stops — same brand color, both themes */
-    --gradient-accent-from: #6366F1;
-    --gradient-accent-via: #818CF8;
-    --gradient-accent-to: #A78BFA;
+    /* Gradient stops — blue ramp (used by text-gradient / surface-gradient) */
+    --gradient-accent-from: #2874F0;
+    --gradient-accent-via: #4A90F0;
+    --gradient-accent-to: #66A6FF;
 
     /* shadcn/ui tokens (light) — see the :root/.dark block above. */
     --background: 0 0% 100%;
@@ -146,7 +151,7 @@
   }
 
   ::selection {
-    background: rgba(99, 102, 241, 0.35);
+    background: rgba(40, 116, 240, 0.22);
     color: rgb(var(--ink-primary));
   }
 
@@ -234,7 +239,7 @@
     border-radius: inherit;
     background: radial-gradient(
       ellipse at center,
-      rgba(99, 102, 241, 0.25) 0%,
+      rgba(40, 116, 240, 0.22) 0%,
       transparent 70%
     );
     pointer-events: none;
@@ -308,7 +313,7 @@
       90deg,
       transparent 0%,
       var(--fill-strong) 40%,
-      rgba(255, 255, 255, 0.08) 55%,
+      rgba(0, 0, 0, 0.05) 55%,
       transparent 100%
     );
     animation: shimmer 1.6s ease-in-out infinite;
@@ -349,7 +354,7 @@
   .surface-gradient {
     background: radial-gradient(
       ellipse 80% 60% at 50% -10%,
-      rgba(99, 102, 241, 0.12) 0%,
+      rgba(40, 116, 240, 0.1) 0%,
       transparent 70%
     ),
     rgb(var(--bg-base));

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import {
   Coins,
   Gift,
@@ -19,7 +18,6 @@ import {
 import { Page } from '@/components/layout/Page.jsx';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs.jsx';
 import { Button } from '@/components/ui/Button.jsx';
-import { Card } from '@/components/ui/Card.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { cn, formatPrice } from '@/lib/utils.js';
@@ -27,7 +25,6 @@ import { useAuthStore } from '@/features/auth/store.js';
 import { useMyLoyalty, useRedeemTier } from '@/features/loyalty/hooks.js';
 import { ReferralSection } from '@/features/loyalty/ReferralSection.jsx';
 import { VipTierCard } from '@/features/loyalty/VipTierCard.jsx';
-import { fadeUp, staggerContainer, listStagger } from '@/lib/motion.js';
 
 const REASON_LABELS = {
   signup_bonus: { label: 'Welcome bonus', icon: Sparkles },
@@ -72,38 +69,33 @@ function RedeemSuccessBanner({ result, onDismiss }) {
     );
   }
   return (
-    <motion.div
-      variants={fadeUp}
-      initial="hidden"
-      animate="show"
-      className="rounded-xl border border-success/25 bg-success/8 p-5 shadow-glow-success"
-    >
-      <div className="flex items-start gap-4">
-        <span className="grid size-11 shrink-0 place-items-center rounded-full bg-success/12 text-success">
-          <Gift className="size-6" aria-hidden="true" />
+    <div className="rounded-sm border border-success/30 bg-success/8 p-4 shadow-sm">
+      <div className="flex items-start gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-success/12 text-success">
+          <Gift className="size-5" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-ink-primary">Reward unlocked!</h3>
-          <p className="mt-0.5 text-sm text-ink-secondary">
+          <p className="font-semibold text-ink-primary">Reward unlocked!</p>
+          <p className="mt-0.5 text-xs text-ink-secondary">
             Paste this code at checkout. New balance:{' '}
-            <strong className="text-ink-primary nums">
+            <strong className="nums text-ink-primary">
               {result.new_balance.toLocaleString()} pts
             </strong>
           </p>
-          <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-line-subtle bg-bg-elevated px-3 py-2 shadow-sm">
-            <code className="font-mono text-sm tracking-wider text-ink-primary">
+          <div className="mt-2 inline-flex items-center gap-2 rounded-sm border border-line-subtle bg-bg-elevated px-3 py-1.5 shadow-sm">
+            <code className="nums font-mono text-sm tracking-wider text-ink-primary">
               {result.coupon_code}
             </code>
             <button
               type="button"
               onClick={copy}
               aria-label="Copy coupon code"
-              className="grid size-7 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+              className="grid size-6 place-items-center rounded-xs text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
             >
               {copied ? (
-                <Check className="size-4 text-success" />
+                <Check className="size-3.5 text-success" />
               ) : (
-                <Copy className="size-4" />
+                <Copy className="size-3.5" />
               )}
             </button>
           </div>
@@ -112,12 +104,12 @@ function RedeemSuccessBanner({ result, onDismiss }) {
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss"
-          className="grid size-8 place-items-center rounded-lg text-ink-tertiary hover:bg-fill hover:text-ink-primary transition-colors focus-visible:focus-ring"
+          className="grid size-7 place-items-center rounded-xs text-ink-tertiary hover:bg-fill hover:text-ink-primary transition-colors focus-visible:focus-ring"
         >
-          ×
+          &times;
         </button>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -127,9 +119,9 @@ function TierCard({ tier, balance, onRedeem, redeeming }) {
   const pct = Math.min(100, Math.round((balance / tier.cost_points) * 100));
 
   return (
-    <Card interactive className="flex flex-col gap-4 p-5">
+    <div className="flex flex-col gap-4 rounded-sm border border-line-subtle bg-bg-elevated p-4 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-start gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent/12 text-accent">
+        <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-accent/10 text-accent">
           <TicketPercent className="size-5" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
@@ -138,20 +130,20 @@ function TierCard({ tier, balance, onRedeem, redeeming }) {
         </div>
       </div>
 
-      {/* Progress to this tier */}
+      {/* Progress */}
       <div>
         <div className="mb-1.5 flex items-baseline justify-between">
           <span className="text-xs text-ink-tertiary">
             {canRedeem ? 'Ready to redeem' : `${shortBy.toLocaleString()} pts needed`}
           </span>
-          <span className="text-xs font-semibold text-ink-primary nums">
+          <span className="nums text-xs font-semibold text-ink-primary">
             {tier.cost_points.toLocaleString()}{' '}
             <span className="font-normal text-ink-tertiary">pts</span>
           </span>
         </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-fill">
+        <div className="h-1.5 overflow-hidden rounded-full bg-line-subtle">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-accent to-accent-mid transition-[width] duration-500"
+            className="h-full rounded-full bg-accent transition-[width] duration-500"
             style={{ width: `${pct}%` }}
             role="progressbar"
             aria-valuenow={pct}
@@ -167,8 +159,8 @@ function TierCard({ tier, balance, onRedeem, redeeming }) {
       </p>
 
       {!canRedeem && shortBy > 0 ? (
-        <Button size="sm" disabled>
-          Need <span className="nums">{shortBy.toLocaleString()}</span> more pts
+        <Button size="sm" disabled variant="secondary">
+          Need <span className="nums ml-1">{shortBy.toLocaleString()}</span> more pts
         </Button>
       ) : (
         <Button
@@ -176,13 +168,12 @@ function TierCard({ tier, balance, onRedeem, redeeming }) {
           onClick={() => onRedeem(tier)}
           loading={redeeming}
           disabled={!canRedeem}
-          className={canRedeem ? 'accent-halo' : ''}
         >
           <Gift className="size-4" aria-hidden="true" />
           Redeem reward
         </Button>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -190,11 +181,11 @@ function TransactionRow({ tx }) {
   const { label, icon: Icon } = formatReason(tx.reason);
   const isCredit = tx.delta > 0;
   return (
-    <li className="flex items-center gap-3 border-t border-line-subtle px-4 py-3 first:border-t-0 hover:bg-bg-sunken/50 transition-colors">
+    <li className="flex items-center gap-3 border-t border-line-subtle px-4 py-3 first:border-t-0 hover:bg-bg-sunken/40 transition-colors">
       <span
         className={cn(
-          'grid size-8 shrink-0 place-items-center rounded-full transition-colors',
-          isCredit ? 'bg-success/12 text-success' : 'bg-fill text-ink-secondary',
+          'grid size-8 shrink-0 place-items-center rounded-full',
+          isCredit ? 'bg-success/10 text-success' : 'bg-bg-sunken text-ink-secondary',
         )}
       >
         <Icon className="size-4" aria-hidden="true" />
@@ -208,7 +199,7 @@ function TransactionRow({ tx }) {
       <p className="text-xs text-ink-tertiary">{formatDate(tx.created_at)}</p>
       <p
         className={cn(
-          'min-w-[4rem] text-right text-sm font-semibold nums',
+          'nums min-w-[4rem] text-right text-sm font-semibold',
           isCredit ? 'text-success' : 'text-ink-secondary',
         )}
       >
@@ -229,7 +220,7 @@ export default function RewardsPage() {
   if (!user || status === 401) {
     return (
       <Page>
-        <h1 className="text-h1 text-ink-primary tracking-tight">Rewards</h1>
+        <h1 className="text-lg font-semibold text-ink-primary">Rewards</h1>
         <div className="mt-8">
           <EmptyState
             icon={Lock}
@@ -249,7 +240,7 @@ export default function RewardsPage() {
   if (isError) {
     return (
       <Page>
-        <h1 className="text-h1 text-ink-primary tracking-tight">Rewards</h1>
+        <h1 className="text-lg font-semibold text-ink-primary">Rewards</h1>
         <div className="mt-8">
           <EmptyState
             icon={AlertTriangle}
@@ -283,95 +274,89 @@ export default function RewardsPage() {
 
   return (
     <Page>
-      <Breadcrumbs current="Rewards" className="mb-5" />
+      <Breadcrumbs current="Rewards" className="mb-4" />
 
-      <h1 className="text-h1 text-ink-primary tracking-tight">Rewards</h1>
-      <p className="mt-1 text-sm text-ink-secondary">
-        Earn points on every order. Redeem for discounts.
-      </p>
+      <div className="mb-5 flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-ink-primary">My Rewards</h1>
+        <p className="text-xs text-ink-secondary">
+          Earn points on every order
+        </p>
+      </div>
 
       {isLoading ? (
-        <div className="mt-8 flex flex-col gap-6">
-          <Skeleton className="h-40 rounded-xl" />
-          <Skeleton className="h-32 rounded-xl" />
-          <Skeleton className="h-72 rounded-xl" />
+        <div className="flex flex-col gap-4">
+          <Skeleton className="h-32 rounded-sm" />
+          <Skeleton className="h-24 rounded-sm" />
+          <Skeleton className="h-64 rounded-sm" />
         </div>
       ) : (
-        <motion.div
-          variants={staggerContainer(0.08)}
-          initial="hidden"
-          animate="show"
-          className="mt-8 flex flex-col gap-8"
-        >
+        <div className="flex flex-col gap-6">
           {success && (
             <RedeemSuccessBanner result={success} onDismiss={() => setSuccess(null)} />
           )}
 
           {/* VIP Tier */}
-          <motion.div variants={fadeUp}>
-            <VipTierCard progress={tierProgress} />
-          </motion.div>
+          <VipTierCard progress={tierProgress} />
 
-          {/* Balance card */}
-          <motion.div variants={fadeUp}>
-            <Card className="overflow-hidden p-0">
-              <div className="h-1 w-full bg-gradient-to-r from-accent via-accent-mid to-accent/60" aria-hidden="true" />
-              <div className="grid gap-0 sm:grid-cols-[1fr_1px_1fr]">
-                <div className="p-6">
-                  <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
-                    <Coins className="size-3.5" aria-hidden="true" />
-                    Available balance
+          {/* Balance card — Flipkart-style blue-tinted summary */}
+          <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
+            {/* accent top stripe */}
+            <div className="h-1 w-full bg-accent" aria-hidden="true" />
+            <div className="grid gap-0 divide-y divide-line-subtle sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+              <div className="px-5 py-4">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-tertiary">
+                  <Coins className="size-3.5" aria-hidden="true" />
+                  Available balance
+                </p>
+                <p className="nums mt-2 text-3xl font-bold leading-none text-ink-primary">
+                  {balance.toLocaleString()}
+                  <span className="ml-1.5 text-sm font-normal text-ink-tertiary">pts</span>
+                </p>
+                {balance < 0 && (
+                  <p className="mt-1.5 flex items-center gap-1 text-xs text-warning">
+                    <TrendingDown className="size-3" aria-hidden="true" />
+                    Balance is negative — earn points to restore it.
                   </p>
-                  <p className="mt-3 text-[2.5rem] font-semibold leading-none text-ink-primary nums">
-                    {balance.toLocaleString()}
-                    <span className="ml-2 text-base font-normal text-ink-tertiary">pts</span>
+                )}
+                {balance > 0 && tiers.length > 0 && (
+                  <p className="mt-1.5 flex items-center gap-1 text-xs text-success">
+                    <TrendingUp className="size-3" aria-hidden="true" />
+                    You have rewards available to redeem.
                   </p>
-                  {balance < 0 && (
-                    <p className="mt-2 flex items-center gap-1 text-xs text-warning">
-                      <TrendingDown className="size-3" aria-hidden="true" />
-                      Balance is negative — earn points to restore it.
-                    </p>
-                  )}
-                  {balance > 0 && tiers.length > 0 && (
-                    <p className="mt-2 flex items-center gap-1 text-xs text-success">
-                      <TrendingUp className="size-3" aria-hidden="true" />
-                      You have rewards available to redeem.
-                    </p>
-                  )}
-                </div>
-
-                <div className="hidden bg-line-subtle sm:block" />
-
-                <div className="border-t border-line-subtle p-6 sm:border-t-0">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
-                    Lifetime earned
-                  </p>
-                  <p className="mt-3 text-[1.75rem] font-semibold leading-none text-ink-secondary nums">
-                    {lifetime.toLocaleString()}
-                    <span className="ml-2 text-sm font-normal text-ink-tertiary">pts</span>
-                  </p>
-                  <p className="mt-2 text-xs text-ink-tertiary">
-                    Total points you've ever earned.
-                  </p>
-                </div>
+                )}
               </div>
-            </Card>
-          </motion.div>
+
+              <div className="px-5 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-tertiary">
+                  Lifetime earned
+                </p>
+                <p className="nums mt-2 text-2xl font-bold leading-none text-ink-secondary">
+                  {lifetime.toLocaleString()}
+                  <span className="ml-1.5 text-sm font-normal text-ink-tertiary">pts</span>
+                </p>
+                <p className="mt-1.5 text-xs text-ink-tertiary">
+                  Total points you&apos;ve ever earned.
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Redemption tiers */}
-          <motion.section variants={fadeUp}>
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 className="text-h3 text-ink-primary tracking-tight">Ways to redeem</h2>
+          <section>
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <h2 className="text-sm font-semibold text-ink-primary">Ways to redeem</h2>
               {tiers.length > 0 && (
-                <p className="text-xs text-ink-tertiary nums">{tiers.length} option{tiers.length === 1 ? '' : 's'}</p>
+                <p className="nums text-xs text-ink-tertiary">
+                  {tiers.length} option{tiers.length === 1 ? '' : 's'}
+                </p>
               )}
             </div>
             {tiers.length === 0 ? (
-              <p className="mt-3 text-sm text-ink-secondary">
+              <p className="text-sm text-ink-secondary">
                 No rewards are available right now. Check back soon.
               </p>
             ) : (
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {tiers.map((t) => (
                   <TierCard
                     key={t.id}
@@ -389,24 +374,22 @@ export default function RewardsPage() {
                 {redeem.error?.response?.data?.error?.message || 'Could not redeem. Please try again.'}
               </p>
             )}
-          </motion.section>
+          </section>
 
           {/* Referral */}
-          <motion.div variants={fadeUp}>
-            <ReferralSection />
-          </motion.div>
+          <ReferralSection />
 
           {/* Recent activity */}
-          <motion.section variants={fadeUp}>
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-h3 text-ink-primary tracking-tight">Recent activity</h2>
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-ink-primary">Recent activity</h2>
               <div className="flex items-center gap-3 text-xs text-ink-tertiary">
                 <span className="flex items-center gap-1">
                   <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />
                   Earned
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="size-1.5 rounded-full bg-fill-strong" aria-hidden="true" />
+                  <span className="size-1.5 rounded-full bg-line-strong" aria-hidden="true" />
                   Spent
                 </span>
               </div>
@@ -421,19 +404,16 @@ export default function RewardsPage() {
                 description="Place an order or write a review to start earning points."
               />
             ) : (
-              <motion.ul
-                variants={listStagger(0.04)}
-                initial="hidden"
-                animate="show"
-                className="mt-4 overflow-hidden rounded-xl border border-line-subtle bg-bg-elevated"
-              >
-                {recent.map((tx) => (
-                  <TransactionRow key={tx.id} tx={tx} />
-                ))}
-              </motion.ul>
+              <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
+                <ul>
+                  {recent.map((tx) => (
+                    <TransactionRow key={tx.id} tx={tx} />
+                  ))}
+                </ul>
+              </div>
             )}
-          </motion.section>
-        </motion.div>
+          </section>
+        </div>
       )}
     </Page>
   );

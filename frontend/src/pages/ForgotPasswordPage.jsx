@@ -1,26 +1,22 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { Mail, KeyRound, Lock, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Input } from '@/components/ui/Input.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { authApi } from '@/features/auth/api.js';
-import { duration, ease, heroContainer, fadeUp } from '@/lib/motion.js';
+import { cn } from '@/lib/utils.js';
 
-// Step indicator dot
 function StepDot({ active, done }) {
   return (
     <span
       className={cn(
         'size-2 rounded-full transition-all duration-300',
-        done ? 'bg-success' : active ? 'bg-accent' : 'bg-fill-strong',
+        done ? 'bg-success' : active ? 'bg-accent' : 'bg-line-strong',
       )}
       aria-hidden="true"
     />
   );
 }
-
-import { cn } from '@/lib/utils.js';
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
@@ -75,75 +71,63 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <main className="relative mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-content items-center justify-center px-6 py-12">
-      {/* Background ambient */}
-      <div
-        aria-hidden="true"
-        className="absolute left-1/2 top-1/3 -z-10 size-[480px] -translate-x-1/2 rounded-full bg-accent/10 blur-[150px]"
-      />
+    <main className="flex min-h-[calc(100vh-4rem)] w-full items-center justify-center bg-bg-base px-4 py-12">
+      <div className="w-full max-w-sm">
+        {/* White card */}
+        <div className="rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
+          {/* Blue header bar */}
+          <div className="rounded-t-sm bg-accent px-6 py-5">
+            <div className="flex items-center gap-2.5">
+              <span className="grid size-8 place-items-center rounded-sm bg-white/20">
+                <KeyRound className="size-4 text-white" aria-hidden="true" />
+              </span>
+              <h1 className="text-base font-semibold text-white">
+                {step === 'done'
+                  ? 'Password reset'
+                  : step === 'request'
+                  ? 'Reset your password'
+                  : 'Enter your code'}
+              </h1>
+            </div>
+            {step !== 'done' && (
+              <p className="mt-1.5 text-xs text-white/75">
+                {step === 'request'
+                  ? "We'll email you a 6-digit code to reset it."
+                  : `We sent a code to ${email}. It expires in 10 minutes.`}
+              </p>
+            )}
+          </div>
 
-      <motion.div
-        variants={heroContainer}
-        initial="hidden"
-        animate="show"
-        className="w-full max-w-md"
-      >
-        <motion.div variants={fadeUp} className="gradient-border rounded-lg">
-          <div className="glass rounded-lg p-8">
+          <div className="px-6 py-6">
             {step === 'done' ? (
-              /* ── Success state ── */
-              <motion.div
-                variants={heroContainer}
-                initial="hidden"
-                animate="show"
-                className="flex flex-col items-center text-center"
-              >
-                <motion.span
-                  variants={fadeUp}
-                  className="grid size-14 place-items-center rounded-full bg-success/12 text-success shadow-glow-success"
-                >
+              /* Success state */
+              <div className="flex flex-col items-center py-4 text-center">
+                <span className="grid size-14 place-items-center rounded-full bg-success/10 text-success">
                   <CheckCircle2 className="size-7" aria-hidden="true" />
-                </motion.span>
-                <motion.h1 variants={fadeUp} className="mt-5 text-h2 tracking-tight text-ink-primary">
-                  Password reset
-                </motion.h1>
-                <motion.p variants={fadeUp} className="mt-1.5 text-sm text-ink-secondary">
-                  Your password has been changed. You can sign in with it now.
-                </motion.p>
-                <motion.div variants={fadeUp} className="mt-6 w-full">
-                  <Button block size="lg" onClick={() => navigate('/login')}>
-                    Go to sign in
-                  </Button>
-                </motion.div>
-              </motion.div>
+                </span>
+                <p className="mt-4 text-sm font-medium text-ink-primary">
+                  Your password has been changed.
+                </p>
+                <p className="mt-1 text-xs text-ink-secondary">
+                  You can sign in with your new password now.
+                </p>
+                <Button block size="lg" className="mt-6" onClick={() => navigate('/login')}>
+                  Go to login
+                </Button>
+              </div>
             ) : (
               <>
-                {/* Step progress indicators */}
-                <div className="mb-6 flex items-center justify-center gap-2">
+                {/* Step progress */}
+                <div className="mb-5 flex items-center justify-center gap-2">
                   <StepDot done={step === 'reset'} active={step === 'request'} />
-                  <span className="h-px w-6 bg-line-subtle" aria-hidden="true" />
+                  <span className="h-px w-8 bg-line-subtle" aria-hidden="true" />
                   <StepDot done={false} active={step === 'reset'} />
                 </div>
 
-                {/* Header */}
-                <motion.div variants={fadeUp} className="flex flex-col items-center text-center">
-                  <span className="grid size-12 place-items-center rounded-xl bg-accent text-ink-inverse shadow-glow-sm">
-                    <KeyRound className="size-5" aria-hidden="true" />
-                  </span>
-                  <h1 className="mt-4 text-h2 tracking-tight text-ink-primary">
-                    {step === 'request' ? 'Reset your password' : 'Enter your code'}
-                  </h1>
-                  <p className="mt-1.5 text-sm text-ink-secondary">
-                    {step === 'request'
-                      ? "We'll email you a 6-digit code to reset it."
-                      : `We sent a code to ${email}. It expires in 10 minutes.`}
-                  </p>
-                </motion.div>
-
                 {step === 'request' ? (
-                  <motion.form variants={fadeUp} onSubmit={handleRequest} className="mt-6">
+                  <form onSubmit={handleRequest} className="flex flex-col gap-1">
                     <Input
-                      label="Email"
+                      label="Email address"
                       type="email"
                       icon={Mail}
                       placeholder="you@example.com"
@@ -156,9 +140,9 @@ export default function ForgotPasswordPage() {
                     <Button type="submit" block size="lg" loading={busy} className="mt-2">
                       Send reset code
                     </Button>
-                  </motion.form>
+                  </form>
                 ) : (
-                  <motion.form variants={fadeUp} onSubmit={handleReset} className="mt-6">
+                  <form onSubmit={handleReset} className="flex flex-col gap-1">
                     <Input
                       label="6-digit code"
                       icon={KeyRound}
@@ -192,29 +176,29 @@ export default function ForgotPasswordPage() {
                         setError(null);
                         setOtp('');
                       }}
-                      className="mt-3 w-full rounded-xs text-center text-xs text-ink-tertiary transition-colors hover:text-ink-secondary focus-visible:focus-ring"
+                      className="mt-2 w-full rounded-xs text-center text-xs text-ink-tertiary transition-colors hover:text-ink-secondary focus-visible:focus-ring"
                     >
                       Use a different email
                     </button>
-                  </motion.form>
+                  </form>
                 )}
               </>
             )}
           </div>
-        </motion.div>
+        </div>
 
         {step !== 'done' && (
-          <motion.p variants={fadeUp} className="mt-5 text-center text-xs text-ink-tertiary">
+          <p className="mt-4 text-center text-xs text-ink-tertiary">
             <Link
               to="/login"
-              className="inline-flex items-center gap-1.5 rounded-xs transition-colors hover:text-ink-secondary focus-visible:focus-ring"
+              className="inline-flex items-center gap-1.5 rounded-xs text-accent transition-colors hover:text-accent-hover focus-visible:focus-ring"
             >
               <ArrowLeft className="size-3.5" aria-hidden="true" />
-              Back to sign in
+              Back to login
             </Link>
-          </motion.p>
+          </p>
         )}
-      </motion.div>
+      </div>
     </main>
   );
 }

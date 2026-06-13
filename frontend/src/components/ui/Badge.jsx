@@ -4,19 +4,22 @@ import { cn } from '@/lib/utils.js';
 /**
  * Status / label badge.
  *
- * Tones:   neutral | accent | success | warning | danger | info
+ * Tones:   neutral | accent | success | warning | danger | info | rating
  * Sizes:   sm (default) | md
  * dot      — prepends a colored dot indicator (useful for live/status badges)
  * outline  — border-only treatment instead of filled background
+ *
+ * `rating` is the solid green Flipkart rating pill (white text) — pair it with
+ * a Star icon, e.g. <Badge tone="rating">4.3 <Star .../></Badge>.
  *
  * @example
  *   <Badge tone="success">Active</Badge>
  *   <Badge tone="warning" dot>Low stock</Badge>
  *   <Badge tone="accent" outline>New</Badge>
- *   <Badge tone="info" size="md">Processing</Badge>
+ *   <Badge tone="rating">4.3</Badge>
  */
 const badgeVariants = cva(
-  'inline-flex items-center gap-1.5 rounded-full font-medium',
+  'inline-flex items-center gap-1.5 rounded-xs font-medium',
   {
     variants: {
       tone: {
@@ -26,6 +29,7 @@ const badgeVariants = cva(
         warning: 'bg-warning/12 text-warning',
         danger:  'bg-danger/12 text-danger',
         info:    'bg-info/12 text-info',
+        rating:  'bg-rating text-white font-semibold',
       },
       size: {
         sm: 'px-2.5 py-1 text-xs',
@@ -55,6 +59,7 @@ const DOT_COLOR = {
   warning: 'bg-warning',
   danger:  'bg-danger',
   info:    'bg-info',
+  rating:  'bg-white',
 };
 
 export function Badge({

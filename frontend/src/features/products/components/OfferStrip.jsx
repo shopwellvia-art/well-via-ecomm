@@ -1,49 +1,55 @@
-import { Truck, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Truck, RefreshCw, ShieldCheck, Tag } from 'lucide-react';
 
-const PERKS = [
+const OFFERS = [
+  {
+    icon: Tag,
+    label: 'Bank Offer',
+    detail: '10% instant discount on HDFC Bank Debit and Credit Cards',
+  },
   {
     icon: Truck,
-    title: 'Free delivery',
-    body: 'On all orders — no minimum value, all serviceable pincodes.',
+    label: 'Free Delivery',
+    detail: 'Free shipping on all orders to all serviceable pincodes',
   },
   {
     icon: RefreshCw,
-    title: '7-day returns',
-    body: 'Changed your mind? Returns are free within 7 days of delivery.',
+    label: '7 Day Returns',
+    detail: 'Changed your mind? Easy free returns within 7 days',
   },
   {
     icon: ShieldCheck,
-    title: '1-year warranty',
-    body: 'All products backed by ShopWell's quality guarantee.',
+    label: '1 Year Warranty',
+    detail: 'Backed by ShopWell quality guarantee on all products',
   },
 ];
 
 /**
- * Platform-wide perks strip — three trust pillars displayed as a compact
- * horizontal row (stacks to single column on mobile).
+ * Amazon-style compact offer strip — labelled rows with icon + bold label +
+ * detail text. Flat white card, no shadows or gradients.
  */
 export function OfferStrip() {
   return (
-    <section className="mt-6" aria-label="Purchase guarantees">
-      <h2 className="sr-only">Delivery and returns</h2>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {PERKS.map(({ icon: Icon, title, body }) => (
-          <div
-            key={title}
-            className="flex items-start gap-3 rounded-md border border-line-subtle bg-bg-elevated p-3 transition-colors hover:border-line-strong"
-          >
-            <span
-              className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-sm bg-accent-soft text-accent"
-              aria-hidden="true"
-            >
-              <Icon className="size-4" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-ink-primary">{title}</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-ink-secondary">{body}</p>
-            </div>
-          </div>
-        ))}
+    <section className="mt-5" aria-label="Available offers">
+      <div className="rounded-sm border border-line-subtle bg-bg-elevated">
+        <p className="border-b border-line-subtle px-4 py-2.5 text-sm font-semibold text-ink-primary">
+          Available Offers
+        </p>
+        <ul className="divide-y divide-line-subtle">
+          {OFFERS.map(({ icon: Icon, label, detail }) => (
+            <li key={label} className="flex items-start gap-3 px-4 py-3">
+              <span
+                className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-sm bg-success/10 text-success"
+                aria-hidden="true"
+              >
+                <Icon className="size-3.5" />
+              </span>
+              <p className="text-xs leading-relaxed text-ink-secondary">
+                <span className="font-semibold text-ink-primary">{label}: </span>
+                {detail}
+              </p>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );

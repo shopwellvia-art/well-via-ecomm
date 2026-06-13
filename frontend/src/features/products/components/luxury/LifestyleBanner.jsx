@@ -1,16 +1,13 @@
 import { Link } from 'react-router-dom';
-import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
-import { ease } from '@/lib/motion.js';
 
 /**
- * Editorial lifestyle banner — a large, cinematic moment after the spec-heavy
- * sections. Uses the product's own primary image with a gradient scrim so the
- * brand copy stays legible in both themes. No data is invented: if the product
- * has no imagery the banner simply doesn't render.
+ * Editorial product banner — a large image with a scrim overlay and CTA.
+ * Flat style: no cinematic Framer Motion scale, no glassmorphism. The image
+ * itself provides visual richness. Renders nothing when no image is available.
+ * All logic (finding the hero image URL) unchanged.
  */
 export function LifestyleBanner({ product }) {
-  const reduce = useReducedMotion();
   const hero =
     product.image_url ||
     [...(product.images || [])].sort(
@@ -20,72 +17,40 @@ export function LifestyleBanner({ product }) {
   if (!hero) return null;
 
   return (
-    <section className="mt-20">
-      <div className="relative isolate overflow-hidden rounded-lg">
-        <motion.img
+    <section className="mt-10">
+      <div className="relative isolate overflow-hidden rounded-sm">
+        <img
           src={hero}
           alt=""
           aria-hidden="true"
-          initial={reduce ? false : { scale: 1.12 }}
-          whileInView={reduce ? undefined : { scale: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 1.2, ease: ease.standard }}
           className="absolute inset-0 -z-10 size-full object-cover"
         />
-        {/* Scrim — darkens the image so type reads in any theme */}
+        {/* Scrim */}
         <div
-          className="absolute inset-0 -z-10"
-          style={{
-            background:
-              'linear-gradient(110deg, rgba(10,10,18,0.82) 0%, rgba(20,16,40,0.6) 45%, rgba(99,102,241,0.25) 100%)',
-          }}
+          className="absolute inset-0 -z-10 bg-gradient-to-r from-black/75 via-black/50 to-transparent"
+          aria-hidden="true"
         />
-        <div className="flex min-h-[340px] flex-col justify-center gap-4 p-8 sm:min-h-[420px] sm:p-14">
-          <motion.span
-            initial={reduce ? false : { opacity: 0, y: 16 }}
-            whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, ease: ease.entrance }}
-            className="text-xs font-semibold uppercase tracking-[0.22em] text-white/70"
-          >
+        <div className="flex min-h-[220px] flex-col justify-center gap-3 p-8 sm:min-h-[280px] sm:p-12">
+          <span className="text-xs font-semibold uppercase tracking-widest text-white/70">
             {product.name}
-          </motion.span>
-          <motion.h2
-            initial={reduce ? false : { opacity: 0, y: 20 }}
-            whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.7, delay: 0.08, ease: ease.entrance }}
-            className="max-w-xl text-balance text-4xl font-semibold leading-tight text-white sm:text-5xl"
-          >
+          </span>
+          <h2 className="max-w-md text-2xl font-semibold text-white sm:text-3xl">
             Designed for modern life.
-          </motion.h2>
-          <motion.div
-            initial={reduce ? false : { opacity: 0, y: 20 }}
-            whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.7, delay: 0.16, ease: ease.entrance }}
-            className="flex flex-wrap gap-x-6 gap-y-2 text-lg font-medium text-white/85"
-          >
+          </h2>
+          <div className="flex flex-wrap gap-4 text-sm font-medium text-white/80">
             <span>Comfort.</span>
             <span>Style.</span>
             <span>Performance.</span>
-          </motion.div>
-
-          <motion.div
-            initial={reduce ? false : { opacity: 0, y: 20 }}
-            whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.7, delay: 0.24, ease: ease.entrance }}
-            className="mt-4"
-          >
+          </div>
+          <div className="mt-2">
             <Link
               to="/products"
-              className="inline-flex h-11 items-center gap-2 rounded-full bg-white px-6 text-sm font-semibold text-[#171627] shadow-lg transition-transform hover:-translate-y-0.5 focus-visible:focus-ring"
+              className="inline-flex h-10 items-center gap-2 rounded-sm bg-white px-5 text-sm font-semibold text-ink-primary shadow-sm transition-[filter] hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
             >
-              Explore the collection
+              Explore collection
               <ArrowRight className="size-4" aria-hidden="true" />
             </Link>
-          </motion.div>
+          </div>
         </div>
       </div>
     </section>

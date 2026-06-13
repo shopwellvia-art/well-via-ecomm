@@ -10,8 +10,7 @@ import { cn } from '@/lib/utils.js';
  *
  * `Home` is prepended automatically (pass includeHome={false} to opt out).
  * `items` are the intermediate links; `current` is the active page, rendered
- * bold and non-interactive. The pill blurs its backdrop so it reads cleanly
- * over gradients or imagery.
+ * in the primary ink and non-interactive. Flat plain-text marketplace style.
  */
 export function Breadcrumbs({ items = [], current, className, includeHome = true }) {
   const links = [
@@ -21,7 +20,7 @@ export function Breadcrumbs({ items = [], current, className, includeHome = true
 
   return (
     <nav aria-label="Breadcrumb" className={className}>
-      <ol className="inline-flex max-w-full flex-wrap items-center gap-x-1 gap-y-1 rounded-full border border-line-subtle bg-bg-elevated/70 px-3.5 py-2 text-xs shadow-sm backdrop-blur">
+      <ol className="inline-flex max-w-full flex-wrap items-center gap-x-1 gap-y-1 text-xs">
         {links.map(({ label, to, icon: Icon }) => (
           <li key={`${to}-${label}`} className="inline-flex items-center gap-1">
             <Link
@@ -31,7 +30,7 @@ export function Breadcrumbs({ items = [], current, className, includeHome = true
               {Icon && <Icon className="size-3.5" aria-hidden="true" />}
               {label}
             </Link>
-            <ChevronRight className="size-3.5 text-ink-tertiary/60" aria-hidden="true" />
+            <ChevronRight className="size-3.5 text-ink-tertiary/70" aria-hidden="true" />
           </li>
         ))}
         {current && (

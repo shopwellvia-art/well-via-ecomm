@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Minus,
   Plus,
-  ShoppingBag,
+  ShoppingCart,
   Zap,
   Check,
   Share2,
@@ -18,17 +18,12 @@ import { useAddToCart } from '@/features/cart/hooks.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { WishlistButton } from '@/features/wishlist/WishlistButton.jsx';
 import { StarRating } from '@/features/reviews/StarRating.jsx';
+import { Button } from '@/components/ui/Button.jsx';
 
 /**
- * The conversion panel — frosted, floating, sticky on desktop.
- *
- * Everything shown is real or a transparent derivation of real data:
- *   - discount % is computed from `compare_at_price` (which the old buy box
- *     didn't even surface),
- *   - the EMI line is a plain arithmetic estimate of price ÷ tenure and is
- *     labelled as such — no fictitious "no-cost" claims,
- *   - delivery dates are relative to today, stock/returns come straight off
- *     the product + platform policy.
+ * Conversion panel — flat Flipkart/Amazon marketplace style.
+ * ADD TO CART = bg-cart (amber). BUY NOW = bg-cta (orange).
+ * All logic (navigate, mutate, share, delivery dates, EMI) unchanged.
  */
 export function LuxuryBuyPanel({ product }) {
   const navigate = useNavigate();
@@ -46,7 +41,6 @@ export function LuxuryBuyPanel({ product }) {
   const discountPct = hasDiscount ? Math.round((1 - price / compareAt) * 100) : 0;
   const saved = hasDiscount ? compareAt - price : 0;
 
-  // EMI estimate — shown only when the ticket is large enough for it to matter.
   const emiPerMonth = price >= 3000 ? Math.round(price / 6) : 0;
 
   const delivery = useMemo(() => makeDeliveryDates(), []);
@@ -84,183 +78,201 @@ export function LuxuryBuyPanel({ product }) {
         setTimeout(() => setShared(false), 1800);
       }
     } catch {
-      /* user dismissed the share sheet — nothing to do */
+      /* user dismissed share sheet */
     }
   }
 
   return (
     <aside
       aria-label="Purchase options"
-      className="relative overflow-hidden rounded-lg border border-line-strong bg-bg-elevated p-6 shadow-lg lg:sticky lg:top-24"
+      className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm lg:sticky lg:top-20"
     >
-      {/* Soft luxury sheen along the top edge */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-accent via-[#B794F4] to-accent"
-      />
-      {/* Rating */}
+      {/* Rating link */}
       {ratingCount > 0 && (
-        <a
-          href="#reviews"
-          className="mb-4 inline-flex items-center gap-2 rounded-sm text-sm text-ink-secondary transition-colors hover:text-ink-primary focus-visible:focus-ring"
-        >
-          <StarRating value={Number(product.rating_avg) || 0} size="sm" />
-          <span className="font-semibold tabular-nums text-ink-primary">
-            {Number(product.rating_avg).toFixed(1)}
-          </span>
-          <span className="text-ink-tertiary">
-            ({ratingCount.toLocaleString()} review{ratingCount === 1 ? '' : 's'})
-          </span>
-        </a>
-      )}
-
-      {/* Price */}
-      <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
-        <span className="text-[2rem] font-semibold leading-none tracking-tight text-ink-primary tabular-nums">
-          {formatPrice(price)}
-        </span>
-        {hasDiscount && (
-          <>
-            <span className="text-base text-ink-tertiary line-through tabular-nums">
-              {formatPrice(compareAt)}
-            </span>
-            <span className="rounded-full bg-success/15 px-2.5 py-1 text-xs font-bold text-success">
-              {discountPct}% OFF
-            </span>
-          </>
-        )}
-      </div>
-      <p className="mt-1.5 text-xs text-ink-tertiary">
-        Inclusive of all taxes.
-        {hasDiscount && (
-          <span className="ml-1 text-success">You save {formatPrice(saved)}.</span>
-        )}
-      </p>
-
-      {/* EMI */}
-      {emiPerMonth > 0 && (
-        <p className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-fill px-2.5 py-1.5 text-xs text-ink-secondary">
-          <CreditCard className="size-3.5 text-accent" aria-hidden="true" />
-          EMI from <strong className="text-ink-primary">{formatPrice(emiPerMonth)}/mo</strong>
-          <span className="text-ink-tertiary">· 6 mo (est.)</span>
-        </p>
-      )}
-
-      {/* Delivery */}
-      <div className="mt-5 space-y-1.5 text-sm">
-        <p className="text-ink-secondary">
-          Free delivery by <strong className="text-ink-primary">{delivery.free}</strong>
-        </p>
-        <p className="text-ink-secondary">
-          Or fastest by <strong className="text-accent">{delivery.fast}</strong>
-        </p>
-      </div>
-
-      {/* Stock */}
-      <p
-        className={cn(
-          'mt-4 text-sm font-semibold',
-          outOfStock ? 'text-danger' : product.stock <= 5 ? 'text-warning' : 'text-success',
-        )}
-      >
-        {outOfStock
-          ? 'Out of stock'
-          : product.stock <= 5
-            ? `Hurry — only ${product.stock} left`
-            : 'In stock'}
-      </p>
-
-      {/* Quantity */}
-      <div className="mt-5">
-        <label className="text-xs font-medium text-ink-secondary" htmlFor="lux-qty">
-          Quantity
-        </label>
-        <div className="mt-1.5 flex h-11 w-fit items-center rounded-full border border-line-subtle bg-bg-base/40">
-          <button
-            type="button"
-            aria-label="Decrease quantity"
-            disabled={qty <= 1 || outOfStock}
-            onClick={() => setQty((q) => Math.max(1, q - 1))}
-            className="grid size-11 place-items-center rounded-full text-ink-secondary transition-colors hover:text-ink-primary focus-visible:focus-ring disabled:opacity-30"
+        <div className="border-b border-line-subtle px-4 py-3">
+          <a
+            href="#reviews"
+            className="inline-flex items-center gap-2 text-sm text-ink-secondary transition-colors hover:text-ink-primary focus-visible:outline-none focus-visible:underline"
           >
-            <Minus className="size-4" />
-          </button>
-          <span id="lux-qty" className="w-10 text-center text-sm tabular-nums text-ink-primary">
-            {qty}
-          </span>
-          <button
-            type="button"
-            aria-label="Increase quantity"
-            disabled={qty >= maxQty || outOfStock}
-            onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
-            className="grid size-11 place-items-center rounded-full text-ink-secondary transition-colors hover:text-ink-primary focus-visible:focus-ring disabled:opacity-30"
-          >
-            <Plus className="size-4" />
-          </button>
+            <StarRating value={Number(product.rating_avg) || 0} size="sm" />
+            <span className="font-semibold tabular-nums text-ink-primary">
+              {Number(product.rating_avg).toFixed(1)}
+            </span>
+            <span className="text-ink-tertiary">
+              ({ratingCount.toLocaleString()} review{ratingCount === 1 ? '' : 's'})
+            </span>
+          </a>
         </div>
-      </div>
+      )}
 
-      {/* Actions */}
-      <div className="mt-6 flex flex-col gap-2.5">
-        <button
-          type="button"
-          onClick={handleAddToCart}
-          disabled={outOfStock || addToCart.isPending}
-          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-accent text-sm font-semibold text-ink-inverse shadow-glow transition-[transform,filter] hover:-translate-y-0.5 hover:brightness-105 focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-40"
-        >
-          {added ? (
-            <>
-              <Check className="size-4" aria-hidden="true" /> Added to cart
-            </>
-          ) : (
-            <>
-              <ShoppingBag className="size-4" aria-hidden="true" /> Add to Cart
-            </>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={handleBuyNow}
-          disabled={outOfStock}
-          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border border-line-strong bg-bg-base/40 text-sm font-semibold text-ink-primary transition-[transform,background-color] hover:-translate-y-0.5 hover:bg-fill focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-40"
-        >
-          <Zap className="size-4 text-accent" aria-hidden="true" /> Buy Now
-        </button>
-
-        <div className="mt-1 grid grid-cols-2 gap-2.5">
-          <WishlistButton productId={product.id} variant="inline" />
-          <button
-            type="button"
-            onClick={handleShare}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-sm border border-line-subtle bg-bg-base/40 text-sm font-medium text-ink-secondary transition-colors hover:border-line-strong hover:text-ink-primary focus-visible:focus-ring"
-          >
-            {shared ? (
+      <div className="px-4 py-4 space-y-4">
+        {/* Price */}
+        <div>
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="nums text-[1.75rem] font-semibold leading-none text-accent tabular-nums">
+              {formatPrice(price)}
+            </span>
+            {hasDiscount && (
               <>
-                <Check className="size-4" aria-hidden="true" /> Link copied
+                <span className="nums text-sm text-ink-tertiary line-through tabular-nums">
+                  {formatPrice(compareAt)}
+                </span>
+                <span className="rounded-sm bg-rating/15 px-1.5 py-0.5 text-xs font-bold text-rating">
+                  {discountPct}% OFF
+                </span>
+              </>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-ink-tertiary">
+            Inclusive of all taxes.
+            {hasDiscount && (
+              <span className="ml-1 text-rating">You save {formatPrice(saved)}.</span>
+            )}
+          </p>
+        </div>
+
+        {/* EMI */}
+        {emiPerMonth > 0 && (
+          <p className="inline-flex items-center gap-1.5 rounded-sm border border-line-subtle bg-bg-sunken px-2.5 py-1.5 text-xs text-ink-secondary">
+            <CreditCard className="size-3.5 text-accent" aria-hidden="true" />
+            EMI from{' '}
+            <strong className="text-ink-primary">{formatPrice(emiPerMonth)}/mo</strong>
+            <span className="text-ink-tertiary">· 6 mo (est.)</span>
+          </p>
+        )}
+
+        {/* Delivery */}
+        <div className="rounded-sm bg-bg-sunken px-3 py-2.5 text-xs space-y-1">
+          <p className="text-ink-secondary">
+            Free delivery by{' '}
+            <strong className="font-semibold text-ink-primary">{delivery.free}</strong>
+          </p>
+          <p className="text-ink-secondary">
+            Or fastest by{' '}
+            <strong className="font-semibold text-accent">{delivery.fast}</strong>
+          </p>
+        </div>
+
+        {/* Stock status */}
+        <p
+          className={cn(
+            'text-sm font-semibold',
+            outOfStock ? 'text-danger' : product.stock <= 5 ? 'text-warning' : 'text-success',
+          )}
+        >
+          {outOfStock
+            ? 'Out of stock'
+            : product.stock <= 5
+              ? `Hurry — only ${product.stock} left`
+              : 'In stock'}
+        </p>
+
+        {/* Quantity stepper */}
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-ink-secondary" htmlFor="lux-qty">
+            Quantity
+          </label>
+          <div className="inline-flex h-9 items-center rounded-sm border border-line-subtle bg-bg-sunken">
+            <button
+              type="button"
+              aria-label="Decrease quantity"
+              disabled={qty <= 1 || outOfStock}
+              onClick={() => setQty((q) => Math.max(1, q - 1))}
+              className="grid size-9 place-items-center text-ink-secondary transition-colors hover:text-ink-primary focus-visible:outline-none disabled:opacity-30"
+            >
+              <Minus className="size-4" />
+            </button>
+            <span
+              id="lux-qty"
+              className="w-9 text-center text-sm font-medium tabular-nums text-ink-primary"
+            >
+              {qty}
+            </span>
+            <button
+              type="button"
+              aria-label="Increase quantity"
+              disabled={qty >= maxQty || outOfStock}
+              onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
+              className="grid size-9 place-items-center text-ink-secondary transition-colors hover:text-ink-primary focus-visible:outline-none disabled:opacity-30"
+            >
+              <Plus className="size-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* CTAs */}
+        <div className="flex flex-col gap-2.5">
+          {/* Add to Cart — amber */}
+          <Button
+            variant="cart"
+            size="lg"
+            onClick={handleAddToCart}
+            disabled={outOfStock || addToCart.isPending}
+            block
+          >
+            {added ? (
+              <>
+                <Check className="size-4" aria-hidden="true" />
+                Added to Cart
               </>
             ) : (
               <>
-                <Share2 className="size-4" aria-hidden="true" /> Share
+                <ShoppingCart className="size-4" aria-hidden="true" />
+                Add to Cart
               </>
             )}
-          </button>
+          </Button>
+
+          {/* Buy Now — orange */}
+          <Button
+            variant="cta"
+            size="lg"
+            onClick={handleBuyNow}
+            disabled={outOfStock}
+            block
+          >
+            <Zap className="size-4" aria-hidden="true" />
+            Buy Now
+          </Button>
+
+          {/* Wishlist + Share row */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <WishlistButton productId={product.id} variant="inline" />
+            <button
+              type="button"
+              onClick={handleShare}
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-sm border border-line-subtle bg-bg-elevated text-sm font-medium text-ink-secondary transition-colors hover:border-line-strong hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              {shared ? (
+                <>
+                  <Check className="size-4" aria-hidden="true" />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Share2 className="size-4" aria-hidden="true" />
+                  Share
+                </>
+              )}
+            </button>
+          </div>
         </div>
+
+        <p className="flex items-center justify-center gap-1.5 text-xs text-ink-tertiary">
+          <Lock className="size-3" aria-hidden="true" />
+          Secure, encrypted checkout
+        </p>
       </div>
 
-      <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-ink-tertiary">
-        <Lock className="size-3" aria-hidden="true" /> Secure, encrypted checkout
-      </p>
-
-      {/* Assurances */}
-      <ul className="mt-5 grid grid-cols-1 gap-2.5 border-t border-line-subtle pt-5 text-xs">
+      {/* Assurances strip */}
+      <ul className="grid grid-cols-1 gap-2 border-t border-line-subtle px-4 py-3">
         <Assurance icon={Truck} label="Free delivery on every order" />
         <Assurance icon={RotateCcw} label="7-day easy returns" />
         <Assurance icon={ShieldCheck} label="100% authentic · Sold by ShopWell" />
       </ul>
 
       {addToCart.isError && !addToCart.isPending && (
-        <p className="mt-3 text-xs text-danger">
+        <p className="border-t border-line-subtle px-4 pb-3 text-xs text-danger">
           Couldn&apos;t add to cart — try signing in again.
         </p>
       )}
@@ -270,8 +282,8 @@ export function LuxuryBuyPanel({ product }) {
 
 function Assurance({ icon: Icon, label }) {
   return (
-    <li className="flex items-center gap-2.5 text-ink-secondary">
-      <span className="grid size-7 shrink-0 place-items-center rounded-full bg-accent/12 text-accent">
+    <li className="flex items-center gap-2.5 text-xs text-ink-secondary">
+      <span className="grid size-6 shrink-0 place-items-center rounded-sm bg-accent/10 text-accent">
         <Icon className="size-3.5" aria-hidden="true" />
       </span>
       {label}
@@ -279,7 +291,6 @@ function Assurance({ icon: Icon, label }) {
   );
 }
 
-/** Free delivery ~5 days out, fast delivery tomorrow. Format like "Sun, 31 May". */
 function makeDeliveryDates() {
   const fmt = (d) =>
     d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });

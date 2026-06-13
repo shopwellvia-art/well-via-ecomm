@@ -219,9 +219,9 @@ export default function AddressForm({
                 type="button"
                 onClick={() => set('label', l)}
                 className={cn(
-                  'flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2.5 text-xs font-semibold transition-all duration-150 focus-visible:focus-ring',
+                  'flex flex-1 items-center justify-center gap-1.5 rounded-xs border py-2.5 text-xs font-semibold transition-colors duration-150 focus-visible:focus-ring',
                   values.label === l
-                    ? 'border-accent bg-accent/12 text-accent shadow-glow-sm'
+                    ? 'border-accent bg-accent/8 text-accent'
                     : 'border-line-subtle bg-bg-elevated text-ink-secondary hover:border-line-strong hover:text-ink-primary',
                 )}
               >
@@ -362,12 +362,12 @@ export default function AddressForm({
 
       {/* ── Set as default checkbox ── */}
       {showSetDefault && (
-        <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-line-subtle bg-bg-sunken px-4 py-3 text-sm transition-colors hover:border-line-strong">
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-sm border border-line-subtle bg-bg-sunken px-4 py-3 text-sm transition-colors hover:border-line-strong">
           <input
             type="checkbox"
             checked={values.is_default}
             onChange={(e) => set('is_default', e.target.checked)}
-            className="size-4 rounded border-line-subtle bg-bg-elevated text-accent"
+            className="size-4 rounded-xs border-line-subtle bg-bg-elevated text-accent"
           />
           <span className="font-medium text-ink-primary">Set as default delivery address</span>
         </label>

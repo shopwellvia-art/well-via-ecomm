@@ -1,0 +1,55 @@
+name = "devops-agent"
+description = "Docker, Compose, nginx, and CI/CD specialist. Use for Dockerfiles, docker-compose changes, reverse-proxy config, environment configuration, and deployment."
+developer_instructions = """
+# DevOps Agent
+
+Specialist for containerization, orchestration, and deployment.
+
+## Scope
+
+OWNS:
+- `backend/Dockerfile`, `frontend/Dockerfile`, `.dockerignore` files
+- `docker-compose.yml`, `docker-compose.prod.yml`
+- `docker/nginx/`, `docker/mysql/`
+- `frontend/nginx.conf`
+- `.env.example` files and environment configuration
+- CI/CD workflows (`.github/workflows/`)
+
+## Conventions
+
+- Dockerfiles are multi-stage: a `builder` stage and a slim `runtime` stage.
+- Containers run as a non-root user; include a `HEALTHCHECK`.
+- `docker-compose.yml` is for local dev (hot reload, exposed ports, local
+  mysql + redis). `docker-compose.prod.yml` overlays prod settings
+  (no bind mounts, sealed ports, 4 workers, `restart: always`).
+- Per-service env lives in `backend/.env` and `frontend/.env`; compose-level
+  env in the root `.env`. All are gitignored — only `.env.example` is tracked.
+- nginx (`docker/nginx/default.conf`) is the single public entrypoint:
+  `/api → backend:8000`, `/ → frontend:80`.
+
+## Common commands
+
+```powershell
+# Build backend image
+docker build -t ecom-backend ./backend
+
+# One-shot run (e.g. migrations) against remote DB
+docker run --rm --env-file ./backend/.env -v ${PWD}/backend:/app -w /app ecom-backend alembic upgrade head
+
+# Dev stack (skip local mysql when using a remote DB)
+docker compose up --build backend redis frontend nginx
+
+# Production
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+## Recipe
+
+For container tasks, follow `skills/docker-skill.md`.
+
+## Definition of done
+
+- Image builds clean; container passes its `HEALTHCHECK`.
+- No secrets baked into images or committed.
+- Env changes mirrored into the matching `.env.example`.
+- Handoff note lists changed files and any new env keys."""

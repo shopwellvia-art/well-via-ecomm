@@ -147,9 +147,9 @@ export default function AddressPicker({ onChange }) {
                 variants={fadeUp}
                 onClick={() => handleSelectSaved(addr.id)}
                 className={cn(
-                  'w-full rounded-lg border text-left transition-all duration-200',
+                  'w-full rounded-sm border text-left transition-colors duration-150',
                   isSelected
-                    ? 'border-accent bg-accent/12 shadow-glow-sm'
+                    ? 'border-accent bg-accent/8'
                     : 'border-line-subtle bg-bg-elevated hover:border-line-strong hover:shadow-sm',
                 )}
               >
@@ -187,7 +187,7 @@ export default function AddressPicker({ onChange }) {
       {/* Add new address expander */}
       <div
         className={cn(
-          'overflow-hidden rounded-lg border transition-colors duration-200',
+          'overflow-hidden rounded-sm border transition-colors duration-150',
           addOpen ? 'border-accent/40 bg-bg-elevated' : 'border-line-subtle bg-bg-elevated',
         )}
       >
@@ -236,12 +236,12 @@ export default function AddressPicker({ onChange }) {
                 </motion.div>
 
                 {/* "Save to my addresses" checkbox */}
-                <label className="mt-4 flex cursor-pointer items-center gap-2.5 rounded-lg border border-line-subtle bg-bg-sunken px-4 py-3 text-sm transition-colors hover:border-line-strong">
+                <label className="mt-4 flex cursor-pointer items-center gap-2.5 rounded-sm border border-line-subtle bg-bg-sunken px-4 py-3 text-sm transition-colors hover:border-line-strong">
                   <input
                     type="checkbox"
                     checked={saveNew}
                     onChange={(e) => setSaveNew(e.target.checked)}
-                    className="size-4 rounded border-line-subtle bg-bg-elevated text-accent"
+                    className="size-4 rounded-xs border-line-subtle bg-bg-elevated text-accent"
                   />
                   <span className="font-medium text-ink-primary">Save to my addresses</span>
                   <span className="ml-auto text-xs text-ink-tertiary">For faster checkout next time</span>

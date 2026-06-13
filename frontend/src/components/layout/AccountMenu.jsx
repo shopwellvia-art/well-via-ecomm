@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { LogOut, LayoutDashboard, UserRound, Package, Heart, Coins, Shield, MapPin } from 'lucide-react';
+import { LogOut, LayoutDashboard, UserRound, Package, Heart, Coins, Shield, MapPin, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { authApi } from '@/features/auth/api.js';
@@ -37,18 +37,22 @@ export default function AccountMenu() {
     };
   }, [open]);
 
+  // Signed out: a dark icon + "Login" label, consistent with the other
+  // white-header actions (Wishlist / Cart).
   if (!user) {
     return (
       <Link
         to="/login"
-        className="inline-flex items-center whitespace-nowrap rounded-full border border-line-subtle px-4 py-1.5 text-sm font-medium text-ink-secondary transition-colors hover:border-line-strong hover:text-ink-primary focus-visible:focus-ring"
+        className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm font-medium text-ink-secondary transition-colors hover:text-accent focus-visible:focus-ring"
       >
-        Sign in
+        <UserRound className="size-[22px]" aria-hidden="true" />
+        <span className="hidden lg:inline">Login</span>
       </Link>
     );
   }
 
   const initial = (user.email || '?').charAt(0).toUpperCase();
+  const displayName = user.name || (user.email ? user.email.split('@')[0] : 'Account');
   // Staff = legacy admin flag OR any assigned role. Mirrors <RequireAdmin>,
   // so anyone who can enter the admin shell also sees the shortcut to it.
   const isStaff = !!user.is_admin || (Array.isArray(user.roles) && user.roles.length > 0);
@@ -74,11 +78,18 @@ export default function AccountMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Account menu"
-        className="grid size-10 place-items-center rounded-full focus-visible:focus-ring"
+        className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-ink-secondary transition-colors hover:text-accent focus-visible:focus-ring"
       >
-        <span className="grid size-8 place-items-center rounded-full bg-accent/12 text-xs font-semibold text-accent">
+        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-accent text-xs font-bold text-white">
           {initial}
         </span>
+        <span className="hidden max-w-[8rem] truncate text-sm font-medium text-ink-primary lg:inline">
+          {displayName}
+        </span>
+        <ChevronDown
+          className={cn('hidden size-4 transition-transform sm:block', open && 'rotate-180')}
+          aria-hidden="true"
+        />
       </button>
 
       <AnimatePresence>

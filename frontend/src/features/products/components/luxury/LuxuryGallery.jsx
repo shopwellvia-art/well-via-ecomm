@@ -41,8 +41,8 @@ export function LuxuryGallery({ product }) {
     return (
       <div className="flex flex-col-reverse gap-4 lg:flex-row">
         <div className="hidden lg:block lg:w-20 lg:shrink-0" />
-        <div className="aspect-square w-full overflow-hidden rounded-lg border border-line-subtle bg-bg-elevated">
-          <ProductMedia product={product} eager />
+        <div className="aspect-square w-full overflow-hidden rounded-sm border border-line-subtle bg-white p-4">
+          <ProductMedia product={product} className="object-contain" eager />
         </div>
       </div>
     );
@@ -97,10 +97,10 @@ export function LuxuryGallery({ product }) {
               aria-label={`View ${vid ? 'video' : 'image'} ${i + 1}`}
               aria-current={i === active}
               className={cn(
-                'relative size-16 shrink-0 overflow-hidden rounded-md border bg-bg-elevated transition-all duration-200 focus-visible:focus-ring lg:size-20',
+                'relative size-16 shrink-0 overflow-hidden rounded-sm border bg-white transition-all duration-200 focus-visible:focus-ring lg:size-20',
                 i === active
-                  ? 'border-accent ring-2 ring-accent/30 shadow-sm'
-                  : 'border-line-subtle opacity-80 hover:opacity-100 hover:border-line-strong',
+                  ? 'border-accent ring-1 ring-accent/40'
+                  : 'border-line-subtle opacity-90 hover:opacity-100 hover:border-line-strong',
               )}
             >
               {vid ? (
@@ -111,7 +111,7 @@ export function LuxuryGallery({ product }) {
                   </span>
                 </>
               ) : (
-                <img src={img.url} alt="" loading="lazy" className="size-full object-cover" />
+                <img src={img.url} alt="" loading="lazy" className="size-full object-contain p-1" />
               )}
             </button>
           );
@@ -126,7 +126,7 @@ export function LuxuryGallery({ product }) {
           onMouseLeave={() => setLens(null)}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
-          className="group relative aspect-square w-full select-none overflow-hidden rounded-lg border border-line-subtle bg-bg-elevated"
+          className="group relative aspect-square w-full select-none overflow-hidden rounded-sm border border-line-subtle bg-white p-4"
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -150,7 +150,7 @@ export function LuxuryGallery({ product }) {
                   alt={product.name}
                   fetchpriority="high"
                   draggable={false}
-                  className={cn('size-full object-cover', !lens && 'cursor-zoom-in')}
+                  className={cn('size-full object-contain', !lens && 'cursor-zoom-in')}
                 />
               )}
             </motion.div>
@@ -171,7 +171,7 @@ export function LuxuryGallery({ product }) {
 
           {/* Zoom hint */}
           {!currentIsVideo && (
-            <div className="pointer-events-none absolute bottom-4 left-4 z-10 inline-flex items-center gap-1.5 rounded-full bg-bg-base/70 px-3 py-1.5 text-xs text-ink-secondary opacity-0 backdrop-blur transition-opacity duration-200 group-hover:opacity-100">
+            <div className="pointer-events-none absolute bottom-3 left-3 z-10 inline-flex items-center gap-1.5 rounded-xs bg-ink-primary/75 px-2.5 py-1 text-xs text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
               <ZoomIn className="size-3.5" aria-hidden="true" /> Hover to zoom
             </div>
           )}

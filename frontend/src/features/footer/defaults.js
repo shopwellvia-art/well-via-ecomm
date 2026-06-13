@@ -222,7 +222,7 @@ export const FOOTER_DEFAULTS = {
     { icon: 'LifeBuoy', label: 'Help Center', to: '/help' },
   ],
 
-  payment_methods: ['VISA', 'MC', 'AmEx', 'UPI', 'RuPay', 'Net Banking', 'COD', 'EMI'],
+  payment_methods: ['VISA', 'Mastercard', 'RuPay', 'UPI', 'AMEX', 'PayPal'],
 
   copyright: '© 2007–{year} Lumen.com',
 };

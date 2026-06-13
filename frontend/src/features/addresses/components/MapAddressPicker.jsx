@@ -1,5 +1,9 @@
 /**
- * MapAddressPicker — Flipkart-style full-screen map pin picker.
+ * MapAddressPicker — Flipkart/Swiggy-style map picker.
+ *
+ * Interaction: the pin is FIXED at the centre of the viewport (a CSS overlay,
+ * NOT a Leaflet marker). The user pans/zooms the MAP underneath it; on every
+ * `moveend` we read map.getCenter() and reverse-geocode that exact point.
  *
  * Props
  *   open      – controls visibility
@@ -10,8 +14,7 @@
  *   Desktop (≥768px): ~80vw × 80vh centered panel, map left + info rail right.
  *   Mobile: full-screen, map top (55%) + info panel bottom (45%).
  *
- * Tiles: CartoDB dark_all (matches the app's dark theme).
- * Marker: custom L.divIcon with inline-SVG accent pin (no bundled image URLs).
+ * Tiles: CartoDB Voyager (light, Google-Maps-like).
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -19,7 +22,6 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, LocateFixed, Loader2, MapPin, Navigation, CheckCircle2 } from 'lucide-react';
 import { MapContainer, TileLayer, useMapEvents, useMap } from 'react-leaflet';
-import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { Button } from '@/components/ui/Button.jsx';
@@ -29,10 +31,11 @@ import { getDevicePosition, friendlyGeoError } from '../hooks.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const INDIA_CENTER = [20.5937, 78.9629];
-const INDIA_ZOOM   = 5;
-const LOCATED_ZOOM = 16;
-const DEBOUNCE_MS  = 400;
+const INDIA_CENTER     = [20.5937, 78.9629];
+const INDIA_ZOOM       = 5;
+const LOCATED_ZOOM     = 16;
+const MIN_RESOLVE_ZOOM = 12;   // don't geocode while zoomed out to the country view
+const DEBOUNCE_MS      = 400;
 
 // ─── Haversine distance (km) ─────────────────────────────────────────────────
 
@@ -48,67 +51,23 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// ─── Leaflet divIcon pin ──────────────────────────────────────────────────────
-
-function makePinIcon() {
-  const html = `
-    <div style="position:relative;width:32px;height:44px;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.5))">
-      <svg viewBox="0 0 32 44" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="44">
-        <path d="M16 0C7.163 0 0 7.163 0 16c0 11 16 28 16 28S32 27 32 16C32 7.163 24.837 0 16 0z" fill="#6366F1"/>
-        <circle cx="16" cy="16" r="6" fill="white" fill-opacity="0.95"/>
-      </svg>
-    </div>`;
-  return L.divIcon({
-    html,
-    className: '',          // suppress leaflet-div-icon default white box
-    iconSize:  [32, 44],
-    iconAnchor: [16, 44],   // tip of pin sits on the coordinate
-    popupAnchor: [0, -44],
-  });
-}
-
 // ─── Inner map components ─────────────────────────────────────────────────────
 
 /**
- * Renders a draggable marker and wires map-click.
- * Creates the Leaflet marker imperatively so we can set a custom divIcon
- * without touching Leaflet's image-URL defaults.
+ * Watches map pan/zoom. `movestart` signals the map is in motion (so the pin
+ * can lift and the stale address can clear); `moveend` reports the new centre
+ * so the parent can reverse-geocode it.
  */
-function DraggableMarker({ position, onMove }) {
-  const map = useMap();
-  const markerRef = useRef(null);
-
-  // Map click → move pin
-  useMapEvents({
-    click(e) {
-      onMove(e.latlng.lat, e.latlng.lng);
+function CenterWatcher({ onMoveStart, onMoveEnd }) {
+  const map = useMapEvents({
+    movestart() {
+      onMoveStart();
+    },
+    moveend() {
+      const c = map.getCenter();
+      onMoveEnd(c.lat, c.lng, map.getZoom());
     },
   });
-
-  // Create marker once per map instance
-  useEffect(() => {
-    const marker = L.marker(position, { icon: makePinIcon(), draggable: true }).addTo(map);
-    markerRef.current = marker;
-
-    marker.on('dragend', () => {
-      const ll = marker.getLatLng();
-      onMove(ll.lat, ll.lng);
-    });
-
-    return () => {
-      marker.remove();
-      markerRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map]);
-
-  // Sync position when prop changes (e.g. "use my location" button)
-  useEffect(() => {
-    if (markerRef.current) {
-      markerRef.current.setLatLng(position);
-    }
-  }, [position]);
-
   return null;
 }
 
@@ -125,11 +84,12 @@ function MapController({ flyTo }) {
 // ─── MapAddressPicker ─────────────────────────────────────────────────────────
 
 export default function MapAddressPicker({ open, onClose, onSelect }) {
-  const [pinPosition, setPinPosition] = useState(INDIA_CENTER);
+  const [pinPosition, setPinPosition] = useState(INDIA_CENTER); // last map centre
   const [flyTo, setFlyTo]             = useState(null);
   const [devicePos, setDevicePos]     = useState(null);   // { lat, lng } when known
   const [geoStatus, setGeoStatus]     = useState('idle'); // 'idle'|'locating'|'error'
   const [geoError, setGeoError]       = useState(null);
+  const [dragging, setDragging]       = useState(false);  // map currently in motion
 
   const [resolving, setResolving]     = useState(false);
   const [geoResult, setGeoResult]     = useState(null);   // reverseGeocode response
@@ -164,36 +124,45 @@ export default function MapAddressPicker({ open, onClose, onSelect }) {
   }, []);
 
   // ── Auto-locate on open ──────────────────────────────────────────────────────
+  // Geocoding is driven by `moveend` (see handleMoveEnd) — here we only fly the
+  // map to the device location; the resulting moveend resolves the address.
   useEffect(() => {
     if (!open) return;
     // Reset per-open state
     setGeoResult(null);
     setHasResolved(false);
     setGeoError(null);
+    setDevicePos(null);
+    setDragging(false);
+    setPinPosition(INDIA_CENTER);
+    setFlyTo(null);
     setGeoStatus('locating');
 
     getDevicePosition()
       .then(({ latitude, longitude }) => {
         setDevicePos({ lat: latitude, lng: longitude });
         setGeoStatus('idle');
-        const center = [latitude, longitude];
-        setPinPosition(center);
-        setFlyTo({ center, zoom: LOCATED_ZOOM });
-        scheduleResolve(latitude, longitude);
+        setFlyTo({ center: [latitude, longitude], zoom: LOCATED_ZOOM });
       })
       .catch(() => {
         setGeoStatus('idle');
-        setFlyTo({ center: INDIA_CENTER, zoom: INDIA_ZOOM });
-        setGeoError('Location access denied — drag the pin to your address.');
+        setGeoError('Location access denied — move the map to your address.');
       });
-  }, [open, scheduleResolve]);
+  }, [open]);
 
-  // ── Pin moved ────────────────────────────────────────────────────────────────
-  function handlePinMove(lat, lng) {
-    setPinPosition([lat, lng]);
+  // ── Map moved ────────────────────────────────────────────────────────────────
+  function handleMoveStart() {
+    setDragging(true);
+    // hide the stale address while the map is in motion
     setGeoResult(null);
     setHasResolved(false);
-    scheduleResolve(lat, lng);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  }
+
+  function handleMoveEnd(lat, lng, zoom) {
+    setDragging(false);
+    setPinPosition([lat, lng]);
+    if (zoom >= MIN_RESOLVE_ZOOM) scheduleResolve(lat, lng);
   }
 
   // ── "Use my current location" button ─────────────────────────────────────────
@@ -204,10 +173,7 @@ export default function MapAddressPicker({ open, onClose, onSelect }) {
       .then(({ latitude, longitude }) => {
         setDevicePos({ lat: latitude, lng: longitude });
         setGeoStatus('idle');
-        const center = [latitude, longitude];
-        setPinPosition(center);
-        setFlyTo({ center, zoom: LOCATED_ZOOM });
-        scheduleResolve(latitude, longitude);
+        setFlyTo({ center: [latitude, longitude], zoom: LOCATED_ZOOM });
       })
       .catch((err) => {
         setGeoStatus('error');
@@ -310,30 +276,62 @@ export default function MapAddressPicker({ open, onClose, onSelect }) {
                 zoomControl={false}
                 attributionControl={true}
                 className="h-full w-full"
-                style={{ background: '#0d0d12' }}
+                style={{ background: '#e5e7eb' }}
               >
                 <TileLayer
-                  url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                  url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
                   attribution="&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors &copy; <a href='https://carto.com/attributions'>CARTO</a>"
                   subdomains="abcd"
-                  maxZoom={19}
+                  maxZoom={20}
                 />
-                <DraggableMarker position={pinPosition} onMove={handlePinMove} />
+                <CenterWatcher onMoveStart={handleMoveStart} onMoveEnd={handleMoveEnd} />
                 <MapController flyTo={flyTo} />
               </MapContainer>
 
-              {/* "Drag to place pin" hint (auto-locate failed or not resolved yet) */}
+              {/* ── Fixed centre pin (the map moves under it) ── */}
+              <div className="pointer-events-none absolute inset-0 z-[450]">
+                {/* ground shadow — marks the exact map centre */}
+                <span
+                  className={cn(
+                    'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[50%]',
+                    'bg-black/40 transition-all duration-200',
+                    dragging ? 'h-1 w-2.5 opacity-25 blur-[2px]' : 'h-1.5 w-3.5 opacity-50 blur-[1px]',
+                  )}
+                />
+                {/* pin — tip rests on the map centre, lifts while dragging */}
+                <div
+                  className={cn(
+                    'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full origin-bottom',
+                    'transition-transform duration-200 ease-out',
+                    dragging && '-translate-y-[calc(100%+8px)] scale-105',
+                  )}
+                >
+                  <svg
+                    width="34" height="46" viewBox="0 0 32 44" fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="drop-shadow-[0_6px_8px_rgba(0,0,0,0.35)]"
+                  >
+                    <path
+                      d="M16 0C7.163 0 0 7.163 0 16c0 11 16 28 16 28S32 27 32 16C32 7.163 24.837 0 16 0z"
+                      fill="#6366F1"
+                    />
+                    <circle cx="16" cy="16" r="6" fill="white" fillOpacity="0.95" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* "Move the map" hint (auto-locate failed or not resolved yet) */}
               {geoStatus === 'idle' && !devicePos && !hasResolved && (
                 <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 z-[400]">
                   <p className="rounded-full bg-bg-elevated/90 backdrop-blur-sm px-3 py-1.5
                                 text-xs text-ink-secondary shadow-md border border-line-subtle whitespace-nowrap">
-                    Drag the pin or tap the map to choose your location
+                    Move the map to position the pin over your address
                   </p>
                 </div>
               )}
 
               {/* "Use my current location" pill — bottom-center of map */}
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[400] flex flex-col items-center gap-1.5">
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[460] flex flex-col items-center gap-1.5">
                 <button
                   type="button"
                   onClick={handleLocateMe}
@@ -430,14 +428,14 @@ export default function MapAddressPicker({ open, onClose, onSelect }) {
                       className="rounded-lg border border-warning/30 bg-warning/10 p-3"
                     >
                       <p className="text-xs text-warning leading-relaxed">
-                        We couldn&apos;t find a deliverable pincode here — move the pin
+                        We couldn&apos;t find a deliverable pincode here — move the map
                         closer to a road or town.
                       </p>
                     </motion.div>
                   )
                 ) : (
                   <p className="text-xs text-ink-tertiary leading-relaxed">
-                    Move or drag the pin to see the address.
+                    Move the map to see the address.
                   </p>
                 )}
 
@@ -465,7 +463,7 @@ export default function MapAddressPicker({ open, onClose, onSelect }) {
                   )}
                 </Button>
                 <p className="text-[10px] text-center text-ink-tertiary">
-                  Drag pin or tap map to refine
+                  Move the map to refine
                 </p>
               </div>
             </div>

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Star } from 'lucide-react';
 import { Page } from '@/components/layout/Page.jsx';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs.jsx';
 import { Button } from '@/components/ui/Button.jsx';
@@ -14,7 +14,7 @@ import {
   useLikelyProducts,
 } from '@/features/products/hooks.js';
 import { useCategories } from '@/features/categories/hooks.js';
-import { stockLabel } from '@/lib/utils.js';
+import { stockLabel, formatPrice } from '@/lib/utils.js';
 import { useTrackProductView } from '@/features/history/store.js';
 
 import { FrequentlyBoughtTogether } from '@/features/products/components/FrequentlyBoughtTogether.jsx';
@@ -22,7 +22,8 @@ import { ProductRail } from '@/features/products/components/ProductRail.jsx';
 import { BrowsingHistoryRail } from '@/features/history/BrowsingHistoryRail.jsx';
 import { CustomerReviewsSection } from '@/features/reviews/CustomerReviewsSection.jsx';
 
-import { Aura, Reveal } from '@/features/products/components/luxury/luxe.jsx';
+// luxury/* — all still rendered; only page layout restructured
+import { Reveal } from '@/features/products/components/luxury/luxe.jsx';
 import { LuxuryGallery } from '@/features/products/components/luxury/LuxuryGallery.jsx';
 import { LuxuryBuyPanel } from '@/features/products/components/luxury/LuxuryBuyPanel.jsx';
 import { KeyFeatures } from '@/features/products/components/luxury/KeyFeatures.jsx';
@@ -31,31 +32,18 @@ import { LifestyleBanner } from '@/features/products/components/luxury/Lifestyle
 import { CustomerSay } from '@/features/products/components/luxury/CustomerSay.jsx';
 import { StickyBuyBar } from '@/features/products/components/luxury/StickyBuyBar.jsx';
 
-/**
- * Luxury product detail page — Apple / Aesop / Nothing inspired.
- *
- * Layout (>=lg):  | large frosted gallery | product info + glass buy panel |
- *   Below: trust strip → highlights → lifestyle banner → frequently bought
- *   together → recommendation rails → reviews. A scroll-activated buy bar keeps
- *   the CTA reachable throughout.
- *
- * The premium feel is layered with theme tokens + soft lavender ambient light,
- * so it reads as a flagship in BOTH light and dark mode. Every section is
- * data-honest: anything without backing data (video, 360, highlights) simply
- * doesn't render rather than showing placeholders.
- */
+import { OfferStrip } from '@/features/products/components/OfferStrip.jsx';
+import { AboutThisItem } from '@/features/products/components/AboutThisItem.jsx';
+import { SpecTable } from '@/features/products/components/SpecTable.jsx';
+
 export default function ProductDetailPage() {
   const { id } = useParams();
   const { data: product, isLoading, isError } = useProduct(id);
   const { data: related, isLoading: relatedLoading } = useRelatedProducts(id, 12);
-  const { data: coPurchased, isLoading: coPurchasedLoading } = useCoPurchasedProducts(
-    id,
-    12,
-  );
+  const { data: coPurchased, isLoading: coPurchasedLoading } = useCoPurchasedProducts(id, 12);
   const { data: likely, isLoading: likelyLoading } = useLikelyProducts(id, 12);
   const { data: categories } = useCategories();
 
-  // Record the view for the "Your browsing history" rail on subsequent visits.
   useTrackProductView(id);
 
   const categoryName = useMemo(() => {
@@ -67,94 +55,165 @@ export default function ProductDetailPage() {
   if (isError || !product) return <NotFound />;
 
   const stock = stockLabel(product.stock);
+  const price = Number(product.price) || 0;
+  const compareAt = Number(product.compare_at_price) || 0;
+  const hasDiscount = compareAt > price;
+  const discountPct = hasDiscount ? Math.round((1 - price / compareAt) * 100) : 0;
+  const ratingAvg = Number(product.rating_avg) || 0;
+  const ratingCount = Number(product.rating_count) || 0;
 
   return (
     <Page>
-      <div className="relative isolate">
-        <Aura />
+      {/* Breadcrumbs */}
+      <Breadcrumbs
+        items={[
+          { label: 'Home', to: '/' },
+          { label: 'Shop', to: '/products' },
+          ...(categoryName
+            ? [{ label: categoryName, to: `/products?category_id=${product.category_id}` }]
+            : []),
+        ]}
+        current={product.name}
+        className="mb-4"
+      />
 
-        <Breadcrumbs
-          items={[
-            { label: 'Shop', to: '/products' },
-            ...(categoryName
-              ? [
-                  {
-                    label: categoryName,
-                    to: `/products?category_id=${product.category_id}`,
-                  },
-                ]
-              : []),
-          ]}
-          current={product.name}
-        />
+      {/* ── HERO TWO-COLUMN: Flipkart / Amazon layout ──────────────────────────
+          LEFT  (sticky): gallery + thumbnail rail  (desktop)
+          RIGHT         : title / rating / price / buy panel / specs
+          Mobile: stacked — gallery → info → buy panel
+      ───────────────────────────────────────────────────────────────────────── */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] xl:grid-cols-[460px_minmax(0,1fr)]">
 
-        {/* Hero: gallery | info + buy panel. Plain sections (no Reveal
-            transform) so the sticky gallery isn't broken by an animated
-            ancestor; the Page wrapper already provides the entrance. */}
-        <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-12">
-          <section className="lg:sticky lg:top-24 lg:z-30 lg:self-start">
-            <LuxuryGallery product={product} />
-          </section>
+        {/* ── LEFT: Image gallery (sticky on desktop) ── */}
+        <section className="lg:sticky lg:top-20 lg:self-start">
+          <LuxuryGallery product={product} />
+        </section>
 
-          <section className="relative min-w-0 lg:z-10">
-            {categoryName && (
-              <Link
-                to={`/products?category_id=${product.category_id}`}
-                className="text-xs font-semibold uppercase tracking-[0.18em] text-accent hover:underline"
-              >
-                {categoryName}
-              </Link>
-            )}
-            <h1 className="mt-3 text-4xl font-semibold leading-tight tracking-tight text-ink-primary text-balance sm:text-5xl">
-              {product.name}
-            </h1>
+        {/* ── RIGHT: Product info + buy panel ── */}
+        <section className="min-w-0">
+          {/* Category breadcrumb */}
+          {categoryName && (
+            <Link
+              to={`/products?category_id=${product.category_id}`}
+              className="mb-1 block text-xs font-semibold uppercase tracking-wide text-accent hover:underline focus-visible:outline-none focus-visible:underline"
+            >
+              {categoryName}
+            </Link>
+          )}
 
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <Badge tone={stock.tone} className="text-[11px]">
-                {stock.text}
+          {/* Product title */}
+          <h1 className="text-xl font-medium leading-snug text-ink-primary sm:text-[1.375rem]">
+            {product.name}
+          </h1>
+
+          {/* Rating row — only when data exists */}
+          {ratingCount > 0 && (
+            <a
+              href="#reviews"
+              className="mt-2 inline-flex items-center gap-1.5 hover:underline focus-visible:outline-none"
+            >
+              <Badge tone="rating" className="inline-flex items-center gap-1 px-2 py-0.5 text-xs">
+                {ratingAvg.toFixed(1)}
+                <Star className="size-3 fill-current" aria-hidden="true" />
               </Badge>
-              <span className="text-xs text-ink-tertiary">SKU: {product.sku}</span>
-            </div>
+              <span className="text-xs text-ink-tertiary">
+                {ratingCount.toLocaleString()} rating{ratingCount === 1 ? '' : 's'}
+              </span>
+            </a>
+          )}
 
-            {product.description && (
-              <p className="mt-5 max-w-prose text-body leading-relaxed text-ink-secondary">
-                {product.description}
-              </p>
+          {/* Stock + SKU */}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Badge tone={stock.tone} className="text-[11px]">
+              {stock.text}
+            </Badge>
+            <span className="text-xs text-ink-tertiary">SKU: {product.sku}</span>
+          </div>
+
+          {/* Divider */}
+          <div className="my-4 border-t border-line-subtle" />
+
+          {/* Price block */}
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="nums text-3xl font-semibold text-accent">
+              {formatPrice(price)}
+            </span>
+            {hasDiscount && (
+              <>
+                <s className="nums text-base text-ink-tertiary" aria-label={`Was ${formatPrice(compareAt)}`}>
+                  {formatPrice(compareAt)}
+                </s>
+                <span className="text-sm font-bold text-rating">{discountPct}% off</span>
+              </>
             )}
+          </div>
+          <p className="mt-0.5 text-xs text-ink-tertiary">Inclusive of all taxes.</p>
 
-            <div id="pdp-buybox" className="mt-8">
-              <LuxuryBuyPanel product={product} />
-            </div>
-          </section>
-        </div>
+          {/* Offer strip */}
+          <OfferStrip />
 
-        <TrustRow />
+          {/* Divider */}
+          <div className="my-4 border-t border-line-subtle" />
 
-        <KeyFeatures product={product} />
+          {/* Brief description */}
+          {product.description && (
+            <p className="text-sm leading-relaxed text-ink-secondary">
+              {product.description.length > 300
+                ? `${product.description.slice(0, 300)}…`
+                : product.description}
+            </p>
+          )}
 
-        <LifestyleBanner product={product} />
+          {/* Buy panel — StickyBuyBar observes #pdp-buybox to know when to appear */}
+          <div id="pdp-buybox" className="mt-5">
+            <LuxuryBuyPanel product={product} />
+          </div>
 
-        <Reveal className="mt-20">
-          <FrequentlyBoughtTogether
-            product={product}
-            related={related}
-            isLoading={relatedLoading}
-          />
-        </Reveal>
+          {/* About this item */}
+          <AboutThisItem product={product} categoryName={categoryName} />
 
-        <CustomerSay product={product} />
-
-        <ProductRail
-          title="You may also like"
-          products={likely?.length ? likely : coPurchased}
-          isLoading={likelyLoading && coPurchasedLoading}
-        />
-
-        <BrowsingHistoryRail excludeId={product.id} title="Recently viewed" />
-
-        <CustomerReviewsSection product={product} />
+          {/* Spec table */}
+          <SpecTable product={product} categoryName={categoryName} />
+        </section>
       </div>
 
+      {/* ── BELOW-FOLD SECTIONS ── */}
+
+      {/* Trust row */}
+      <TrustRow />
+
+      {/* Key features / highlights */}
+      <KeyFeatures product={product} />
+
+      {/* Lifestyle banner */}
+      <LifestyleBanner product={product} />
+
+      {/* Frequently bought together */}
+      <Reveal className="mt-10">
+        <FrequentlyBoughtTogether
+          product={product}
+          related={related}
+          isLoading={relatedLoading}
+        />
+      </Reveal>
+
+      {/* Customer reviews summary */}
+      <CustomerSay product={product} />
+
+      {/* You may also like rail */}
+      <ProductRail
+        title="You may also like"
+        products={likely?.length ? likely : coPurchased}
+        isLoading={likelyLoading && coPurchasedLoading}
+      />
+
+      {/* Recently viewed */}
+      <BrowsingHistoryRail excludeId={product.id} title="Recently viewed" />
+
+      {/* Full paginated reviews */}
+      <CustomerReviewsSection product={product} />
+
+      {/* Sticky bottom CTA bar — slides in once #pdp-buybox scrolls out of view */}
       <StickyBuyBar product={product} />
     </Page>
   );
@@ -163,30 +222,36 @@ export default function ProductDetailPage() {
 function Loading() {
   return (
     <Page>
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-12">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
         {/* Gallery skeleton */}
-        <div className="flex flex-col gap-3">
-          <Skeleton className="aspect-[4/5] rounded-md" />
-          <div className="grid grid-cols-5 gap-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} variant="circle" className="aspect-square w-full rounded-sm" />
+        <div className="flex flex-col gap-2.5">
+          <Skeleton className="aspect-square rounded-sm" />
+          <div className="grid grid-cols-6 gap-1.5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="aspect-square rounded-sm" />
             ))}
           </div>
         </div>
 
-        {/* Buy panel skeleton */}
-        <div className="flex flex-col gap-5">
-          <Skeleton className="h-3.5 w-20" />
-          <Skeleton className="h-10 w-4/5" />
+        {/* Info skeleton */}
+        <div className="flex flex-col gap-4">
+          <Skeleton className="h-3 w-20" />
+          <div>
+            <Skeleton className="h-6 w-full" />
+            <Skeleton className="mt-1.5 h-6 w-4/5" />
+          </div>
+          <Skeleton className="h-3 w-24" />
+          <div className="flex items-baseline gap-3">
+            <Skeleton className="h-9 w-28" />
+            <Skeleton className="h-4 w-14" />
+          </div>
           <Skeleton variant="text" lines={3} className="w-full" />
-          <div className="mt-2 flex flex-col gap-3 rounded-lg border border-line-subtle p-5">
-            <Skeleton className="h-8 w-28" />
+          <div className="mt-2 flex flex-col gap-2.5 rounded-sm border border-line-subtle p-4">
             <Skeleton className="h-3 w-40" />
             <Skeleton className="h-3 w-32" />
-            <div className="mt-2 h-px w-full bg-line-subtle" />
-            <Skeleton className="h-11 w-full rounded-full" />
-            <Skeleton className="h-11 w-full rounded-full" />
-            <Skeleton className="h-11 w-full rounded-sm" />
+            <div className="h-px w-full bg-line-subtle" />
+            <Skeleton className="h-12 w-full rounded-sm" />
+            <Skeleton className="h-12 w-full rounded-sm" />
           </div>
         </div>
       </div>

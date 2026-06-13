@@ -49,7 +49,7 @@ function Release({ item }) {
           href={safeUrl(item.url)}
           target="_blank"
           rel="noreferrer"
-          className="block rounded-lg focus-visible:focus-ring"
+          className="block rounded-sm focus-visible:focus-ring"
         >
           {inner}
         </a>
@@ -75,95 +75,95 @@ export default function PressPage() {
   const { contact } = page;
 
   return (
-    <Page>
+    <>
       <CompanyHero hero={page.hero} current="Press">
         {page.intro && (
-          <p className="mt-5 max-w-2xl text-sm leading-relaxed text-ink-secondary">
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-secondary">
             {page.intro}
           </p>
         )}
       </CompanyHero>
 
-      <Section className="mt-12 grid gap-8 lg:grid-cols-[1.6fr_1fr]">
-        {/* Releases list */}
-        <div>
-          <SectionLabel className="text-h3">Latest coverage</SectionLabel>
-          {page.releases?.length > 0 ? (
-            <motion.div
-              variants={listStagger(0.04)}
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true, margin: '-40px' }}
-              className="mt-5 flex flex-col gap-3"
-            >
-              {page.releases.map((item, i) => (
-                <motion.div key={i} variants={fadeUp}>
-                  <Release item={item} />
-                </motion.div>
-              ))}
-            </motion.div>
-          ) : (
-            <div className="mt-4">
+      <Page>
+        <Section className="mt-6 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+          {/* Releases list */}
+          <div>
+            <SectionLabel className="mb-4">Latest coverage</SectionLabel>
+            {page.releases?.length > 0 ? (
+              <motion.div
+                variants={listStagger(0.04)}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, margin: '-40px' }}
+                className="flex flex-col gap-3"
+              >
+                {page.releases.map((item, i) => (
+                  <motion.div key={i} variants={fadeUp}>
+                    <Release item={item} />
+                  </motion.div>
+                ))}
+              </motion.div>
+            ) : (
               <EmptyState
                 icon={Newspaper}
                 size="sm"
                 title="No announcements yet"
                 bordered={false}
               />
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Sidebar: media contact + kit */}
-        <div className="flex flex-col gap-4">
-          {contact?.heading && (
-            <Card>
-              <CardBody>
-                <h3 className="font-semibold text-ink-primary">{contact.heading}</h3>
-                <ul className="mt-3 space-y-2.5 text-sm">
-                  {contact.email && (
-                    <li>
-                      <a
-                        href={`mailto:${contact.email}`}
-                        className="inline-flex items-center gap-2 text-ink-secondary transition-colors hover:text-accent focus-visible:focus-ring"
-                      >
-                        <Mail className="size-4 text-accent" aria-hidden="true" />
-                        {contact.email}
-                      </a>
-                    </li>
-                  )}
-                  {contact.phone && (
-                    <li>
-                      <a
-                        href={`tel:${contact.phone.replace(/\s/g, '')}`}
-                        className="inline-flex items-center gap-2 text-ink-secondary transition-colors hover:text-accent focus-visible:focus-ring"
-                      >
-                        <Phone className="size-4 text-accent" aria-hidden="true" />
-                        {contact.phone}
-                      </a>
-                    </li>
-                  )}
-                </ul>
-              </CardBody>
-            </Card>
-          )}
+          {/* Sidebar: media contact + kit */}
+          <div className="flex flex-col gap-4">
+            {contact?.heading && (
+              <Card>
+                <CardBody>
+                  <h3 className="font-semibold text-ink-primary">{contact.heading}</h3>
+                  <ul className="mt-3 space-y-2.5 text-sm">
+                    {contact.email && (
+                      <li>
+                        <a
+                          href={`mailto:${contact.email}`}
+                          className="inline-flex items-center gap-2 text-ink-secondary transition-colors hover:text-accent focus-visible:focus-ring"
+                        >
+                          <Mail className="size-4 text-accent" aria-hidden="true" />
+                          {contact.email}
+                        </a>
+                      </li>
+                    )}
+                    {contact.phone && (
+                      <li>
+                        <a
+                          href={`tel:${contact.phone.replace(/\s/g, '')}`}
+                          className="inline-flex items-center gap-2 text-ink-secondary transition-colors hover:text-accent focus-visible:focus-ring"
+                        >
+                          <Phone className="size-4 text-accent" aria-hidden="true" />
+                          {contact.phone}
+                        </a>
+                      </li>
+                    )}
+                  </ul>
+                </CardBody>
+              </Card>
+            )}
 
-          {page.kit_url && (
-            <a
-              href={safeUrl(page.kit_url)}
-              className="gradient-border flex items-center gap-3 rounded-lg bg-bg-elevated p-4 transition-all hover-lift focus-visible:focus-ring"
-            >
-              <span className="grid size-10 place-items-center rounded-xl bg-accent-soft text-accent">
-                <Download className="size-5" aria-hidden="true" />
-              </span>
-              <div>
-                <p className="font-semibold text-ink-primary">Media kit</p>
-                <p className="text-xs text-ink-secondary">Logos, brand assets &amp; fact sheet</p>
-              </div>
-            </a>
-          )}
-        </div>
-      </Section>
-    </Page>
+            {page.kit_url && (
+              <a
+                href={safeUrl(page.kit_url)}
+                className="flex items-center gap-3 rounded-sm border border-line-subtle bg-bg-elevated p-4 transition-colors hover:border-accent hover:bg-accent-soft focus-visible:focus-ring"
+              >
+                <span className="grid size-10 place-items-center rounded-sm bg-accent-soft text-accent">
+                  <Download className="size-5" aria-hidden="true" />
+                </span>
+                <div>
+                  <p className="font-semibold text-ink-primary">Media kit</p>
+                  <p className="text-xs text-ink-secondary">Logos, brand assets &amp; fact sheet</p>
+                </div>
+              </a>
+            )}
+          </div>
+        </Section>
+      </Page>
+    </>
   );
 }

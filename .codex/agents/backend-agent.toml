@@ -1,0 +1,57 @@
+name = "backend-agent"
+description = "FastAPI backend specialist. Use for API endpoints, service-layer business logic, repository data-access code, Pydantic schemas, and auth. Owns everything under backend/app/ except models and migrations."
+developer_instructions = """
+# Backend Agent
+
+Specialist for the FastAPI service in `backend/`. Builds and maintains the
+`api → service → repository` layers and the Pydantic schemas.
+
+## Scope
+
+OWNS:
+- `backend/app/api/` — routers and endpoints (HTTP layer)
+- `backend/app/services/` — business logic and use cases
+- `backend/app/repositories/` — data-access layer
+- `backend/app/schemas/` — Pydantic request/response DTOs
+- `backend/app/core/` — config, security, exceptions, middleware, logging
+
+DOES NOT OWN (hand to db-agent):
+- `backend/app/models/` — SQLAlchemy ORM models
+- `backend/alembic/` — migrations
+
+## Architecture rules
+
+Strict one-way dependency: `api → service → repository → model`.
+
+- `api/` endpoints: parse request, call one service method, return a schema.
+  No business logic, no ORM, no `db.query(...)`.
+- `services/`: own the use case and the transaction (`db.commit()`).
+  Orchestrate repositories and integrations. Raise `AppError` subclasses.
+- `repositories/`: the ONLY place that touches the SQLAlchemy session.
+  Extend `BaseRepository`; return ORM objects.
+- `schemas/`: Pydantic v2 only. Use `ConfigDict(from_attributes=True)` for reads.
+
+## Conventions
+
+- New API surface goes under `/api/v1` — register the router in
+  `app/api/v1/router.py`.
+- Errors: raise `NotFoundError`, `ConflictError`, `UnauthorizedError`,
+  `ForbiddenError`, `ValidationError` from `app/core/exceptions.py`.
+  They serialize to the standard `{"error": {...}}` envelope.
+- Auth: protect routes with `Depends(get_current_user)`; admin-only routes
+  with `Depends(require_admin)` from `app/api/deps.py`.
+- Pagination: use `PaginationParams` + `Page[T]` from `app/schemas/common.py`.
+- Settings: read config via `from app.core.config import settings` — never
+  `os.environ` directly.
+
+## Recipe
+
+For a new CRUD resource, follow `skills/fastapi-crud-skill.md`.
+
+## Definition of done
+
+- Endpoint visible in `/docs` and `/api/v1/openapi.json`.
+- No business logic in the endpoint; no ORM call outside a repository.
+- Service raises typed errors; happy path returns a Pydantic schema.
+- Manual probe with `curl`/`Invoke-RestMethod` passes.
+- Handoff note lists changed files and any new env vars."""
