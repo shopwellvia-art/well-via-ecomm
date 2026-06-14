@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
-import { PackageX, Truck, ShieldCheck, HeartHandshake, TrendingUp } from 'lucide-react';
+import { PackageX, AlertCircle, Truck, ShieldCheck, HeartHandshake, TrendingUp } from 'lucide-react';
 import Hero from '@/components/marketing/Hero.jsx';
 import CategoryMarquee from '@/components/marketing/CategoryMarquee.jsx';
 import DealsBanner from '@/components/marketing/DealsBanner.jsx';
@@ -9,7 +9,7 @@ import CommunityBand from '@/components/marketing/CommunityBand.jsx';
 import { Page } from '@/components/layout/Page.jsx';
 import { ProductGrid } from '@/features/products/components/ProductGrid.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
-import { buttonVariants } from '@/components/ui/Button.jsx';
+import { Button, buttonVariants } from '@/components/ui/Button.jsx';
 import { useProducts } from '@/features/products/hooks.js';
 import { useAddToCart } from '@/features/cart/hooks.js';
 import { cn } from '@/lib/utils.js';
@@ -48,7 +48,7 @@ function TrustStrip() {
       className="mx-auto mt-3 max-w-content px-4 sm:px-6"
     >
       <ul
-        className="grid grid-cols-2 divide-x divide-line-subtle overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm sm:grid-cols-4"
+        className="grid grid-cols-2 divide-x divide-y divide-line-subtle overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm sm:grid-cols-4 sm:divide-y-0"
         role="list"
       >
         {TRUST_ITEMS.map(({ icon: Icon, title, sub }) => (
@@ -94,7 +94,7 @@ function SectionHeader({ heading, viewAllTo, viewAllLabel = 'VIEW ALL' }) {
 
 export default function HomePage() {
   const reduce = useReducedMotion();
-  const { data, isLoading } = useProducts({ page: 1, page_size: 8 });
+  const { data, isLoading, isError, refetch } = useProducts({ page: 1, page_size: 8 });
   const addToCart = useAddToCart();
   const products = data?.items ?? [];
 
@@ -131,7 +131,20 @@ export default function HomePage() {
           />
 
           <div className="px-4 pb-5 pt-4">
-            {!isLoading && products.length === 0 ? (
+            {isError ? (
+              <EmptyState
+                icon={AlertCircle}
+                iconTone="danger"
+                title="Could not load products"
+                description="There was a problem fetching the catalog. Please try again."
+                size="sm"
+                action={
+                  <Button size="sm" onClick={() => refetch()}>
+                    Retry
+                  </Button>
+                }
+              />
+            ) : !isLoading && products.length === 0 ? (
               <EmptyState
                 icon={PackageX}
                 title="No products yet"

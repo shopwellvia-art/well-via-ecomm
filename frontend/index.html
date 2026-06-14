@@ -8,23 +8,11 @@
     <meta name="description" content="Shop the latest deals — electronics, fashion, home & more." />
     <title>Lumen — Online Shopping</title>
     <!-- Storefront is light-only (Flipkart look). Force light before paint so a
-         stale 'dark' preference can never flash the old theme. -->
-    <script>
-      (function () {
-        try {
-          var root = document.documentElement;
-          root.classList.remove('dark', 'light');
-          root.classList.add('light');
-          root.style.colorScheme = 'light';
-        } catch (e) {}
-      })();
-    </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap"
-    />
+         stale 'dark' preference can never flash the old theme. Externalized to
+         a self-hosted file to satisfy the production CSP (script-src 'self'). -->
+    <script src="/theme-init.js"></script>
+    <!-- Roboto is self-hosted via @fontsource/roboto (imported in main.jsx) so
+         it loads under the strict CSP without a Google Fonts exception. -->
   </head>
   <body>
     <div id="root"></div>

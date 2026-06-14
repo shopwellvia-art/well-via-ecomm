@@ -25,6 +25,9 @@ export default function ForgotPasswordPage() {
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
+  // FIX (finding 4): separate OTP vs password field errors on the reset step
+  const [otpError, setOtpError] = useState(null);
+  const [passwordError, setPasswordError] = useState(null);
   const [busy, setBusy] = useState(false);
 
   async function handleRequest(e) {
@@ -38,8 +41,9 @@ export default function ForgotPasswordPage() {
     try {
       await authApi.forgotPassword(email.trim());
       setStep('reset');
-    } catch {
-      setError('Something went wrong. Please try again.');
+    } catch (err) {
+      // FIX (finding 1): surface server error message instead of swallowing it
+      setError(err.response?.data?.error?.message || 'Something went wrong. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -47,13 +51,16 @@ export default function ForgotPasswordPage() {
 
   async function handleReset(e) {
     e.preventDefault();
-    setError(null);
+    setOtpError(null);
+    setPasswordError(null);
+    // FIX (finding 4): validate OTP -> set otpError only
     if (otp.trim().length !== 6) {
-      setError('Enter the 6-digit code from your email.');
+      setOtpError('Enter the 6-digit code from your email.');
       return;
     }
+    // FIX (finding 4): validate password -> set passwordError only
     if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+      setPasswordError('Password must be at least 8 characters.');
       return;
     }
     setBusy(true);
@@ -61,7 +68,8 @@ export default function ForgotPasswordPage() {
       await authApi.resetPassword(email.trim(), otp.trim(), password);
       setStep('done');
     } catch (err) {
-      setError(
+      // FIX (finding 4): API errors go to passwordError (general form error)
+      setPasswordError(
         err.response?.data?.error?.message ||
           'That code is invalid or has expired. Request a new one.',
       );
@@ -71,7 +79,8 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <main className="flex min-h-[calc(100vh-4rem)] w-full items-center justify-center bg-bg-base px-4 py-12">
+    // FIX (finding 5): use svh units and mobile-aware navbar offset
+    <main className="flex min-h-[calc(100svh-8.5rem)] w-full items-center justify-center bg-bg-base px-4 py-12 md:min-h-[calc(100svh-4rem)]">
       <div className="w-full max-w-sm">
         {/* White card */}
         <div className="rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
@@ -102,7 +111,8 @@ export default function ForgotPasswordPage() {
             {step === 'done' ? (
               /* Success state */
               <div className="flex flex-col items-center py-4 text-center">
-                <span className="grid size-14 place-items-center rounded-full bg-success/10 text-success">
+                {/* FIX (findings 2 & 6): /10 -> /12 per design-system tint standard */}
+                <span className="grid size-14 place-items-center rounded-full bg-success/12 text-success">
                   <CheckCircle2 className="size-7" aria-hidden="true" />
                 </span>
                 <p className="mt-4 text-sm font-medium text-ink-primary">
@@ -119,6 +129,12 @@ export default function ForgotPasswordPage() {
               <>
                 {/* Step progress */}
                 <div className="mb-5 flex items-center justify-center gap-2">
+                  {/* FIX (finding 3): visually-hidden step announcement for screen readers */}
+                  <span className="sr-only">
+                    {step === 'request'
+                      ? 'Step 1 of 2: Enter email'
+                      : 'Step 2 of 2: Enter code and new password'}
+                  </span>
                   <StepDot done={step === 'reset'} active={step === 'request'} />
                   <span className="h-px w-8 bg-line-subtle" aria-hidden="true" />
                   <StepDot done={false} active={step === 'reset'} />
@@ -143,6 +159,7 @@ export default function ForgotPasswordPage() {
                   </form>
                 ) : (
                   <form onSubmit={handleReset} className="flex flex-col gap-1">
+                    {/* FIX (finding 4): OTP field gets its own error state */}
                     <Input
                       label="6-digit code"
                       icon={KeyRound}
@@ -153,7 +170,9 @@ export default function ForgotPasswordPage() {
                       required
                       value={otp}
                       onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                      error={otpError}
                     />
+                    {/* FIX (finding 4): password field gets its own error state */}
                     <Input
                       label="New password"
                       type="password"
@@ -163,7 +182,7 @@ export default function ForgotPasswordPage() {
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      error={error}
+                      error={passwordError}
                       helper="At least 8 characters."
                     />
                     <Button type="submit" block size="lg" loading={busy} className="mt-2">
@@ -174,6 +193,8 @@ export default function ForgotPasswordPage() {
                       onClick={() => {
                         setStep('request');
                         setError(null);
+                        setOtpError(null);
+                        setPasswordError(null);
                         setOtp('');
                       }}
                       className="mt-2 w-full rounded-xs text-center text-xs text-ink-tertiary transition-colors hover:text-ink-secondary focus-visible:focus-ring"

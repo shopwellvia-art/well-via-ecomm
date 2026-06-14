@@ -13,7 +13,7 @@ import {
 import { staggerContainer, fadeUp } from '@/lib/motion.js';
 
 export default function AboutPage() {
-  const { data } = useSitePages();
+  const { data, isError } = useSitePages();
   const page = { ...SITE_PAGES_DEFAULTS.about, ...data?.about };
 
   if (page.enabled === false) {
@@ -28,6 +28,12 @@ export default function AboutPage() {
     <>
       <CompanyHero hero={page.hero} current="About Us" />
 
+      {isError && (
+        <p role="alert" className="mx-auto max-w-content px-6 py-2 text-xs text-danger">
+          Content could not be refreshed. Showing cached defaults.
+        </p>
+      )}
+
       <Page>
         {/* Stats row */}
         {page.stats?.length > 0 && (
@@ -39,11 +45,11 @@ export default function AboutPage() {
               viewport={{ once: true, margin: '-60px' }}
               className="grid grid-cols-2 gap-4 sm:grid-cols-4"
             >
-              {page.stats.map((s, i) => (
-                <motion.div key={i} variants={fadeUp}>
+              {page.stats.map((s) => (
+                <motion.div key={s.label} variants={fadeUp}>
                   <Card className="text-center">
                     <CardBody className="py-6">
-                      <p className="text-2xl font-bold text-accent">{s.value}</p>
+                      <p className="text-2xl font-bold text-accent break-words">{s.value}</p>
                       <p className="mt-1.5 text-sm text-ink-secondary">{s.label}</p>
                     </CardBody>
                   </Card>
@@ -78,10 +84,10 @@ export default function AboutPage() {
               viewport={{ once: true, margin: '-60px' }}
               className="grid gap-4 sm:grid-cols-2"
             >
-              {page.values.map((v, i) => {
+              {page.values.map((v) => {
                 const Icon = resolvePageIcon(v.icon);
                 return (
-                  <motion.div key={i} variants={fadeUp}>
+                  <motion.div key={v.title} variants={fadeUp}>
                     <Card interactive>
                       <CardBody className="flex gap-4">
                         <span className="grid size-10 shrink-0 place-items-center rounded-sm bg-accent-soft text-accent">

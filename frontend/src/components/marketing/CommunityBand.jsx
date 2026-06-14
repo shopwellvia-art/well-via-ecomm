@@ -76,16 +76,17 @@ export default function CommunityBand() {
                 'h-10 w-full rounded-xs border bg-white/10 px-3 text-sm text-white',
                 'placeholder:text-white/50',
                 'transition-colors duration-150',
-                'focus:outline-none focus:bg-white/15',
+                'focus:outline-none focus-visible:bg-white/15',
                 error
-                  ? 'border-red-300'
-                  : 'border-white/30 focus:border-white/60',
+                  ? 'border-danger/60'
+                  : 'border-white/30 focus-visible:border-white/60',
                 'sm:w-60',
               )}
             />
 
             <button
               type="submit"
+              disabled={submitted}
               className={cn(
                 'inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xs',
                 'bg-white px-5 text-sm font-semibold text-accent',
@@ -112,7 +113,7 @@ export default function CommunityBand() {
               aria-live="polite"
               className={cn(
                 'absolute -bottom-5 left-0 min-h-[1rem] text-xs sm:bottom-auto sm:top-full sm:mt-1',
-                error ? 'text-red-200' : submitted ? 'text-white/80' : 'sr-only',
+                error ? 'text-white/90' : submitted ? 'text-white/80' : 'sr-only',
               )}
             >
               {error || (submitted ? "You're in! Check your inbox soon." : '')}

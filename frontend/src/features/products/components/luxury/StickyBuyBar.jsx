@@ -82,9 +82,11 @@ export function StickyBuyBar({ product }) {
           animate={{ y: 0 }}
           exit={reduce ? { opacity: 0 } : { y: '100%' }}
           transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          role="region"
+          aria-label="Quick buy"
           className="fixed inset-x-0 bottom-0 z-40 border-t border-line-subtle bg-bg-elevated shadow-lg"
         >
-          <div className="mx-auto flex max-w-content items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6">
+          <div className="mx-auto flex max-w-content items-center gap-3 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:gap-4 sm:px-6">
             {/* Product thumbnail */}
             <div className="hidden size-11 shrink-0 overflow-hidden rounded-sm border border-line-subtle sm:block">
               <ProductMedia product={product} />

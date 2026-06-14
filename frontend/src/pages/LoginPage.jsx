@@ -224,7 +224,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-[calc(100vh-4rem)] w-full items-stretch bg-bg-base">
+    <main className="flex min-h-[calc(100vh-8.5rem)] md:min-h-[calc(100vh-4rem)] w-full items-stretch bg-bg-base">
       {/* ── LEFT promo panel (hidden on mobile) ── */}
       <div className="hidden w-[360px] shrink-0 flex-col justify-between bg-accent p-10 lg:flex">
         <div>
@@ -262,7 +262,7 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={() => { setMode('register'); setError(null); }}
-            className="font-semibold text-white/70 underline underline-offset-2 hover:text-white focus-visible:focus-ring"
+            className="font-semibold text-white/70 underline underline-offset-2 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-accent"
           >
             Create a free account
           </button>
@@ -290,7 +290,7 @@ export default function LoginPage() {
                 <span className="font-medium text-ink-primary">{pendingTotp.email}</span>.
               </p>
 
-              <div className="mt-5 rounded-sm border border-accent/25 bg-accent/5 px-4 py-3 text-xs text-ink-secondary">
+              <div className="mt-5 rounded-sm border border-accent/20 bg-accent/12 px-4 py-3 text-xs text-ink-secondary">
                 <p className="flex items-center gap-2 font-semibold text-ink-primary">
                   <ShieldCheck className="size-4 text-accent" aria-hidden="true" />
                   Open your authenticator app
@@ -306,7 +306,8 @@ export default function LoginPage() {
                   value={totpCode}
                   onChange={(e) => setTotpCode(e.target.value)}
                   placeholder="123456"
-                  inputMode="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   autoComplete="one-time-code"
                   error={error}
                   autoFocus
@@ -331,17 +332,36 @@ export default function LoginPage() {
           ) : (
             <>
               {/* Mode toggle */}
-              <div className="mb-6 flex rounded-sm border border-line-subtle bg-bg-elevated overflow-hidden">
+              <div
+                role="tablist"
+                aria-label="Authentication mode"
+                className="mb-6 flex rounded-sm border border-line-subtle bg-bg-elevated overflow-hidden"
+                onKeyDown={(e) => {
+                  const tabs = ['login', 'register'];
+                  const idx = tabs.indexOf(mode);
+                  if (e.key === 'ArrowRight') {
+                    const next = tabs[(idx + 1) % tabs.length];
+                    setMode(next);
+                    setError(null);
+                  } else if (e.key === 'ArrowLeft') {
+                    const prev = tabs[(idx - 1 + tabs.length) % tabs.length];
+                    setMode(prev);
+                    setError(null);
+                  }
+                }}
+              >
                 {['login', 'register'].map((m) => (
                   <button
                     key={m}
                     type="button"
+                    role="tab"
+                    aria-selected={mode === m}
                     onClick={() => {
                       setMode(m);
                       setError(null);
                     }}
                     className={cn(
-                      'flex-1 py-2.5 text-sm font-medium transition-colors duration-150 focus-visible:focus-ring',
+                      'flex-1 py-3 text-sm font-medium transition-colors duration-150 focus-visible:focus-ring',
                       mode === m
                         ? 'bg-accent text-white'
                         : 'text-ink-secondary hover:text-ink-primary hover:bg-bg-sunken',
@@ -357,13 +377,13 @@ export default function LoginPage() {
               </h1>
               <p className="mt-0.5 text-xs text-ink-secondary">
                 {isRegister
-                  ? 'Get access to your Orders, Wishlist and Recommendations'
+                  ? 'Fill in the details below to get started'
                   : 'Get access to your Orders, Wishlist and Recommendations'}
               </p>
 
               {/* Referral banner */}
               {pendingReferral && (
-                <div className="mt-4 flex items-start gap-2.5 rounded-sm border border-accent/25 bg-accent/5 px-3 py-2.5 text-xs text-ink-primary">
+                <div className="mt-4 flex items-start gap-2.5 rounded-sm border border-accent/20 bg-accent/12 px-3 py-2.5 text-xs text-ink-primary">
                   <Gift className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden="true" />
                   <span>
                     You were invited by a friend. Sign up to claim your{' '}
@@ -406,7 +426,6 @@ export default function LoginPage() {
                   required
                   value={form.password}
                   onChange={set('password')}
-                  error={error}
                   helper={isRegister ? 'At least 8 characters.' : undefined}
                 />
 
@@ -418,6 +437,15 @@ export default function LoginPage() {
                     >
                       Forgot password?
                     </Link>
+                  </div>
+                )}
+
+                {error && (
+                  <div
+                    role="alert"
+                    className="rounded-sm border border-danger/25 bg-danger/12 px-3 py-2 text-xs text-danger"
+                  >
+                    {error}
                   </div>
                 )}
 

@@ -2,6 +2,7 @@ import { CheckCircle2, Star } from 'lucide-react';
 import { useProductReviews } from '@/features/reviews/hooks.js';
 import { StarRating } from '@/features/reviews/StarRating.jsx';
 import { RatingHistogram } from '@/features/reviews/RatingHistogram.jsx';
+import { Skeleton } from '@/components/ui/Skeleton.jsx';
 
 /**
  * "What our customers say" — flat Flipkart/Amazon style.
@@ -13,7 +14,7 @@ export function CustomerSay({ product }) {
   const ratingAvg = Number(product.rating_avg) || 0;
   const ratingCount = Number(product.rating_count) || 0;
 
-  const { data } = useProductReviews(product.id, {
+  const { data, isLoading } = useProductReviews(product.id, {
     page: 1,
     page_size: 6,
     sort: 'top',
@@ -52,7 +53,13 @@ export function CustomerSay({ product }) {
         </div>
 
         {/* Review cards */}
-        {cards.length > 0 && (
+        {isLoading && cards.length === 0 ? (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-32 rounded-sm" />
+            ))}
+          </div>
+        ) : cards.length > 0 && (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {cards.map((r) => (
               <div

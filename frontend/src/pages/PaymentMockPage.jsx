@@ -31,6 +31,26 @@ export default function PaymentMockPage() {
       ? returnUrl
       : `/payments/return?mtid=${txnId}`;
 
+  // Guard: if the route was reached without a :txnId segment (stale bookmark,
+  // direct URL entry), render a clear error rather than silently sending
+  // `merchant_transaction_id: undefined` to the API.
+  // All hooks are declared above so React's rules-of-hooks are satisfied.
+  if (!txnId) {
+    return (
+      <Page>
+        <div className="flex min-h-[70vh] items-center justify-center py-12">
+          <Card className="p-8 text-center">
+            <AlertTriangle className="mx-auto mb-3 size-8 text-warning" aria-hidden="true" />
+            <p className="font-semibold text-ink-primary">Missing transaction ID</p>
+            <p className="mt-1 text-sm text-ink-secondary">
+              This URL is invalid. Please return to the checkout and try again.
+            </p>
+          </Card>
+        </div>
+      </Page>
+    );
+  }
+
   async function decide(action) {
     setWorking(action);
     setError(null);
@@ -53,9 +73,12 @@ export default function PaymentMockPage() {
       <div className="flex min-h-[70vh] items-center justify-center py-12">
         <div className="w-full max-w-md">
           <Card className="overflow-hidden p-0">
-            {/* Branded header — PhonePe purple, flat (no gradient) */}
+            {/* Branded header — PhonePe purple, flat (no gradient).
+                bg-[#5f259f] is an intentional brand-color bypass: this purple
+                is PhonePe's registered brand color and has no semantic token
+                equivalent. It is scoped to this dev-only sandbox simulator. */}
             <div className="flex items-center gap-3 bg-[#5f259f] px-6 py-5 text-white">
-              <span className="grid size-10 shrink-0 place-items-center rounded-sm bg-white/15">
+              <span className="grid size-10 shrink-0 place-items-center rounded-sm bg-white/12">
                 <ShieldCheck className="size-5" aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
@@ -75,7 +98,7 @@ export default function PaymentMockPage() {
                 <p className="text-[11px] font-bold uppercase tracking-widest text-ink-tertiary">
                   Amount due
                 </p>
-                <p className="mt-2 text-4xl font-semibold leading-none text-ink-primary nums">
+                <p className="mt-2 break-words text-3xl font-semibold leading-none text-ink-primary nums sm:text-4xl">
                   {formatPrice(amountMajor)}
                 </p>
                 <p className="mt-2 flex items-center gap-1.5 break-all text-xs text-ink-tertiary">

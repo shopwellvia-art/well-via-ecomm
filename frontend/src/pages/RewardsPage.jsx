@@ -90,7 +90,7 @@ function RedeemSuccessBanner({ result, onDismiss }) {
               type="button"
               onClick={copy}
               aria-label="Copy coupon code"
-              className="grid size-6 place-items-center rounded-xs text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+              className="grid size-9 place-items-center rounded-xs text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
             >
               {copied ? (
                 <Check className="size-3.5 text-success" />
@@ -104,7 +104,7 @@ function RedeemSuccessBanner({ result, onDismiss }) {
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss"
-          className="grid size-7 place-items-center rounded-xs text-ink-tertiary hover:bg-fill hover:text-ink-primary transition-colors focus-visible:focus-ring"
+          className="grid size-9 place-items-center rounded-xs text-ink-tertiary hover:bg-fill hover:text-ink-primary transition-colors focus-visible:focus-ring"
         >
           &times;
         </button>
@@ -121,7 +121,7 @@ function TierCard({ tier, balance, onRedeem, redeeming }) {
   return (
     <div className="flex flex-col gap-4 rounded-sm border border-line-subtle bg-bg-elevated p-4 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-start gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-accent/10 text-accent">
+        <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-accent/12 text-accent">
           <TicketPercent className="size-5" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
@@ -146,6 +146,7 @@ function TierCard({ tier, balance, onRedeem, redeeming }) {
             className="h-full rounded-full bg-accent transition-[width] duration-500"
             style={{ width: `${pct}%` }}
             role="progressbar"
+            aria-label={`Progress toward ${tier.name}: ${pct}%`}
             aria-valuenow={pct}
             aria-valuemin={0}
             aria-valuemax={100}
@@ -181,11 +182,11 @@ function TransactionRow({ tx }) {
   const { label, icon: Icon } = formatReason(tx.reason);
   const isCredit = tx.delta > 0;
   return (
-    <li className="flex items-center gap-3 border-t border-line-subtle px-4 py-3 first:border-t-0 hover:bg-bg-sunken/40 transition-colors">
+    <li className="flex items-center gap-3 border-t border-line-subtle px-4 py-3 first:border-t-0 hover:bg-bg-sunken transition-colors">
       <span
         className={cn(
           'grid size-8 shrink-0 place-items-center rounded-full',
-          isCredit ? 'bg-success/10 text-success' : 'bg-bg-sunken text-ink-secondary',
+          isCredit ? 'bg-success/12 text-success' : 'bg-bg-sunken text-ink-secondary',
         )}
       >
         <Icon className="size-4" aria-hidden="true" />
@@ -383,7 +384,7 @@ export default function RewardsPage() {
           <section>
             <div className="mb-3 flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-ink-primary">Recent activity</h2>
-              <div className="flex items-center gap-3 text-xs text-ink-tertiary">
+              <div className="flex items-center gap-3 text-xs text-ink-secondary">
                 <span className="flex items-center gap-1">
                   <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />
                   Earned

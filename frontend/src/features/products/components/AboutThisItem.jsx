@@ -17,8 +17,8 @@ export function AboutThisItem({ product, categoryName }) {
           About this item
         </h2>
         <ul className="px-4 py-3 space-y-2">
-          {bullets.map((b, i) => (
-            <li key={i} className="flex items-start gap-2.5 text-sm text-ink-secondary">
+          {bullets.map((b) => (
+            <li key={b.slice(0, 40)} className="flex items-start gap-2.5 text-sm text-ink-secondary">
               <span
                 className="mt-1.5 size-1.5 shrink-0 rounded-full bg-accent"
                 aria-hidden="true"

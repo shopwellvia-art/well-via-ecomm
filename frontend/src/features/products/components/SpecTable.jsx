@@ -10,7 +10,7 @@ export function SpecTable({ product, categoryName }) {
     ['SKU', product.sku],
     ['Price', formatPrice(product.price)],
     ['Availability', product.stock > 0 ? `In stock (${product.stock} units)` : 'Out of stock'],
-    ['Listed', new Date(product.created_at).toLocaleDateString()],
+    ['Listed', product.created_at ? new Date(product.created_at).toLocaleDateString() : '—'],
   ];
 
   return (

@@ -5,38 +5,8 @@ import { ease, duration } from '@/lib/motion.js';
 /**
  * Shared primitives for the luxury product page.
  *
- * Everything here is theme-aware (it speaks in design tokens, not hard-coded
- * colours) so the page reads as premium in BOTH light and dark mode. The soft
- * lavender "luxury" feel is layered as low-opacity gradients on top of the
- * token palette — the brand accent (#6366F1) already sits in that family.
+ * Token-driven — no hardcoded colours or glass/glow effects.
  */
-
-/**
- * Ambient lighting — soft, blurred colour fields behind the page content.
- * Rendered inside an `isolate` parent and pinned with `-z-10` so it floats
- * behind the cards without ever intercepting clicks. Subtle by design.
- */
-export function Aura({ className }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={cn(
-        'pointer-events-none absolute inset-0 -z-10 overflow-hidden',
-        className,
-      )}
-    >
-      <div className="absolute -left-40 -top-48 size-[620px] rounded-full bg-accent/25 blur-[130px]" />
-      <div
-        className="absolute -right-32 top-10 size-[560px] rounded-full blur-[130px]"
-        style={{ background: 'rgba(183, 148, 244, 0.28)' }}
-      />
-      <div
-        className="absolute left-1/4 top-[640px] size-[480px] rounded-full blur-[150px]"
-        style={{ background: 'rgba(99, 102, 241, 0.16)' }}
-      />
-    </div>
-  );
-}
 
 /**
  * Scroll reveal — fades + rises its children the first time they enter the
@@ -61,15 +31,6 @@ export function Reveal({ children, className, delay = 0, y = 24, as = 'div' }) {
     >
       {children}
     </MotionTag>
-  );
-}
-
-/** Frosted-glass surface with the brand's 24px radius and soft depth. */
-export function GlassCard({ children, className, ...props }) {
-  return (
-    <div className={cn('glass rounded-lg', className)} {...props}>
-      {children}
-    </div>
   );
 }
 

@@ -4,6 +4,13 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import App from './app/App.jsx';
+// Self-hosted Roboto (weights used by the Flipkart re-skin). Imported before
+// global.css so the @font-face rules are registered first. Self-hosting keeps
+// the font working under the strict production CSP (no Google Fonts exception).
+import '@fontsource/roboto/400.css';
+import '@fontsource/roboto/500.css';
+import '@fontsource/roboto/700.css';
+import '@fontsource/roboto/900.css';
 import './styles/global.css';
 
 const queryClient = new QueryClient({

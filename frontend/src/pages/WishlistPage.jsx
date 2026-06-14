@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, ShoppingBag, Trash2, ArrowRight, Lock, AlertTriangle, Check } from 'lucide-react';
 import { Page } from '@/components/layout/Page.jsx';
@@ -17,13 +18,19 @@ function WishlistItem({ item }) {
   const remove = useRemoveFromWishlist();
   const add = useAddToCart();
   const added = add.isSuccess && add.variables?.productId === item.product_id;
+  const [imgErr, setImgErr] = useState(false);
+  const [moveErr, setMoveErr] = useState(false);
 
   function handleMoveToCart() {
+    setMoveErr(false);
     add.mutate(
       { productId: item.product_id, quantity: 1 },
       {
         onSuccess: () => {
           remove.mutate(item.product_id);
+        },
+        onError: () => {
+          setMoveErr(true);
         },
       },
     );
@@ -34,14 +41,16 @@ function WishlistItem({ item }) {
       {/* Thumbnail */}
       <Link
         to={`/products/${item.product_id}`}
+        aria-label={item.name}
         className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-line-subtle bg-bg-sunken focus-visible:focus-ring"
       >
-        {item.image_url ? (
+        {item.image_url && !imgErr ? (
           <img
             src={item.image_url}
             alt=""
             loading="lazy"
             className="size-full object-contain"
+            onError={() => setImgErr(true)}
           />
         ) : (
           <span className="text-xl font-semibold text-ink-primary/20">
@@ -61,12 +70,17 @@ function WishlistItem({ item }) {
         <p className="nums mt-1 text-base font-semibold text-ink-primary">
           {formatPrice(item.price)}
         </p>
+        {moveErr && (
+          <p className="mt-1 text-xs text-danger">
+            Could not add to cart. Please try again.
+          </p>
+        )}
       </div>
 
       {/* Actions */}
       <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
         <Button
-          size="sm"
+          size="md"
           variant="cart"
           onClick={handleMoveToCart}
           loading={add.isPending}
@@ -89,7 +103,7 @@ function WishlistItem({ item }) {
           aria-label={`Remove ${item.name} from wishlist`}
           disabled={remove.isPending}
           onClick={() => remove.mutate(item.product_id)}
-          className="grid size-8 place-items-center rounded-sm border border-transparent text-ink-tertiary transition-colors hover:border-danger/25 hover:bg-danger/8 hover:text-danger focus-visible:focus-ring disabled:opacity-40"
+          className="grid size-11 place-items-center rounded-sm border border-transparent text-ink-tertiary transition-colors hover:border-danger/25 hover:bg-danger/8 hover:text-danger focus-visible:focus-ring disabled:opacity-40"
         >
           <Trash2 className="size-4" />
         </button>
@@ -154,7 +168,7 @@ export default function WishlistPage() {
           <Heart className="size-5 text-danger" aria-hidden="true" />
           <h1 className="text-lg font-semibold text-ink-primary">My Wishlist</h1>
           {!isLoading && items.length > 0 && (
-            <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent">
+            <span className="rounded-xs bg-accent px-2 py-0.5 text-xs font-semibold text-white">
               {items.length}
             </span>
           )}

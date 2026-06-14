@@ -10,7 +10,6 @@ import {
   MapPin,
   ShieldCheck,
   Zap,
-  Info,
   LocateFixed,
   Loader2,
 } from 'lucide-react';
@@ -62,7 +61,7 @@ function CouponBlock({ appliedCode, discount }) {
 
   if (appliedCode) {
     return (
-      <div className="flex items-center justify-between rounded-sm border border-success/25 bg-success/8 px-3 py-2.5 text-sm">
+      <div className="flex items-center justify-between rounded-sm border border-success/25 bg-success/12 px-3 py-2.5 text-sm">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="grid size-7 shrink-0 place-items-center rounded-sm bg-success/12 text-success">
             <TicketPercent className="size-3.5" aria-hidden="true" />
@@ -93,6 +92,7 @@ function CouponBlock({ appliedCode, discount }) {
       <div className="flex items-start gap-2">
         <div className="flex-1">
           <Input
+            label="Coupon code"
             placeholder="WELCOME10"
             value={code}
             onChange={(e) => setCode(e.target.value)}
@@ -140,7 +140,7 @@ function DeliverToBar({ address, detectedPincode, serviceability, onChange, onDe
               : 'Add a delivery address to see delivery dates and charges.'
             }
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               disabled={detectPending}
@@ -154,7 +154,7 @@ function DeliverToBar({ address, detectedPincode, serviceability, onChange, onDe
               )}
               {detectPending ? 'Detecting…' : 'Detect my location'}
             </button>
-            <span className="text-line-strong text-xs">·</span>
+            <span className="text-ink-tertiary text-xs">·</span>
             <Button type="button" size="sm" variant="outline" onClick={onChange}>
               Add address
             </Button>
@@ -188,7 +188,7 @@ function DeliverToBar({ address, detectedPincode, serviceability, onChange, onDe
             {address.line2 ? `, ${address.line2}` : ''}, {address.city}, {address.state}
           </p>
         </div>
-        <Button type="button" size="sm" variant="outline" onClick={onChange}>
+        <Button type="button" size="sm" variant="outline" onClick={onChange} className="shrink-0">
           Change
         </Button>
       </div>
@@ -208,7 +208,6 @@ function PlaceOrderBar({ total, disabled, onPlaceOrder, className = '' }) {
     <div className={`flex items-center justify-between gap-4 ${className}`}>
       <div className="flex items-baseline gap-2">
         <span className="text-lg font-bold text-ink-primary nums">{formatPrice(total)}</span>
-        <Info className="size-3.5 text-ink-tertiary" aria-hidden="true" />
       </div>
       <Button variant="cta" size="lg" className="px-8" disabled={disabled} onClick={onPlaceOrder}>
         Place Order
@@ -232,6 +231,9 @@ export default function CartPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Which item's "Save for later" is in flight (product_id).
   const [savingForLater, setSavingForLater] = useState(null);
+  // Per-item pending state for remove and qty update (product_id).
+  const [removingId, setRemovingId] = useState(null);
+  const [updatingId, setUpdatingId] = useState(null);
   // Pincode detected via geolocation (no saved address path).
   const [detectedPincode, setDetectedPincode] = useState('');
   const [detectError, setDetectError] = useState(null);
@@ -255,7 +257,7 @@ export default function CartPage() {
   const status = error?.response?.status;
 
   const pincode = selectedAddress?.pincode || detectedPincode || '';
-  const { data: serviceability } = useServiceability(pincode);
+  const { data: serviceability, isLoading: svcLoading } = useServiceability(pincode);
   const serviceable = serviceability?.serviceable ?? null;
 
   const rateInputItems = useMemo(
@@ -304,6 +306,16 @@ export default function CartPage() {
     } finally {
       setSavingForLater(null);
     }
+  }
+
+  function handleRemoveItem(productId) {
+    setRemovingId(productId);
+    removeItem.mutate(productId, { onSettled: () => setRemovingId(null) });
+  }
+
+  function handleUpdateQty(productId, quantity) {
+    setUpdatingId(productId);
+    updateQty.mutate({ productId, quantity }, { onSettled: () => setUpdatingId(null) });
   }
 
   function handleDetectLocation() {
@@ -441,8 +453,8 @@ export default function CartPage() {
                   );
                   const busy =
                     savingForLater === item.product_id ||
-                    removeItem.isPending ||
-                    updateQty.isPending;
+                    removingId === item.product_id ||
+                    updatingId === item.product_id;
 
                   return (
                     <li key={item.product_id} className="p-4 sm:p-5">
@@ -451,15 +463,27 @@ export default function CartPage() {
                         <div className="flex w-[88px] shrink-0 flex-col items-center gap-2.5 sm:w-[104px]">
                           <Link
                             to={`/products/${item.product_id}`}
+                            aria-label={item.name}
                             className="grid aspect-square w-full place-items-center overflow-hidden rounded-sm border border-line-subtle bg-bg-sunken text-xl font-semibold text-ink-tertiary"
                           >
                             {item.image_url ? (
-                              <img
-                                src={item.image_url}
-                                alt=""
-                                loading="lazy"
-                                className="size-full object-cover"
-                              />
+                              <>
+                                <img
+                                  src={item.image_url}
+                                  alt={item.name}
+                                  loading="lazy"
+                                  className="size-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                    if (e.currentTarget.nextSibling) {
+                                      e.currentTarget.nextSibling.style.display = '';
+                                    }
+                                  }}
+                                />
+                                <span style={{ display: 'none' }}>
+                                  {item.name.charAt(0).toUpperCase()}
+                                </span>
+                              </>
                             ) : (
                               item.name.charAt(0).toUpperCase()
                             )}
@@ -468,12 +492,9 @@ export default function CartPage() {
                             Qty:
                             <select
                               value={item.quantity}
-                              disabled={updateQty.isPending}
+                              disabled={updatingId === item.product_id}
                               onChange={(e) =>
-                                updateQty.mutate({
-                                  productId: item.product_id,
-                                  quantity: Number(e.target.value),
-                                })
+                                handleUpdateQty(item.product_id, Number(e.target.value))
                               }
                               aria-label={`Quantity for ${item.name}`}
                               className="rounded-xs border border-line-subtle bg-bg-elevated px-1.5 py-1 text-xs font-semibold text-ink-primary nums transition-colors hover:border-line-strong focus-visible:focus-ring disabled:opacity-50"
@@ -533,28 +554,31 @@ export default function CartPage() {
                         <button
                           type="button"
                           disabled={busy}
+                          aria-label={`Save ${item.name} for later`}
                           onClick={() => handleSaveForLater(item)}
-                          className="py-2.5 text-xs font-semibold text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary focus-visible:focus-ring disabled:opacity-50"
+                          className="py-3 text-xs font-semibold text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary focus-visible:focus-ring disabled:opacity-50"
                         >
                           {savingForLater === item.product_id ? 'Saving…' : 'Save for later'}
                         </button>
                         <button
                           type="button"
                           disabled={busy}
-                          onClick={() => removeItem.mutate(item.product_id)}
-                          className="py-2.5 text-xs font-semibold text-ink-secondary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring disabled:opacity-50"
+                          aria-label={`Remove ${item.name} from cart`}
+                          onClick={() => handleRemoveItem(item.product_id)}
+                          className="py-3 text-xs font-semibold text-ink-secondary transition-colors hover:bg-danger/12 hover:text-danger focus-visible:focus-ring disabled:opacity-50"
                         >
                           Remove
                         </button>
                         <button
                           type="button"
                           disabled={busy || serviceable === false}
+                          aria-label={`Buy ${item.name} now`}
                           onClick={() =>
                             navigate(
                               `/checkout?buyNow=${item.product_id}&qty=${item.quantity}`,
                             )
                           }
-                          className="inline-flex items-center justify-center gap-1 py-2.5 text-xs font-semibold text-accent transition-colors hover:bg-accent/8 focus-visible:focus-ring disabled:opacity-50"
+                          className="inline-flex items-center justify-center gap-1 py-3 text-xs font-semibold text-accent transition-colors hover:bg-accent/12 focus-visible:focus-ring disabled:opacity-50"
                         >
                           <Zap className="size-3.5" aria-hidden="true" />
                           Buy this now
@@ -644,7 +668,7 @@ export default function CartPage() {
                 </div>
 
                 {totalSavings > 0 && (
-                  <p className="mt-3 rounded-sm bg-success/10 px-3 py-2 text-center text-xs font-semibold text-success">
+                  <p className="mt-3 rounded-sm bg-success/12 px-3 py-2 text-center text-xs font-semibold text-success">
                     You will save {formatPrice(totalSavings)} on this order
                   </p>
                 )}
@@ -667,7 +691,7 @@ export default function CartPage() {
                 variant="cta"
                 block
                 size="lg"
-                disabled={serviceable === false}
+                disabled={(svcLoading && !!pincode) || serviceable === false}
                 onClick={placeOrder}
               >
                 PLACE ORDER
@@ -681,15 +705,15 @@ export default function CartPage() {
           </div>
 
           {/* Mobile sticky place-order bar */}
-          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line-subtle bg-bg-elevated px-4 py-3 shadow-md lg:hidden">
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line-subtle bg-bg-elevated px-4 pt-3 shadow-md lg:hidden" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
             <PlaceOrderBar
               total={total}
-              disabled={serviceable === false}
+              disabled={(svcLoading && !!pincode) || serviceable === false}
               onPlaceOrder={placeOrder}
             />
           </div>
           {/* Spacer so the fixed bar doesn't cover the rail on mobile */}
-          <div className="h-16 lg:hidden" aria-hidden="true" />
+          <div className="h-24 lg:hidden" aria-hidden="true" />
         </div>
       )}
 

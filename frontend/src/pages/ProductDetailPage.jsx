@@ -85,7 +85,10 @@ export default function ProductDetailPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] xl:grid-cols-[460px_minmax(0,1fr)]">
 
         {/* ── LEFT: Image gallery (sticky on desktop) ── */}
-        <section className="lg:sticky lg:top-20 lg:self-start">
+        {/* max-h-[70vw] caps the gallery height on mobile so the buy panel
+            stays visible without excessive scrolling; removed at lg+ where
+            the sticky column takes its natural height. */}
+        <section className="max-h-[70vw] overflow-hidden lg:max-h-none lg:overflow-visible lg:sticky lg:top-20 lg:self-start">
           <LuxuryGallery product={product} />
         </section>
 
@@ -204,7 +207,7 @@ export default function ProductDetailPage() {
       <ProductRail
         title="You may also like"
         products={likely?.length ? likely : coPurchased}
-        isLoading={likelyLoading && coPurchasedLoading}
+        isLoading={likelyLoading || coPurchasedLoading}
       />
 
       {/* Recently viewed */}

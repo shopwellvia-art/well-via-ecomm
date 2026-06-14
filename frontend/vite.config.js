@@ -29,5 +29,11 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    // Never inline fonts as base64 data: URIs. The production CSP (nginx.conf)
+    // has no `font-src data:`, so an inlined font would be blocked at runtime.
+    // Emitting every weight as a separate file keeps them under `default-src
+    // 'self'`. Other assets keep Vite's default size-based inlining.
+    assetsInlineLimit: (filePath) =>
+      /\.(woff2?|ttf|otf|eot)$/i.test(filePath) ? false : undefined,
   },
 });

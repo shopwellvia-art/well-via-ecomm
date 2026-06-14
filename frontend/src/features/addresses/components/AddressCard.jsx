@@ -39,7 +39,7 @@ export default function AddressCard({
   return (
     <div
       className={cn(
-        'rounded-sm border transition-colors duration-150',
+        'min-w-0 rounded-sm border transition-colors duration-150',
         selected
           ? 'border-accent bg-accent/8'
           : 'border-line-subtle bg-bg-elevated',

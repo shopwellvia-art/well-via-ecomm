@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, MapPin, CheckCircle2 } from 'lucide-react';
@@ -9,6 +9,16 @@ import { useAddresses, useCreateAddress } from '../hooks.js';
 import AddressForm from './AddressForm.jsx';
 
 const LABEL_TEXT = { home: 'Home', work: 'Work', other: 'Other' };
+
+/** Returns all focusable elements inside a container. */
+function getFocusable(container) {
+  if (!container) return [];
+  return Array.from(
+    container.querySelectorAll(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  );
+}
 
 /**
  * Right-side "Select delivery address" drawer (Flipkart-style).
@@ -24,15 +34,21 @@ const LABEL_TEXT = { home: 'Home', work: 'Work', other: 'Other' };
  *   onSelect   – called with the full AddressRead object
  */
 export default function AddressSelectDrawer({ open, onClose, selectedId, onSelect }) {
-  const { data: addresses, isLoading } = useAddresses();
+  const { data: addresses, isLoading, isError } = useAddresses();
   const createAddress = useCreateAddress();
   const [adding, setAdding] = useState(false);
+
+  // Refs for focus management
+  const panelRef = useRef(null);
+  const closeBtnRef = useRef(null);
+  const triggerRef = useRef(null); // stores the element that opened the drawer
 
   // Open straight onto the form when there's nothing saved yet.
   useEffect(() => {
     if (open && addresses && addresses.length === 0) setAdding(true);
   }, [open, addresses]);
 
+  // Escape key handler
   useEffect(() => {
     if (!open) return undefined;
     function onKey(e) {
@@ -41,6 +57,49 @@ export default function AddressSelectDrawer({ open, onClose, selectedId, onSelec
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+
+  // Focus management: capture trigger, move focus into drawer on open, restore on close
+  useEffect(() => {
+    if (open) {
+      // Store the element that triggered the open so we can restore focus on close
+      triggerRef.current = document.activeElement;
+      // Move focus into the drawer after the animation frame so the panel is rendered
+      requestAnimationFrame(() => {
+        closeBtnRef.current?.focus();
+      });
+    } else {
+      // Restore focus to the trigger element when the drawer closes
+      if (triggerRef.current && typeof triggerRef.current.focus === 'function') {
+        triggerRef.current.focus();
+        triggerRef.current = null;
+      }
+    }
+  }, [open]);
+
+  // Focus trap: confine Tab / Shift+Tab within the panel while it is open
+  useEffect(() => {
+    if (!open) return undefined;
+    function onKeyDown(e) {
+      if (e.key !== 'Tab') return;
+      const focusable = getFocusable(panelRef.current);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open]);
 
   function handleCreate(values) {
     createAddress.mutate(values, {
@@ -69,18 +128,20 @@ export default function AddressSelectDrawer({ open, onClose, selectedId, onSelec
 
           {/* Panel */}
           <motion.div
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
-            aria-label="Select delivery address"
+            aria-labelledby="drawer-title"
+            tabIndex={-1}
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'tween', duration: 0.25, ease: 'easeOut' }}
-            className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-bg-elevated shadow-xl"
+            className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-bg-elevated shadow-xl outline-none"
           >
             {/* Header */}
             <div className="flex items-center justify-between border-b border-line-subtle px-5 py-4">
-              <h2 className="text-sm font-semibold text-ink-primary">
+              <h2 id="drawer-title" className="text-sm font-semibold text-ink-primary">
                 Select delivery address
               </h2>
               <div className="flex items-center gap-2">
@@ -97,6 +158,7 @@ export default function AddressSelectDrawer({ open, onClose, selectedId, onSelec
                   </Button>
                 )}
                 <button
+                  ref={closeBtnRef}
                   type="button"
                   aria-label="Close"
                   onClick={onClose}
@@ -110,7 +172,7 @@ export default function AddressSelectDrawer({ open, onClose, selectedId, onSelec
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-4">
               {adding ? (
-                <div>
+                <div className="pb-[env(safe-area-inset-bottom,0)]">
                   <AddressForm
                     onSubmit={handleCreate}
                     onCancel={
@@ -127,23 +189,40 @@ export default function AddressSelectDrawer({ open, onClose, selectedId, onSelec
                     </p>
                   )}
                 </div>
+              ) : isError ? (
+                <div className="p-4 text-sm text-danger">
+                  Could not load addresses.{' '}
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="font-semibold underline underline-offset-2 focus-visible:focus-ring"
+                  >
+                    Retry
+                  </button>
+                </div>
               ) : isLoading ? (
                 <div className="flex flex-col gap-2">
-                  <Skeleton className="h-20 rounded-lg" />
-                  <Skeleton className="h-20 rounded-lg" />
+                  <Skeleton className="h-20 rounded-sm" />
+                  <Skeleton className="h-20 rounded-sm" />
                 </div>
               ) : (
                 <>
                   <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-widest text-ink-tertiary">
                     Saved addresses
                   </p>
-                  <ul className="flex flex-col gap-2">
+                  <ul
+                    role="radiogroup"
+                    aria-label="Saved addresses"
+                    className="flex flex-col gap-2"
+                  >
                     {(addresses ?? []).map((addr) => {
                       const isSelected = selectedId === addr.id;
                       return (
                         <li key={addr.id}>
                           <button
                             type="button"
+                            role="radio"
+                            aria-checked={isSelected}
                             onClick={() => {
                               onSelect?.(addr);
                               onClose?.();
@@ -172,7 +251,7 @@ export default function AddressSelectDrawer({ open, onClose, selectedId, onSelec
                               </span>
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-sm font-semibold text-ink-primary">
+                                  <span className="min-w-0 truncate text-sm font-semibold text-ink-primary">
                                     {addr.full_name}
                                   </span>
                                   <span className="rounded-sm bg-fill px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">

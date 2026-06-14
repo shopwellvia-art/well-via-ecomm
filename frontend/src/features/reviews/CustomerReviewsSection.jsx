@@ -28,7 +28,7 @@ export function CustomerReviewsSection({ product }) {
   const [page, setPage] = useState(1);
   const [writing, setWriting] = useState(false);
 
-  const { data, isLoading } = useProductReviews(product.id, {
+  const { data, isLoading, isError, refetch } = useProductReviews(product.id, {
     page,
     page_size: PAGE_SIZE,
     sort,
@@ -85,7 +85,7 @@ export function CustomerReviewsSection({ product }) {
           )}
 
           {/* Write review CTA */}
-          <div className="mt-6 rounded-md border border-line-subtle bg-bg-elevated p-4">
+          <div className="mt-6 rounded-sm border border-line-subtle bg-bg-elevated p-4">
             <p className="text-sm font-semibold text-ink-primary">Review this product</p>
             <p className="mt-1 text-xs text-ink-tertiary">
               Share your thoughts with other customers.
@@ -167,8 +167,15 @@ export function CustomerReviewsSection({ product }) {
                   </div>
                 ))}
               </div>
+            ) : isError ? (
+              <div className="py-8 text-center text-sm text-danger">
+                Couldn&apos;t load reviews.{' '}
+                <button onClick={() => refetch()} className="underline">
+                  Retry
+                </button>
+              </div>
             ) : items.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-line-subtle py-14 text-center">
+              <div className="flex flex-col items-center gap-3 rounded-sm border border-dashed border-line-subtle py-14 text-center">
                 <span className="grid size-10 place-items-center rounded-full bg-fill">
                   <MessageSquare className="size-5 text-ink-tertiary" aria-hidden="true" />
                 </span>

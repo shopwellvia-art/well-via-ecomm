@@ -90,24 +90,33 @@ export default function CorporatePage() {
                   initial="hidden"
                   whileInView="show"
                   viewport={{ once: true, margin: '-60px' }}
-                  className="grid gap-4 sm:grid-cols-3"
+                  className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
                 >
                   {page.leadership.map((p, i) => (
                     <motion.div key={i} variants={fadeUp}>
                       <Card>
                         <CardBody className="flex flex-col items-center text-center py-6">
-                          {p.image ? (
-                            <img
-                              src={p.image}
-                              alt=""
-                              loading="lazy"
-                              className="size-16 rounded-full object-cover ring-2 ring-line-subtle"
-                            />
-                          ) : (
-                            <span className="grid size-16 place-items-center rounded-full bg-accent-soft text-lg font-semibold text-accent">
+                          <div className="relative size-16">
+                            {p.image && (
+                              <img
+                                src={p.image}
+                                alt={p.name}
+                                loading="lazy"
+                                className="size-16 rounded-full object-cover ring-2 ring-line-subtle"
+                                onError={(e) => {
+                                  e.currentTarget.onerror = null;
+                                  e.currentTarget.style.display = 'none';
+                                  e.currentTarget.nextElementSibling?.removeAttribute('hidden');
+                                }}
+                              />
+                            )}
+                            <span
+                              hidden={!!p.image}
+                              className="grid size-16 place-items-center rounded-full bg-accent-soft text-lg font-semibold text-accent"
+                            >
                               {(p.name || '?').charAt(0)}
                             </span>
-                          )}
+                          </div>
                           <p className="mt-3 font-semibold text-ink-primary">{p.name}</p>
                           {p.title && (
                             <p className="mt-0.5 text-xs text-ink-secondary">{p.title}</p>
@@ -189,7 +198,7 @@ export default function CorporatePage() {
 
             {page.downloads?.length > 0 && (
               <div>
-                <h3 className="mb-3 text-sm font-semibold text-ink-primary">Documents</h3>
+                <SectionLabel className="mb-3">Documents</SectionLabel>
                 <motion.div
                   variants={listStagger(0.04)}
                   initial="hidden"

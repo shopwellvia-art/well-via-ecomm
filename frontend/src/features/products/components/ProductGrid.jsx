@@ -17,10 +17,12 @@ export function ProductGrid({ products = [], loading = false, onQuickAdd, skelet
     );
   }
 
+  const stagger = Math.min(0.05, 0.3 / Math.max(products.length, 1));
+
   return (
     <motion.div
       className={GRID}
-      variants={listStagger(0.05)}
+      variants={listStagger(stagger)}
       initial="hidden"
       whileInView="show"
       viewport={{ once: true, amount: 0.08 }}

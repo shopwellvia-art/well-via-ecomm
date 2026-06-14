@@ -52,9 +52,15 @@ export function LuxuryBuyPanel({ product }) {
       navigate(`/login?next=/products/${product.id}`);
       return;
     }
+    setAdded(false);
     addToCart.mutate(
       { productId: product.id, quantity: qty },
-      { onSuccess: () => setAdded(true) },
+      {
+        onSuccess: () => {
+          setAdded(true);
+          setTimeout(() => setAdded(false), 2000);
+        },
+      },
     );
   }
 
@@ -117,7 +123,7 @@ export function LuxuryBuyPanel({ product }) {
                 <span className="nums text-sm text-ink-tertiary line-through tabular-nums">
                   {formatPrice(compareAt)}
                 </span>
-                <span className="rounded-sm bg-rating/15 px-1.5 py-0.5 text-xs font-bold text-rating">
+                <span className="rounded-sm bg-rating/12 px-1.5 py-0.5 text-xs font-bold text-rating">
                   {discountPct}% OFF
                 </span>
               </>
@@ -169,31 +175,36 @@ export function LuxuryBuyPanel({ product }) {
 
         {/* Quantity stepper */}
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-ink-secondary" htmlFor="lux-qty">
+          <label id="lux-qty-label" className="mb-1.5 block text-xs font-medium text-ink-secondary" htmlFor="lux-qty">
             Quantity
           </label>
-          <div className="inline-flex h-9 items-center rounded-sm border border-line-subtle bg-bg-sunken">
+          <div
+            role="group"
+            aria-labelledby="lux-qty-label"
+            className="inline-flex h-9 items-center rounded-sm border border-line-subtle bg-bg-sunken"
+          >
             <button
               type="button"
               aria-label="Decrease quantity"
               disabled={qty <= 1 || outOfStock}
               onClick={() => setQty((q) => Math.max(1, q - 1))}
-              className="grid size-9 place-items-center text-ink-secondary transition-colors hover:text-ink-primary focus-visible:outline-none disabled:opacity-30"
+              className="grid size-9 place-items-center text-ink-secondary transition-colors hover:text-ink-primary focus-visible:focus-ring disabled:opacity-30"
             >
               <Minus className="size-4" />
             </button>
-            <span
+            <output
               id="lux-qty"
+              aria-live="polite"
               className="w-9 text-center text-sm font-medium tabular-nums text-ink-primary"
             >
               {qty}
-            </span>
+            </output>
             <button
               type="button"
               aria-label="Increase quantity"
               disabled={qty >= maxQty || outOfStock}
               onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
-              className="grid size-9 place-items-center text-ink-secondary transition-colors hover:text-ink-primary focus-visible:outline-none disabled:opacity-30"
+              className="grid size-9 place-items-center text-ink-secondary transition-colors hover:text-ink-primary focus-visible:focus-ring disabled:opacity-30"
             >
               <Plus className="size-4" />
             </button>
@@ -228,7 +239,7 @@ export function LuxuryBuyPanel({ product }) {
             variant="cta"
             size="lg"
             onClick={handleBuyNow}
-            disabled={outOfStock}
+            disabled={outOfStock || addToCart.isPending}
             block
           >
             <Zap className="size-4" aria-hidden="true" />
@@ -241,7 +252,7 @@ export function LuxuryBuyPanel({ product }) {
             <button
               type="button"
               onClick={handleShare}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-sm border border-line-subtle bg-bg-elevated text-sm font-medium text-ink-secondary transition-colors hover:border-line-strong hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-sm border border-line-subtle bg-bg-elevated text-sm font-medium text-ink-secondary transition-colors hover:border-line-strong hover:text-ink-primary focus-visible:focus-ring"
             >
               {shared ? (
                 <>

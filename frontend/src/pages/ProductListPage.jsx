@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Search,
@@ -56,6 +56,10 @@ export default function ProductListPage() {
   const [sortBy, setSortBy] = useState('relevance');
   const [filterOpen, setFilterOpen] = useState(false);
 
+  // Refs for drawer focus management
+  const filterTriggerRef = useRef(null);
+  const drawerHeadingRef = useRef(null);
+
   useEffect(() => {
     setSearch(queryParam);
   }, [queryParam]);
@@ -72,11 +76,21 @@ export default function ProductListPage() {
     setPage(1);
   }, [categoryId, categorySlug]);
 
+  // Focus drawer heading when it opens; restore focus to trigger when it closes
+  useEffect(() => {
+    if (filterOpen) {
+      drawerHeadingRef.current?.focus();
+    } else {
+      filterTriggerRef.current?.focus();
+    }
+  }, [filterOpen]);
+
   const { data, isLoading, isError, refetch } = useProducts({
     q: query || undefined,
     category_id: categoryId,
     page,
     page_size: PAGE_SIZE,
+    sort_by: sortBy,
   });
   const addToCart = useAddToCart();
 
@@ -146,10 +160,11 @@ export default function ProductListPage() {
                   <li>
                     <Link
                       to="/products"
+                      aria-current={!isFiltered ? 'page' : undefined}
                       className={cn(
                         'flex items-center gap-2.5 px-4 py-2 text-sm transition-colors',
                         !isFiltered
-                          ? 'border-l-2 border-accent bg-accent/5 font-semibold text-accent'
+                          ? 'border-l-2 border-accent bg-accent/12 font-semibold text-accent'
                           : 'text-ink-secondary hover:bg-bg-sunken hover:text-ink-primary',
                       )}
                     >
@@ -162,10 +177,11 @@ export default function ProductListPage() {
                       <li key={cat.id}>
                         <Link
                           to={`/products?category_id=${cat.id}`}
+                          aria-current={active ? 'page' : undefined}
                           className={cn(
                             'flex items-center gap-2.5 px-4 py-2 text-sm transition-colors',
                             active
-                              ? 'border-l-2 border-accent bg-accent/5 font-semibold text-accent'
+                              ? 'border-l-2 border-accent bg-accent/12 font-semibold text-accent'
                               : 'text-ink-secondary hover:bg-bg-sunken hover:text-ink-primary',
                           )}
                         >
@@ -188,9 +204,12 @@ export default function ProductListPage() {
             <div className="flex items-center gap-3">
               {/* Mobile filter trigger */}
               <button
+                ref={filterTriggerRef}
                 type="button"
                 onClick={() => setFilterOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-sm border border-line-subtle px-3 py-1.5 text-xs font-medium text-ink-secondary transition-colors hover:border-line-strong hover:text-ink-primary focus-visible:outline-none lg:hidden"
+                aria-expanded={filterOpen}
+                aria-controls="filter-drawer"
+                className="inline-flex items-center gap-1.5 rounded-sm border border-line-subtle px-3 py-1.5 text-xs font-medium text-ink-secondary transition-colors hover:border-line-strong hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
               >
                 <SlidersHorizontal className="size-3.5" aria-hidden="true" />
                 Filters
@@ -201,6 +220,8 @@ export default function ProductListPage() {
                     <span className="inline-block size-1.5 animate-pulse rounded-full bg-accent" />
                     Loading…
                   </span>
+                ) : total === 0 ? (
+                  <span className="font-semibold text-ink-primary nums">0 products</span>
                 ) : (
                   <>
                     Showing{' '}
@@ -219,14 +240,14 @@ export default function ProductListPage() {
             {/* Sort options */}
             <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none]">
               <span className="shrink-0 text-xs font-medium text-ink-tertiary">Sort By</span>
-              <div className="flex gap-1">
+              <div className="flex min-h-[2.75rem] items-center gap-1">
                 {SORT_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => setSortBy(opt.value)}
+                    onClick={() => { setSortBy(opt.value); setPage(1); }}
                     className={cn(
-                      'shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none',
+                      'shrink-0 rounded-full px-3 py-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                       sortBy === opt.value
                         ? 'bg-accent text-white'
                         : 'text-ink-secondary hover:text-ink-primary',
@@ -242,7 +263,7 @@ export default function ProductListPage() {
           {/* Active category badge */}
           {isFiltered && activeCategory?.name && (
             <div className="mb-3 flex items-center gap-2">
-              <span className="rounded-sm border border-accent/30 bg-accent/8 px-2.5 py-1 text-xs font-medium text-accent">
+              <span className="rounded-sm border border-accent/30 bg-accent/12 px-2.5 py-1 text-xs font-medium text-accent">
                 {activeCategory.name}
               </span>
               <Link
@@ -359,21 +380,36 @@ export default function ProductListPage() {
       {/* ── MOBILE FILTER DRAWER ── */}
       {filterOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/50"
+          {/* Backdrop — keyboard-operable button */}
+          <button
+            type="button"
+            aria-label="Close filters"
+            className="absolute inset-0 cursor-default bg-black/50"
             onClick={() => setFilterOpen(false)}
-            aria-hidden="true"
           />
           {/* Drawer */}
-          <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-bg-elevated shadow-xl">
+          <div
+            id="filter-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="filter-drawer-title"
+            onKeyDown={(e) => { if (e.key === 'Escape') setFilterOpen(false); }}
+            className="absolute inset-y-0 left-0 flex w-72 max-w-[calc(100vw-2.5rem)] flex-col bg-bg-elevated shadow-xl"
+          >
             <div className="flex items-center justify-between border-b border-line-subtle px-4 py-4">
-              <span className="text-base font-semibold text-ink-primary">Filters</span>
+              <span
+                id="filter-drawer-title"
+                ref={drawerHeadingRef}
+                tabIndex={-1}
+                className="text-base font-semibold text-ink-primary outline-none"
+              >
+                Filters
+              </span>
               <button
                 type="button"
                 onClick={() => setFilterOpen(false)}
                 aria-label="Close filters"
-                className="grid size-8 place-items-center rounded-sm text-ink-secondary hover:text-ink-primary"
+                className="grid size-11 place-items-center rounded-sm text-ink-secondary hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <X className="size-5" aria-hidden="true" />
               </button>
@@ -403,10 +439,11 @@ export default function ProductListPage() {
                       <Link
                         to="/products"
                         onClick={() => setFilterOpen(false)}
+                        aria-current={!isFiltered ? 'page' : undefined}
                         className={cn(
                           'flex items-center gap-2.5 px-4 py-2.5 text-sm',
                           !isFiltered
-                            ? 'border-l-2 border-accent bg-accent/5 font-semibold text-accent'
+                            ? 'border-l-2 border-accent bg-accent/12 font-semibold text-accent'
                             : 'text-ink-secondary',
                         )}
                       >
@@ -420,10 +457,11 @@ export default function ProductListPage() {
                           <Link
                             to={`/products?category_id=${cat.id}`}
                             onClick={() => setFilterOpen(false)}
+                            aria-current={active ? 'page' : undefined}
                             className={cn(
                               'flex items-center gap-2.5 px-4 py-2.5 text-sm',
                               active
-                                ? 'border-l-2 border-accent bg-accent/5 font-semibold text-accent'
+                                ? 'border-l-2 border-accent bg-accent/12 font-semibold text-accent'
                                 : 'text-ink-secondary',
                             )}
                           >

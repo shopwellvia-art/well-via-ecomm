@@ -85,7 +85,7 @@ function ContactForm({ form }) {
             required
           />
           <div className="mt-5 flex items-center gap-4">
-            <Button type="submit" variant="primary">Send message</Button>
+            <Button type="submit" variant="primary" disabled={submitted}>Send message</Button>
             {submitted && (
               <motion.span
                 initial={{ opacity: 0, x: -8 }}
@@ -105,7 +105,26 @@ function ContactForm({ form }) {
 }
 
 export default function ContactPage() {
-  const { data } = useSitePages();
+  const { data, isLoading } = useSitePages();
+
+  if (isLoading && !data) {
+    return (
+      <Page>
+        <div className="space-y-4 py-12 animate-pulse">
+          <div className="h-6 w-48 rounded bg-line-subtle" />
+          <div className="h-4 w-full max-w-lg rounded bg-line-subtle" />
+          <div className="h-4 w-2/3 max-w-md rounded bg-line-subtle" />
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="h-28 rounded bg-line-subtle" />
+            ))}
+          </div>
+          <div className="mt-6 h-64 rounded bg-line-subtle" />
+        </div>
+      </Page>
+    );
+  }
+
   const page = { ...SITE_PAGES_DEFAULTS.contact, ...data?.contact };
 
   if (page.enabled === false) {

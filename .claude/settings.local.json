@@ -115,7 +115,9 @@
       "PowerShell(docker exec *)",
       "PowerShell($r = Invoke-WebRequest -Uri http://localhost:8000/health -UseBasicParsing -TimeoutSec 15; Write-Output \"backend health: $\\($r.StatusCode\\)\"; $f = Invoke-WebRequest -Uri http://localhost:5174/cart -UseBasicParsing -TimeoutSec 15; Write-Output \"frontend /cart: $\\($f.StatusCode\\)\")",
       "PowerShell(try { \\(Invoke-WebRequest -Uri \"http://localhost:5174/\" -UseBasicParsing -TimeoutSec 5\\).StatusCode } catch { \"5174 ERROR: $\\($_.Exception.Message\\)\" }; try { \\(Invoke-WebRequest -Uri \"http://localhost:5173/\" -UseBasicParsing -TimeoutSec 5\\).StatusCode } catch { \"5173 ERROR: $\\($_.Exception.Message\\)\" })",
-      "PowerShell(Start-Sleep -Seconds 3; try { \\(Invoke-WebRequest -Uri \"http://localhost:8000/health\" -UseBasicParsing -TimeoutSec 5\\).Content } catch { \"ERROR: $\\($_.Exception.Message\\)\" }; docker ps --filter \"name=simpleecomers-backend-1\" --format \"{{.Status}}\")"
+      "PowerShell(Start-Sleep -Seconds 3; try { \\(Invoke-WebRequest -Uri \"http://localhost:8000/health\" -UseBasicParsing -TimeoutSec 5\\).Content } catch { \"ERROR: $\\($_.Exception.Message\\)\" }; docker ps --filter \"name=simpleecomers-backend-1\" --format \"{{.Status}}\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\); console.log\\('deps:', Object.keys\\(p.dependencies||{}\\).join\\(', '\\)\\)\")",
+      "Bash(ls src *)"
     ]
   }
 }

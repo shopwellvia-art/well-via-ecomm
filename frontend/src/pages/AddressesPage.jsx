@@ -21,7 +21,7 @@ import { motion } from 'framer-motion';
 export default function AddressesPage() {
   const user = useAuthStore((s) => s.user);
 
-  const { data: addresses, isLoading, isError } = useAddresses();
+  const { data: addresses, isLoading, isError, refetch } = useAddresses();
   const createAddress = useCreateAddress();
   const updateAddress = useUpdateAddress();
   const deleteAddress = useDeleteAddress();
@@ -31,15 +31,19 @@ export default function AddressesPage() {
   const [formMode, setFormMode] = useState(null);
   // id of address currently being deleted (for per-card loading state)
   const [deletingId, setDeletingId] = useState(null);
-  // inline error message
+  // id of address pending inline delete confirmation
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
+  // inline error message for address form
   const [formError, setFormError] = useState(null);
+  // inline error from a failed delete mutation
+  const [deleteError, setDeleteError] = useState(null);
 
   if (!user) {
     return (
       <Page>
         {/* Page header */}
         <div className="mb-6 flex items-center gap-3 border-b border-line-subtle pb-5">
-          <span className="grid size-9 place-items-center rounded-sm bg-accent/10 text-accent">
+          <span className="grid size-9 place-items-center rounded-sm bg-accent/12 text-accent">
             <MapPin className="size-5" aria-hidden="true" />
           </span>
           <div>
@@ -90,11 +94,25 @@ export default function AddressesPage() {
     );
   }
 
+  // First click: show inline confirmation prompt on that card.
+  // Second click (confirmed): run the mutation.
   function handleDelete(id) {
-    if (!window.confirm('Delete this address?')) return;
+    if (confirmingDeleteId !== id) {
+      setConfirmingDeleteId(id);
+      setDeleteError(null);
+      return;
+    }
+    // User confirmed — proceed with deletion.
+    setConfirmingDeleteId(null);
     setDeletingId(id);
+    setDeleteError(null);
     deleteAddress.mutate(id, {
       onSettled: () => setDeletingId(null),
+      onError: (err) => {
+        setDeleteError(
+          err?.response?.data?.error?.message || 'Could not delete address. Please try again.',
+        );
+      },
     });
   }
 
@@ -112,7 +130,7 @@ export default function AddressesPage() {
       {/* ── Page header bar ── */}
       <div className="mb-5 flex items-center justify-between gap-4 border-b border-line-subtle pb-4">
         <div className="flex items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-accent/10 text-accent">
+          <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-accent/12 text-accent">
             <MapPin className="size-5" aria-hidden="true" />
           </span>
           <div>
@@ -185,8 +203,11 @@ export default function AddressesPage() {
           </motion.div>
         ) : isError ? (
           <motion.div variants={fadeUp}>
-            <div className="flex items-start gap-2.5 rounded-sm border border-danger/30 bg-danger/8 p-4 text-sm text-danger">
-              Could not load your addresses. Please refresh the page.
+            <div className="flex flex-col items-start gap-2.5 rounded-sm border border-danger/30 bg-danger/8 p-4 text-sm text-danger">
+              <span>Could not load your addresses. Please try again.</span>
+              <Button size="sm" variant="outline" className="mt-2" onClick={() => refetch()}>
+                Retry
+              </Button>
             </div>
           </motion.div>
         ) : !addresses?.length && formMode === null ? (
@@ -218,13 +239,52 @@ export default function AddressesPage() {
               <motion.div key={addr.id} variants={fadeUp}>
                 <AddressCard
                   address={addr}
-                  onEdit={(a) => { setFormMode({ id: a.id }); setFormError(null); }}
+                  onEdit={(a) => {
+                    setFormMode({ id: a.id });
+                    setFormError(null);
+                    setConfirmingDeleteId(null);
+                  }}
                   onDelete={handleDelete}
                   onSetDefault={handleSetDefault}
                   deleting={deletingId === addr.id}
                 />
+                {/* Inline delete confirmation — replaces window.confirm */}
+                {confirmingDeleteId === addr.id && (
+                  <div
+                    role="alertdialog"
+                    aria-live="assertive"
+                    aria-label="Confirm address deletion"
+                    className="mt-1 flex items-center gap-2 rounded-sm border border-danger/30 bg-danger/8 px-3 py-2 text-sm text-danger"
+                  >
+                    <span className="flex-1">Delete this address?</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-danger/40 text-danger hover:bg-danger/12"
+                      onClick={() => handleDelete(addr.id)}
+                    >
+                      Delete
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-ink-secondary"
+                      onClick={() => setConfirmingDeleteId(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
               </motion.div>
             ))}
+            {/* Inline delete mutation error */}
+            {deleteError && (
+              <motion.div variants={fadeUp}>
+                <div className="flex items-start gap-2.5 rounded-sm border border-danger/30 bg-danger/8 px-3.5 py-3 text-sm text-danger">
+                  {deleteError}
+                </div>
+              </motion.div>
+            )}
           </motion.div>
         )}
       </motion.div>

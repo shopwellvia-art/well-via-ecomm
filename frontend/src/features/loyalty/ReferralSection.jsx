@@ -68,8 +68,8 @@ function NativeShareButton({ url, friendAmount }) {
 }
 
 export function ReferralSection() {
-  const { data, isLoading } = useMyReferralOverview();
-  const { data: list, isLoading: listLoading } = useMyReferrals({
+  const { data, isLoading, isError } = useMyReferralOverview();
+  const { data: list, isLoading: listLoading, isError: listError } = useMyReferrals({
     page: 1,
     page_size: 10,
   });
@@ -78,7 +78,15 @@ export function ReferralSection() {
     return (
       <section>
         <Skeleton variant="text" className="h-6 w-32 mb-4" />
-        <Skeleton className="h-64 rounded-xl" />
+        <Skeleton className="h-64 rounded-sm" />
+      </section>
+    );
+  }
+  if (isError) {
+    return (
+      <section>
+        <h2 className="text-h3 text-ink-primary tracking-tight">Refer a friend</h2>
+        <p className="mt-3 text-xs text-danger">Couldn&rsquo;t load referral information. Please try again later.</p>
       </section>
     );
   }
@@ -99,7 +107,7 @@ export function ReferralSection() {
           {/* Reward explanation header */}
           <div className="border-b border-line-subtle px-6 py-4">
             <div className="flex items-start gap-3">
-              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent/12 text-accent">
+              <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-accent/12 text-accent">
                 <Gift className="size-5" aria-hidden="true" />
               </span>
               <p className="text-sm text-ink-secondary leading-relaxed">
@@ -124,11 +132,11 @@ export function ReferralSection() {
             <div className="flex flex-col gap-5 px-6 py-5">
               {/* Referral code */}
               <div>
-                <label className="block text-[10px] font-semibold uppercase tracking-widest text-ink-tertiary">
+                <p className="block text-[10px] font-semibold uppercase tracking-widest text-ink-tertiary">
                   Your referral code
-                </label>
+                </p>
                 <div className="mt-2 flex items-center gap-2">
-                  <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-line-subtle bg-bg-sunken px-4 py-2.5">
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-sm border border-line-subtle bg-bg-sunken px-4 py-2.5">
                     <code className="flex-1 truncate font-mono text-base font-semibold tracking-[0.12em] text-ink-primary nums">
                       {data.code}
                     </code>
@@ -139,11 +147,11 @@ export function ReferralSection() {
 
               {/* Share link */}
               <div>
-                <label className="block text-[10px] font-semibold uppercase tracking-widest text-ink-tertiary">
+                <p className="block text-[10px] font-semibold uppercase tracking-widest text-ink-tertiary">
                   Share link
-                </label>
+                </p>
                 <div className="mt-2 flex items-center gap-2">
-                  <div className="flex min-w-0 flex-1 items-center rounded-xl border border-line-subtle bg-bg-sunken px-3.5 py-2.5 overflow-hidden">
+                  <div className="flex min-w-0 flex-1 items-center rounded-sm border border-line-subtle bg-bg-sunken px-3.5 py-2.5 overflow-hidden">
                     <ArrowRight className="mr-2 size-3.5 shrink-0 text-ink-tertiary" aria-hidden="true" />
                     <code className="truncate font-mono text-xs text-ink-secondary">
                       {data.share_url}
@@ -190,12 +198,15 @@ export function ReferralSection() {
       </motion.div>
 
       {/* Referral list */}
-      {items.length > 0 && (
+      {listError && (
+        <p className="mt-3 text-xs text-danger">Couldn&rsquo;t load referral history.</p>
+      )}
+      {!listError && items.length > 0 && (
         <motion.div
           variants={listStagger(0.04)}
           initial="hidden"
           animate="show"
-          className="mt-4 overflow-hidden rounded-xl border border-line-subtle bg-bg-elevated"
+          className="mt-4 overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated"
         >
           <table className="w-full">
             <thead>
@@ -252,7 +263,7 @@ function StatCard({ label, value, icon: Icon, tone }) {
   return (
     <div
       className={cn(
-        'flex items-center gap-3 rounded-lg border border-line-subtle bg-bg-elevated px-3.5 py-2.5 transition-colors',
+        'flex items-center gap-3 rounded-sm border border-line-subtle bg-bg-elevated px-3.5 py-2.5 transition-colors',
       )}
     >
       <span

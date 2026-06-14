@@ -39,7 +39,7 @@ export function WriteReviewForm({ productId, onCancel, onSubmitted }) {
       variants={scaleIn}
       initial="hidden"
       animate="show"
-      className="mb-6 rounded-lg border border-line-subtle bg-bg-elevated p-5 shadow-md"
+      className="mb-6 rounded-sm border border-line-subtle bg-bg-elevated p-5 shadow-sm"
     >
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-h3 tracking-tight text-ink-primary">Write your review</h3>
@@ -91,7 +91,7 @@ export function WriteReviewForm({ productId, onCancel, onSubmitted }) {
       </div>
 
       {error && (
-        <p role="alert" className="mt-2.5 text-xs text-danger shadow-glow-danger/0">
+        <p role="alert" className="mt-2.5 text-xs text-danger">
           {error}
         </p>
       )}

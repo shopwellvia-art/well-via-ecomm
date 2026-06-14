@@ -17,6 +17,7 @@ import { Page } from '@/components/layout/Page.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Input } from '@/components/ui/Input.jsx';
 import { Badge } from '@/components/ui/Badge.jsx';
+import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { useAuthStore } from '@/features/auth/store.js';
 import { authApi } from '@/features/auth/api.js';
@@ -60,9 +61,9 @@ function CopyableCode({ value }) {
 
 function BackupCodesPanel({ codes, onAcknowledge }) {
   return (
-    <div className="rounded-sm border border-warning/30 bg-warning/8 p-4">
+    <div className="rounded-sm border border-warning/30 bg-warning/12 p-4">
       <div className="flex items-start gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-warning/15 text-warning">
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-warning/12 text-warning">
           <AlertTriangle className="size-5" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
@@ -83,7 +84,8 @@ function BackupCodesPanel({ codes, onAcknowledge }) {
               </code>
             ))}
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
+          {/* fix-6: stack vertically on mobile instead of awkward wrapping */}
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <Button
               size="sm"
               variant="secondary"
@@ -174,7 +176,8 @@ function EnrollmentFlow({ onDone, onCancel }) {
       <div className="flex flex-col gap-4">
         <div className="rounded-sm border border-line-subtle bg-bg-elevated p-4">
           <div className="flex items-center gap-3">
-            <span className="grid size-9 place-items-center rounded-full bg-success/10 text-success">
+            {/* fix-1/8: bg-success/10 → bg-success/12 */}
+            <span className="grid size-9 place-items-center rounded-full bg-success/12 text-success">
               <ShieldCheck className="size-5" aria-hidden="true" />
             </span>
             <div>
@@ -204,10 +207,13 @@ function EnrollmentFlow({ onDone, onCancel }) {
       </p>
 
       <div className="mt-5 grid gap-5 sm:grid-cols-[144px_minmax(0,1fr)]">
-        {/* QR code */}
-        <div className="grid place-items-center self-start rounded-sm border border-line-subtle bg-white p-2.5 shadow-sm">
+        {/* fix-7: wrap QR in figure/figcaption for AT context */}
+        <figure className="grid place-items-center self-start rounded-sm border border-line-subtle bg-white p-2.5 shadow-sm">
           <QRCodeSVG value={start.otpauth_uri} size={128} includeMargin={false} />
-        </div>
+          <figcaption className="sr-only">
+            Scan this QR code with your authenticator app to link it to your account.
+          </figcaption>
+        </figure>
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-tertiary">
             Or enter this secret manually
@@ -345,13 +351,29 @@ function ProfileCard() {
 export default function AccountSecurityPage() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
-  const { data: cfg } = useSystemConfig();
+  // fix-5/9: destructure isLoading so we can show a skeleton while config loads
+  const { data: cfg, isLoading: cfgLoading } = useSystemConfig();
   const [enrolling, setEnrolling] = useState(false);
+
+  // fix-3: stateful confirmation instead of window.confirm
+  const [disableConfirming, setDisableConfirming] = useState(false);
+  // fix-2: surface disable mutation errors to the user
+  const [disableError, setDisableError] = useState(null);
 
   const disable = useMutation({
     mutationFn: () => totpApi.disable(),
     onSuccess: () => {
+      setDisableConfirming(false);
+      setDisableError(null);
       authApi.me().then((u) => setUser(u)).catch(() => {});
+    },
+    onError: (err) => {
+      setDisableConfirming(false);
+      setDisableError(
+        err?.response?.data?.error?.message ||
+          err?.response?.data?.detail ||
+          'Could not disable two-factor authentication. Please try again.',
+      );
     },
   });
 
@@ -381,7 +403,8 @@ export default function AccountSecurityPage() {
     <Page>
       {/* Page header */}
       <div className="mb-5 flex items-center gap-3 border-b border-line-subtle pb-4">
-        <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-accent/10 text-accent">
+        {/* fix-4: bg-accent/10 → bg-accent/12 */}
+        <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-accent/12 text-accent">
           <Shield className="size-5" aria-hidden="true" />
         </span>
         <div>
@@ -396,8 +419,11 @@ export default function AccountSecurityPage() {
         {/* Profile section */}
         <ProfileCard />
 
-        {/* 2FA section */}
-        {!systemEnabled && !totpOn ? (
+        {/* fix-5/9: show skeleton while system config is loading so the
+            'Unavailable' badge never flashes before real data arrives */}
+        {cfgLoading ? (
+          <Skeleton className="h-24 rounded-sm" />
+        ) : !systemEnabled && !totpOn ? (
           /* System disabled */
           <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
             <div className="border-b border-line-subtle bg-bg-sunken px-4 py-3">
@@ -417,7 +443,11 @@ export default function AccountSecurityPage() {
             </div>
           </div>
         ) : enrolling ? (
-          <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
+          /* fix-7: aria-live so AT announces when enrollment panel appears */
+          <div
+            aria-live="polite"
+            className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm"
+          >
             <div className="flex items-center justify-between border-b border-line-subtle bg-bg-sunken px-4 py-3">
               <div className="flex items-center gap-2">
                 <Shield className="size-4 text-accent" aria-hidden="true" />
@@ -451,23 +481,48 @@ export default function AccountSecurityPage() {
                 You&apos;ll be asked for a 6-digit code from your authenticator every time
                 you sign in.
               </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      'Turn off two-factor authentication? Your account will be protected by password only.',
-                    )
-                  ) {
-                    disable.mutate();
-                  }
-                }}
-                loading={disable.isPending}
-              >
-                <X className="size-4" aria-hidden="true" /> Disable
-              </Button>
+              {/* fix-3: inline confirm/cancel pattern replacing window.confirm */}
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                {disableConfirming ? (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setDisableConfirming(false);
+                        setDisableError(null);
+                      }}
+                      disabled={disable.isPending}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => disable.mutate()}
+                      loading={disable.isPending}
+                    >
+                      <X className="size-4" aria-hidden="true" /> Confirm disable
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setDisableError(null);
+                      setDisableConfirming(true);
+                    }}
+                    loading={disable.isPending}
+                  >
+                    <X className="size-4" aria-hidden="true" /> Disable
+                  </Button>
+                )}
+                {/* fix-2: surface disable errors */}
+                {disableError && (
+                  <p className="mt-2 text-xs text-danger">{disableError}</p>
+                )}
+              </div>
             </div>
           </div>
         ) : (

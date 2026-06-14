@@ -1,0 +1,374 @@
+{
+  "frontend/src/features/products/hooks.js": [
+    {
+      "dimension": "states",
+      "severity": "high",
+      "line": null,
+      "issue": "useProducts (line 4) does not set placeholderData: keepPreviousData. Every page change or filter change causes isLoading=true, which mounts the skeleton grid and tears down the live product grid. Every other paginated hook in the codebase (admin-orders, reviews, analytics, users) uses keepPreviousData to prevent this flash.",
+      "fix": "Import keepPreviousData from @tanstack/react-query and add `placeholderData: keepPreviousData` to the useProducts query options, matching the pattern used in src/features/reviews/hooks.js lines 1+26."
+    }
+  ],
+  "frontend/src/features/products/components/ProductGrid.jsx": [
+    {
+      "dimension": "performance",
+      "severity": "low",
+      "line": null,
+      "issue": "ProductGrid uses `whileInView` (line 26) without `amount` tuning for a dense 4-column grid on desktop. With 12 cards staggered at 0.05s, the last card takes 600ms+ to animate in. Combined with the missing keepPreviousData in useProducts, every page change re-runs the full stagger entrance from hidden, causing noticeable layout motion on each pagination click.",
+      "fix": "Once keepPreviousData is added to useProducts (separate finding), the grid will no longer remount on page change. Independently, cap stagger delay for large grids: pass `stagger = Math.min(0.05, 0.3 / products.length)` or reduce the listStagger to 0.03 for grids over 8 items."
+    }
+  ],
+  "frontend/src/features/products/components/BuyBox.jsx": [
+    {
+      "dimension": "accessibility",
+      "severity": "high",
+      "line": null,
+      "issue": "Same label/span mismatch as LuxuryBuyPanel: `<label htmlFor=\"buybox-qty\">` at line 110 targets a `<span id=\"buybox-qty\">` at line 124. BuyBox is a dead component (not rendered by ProductDetailPage) but is still exported and could be accidentally re-introduced; the bug should be fixed in place.",
+      "fix": "Change `<span id=\"buybox-qty\">` to `<output id=\"buybox-qty\" aria-live=\"polite\">` or restructure the stepper group with `role=\"group\"` and `aria-label=\"Quantity\"`, removing the broken `htmlFor`."
+    },
+    {
+      "dimension": "consistency",
+      "severity": "low",
+      "line": null,
+      "issue": "BuyBox is a dead component — ProductDetailPage renders LuxuryBuyPanel exclusively. BuyBox remains in the bundle and duplicates the add-to-cart logic (including its own `makeDeliveryDates()` copy). If someone accidentally imports it, users get a different UI with inconsistent token usage (`accent/10` bg with no EMI display, missing share button).",
+      "fix": "Delete `frontend/src/features/products/components/BuyBox.jsx` after confirming no active page imports it."
+    }
+  ],
+  "frontend/src/features/products/components/SpecTable.jsx": [
+    {
+      "dimension": "edge-cases",
+      "severity": "high",
+      "line": null,
+      "issue": "Line 13: `new Date(product.created_at).toLocaleDateString()` throws `Invalid Date` and renders \"Invalid Date\" when `product.created_at` is null or undefined (possible for migrated or draft products). The invalid date string will appear as the \"Listed\" row value.",
+      "fix": "Guard the value: `product.created_at ? new Date(product.created_at).toLocaleDateString() : '—'`."
+    }
+  ],
+  "frontend/src/features/reviews/ReviewCard.jsx": [
+    {
+      "dimension": "consistency",
+      "severity": "medium",
+      "line": null,
+      "issue": "Line 38: `bg-accent-soft` is used as a background for the author avatar. `accent-soft` is defined in tailwind.config.js as `rgba(40, 116, 240, 0.10)` — identical to `bg-accent/10`. Using the named alias is fine, but this is an inconsistency: everywhere else (CustomerSay, LuxuryBuyPanel, TrustRow, KeyFeatures) the code uses `bg-accent/10` directly. Both forms are valid tokens but the inconsistency could cause confusion.",
+      "fix": "Normalise to `bg-accent/10` to match the rest of the codebase (or vice-versa — pick one form and apply it everywhere)."
+    }
+  ],
+  "frontend/src/features/reviews/WriteReviewForm.jsx": [
+    {
+      "dimension": "consistency",
+      "severity": "low",
+      "line": null,
+      "issue": "Line 94: `shadow-glow-danger/0` is applied to the error `<p>` element. This is not a defined token — `glow-danger` is a box-shadow token but `/0` (zero opacity) produces a no-op class that Tailwind may not emit. The intent is probably to set no shadow on the error text, so this is dead/no-op styling that clutters the class list.",
+      "fix": "Remove `shadow-glow-danger/0` from the error paragraph's className — it has no visual effect and is not a defined token."
+    },
+    {
+      "dimension": "consistency",
+      "severity": "low",
+      "line": null,
+      "issue": "Line 42 uses `rounded-lg shadow-md` on the review form card. All other storefront cards use `rounded-sm shadow-sm`. The `shadow-md` elevation and `rounded-lg` radius are inconsistent with the flat Flipkart design.",
+      "fix": "Change `rounded-lg shadow-md` → `rounded-sm shadow-sm` at line 42."
+    }
+  ],
+  "frontend/src/features/reviews/CustomerReviewsSection.jsx": [
+    {
+      "dimension": "consistency",
+      "severity": "low",
+      "line": null,
+      "issue": "Lines 88 and 171 use `rounded-md` (6px) and `rounded-lg` (8px) respectively, and line 42 of WriteReviewForm uses `rounded-lg`. The rest of the PDP's cards exclusively use `rounded-sm` (4px). These diverge from the Flipkart flat-marketplace radius standard of 2–4px for cards.",
+      "fix": "Change `rounded-md` to `rounded-sm` on the \"Review this product\" box (line 88) and `rounded-lg` to `rounded-sm` on the empty-state and WriteReviewForm containers."
+    },
+    {
+      "dimension": "states",
+      "severity": "medium",
+      "line": 31,
+      "issue": "`useProductReviews()` (line 31) destructures only `data` and `isLoading` — `isError` is not handled. When the reviews API fails, the component shows the empty-state 'No reviews yet' UI (items === []) instead of an error message, misleading the user into thinking the product has no reviews.",
+      "fix": "Destructure `isError, refetch` from `useProductReviews()`. Replace the `items.length === 0` empty-state check with: `isError ? (<div className='py-8 text-center text-sm text-danger'>Couldn't load reviews. <button onClick={() => refetch()} className='underline'>Retry</button></div>) : items.length === 0 ? (…existing empty state…) : (…list…)`"
+    }
+  ],
+  "frontend/src/features/products/components/luxury/LifestyleBanner.jsx": [
+    {
+      "dimension": "accessibility",
+      "severity": "medium",
+      "line": null,
+      "issue": "The lifestyle banner at line 37 has a hardcoded `<h2>Designed for modern life.</h2>` and the generic bullets \"Comfort. Style. Performance.\" (lines 41–43). These strings are fabricated copy that have no relation to the actual product, misleading screen-reader users and violating the component's own doc comment ('never fabricates data'). Heading order is also broken — there are multiple `<h2>` elements on the page (KeyFeatures, CustomerSay, LifestyleBanner) with no hierarchy relative to the product `<h1>`.",
+      "fix": "Remove the hardcoded marketing copy. Either render `product.name` as the banner headline with a short excerpt from `product.description` (first sentence), or remove the text overlay entirely and keep only the CTA link. This fixes both the fabricated-content and heading-order issues simultaneously."
+    }
+  ],
+  "frontend/src/features/products/components/luxury/CustomerSay.jsx": [
+    {
+      "dimension": "states",
+      "severity": "medium",
+      "line": null,
+      "issue": "The `useProductReviews` call at line 16 destructures only `{ data }` — `isLoading` and `isError` are discarded. While `ratingCount === 0` hides the section before data arrives (because `product.rating_count` from the product query is 0 by default), there is no loading skeleton for the review cards themselves. If `rating_count > 0` but the review fetch is still in flight, the cards area renders empty with no feedback, causing a flash of empty content.",
+      "fix": "Destructure `isLoading` from `useProductReviews` and render skeleton cards (e.g. 3x `<Skeleton className=\"h-32 rounded-sm\" />`) inside the cards grid while `isLoading && cards.length === 0`."
+    }
+  ],
+  "frontend/src/features/products/components/FrequentlyBoughtTogether.jsx": [
+    {
+      "dimension": "states",
+      "severity": "medium",
+      "line": null,
+      "issue": "The `addAll` handler at line 54 uses `Promise.all` to fire multiple `addToCart.mutateAsync` calls in parallel but has no error handling. If any one cart mutation rejects (e.g. a session expires), the rejection is swallowed silently. The user sees neither a success nor an error message, and partial adds may have succeeded.",
+      "fix": "Wrap the `Promise.all` in a try/catch and set a local error state rendered beneath the CTA button, similar to the error display in LuxuryBuyPanel line 274."
+    },
+    {
+      "dimension": "responsive",
+      "severity": "medium",
+      "line": null,
+      "issue": "The product tiles row at line 72 uses `flex flex-wrap items-center gap-4`. Each `BundleTile` is a `label` with `flex items-center gap-3` containing a checkbox, 64×64 thumbnail, and up to 160 px of text (`max-w-[160px]`). On 360 px with 3 products (source + 2 companions) the total width is approximately 3 × (16+64+8+160) + 2×16 + 32 (outer p-4 pad) = 840+ px. The `flex-wrap` causes tiles to wrap to multiple rows (2 per row typically), but the `Plus` icon between tiles also wraps, appearing on an orphaned line between tile rows.",
+      "fix": "On mobile, use a horizontal scroll instead of flex-wrap: `<div className='flex items-center gap-3 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible'>`. Add `shrink-0` to each tile wrapper `<div key={p.id} className='flex shrink-0 items-center gap-3'>`."
+    },
+    {
+      "dimension": "states",
+      "severity": "low",
+      "line": 101,
+      "issue": "The 'Add all to Cart' button (line 101) uses `disabled={selectedCount === 0 || addToCart.isPending}` for pending state, but there is no `loading` prop or visual spinner passed to this raw `<button>` — it becomes unresponsive silently while the mutation is in flight. Additionally `addToCart.isError` is not surfaced here (though LuxuryBuyPanel does surface it), so bundle-add failures are silent.",
+      "fix": "Add a Loader2 spinner inside the button when `addToCart.isPending`: `{addToCart.isPending ? <><Loader2 className='size-4 animate-spin' />Adding…</> : doneAt ? …done… : …default…}`. After the section add: `{addToCart.isError && <p className='mt-2 text-xs text-danger'>Couldn't add items — please try again.</p>}`"
+    }
+  ],
+  "frontend/src/features/products/components/luxury/KeyFeatures.jsx": [
+    {
+      "dimension": "functional",
+      "severity": "low",
+      "line": null,
+      "issue": "List items use `key={i}` (index) at line 28 instead of a stable key derived from the text. When the `highlights` array is re-derived (e.g. description updates), React cannot reconcile existing items efficiently and may flash or re-animate all tiles.",
+      "fix": "Use `key={text.slice(0,40)}` (a short hash of the content) as a stable key, since the text values themselves are unique within the extracted highlights."
+    }
+  ],
+  "frontend/src/features/products/components/AboutThisItem.jsx": [
+    {
+      "dimension": "functional",
+      "severity": "low",
+      "line": null,
+      "issue": "Bullet list items at line 21 use `key={i}` (array index). If description bullets change order (e.g. due to a product update in the same session), React will reconcile incorrectly and potentially re-animate or produce warnings.",
+      "fix": "Use `key={b.slice(0, 40)}` or a short content-derived key instead of the array index."
+    }
+  ],
+  "frontend/src/features/products/components/GalleryAmz.jsx": [
+    {
+      "dimension": "consistency",
+      "severity": "low",
+      "line": null,
+      "issue": "GalleryAmz is a dead component — ProductDetailPage uses LuxuryGallery exclusively. GalleryAmz is still exported and sits in the same components directory, causing build-time confusion and adding dead code to the bundle (it is not tree-shaken because it is not marked as side-effect-free via package.json sideEffects:false). Its main image also uses `object-cover` which crops product images, while LuxuryGallery correctly uses `object-contain`.",
+      "fix": "Delete `frontend/src/features/products/components/GalleryAmz.jsx` or at minimum add a JSDoc `@deprecated` and confirm no other page imports it before removal."
+    }
+  ],
+  "frontend/src/features/shipping/components/FreeShippingNudge.jsx": [
+    {
+      "dimension": "consistency",
+      "severity": "low",
+      "line": 29,
+      "issue": "Lines 29-30: both branches use `/10` tint fractions (`bg-success/10` and `bg-accent/10`). The design-system standard is `/12`. These are visible in the Price Details rail on every cart page load.",
+      "fix": "Change both to `/12`: `'border-success/30 bg-success/12 text-success'` and `'border-accent/30 bg-accent/12 text-accent'`"
+    },
+    {
+      "dimension": "consistency",
+      "severity": "low",
+      "line": null,
+      "issue": "Line 29–30 use `bg-success/10` and `bg-accent/10` for the nudge banner tints. Should be `/12` per the standard.",
+      "fix": "Change `bg-success/10` → `bg-success/12` and `bg-accent/10` → `bg-accent/12` in `FreeShippingNudge.jsx`."
+    }
+  ],
+  "frontend/src/features/addresses/components/AddressCard.jsx": [
+    {
+      "dimension": "accessibility",
+      "severity": "high",
+      "line": null,
+      "issue": "The address body text (`full_name`, `line1`, `city`, `phone`) has no `min-w-0` guard and no `truncate`/`break-words` on long strings. A full_name or line1 that is 80+ characters wide will overflow the card horizontally on narrow containers, especially on 360px screens where the card is inside `max-w-2xl` with action buttons on the same row.",
+      "fix": "Add `min-w-0` to the card's root `<div>` and `break-words` (or `overflow-wrap: break-word` via `break-words` class) to the `<p>` elements for `full_name`, `line1/line2`, and `city/state`. E.g., change `<p className={cn('mt-2.5 font-semibold text-ink-primary', ...)}` to add `break-words`."
+    }
+  ],
+  "frontend/src/features/site-pages/components.jsx": [
+    {
+      "dimension": "accessibility",
+      "severity": "high",
+      "line": null,
+      "issue": "CompanyHero renders `<h1>` at line 34 (`hero.title`). When `hero.title` is an empty string or undefined (e.g. during initial render before defaults load, or if an admin clears the title), the page contains a visible `<h1>` element with no text content. Screen-readers announce an empty heading, and the heading outline is broken. Additionally, `PageDisabled` at line 77 also renders an `<h1>` — if both CompanyHero and PageDisabled's wrapping Page ever render together (they don't currently, but the Page inside PageDisabled has its own main tag issue), there would be two h1s.",
+      "fix": "Guard the h1 render: `{hero.title && <h1 className=\"mt-2 text-h1 font-semibold text-ink-primary\">{hero.title}</h1>}`. Also provide a sensible fallback via defaults so it is never truly empty in practice — defaults.js already covers this but defensive rendering is still good practice."
+    },
+    {
+      "dimension": "accessibility",
+      "severity": "medium",
+      "line": null,
+      "issue": "SectionLabel (line 62-65) renders as `<h2>` and is used as the primary section headings throughout all content pages. However CompanyHero renders an `<h1>` (line 34) and then SectionLabel immediately renders `<h2>` — which is correct. But in CareersPage and StoriesPage, item-level headings inside cards use `<h3>` (e.g. job title at CareersPage:23, story title at StoriesPage:51) while there is no `<h2>` SectionLabel between the CompanyHero `<h1>` and those `<h3>` elements in some code paths (e.g. the 'Open roles' section label IS an h2, but if openings is empty the EmptyState `<h3>` title appears at line 73 of EmptyState with no h2 parent). The heading hierarchy is mostly sound but the EmptyState `<h3>` can appear as a direct child of an h1 section.",
+      "fix": "Ensure every EmptyState rendered in these pages is preceded by a SectionLabel (h2) in the DOM, which CareersPage already does at line 120 (`<SectionLabel className=\"mb-4\">Open roles</SectionLabel>`). The EmptyState h3 at `src/components/feedback/EmptyState.jsx:73` is correctly subordinate. No change needed — the heading hierarchy is valid."
+    }
+  ],
+  "frontend/src/pages/PressPage.jsx": [
+    {
+      "dimension": "responsive",
+      "severity": "medium",
+      "line": null,
+      "issue": "The two-column layout (`Section className=\"mt-6 grid gap-6 lg:grid-cols-[1.6fr_1fr]\"`, line 88) only switches from single-column to two-column at `lg` (1024px). On tablet (768px–1023px) both the releases list and the sidebar stack vertically, which is fine — but the sidebar's Media kit download link (`<a>` at line 151) has no minimum height and the Download icon (size-10, 40px) and p/span text sit within a `p-4` padded anchor. The clickable area is fine at ≥44px tall because the `p-4` padding + text height exceeds 44px. No real touch-target issue here, but verify the kit_url empty-string case: safeUrl('') returns '#' so the Media kit link always renders as a live `<a href=\"#\">` even when no kit URL is set, creating a broken affordance.",
+      "fix": "Guard rendering of the Media kit `<a>` block on a truthy kit_url before calling safeUrl: change `{page.kit_url && (` at line 150 — this guard already exists at line 150! However safeUrl('') returns '#', not undefined, so if kit_url is set to a non-empty but invalid string the guard passes and the link silently resolves to '#'. Add an additional truthiness check for the safeUrl result: `const kitHref = safeUrl(page.kit_url); … {page.kit_url && kitHref !== '#' && ( … href={kitHref} … )}`."
+    },
+    {
+      "dimension": "accessibility",
+      "severity": "medium",
+      "line": null,
+      "issue": "The Release anchor (line 48-55) wraps the card with no `aria-label`. The link text includes a formatted date, an interpunct separator, source name, and headline. Screen-readers will announce all of it including the CSS-generated `before:content-['·']` interpunct (line 31) which some readers vocalise as 'middle dot'. The link target opens `_blank` (new tab) with no visual or programmatic indication of that behaviour.",
+      "fix": "Add `aria-label={item.title}` to the anchor (line 48) and append `(opens in new tab)` as a visually-hidden `<span className=\"sr-only\">` inside the link, which is the WCAG 2.1 recommended pattern for new-tab links."
+    }
+  ],
+  "frontend/src/pages/CareersPage.jsx": [
+    {
+      "dimension": "accessibility",
+      "severity": "medium",
+      "line": null,
+      "issue": "The `Opening` component card-link (line 54) wraps the entire card in `<a href={safeUrl(job.url)}>`. When job.url is a mailto: link (as in the defaults.js), the anchor text read by screen readers is the concatenated content of all child elements — including the ArrowUpRight icon's sibling span 'Apply'. However the link has no `aria-label`, so a screen-reader announces something like 'Senior Frontend Engineer Engineering Bengaluru / Remote Full-time Apply' which is acceptable but verbose. More importantly, the `<a>` element's visible text includes the 'Apply' span but the external link opens a mail client — there is no `target=\"_blank\"` or `rel` attribute and no visual indicator that it opens mail, which may surprise sighted users.",
+      "fix": "Add `aria-label={`Apply for ${job.title}`}` to the anchor element so screen readers give a concise, action-oriented label. For mailto links, no target attribute is needed (mail clients open natively), but consider adding a visual hint like `(opens email)` as a visually-hidden span for keyboard users."
+    }
+  ],
+  "frontend/src/pages/NotFoundPage.jsx": [
+    {
+      "dimension": "accessibility",
+      "severity": "low",
+      "line": null,
+      "issue": "The page renders as `<main>` directly (line 7) without a skip-link target or `id`. The Layout component wraps all pages — NotFoundPage renders inside Layout's Outlet, so its `<main>` may be nested inside another semantic landmark from Layout (depending on Layout's structure). A nested `<main>` violates HTML spec (only one `<main>` per page) and confuses screen-reader landmark navigation.",
+      "fix": "Check if Layout already provides a `<main>` landmark. If so, replace NotFoundPage's `<main>` with a `<div>` keeping all classes identical: `<div className=\"mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-content flex-col items-center justify-center px-6 py-12 text-center\">`."
+    }
+  ],
+  "frontend/src/features/payments/hooks.js": [
+    {
+      "dimension": "functional",
+      "severity": "low",
+      "line": null,
+      "issue": "Line 26-29: `useMockDecision` is exported but never imported anywhere in the codebase — dead export. If left, it creates confusion about which pattern to follow for the mock decision call.",
+      "fix": "Remove the `useMockDecision` export from `hooks.js`, since the page owns the state directly and the hook adds no value."
+    },
+    {
+      "dimension": "states",
+      "severity": "medium",
+      "line": null,
+      "issue": "Line 22: `retry: false` on `usePaymentStatus` means a single transient network error (e.g., flaky mobile connection right after the payment redirect) permanently stops polling and puts the page in the error state. The global QueryClient retries transient failures once for all queries, but this per-query override disables that for the most time-sensitive query in the flow.",
+      "fix": "Change `retry: false` to `retry: (failureCount, error) => { const s = error?.response?.status; if (s >= 400 && s < 500) return false; return failureCount < 2; }` so transient 5xx/network errors get a couple of retries while 4xx errors still fail fast."
+    }
+  ],
+  "frontend/src/pages/PaymentReturnPage.jsx": [
+    {
+      "dimension": "states",
+      "severity": "medium",
+      "line": null,
+      "issue": "Lines 114-133: The `isError` state card tells the user to 'Check your orders in a moment' but provides no retry mechanism. Because `usePaymentStatus` is called with `retry: false`, a transient network blip permanently stops polling and the user is left stranded. The only action is navigating to /orders, not re-triggering the status check.",
+      "fix": "Add a `refetch` return value from `usePaymentStatus` and render a 'Check again' button in the error card: `<Button variant='outline' size='sm' onClick={() => refetch()}>Check again</Button>`. This lets the user re-poll without a full page reload."
+    },
+    {
+      "dimension": "states",
+      "severity": "medium",
+      "line": null,
+      "issue": "Lines 45-48: When `isLoading=true` and `isError=false` the pending card renders. But the `refetchInterval` keeps polling after initial load, so on every subsequent refetch `isLoading` is `false` but `isPending` (derived from `!status || status === 'pending'`) stays true — the spinner stays visible even when data exists and status is being rechecked. This means if an interim fetch briefly returns stale data, the UX correctly shows the right card, but a tab-focus refetch (window focus triggers `refetchOnWindowFocus` which is not disabled) could cause the success card to flicker to the pending spinner.",
+      "fix": "Add `refetchOnWindowFocus: false` to `usePaymentStatus` in `hooks.js` to prevent focus-triggered refetches from interrupting a terminal success/failure state."
+    }
+  ],
+  "frontend/src/components/layout/Page.jsx": [
+    {
+      "dimension": "responsive",
+      "severity": "low",
+      "line": null,
+      "issue": "`Page` always applies `px-6` (24px) regardless of viewport (line 20). At 360px this leaves only 312px of usable content width. Other layout elements like Navbar use `px-3 sm:px-6` to give more room on small screens. There is no `sm:px-6` responsive step — it is just `px-6` from the start.",
+      "fix": "Change the padding to `px-3 sm:px-6` in the `cn()` call so content on 360px screens has 12px side gutters instead of 24px."
+    }
+  ],
+  "frontend/src/components/ui/button-base.jsx": [
+    {
+      "dimension": "consistency",
+      "severity": "medium",
+      "line": null,
+      "issue": "`button-base.jsx` exports a second `Button` component (line 40) with its own `buttonVariants` (line 11) that uses shadcn/ui tokens (`bg-primary`, `bg-destructive`, `hover:bg-accent hover:text-accent-foreground`, `focus-visible:ring-ring`). These shadow the project's own `Button.jsx` tokens and use the wrong Flipkart design system. It is only legitimately needed as a Radix/shadcn base for `ButtonColorful`. Since `ButtonColorful` is dead code (no storefront imports), `button-base.jsx` is also dead.",
+      "fix": "If `ButtonColorful` is deleted (per finding above), delete `button-base.jsx` as well. If any shadcn primitive in the future needs a base button, import from the project's own `Button.jsx` using `asChild` with a `Slot` approach."
+    }
+  ],
+  "frontend/src/components/ui/ThemeToggle.jsx": [
+    {
+      "dimension": "consistency",
+      "severity": "medium",
+      "line": null,
+      "issue": "`ThemeToggle` exposes a dark/light theme switch (line 6-42) but the storefront is documented as LIGHT-ONLY (Flipkart/ShopFlow marketplace). The component is only rendered inside `AdminSidebar`, not in the storefront Navbar. However, it still calls `toggleTheme` which will switch the storefront shell to dark mode if a user opens AdminSidebar and clicks it, breaking the light-only constraint on storefront pages the admin also visits (shared Layout).",
+      "fix": "Restrict the toggle to admin routes only (it is already only in `AdminSidebar`, which is correct). No storefront layout file references it. The real risk is that `applyTheme` in `theme.js` modifies the `<html>` class globally. Ensure `AdminLayout` resets the theme to `light` on unmount, or scope the theme class to the admin shell element instead of `<html>`."
+    },
+    {
+      "dimension": "states",
+      "severity": "low",
+      "line": null,
+      "issue": "The storefront is LIGHT-ONLY per the design system. The `ThemeToggle` component (which switches between dark and light) should not exist in the storefront shell. If it is mounted in the Navbar or Layout, it exposes a broken dark mode to users (the dark token values are legacy premium-UI definitions, not a maintained theme).",
+      "fix": "Confirm whether `ThemeToggle` is rendered anywhere in the storefront shell. Grep shows it is not imported in `Navbar.jsx`, `AccountMenu.jsx`, or `Layout.jsx` — so it is currently dead. No action needed unless it is surfaced; if it is added later, restrict to admin only or remove entirely."
+    }
+  ],
+  "frontend/src/components/ui/Card.jsx": [
+    {
+      "dimension": "consistency",
+      "severity": "medium",
+      "line": null,
+      "issue": "`Card` exposes a `glass` prop (line 25) that applies the `.glass` CSS class. The design system explicitly bans glassmorphism on the light storefront. While `AccountMenu` already uses `.glass` directly (a separate finding), this prop means any caller can easily introduce glassmorphism unintentionally.",
+      "fix": "Remove the `glass` prop and its branch from `Card` (lines 25, 37-38). Callers that need a frosted surface over media (e.g. a hero overlay) should apply `.glass` directly via `className` after a deliberate design decision, not via a named convenience prop."
+    }
+  ],
+  "frontend/src/styles/global.css": [
+    {
+      "dimension": "consistency",
+      "severity": "medium",
+      "line": null,
+      "issue": "The `:root, .dark` block (lines 12-70) still defines full dark-mode tokens including glassmorphism variables (`--glass`, `--glass-highlight`), `--shadow-lift` with heavy black shadows, and shadcn dark tokens. Because the storefront is light-only, the `:root` dark defaults are effectively dead for storefront consumers — but they are the default when no class is on `<html>`, meaning any SSR flash or script-load race will briefly render in dark mode before the `light` class is applied.",
+      "fix": "Swap the priority: make `:root` carry the `.light` (Flipkart) tokens as the base, and move the dark tokens under `.dark` only. This ensures the page renders correctly even before the theme script runs, eliminates the dark flash, and removes the dead code concern."
+    },
+    {
+      "dimension": "consistency",
+      "severity": "low",
+      "line": null,
+      "issue": "`.accent-halo` (lines 228-253) is defined in global.css components layer. This is a glow/aura effect (`radial-gradient` halo behind the element), which the design system explicitly bans (`No glassmorphism, glow, 3D-tilt, or \"aura\"`). It is a dead class in the storefront components reviewed, but its presence means any developer can add it and ship a banned visual.",
+      "fix": "Remove the `.accent-halo` rule block from `global.css`. If a focus-ring glow is ever needed on CTAs, use `shadow-glow` (already a defined Tailwind box-shadow token) rather than a pseudo-element halo."
+    }
+  ],
+  "frontend/src/components/feedback/EmptyState.jsx": [
+    {
+      "dimension": "accessibility",
+      "severity": "low",
+      "line": null,
+      "issue": "`EmptyState` renders a `<h3>` (line 73) for the title in all cases including `size=\"sm\"` compact mode where it is used inline. When placed inside a card that has its own `<h3>` or `<h2>`, this creates a skipped/duplicate heading level. There is no way for the caller to control the heading level.",
+      "fix": "Add a `headingLevel` prop (default `3`) and render `<h{headingLevel}>` so callers in contexts with different heading hierarchies can pass the correct level."
+    }
+  ],
+  "frontend/src/features/products/components/ProductRail.jsx": [
+    {
+      "dimension": "responsive",
+      "severity": "low",
+      "line": null,
+      "issue": "The `ProductRail` scroller uses `[scrollbar-width:thin]` but not `[scrollbar-width:none]` for mobile. On iOS the horizontal scroll track is invisible, but on Android Chrome a thin scrollbar may appear below the cards. More importantly, the arrow buttons (`hidden gap-1 md:flex`) are not shown on mobile, but the rail is touch-swipeable via native overflow scroll — however there is no visual affordance (no fade edge, no scroll hint) telling mobile users the rail is scrollable.",
+      "fix": "Add fade edges to hint the rail is scrollable: wrap the scroll div in a `relative` container and add `before:absolute before:inset-y-0 before:left-0 before:w-6 before:bg-gradient-to-r before:from-bg-base before:to-transparent before:z-10` and matching `after:` on the right. Or add `[scrollbar-width:none] [&::-webkit-scrollbar]:hidden` for a cleaner look on Android."
+    }
+  ],
+  "frontend/src/components/ui/Input.jsx": [
+    {
+      "dimension": "consistency",
+      "severity": "medium",
+      "line": null,
+      "issue": "Line 82 hardcodes the error focus ring as `focus-visible:[box-shadow:0_0_0_3px_rgba(239,68,68,0.18)]` — a raw RGBA hex value for danger-red bypassing the token system. The normal focus ring at line 75 correctly uses `var(--accent-glow)` (a CSS variable). The error ring should similarly use a token-based CSS variable.",
+      "fix": "Add `--danger-glow: 0 0 0 3px rgba(239, 68, 68, 0.18)` in `global.css` (both `:root/.dark` and `.light` blocks), then replace the hardcoded box-shadow string with `focus-visible:[box-shadow:var(--danger-glow)]` in `Input.jsx`. Apply the same fix to `Select.jsx` (line 57) and `Textarea.jsx` (line 59) which have the identical pattern."
+    }
+  ],
+  "frontend/src/components/ui/Select.jsx": [
+    {
+      "dimension": "consistency",
+      "severity": "medium",
+      "line": null,
+      "issue": "Line 57 uses the same hardcoded `focus-visible:[box-shadow:0_0_0_3px_rgba(239,68,68,0.18)]` as Input.jsx — same token bypass issue.",
+      "fix": "After adding `--danger-glow` to global.css (see Input.jsx fix), replace the hardcoded box-shadow with `focus-visible:[box-shadow:var(--danger-glow)]`."
+    }
+  ],
+  "frontend/src/components/ui/Textarea.jsx": [
+    {
+      "dimension": "consistency",
+      "severity": "medium",
+      "line": null,
+      "issue": "Line 59 uses the same hardcoded `focus-visible:[box-shadow:0_0_0_3px_rgba(239,68,68,0.18)]` — same token bypass issue as Input/Select.",
+      "fix": "Replace with `focus-visible:[box-shadow:var(--danger-glow)]` once `--danger-glow` is added to global.css."
+    }
+  ],
+  "frontend/src/features/loyalty/VipTierCard.jsx": [
+    {
+      "dimension": "consistency",
+      "severity": "medium",
+      "line": null,
+      "issue": "Lines 50, 93, 101, 133, 166, 169 use `rounded-xl`, `rounded-full` (progress bar is acceptable), and `rounded-xl` on content panels — radii larger than 12px breaking the storefront's radius cap. Line 50 (`size-12 rounded-xl`) is an icon avatar badge with exaggerated rounding. Line 133 is a tip panel with `rounded-lg`. Line 166 is an empty-state panel with `rounded-xl`.",
+      "fix": "Change `rounded-xl` at lines 50, 93, 133, 166 → `rounded-sm`. Keep `rounded-full` on the progress bar track/fill (functional, not decorative). Add `shadow-sm` instead of `shadow-md` on the avatar badge at line 50 (flat Flipkart style)."
+    }
+  ]
+}

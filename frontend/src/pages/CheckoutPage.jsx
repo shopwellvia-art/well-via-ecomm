@@ -22,6 +22,7 @@ import { Page } from '@/components/layout/Page.jsx';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Card } from '@/components/ui/Card.jsx';
+import { Input } from '@/components/ui/Input.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import AddressPicker from '@/features/addresses/components/AddressPicker.jsx';
@@ -63,10 +64,18 @@ export default function CheckoutPage() {
   const buyNowQty = Math.max(1, Number(params.get('qty') || 1));
   const buyNowMode = !!buyNowId;
 
-  const { data: buyNowProduct, isLoading: buyNowLoading } = useProduct(
-    buyNowMode ? buyNowId : null,
-  );
-  const { data: cart, isLoading: cartLoading } = useCart();
+  const {
+    data: buyNowProduct,
+    isLoading: buyNowLoading,
+    isError: buyNowError,
+    refetch: refetchBuyNow,
+  } = useProduct(buyNowMode ? buyNowId : null);
+  const {
+    data: cart,
+    isLoading: cartLoading,
+    isError: cartError,
+    refetch: refetchCart,
+  } = useCart();
   const checkout = useCheckout();
 
   const [addressPayload, setAddressPayload] = useState({});
@@ -78,6 +87,7 @@ export default function CheckoutPage() {
   const [paymentInstrument, setPaymentInstrument] = useState(null);
   const [customerPhone, setCustomerPhone] = useState(() => user?.phone || '');
   const [phoneUserEdited, setPhoneUserEdited] = useState(false);
+  const [phoneError, setPhoneError] = useState(null);
   const [otpOpen, setOtpOpen] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
   // Gateway selector — only shown when >1 active gateway and method is prepaid/split_cod.
@@ -96,6 +106,8 @@ export default function CheckoutPage() {
   }, [addressPayload.phone, phoneUserEdited]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isLoading = buyNowMode ? buyNowLoading : cartLoading;
+  const isError = buyNowMode ? buyNowError : cartError;
+  const refetch = buyNowMode ? refetchBuyNow : refetchCart;
 
   const { items, subtotal, taxAmount, discountAmount, total, couponCode, checkoutItems } =
     useMemo(() => {
@@ -222,6 +234,48 @@ export default function CheckoutPage() {
 
   if (!user) return <Navigate to="/login" replace />;
 
+  // Finding 1 & 16: fetch error guard — show retry banner instead of misleading empty state.
+  if (!isLoading && isError) {
+    return (
+      <Page>
+        <h1 className="text-xl font-semibold text-ink-primary">Checkout</h1>
+        <div className="mt-8">
+          <EmptyState
+            icon={AlertTriangle}
+            title="Could not load checkout"
+            description="There was a problem loading your items. Please try again."
+            action={
+              <Button size="sm" onClick={() => refetch()}>
+                Try again
+              </Button>
+            }
+          />
+        </div>
+      </Page>
+    );
+  }
+
+  // Finding 16: buy-now product not found guard.
+  if (buyNowMode && !buyNowLoading && !buyNowError && buyNowProduct == null) {
+    return (
+      <Page>
+        <h1 className="text-xl font-semibold text-ink-primary">Checkout</h1>
+        <div className="mt-8">
+          <EmptyState
+            icon={AlertTriangle}
+            title="Product not found"
+            description="This product could not be found. Please browse and try again."
+            action={
+              <Link to="/products">
+                <Button size="sm">Browse products</Button>
+              </Link>
+            }
+          />
+        </div>
+      </Page>
+    );
+  }
+
   if (!isLoading && items.length === 0) {
     return (
       <Page>
@@ -246,7 +300,7 @@ export default function CheckoutPage() {
     if (codOtpRequired && !otpVerified) {
       setError(null);
       if (!customerPhone || customerPhone.trim().length < 8) {
-        setError('Enter your phone number above to receive the OTP.');
+        setPhoneError('Enter a valid phone number to receive the OTP.');
         return;
       }
       setOtpOpen(true);
@@ -310,9 +364,12 @@ export default function CheckoutPage() {
         className="mb-4"
       />
 
+      {/* Finding 3: visually-hidden h1 so heading hierarchy is h1 → h2 */}
+      <h1 className="sr-only">Checkout</h1>
+
       <Link
         to="/cart"
-        className="inline-flex items-center gap-1.5 text-sm text-ink-secondary hover:text-ink-primary transition-colors"
+        className="inline-flex items-center gap-1.5 text-sm text-ink-secondary hover:text-ink-primary transition-colors focus-visible:focus-ring"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
         Back to cart
@@ -334,14 +391,21 @@ export default function CheckoutPage() {
             {/* ══ STEP 1 — Delivery Address ══ */}
             <Card className="overflow-hidden p-0">
               <div
+                role="button"
+                aria-label="Delivery Address step"
+                aria-expanded={activeStep === 'address'}
+                tabIndex={0}
                 className={cn(
                   'flex cursor-pointer select-none items-center px-5 py-4',
                   activeStep === 'address' ? 'bg-accent text-white' : 'bg-bg-elevated',
                 )}
                 onClick={() => activeStep !== 'address' && setActiveStep('address')}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && setActiveStep('address')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    if (activeStep !== 'address') setActiveStep('address');
+                  }
+                }}
               >
                 <span
                   className={cn(
@@ -437,32 +501,40 @@ export default function CheckoutPage() {
                       </div>
 
                       <div className="mt-4 border-t border-line-subtle pt-4">
-                        <label className="block text-sm font-medium text-ink-primary" htmlFor="ship-phone">
-                          Phone number
-                          {codOtpRequired && (
-                            <span className="ml-1.5 text-xs text-warning font-normal">
-                              (OTP required for COD)
-                            </span>
-                          )}
-                        </label>
-                        <input
+                        <Input
                           id="ship-phone"
+                          label={
+                            codOtpRequired ? (
+                              <span>
+                                Phone number{' '}
+                                <span className="ml-1 text-xs text-warning font-normal">
+                                  (OTP required for COD)
+                                </span>
+                              </span>
+                            ) : (
+                              'Phone number'
+                            )
+                          }
                           type="tel"
                           inputMode="tel"
                           autoComplete="tel"
                           value={customerPhone}
+                          placeholder="+91 98765 43210"
+                          error={phoneError || undefined}
+                          helper={
+                            phoneError
+                              ? undefined
+                              : codOtpRequired
+                              ? 'We use this for delivery updates and the COD verification SMS.'
+                              : 'We use this for delivery updates.'
+                          }
                           onChange={(e) => {
                             setCustomerPhone(e.target.value);
                             setPhoneUserEdited(true);
                             setOtpVerified(false);
+                            if (phoneError) setPhoneError(null);
                           }}
-                          placeholder="+91 98765 43210"
-                          className="mt-2 w-full rounded-sm border border-line-subtle bg-bg-elevated px-3 py-2.5 text-sm text-ink-primary placeholder:text-ink-tertiary transition-colors hover:border-line-strong focus-visible:focus-ring"
                         />
-                        <p className="mt-1 text-[11px] text-ink-tertiary">
-                          We use this for delivery updates
-                          {codOtpRequired ? ' and the COD verification SMS.' : '.'}
-                        </p>
                       </div>
 
                       <div className="mt-5">
@@ -492,6 +564,11 @@ export default function CheckoutPage() {
             {/* ══ STEP 2 — Payment Method ══ */}
             <Card className="overflow-hidden p-0">
               <div
+                role="button"
+                aria-label="Payment step"
+                aria-expanded={activeStep === 'payment'}
+                tabIndex={addressDone ? 0 : -1}
+                aria-disabled={!addressDone}
                 className={cn(
                   'flex select-none items-center px-5 py-4',
                   activeStep === 'payment'
@@ -501,9 +578,12 @@ export default function CheckoutPage() {
                     : 'cursor-not-allowed bg-bg-sunken opacity-70',
                 )}
                 onClick={() => addressDone && activeStep !== 'payment' && setActiveStep('payment')}
-                role={addressDone ? 'button' : undefined}
-                tabIndex={addressDone ? 0 : -1}
-                onKeyDown={(e) => e.key === 'Enter' && addressDone && setActiveStep('payment')}
+                onKeyDown={(e) => {
+                  if ((e.key === 'Enter' || e.key === ' ') && addressDone) {
+                    e.preventDefault();
+                    if (activeStep !== 'payment') setActiveStep('payment');
+                  }
+                }}
               >
                 <span
                   className={cn(
@@ -559,14 +639,14 @@ export default function CheckoutPage() {
                               className={cn(
                                 'flex w-full items-start gap-3 rounded-sm border p-4 text-left transition-colors duration-150',
                                 selected
-                                  ? 'border-accent bg-accent/6'
+                                  ? 'border-accent bg-accent/12'
                                   : 'border-line-subtle bg-bg-elevated hover:border-line-strong hover:shadow-sm',
                               )}
                             >
                               <span
                                 className={cn(
                                   'grid size-9 shrink-0 place-items-center rounded-sm transition-colors',
-                                  selected ? 'bg-accent/20 text-accent' : 'bg-accent/10 text-accent',
+                                  selected ? 'bg-accent/12 text-accent' : 'bg-accent/12 text-accent',
                                 )}
                               >
                                 <Icon className="size-5" aria-hidden="true" />
@@ -607,7 +687,7 @@ export default function CheckoutPage() {
                             'flex w-full items-start gap-3 rounded-sm border p-4 text-left transition-colors duration-150',
                             !codAvailable && 'cursor-not-allowed opacity-50',
                             codAvailable && paymentMethod === 'cod'
-                              ? 'border-accent bg-accent/6'
+                              ? 'border-accent bg-accent/12'
                               : codAvailable
                               ? 'border-line-subtle bg-bg-elevated hover:border-line-strong hover:shadow-sm'
                               : 'border-line-subtle bg-bg-elevated',
@@ -617,8 +697,8 @@ export default function CheckoutPage() {
                             className={cn(
                               'grid size-9 shrink-0 place-items-center rounded-sm',
                               codAvailable && paymentMethod === 'cod'
-                                ? 'bg-warning/20 text-warning'
-                                : 'bg-warning/10 text-warning',
+                                ? 'bg-warning/12 text-warning'
+                                : 'bg-warning/12 text-warning',
                             )}
                           >
                             <Banknote className="size-5" aria-hidden="true" />
@@ -665,7 +745,7 @@ export default function CheckoutPage() {
                             className={cn(
                               'flex w-full items-start gap-3 rounded-sm border p-4 text-left transition-colors duration-150',
                               paymentMethod === 'split_cod'
-                                ? 'border-accent bg-accent/6'
+                                ? 'border-accent bg-accent/12'
                                 : 'border-line-subtle bg-bg-elevated hover:border-line-strong hover:shadow-sm',
                             )}
                           >
@@ -673,8 +753,8 @@ export default function CheckoutPage() {
                               className={cn(
                                 'grid size-9 shrink-0 place-items-center rounded-sm',
                                 paymentMethod === 'split_cod'
-                                  ? 'bg-info/20 text-info'
-                                  : 'bg-info/10 text-info',
+                                  ? 'bg-info/12 text-info'
+                                  : 'bg-info/12 text-info',
                               )}
                             >
                               <Split className="size-5" aria-hidden="true" />
@@ -724,9 +804,9 @@ export default function CheckoutPage() {
                                   type="button"
                                   onClick={() => setSelectedGateway(gw.code)}
                                   className={cn(
-                                    'rounded-xs border px-3 py-1.5 text-xs font-medium transition-colors',
+                                    'rounded-xs border px-3 py-1.5 min-h-[44px] text-xs font-medium transition-colors',
                                     active
-                                      ? 'border-accent bg-accent/8 text-accent'
+                                      ? 'border-accent bg-accent/12 text-accent'
                                       : 'border-line-subtle bg-bg-elevated text-ink-secondary hover:border-line-strong hover:text-ink-primary',
                                   )}
                                 >
@@ -884,7 +964,7 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => navigate('/cart')}
-                  className="mt-3 w-full text-center text-xs text-ink-tertiary hover:text-ink-secondary transition-colors"
+                  className="mt-3 w-full text-center text-xs text-ink-tertiary hover:text-ink-secondary transition-colors focus-visible:focus-ring"
                 >
                   Cancel and go back to cart
                 </button>
@@ -892,6 +972,38 @@ export default function CheckoutPage() {
             </Card>
           </div>
         </div>
+      )}
+
+      {/* Findings 4 & 10: mobile/tablet sticky bottom CTA bar — hidden on lg+ where the rail CTA is already visible */}
+      {!isLoading && items.length > 0 && (
+        <>
+          {/* Spacer so content isn't hidden behind the fixed bar */}
+          <div className="h-20 lg:hidden" aria-hidden="true" />
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line-subtle bg-bg-surface px-4 pb-4 pt-3 shadow-lg lg:hidden">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs text-ink-tertiary">Total</p>
+                <p className="text-base font-bold text-ink-primary nums">
+                  {formatPrice(displayedTotal)}
+                </p>
+              </div>
+              <Button
+                variant="cta"
+                size="md"
+                onClick={startPay}
+                disabled={!canSubmit || activeStep !== 'payment'}
+                loading={submitting}
+                className="shrink-0"
+              >
+                {paymentMethod === 'cod'
+                  ? 'PLACE ORDER (COD)'
+                  : paymentMethod === 'split_cod'
+                  ? `PAY ${formatPrice(splitPrepaid)} NOW`
+                  : 'PLACE ORDER'}
+              </Button>
+            </div>
+          </div>
+        </>
       )}
 
       {otpOpen && (

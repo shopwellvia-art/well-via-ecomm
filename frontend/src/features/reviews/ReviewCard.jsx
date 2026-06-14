@@ -35,7 +35,7 @@ export function ReviewCard({ review }) {
       {/* Author row */}
       <div className="flex items-center gap-2.5">
         <span
-          className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent"
+          className="grid size-8 shrink-0 place-items-center rounded-full bg-accent/10 text-xs font-semibold text-accent"
           aria-hidden="true"
         >
           {initials}

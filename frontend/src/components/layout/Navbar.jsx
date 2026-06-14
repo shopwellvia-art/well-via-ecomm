@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ShoppingCart, Menu, X, Sparkles, Search, Heart, Store } from 'lucide-react';
@@ -79,22 +79,76 @@ function SearchBox({ className, autoFocus = false }) {
 
 /** A right-side header action: icon (with optional badge) above/with a label. */
 function HeaderAction({ to, icon: Icon, label, count }) {
+  const ariaLabel = count > 0 ? `${label} (${count})` : label;
   return (
     <Link
       to={to}
-      className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm font-medium text-ink-secondary transition-colors hover:text-accent focus-visible:focus-ring"
+      aria-label={ariaLabel}
+      className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-sm px-2 py-1.5 text-sm font-medium text-ink-secondary transition-colors hover:text-accent focus-visible:focus-ring"
     >
       <span className="relative">
         <Icon className="size-[22px]" aria-hidden="true" />
         <CountBadge count={count} />
       </span>
-      <span className="hidden lg:inline">{label}</span>
+      <span className="hidden lg:inline" aria-hidden="true">{label}</span>
     </Link>
   );
 }
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
+  const drawerRef = useRef(null);
+  const hamburgerRef = useRef(null);
+
+  // Focus trap for the mobile navigation drawer
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const drawer = drawerRef.current;
+    if (!drawer) return undefined;
+
+    const focusableSelectors = [
+      'a[href]',
+      'button:not([disabled])',
+      'input:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(',');
+
+    const focusableEls = Array.from(drawer.querySelectorAll(focusableSelectors));
+    const first = focusableEls[0];
+    const last = focusableEls[focusableEls.length - 1];
+
+    // Move focus into the drawer on open
+    first?.focus();
+
+    function onKeyDown(e) {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        hamburgerRef.current?.focus();
+        return;
+      }
+      if (e.key === 'Tab') {
+        if (focusableEls.length === 0) {
+          e.preventDefault();
+          return;
+        }
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last?.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first?.focus();
+          }
+        }
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
 
   const user = useAuthStore((s) => s.user);
   const { data: footer } = useFooterConfig();
@@ -111,12 +165,14 @@ export default function Navbar() {
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-line-subtle bg-bg-elevated shadow-sm">
-      <nav className="mx-auto flex h-16 max-w-content items-center gap-3 px-3 sm:gap-6 sm:px-6">
+      <nav aria-label="Primary navigation" className="mx-auto flex h-16 max-w-content items-center gap-3 px-3 sm:gap-6 sm:px-6">
         {/* ── Mobile hamburger ─────────────────────────────────────────── */}
         <button
+          ref={hamburgerRef}
           type="button"
           aria-label={open ? 'Close menu' : 'Open menu'}
           aria-expanded={open}
+          aria-controls="mobile-nav-dialog"
           onClick={() => setOpen((v) => !v)}
           className="grid size-9 shrink-0 place-items-center rounded-sm text-ink-secondary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring md:hidden"
         >
@@ -129,6 +185,7 @@ export default function Navbar() {
             <img
               src={brand.logo_url}
               alt={brand.name || 'Lumen'}
+              decoding="async"
               className="h-8 w-auto max-w-[150px] object-contain"
             />
           ) : (
@@ -144,14 +201,12 @@ export default function Navbar() {
         </Link>
 
         {/* ── Desktop search ───────────────────────────────────────────── */}
-        <SearchBox className="hidden max-w-[640px] flex-1 md:block" />
+        <SearchBox className="hidden min-w-0 max-w-[640px] flex-1 md:block" />
 
         {/* ── Right-side actions ───────────────────────────────────────── */}
         <div className="ml-auto flex items-center gap-1 sm:gap-3">
           <AccountMenu />
-          <span className="hidden sm:block">
-            <HeaderAction to="/wishlist" icon={Heart} label="Wishlist" count={wishlistCount} />
-          </span>
+          <HeaderAction to="/wishlist" icon={Heart} label="Wishlist" count={wishlistCount} />
           <HeaderAction to="/cart" icon={ShoppingCart} label="Cart" count={cartCount} />
         </div>
       </nav>
@@ -165,12 +220,20 @@ export default function Navbar() {
       <AnimatePresence>
         {open && (
           <motion.div
+            ref={drawerRef}
+            id="mobile-nav-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mobile-nav-title"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             className="overflow-hidden border-t border-line-subtle bg-bg-elevated md:hidden"
           >
+            <h2 id="mobile-nav-title" className="sr-only">
+              Mobile navigation
+            </h2>
             <ul className="flex flex-col gap-0.5 px-3 py-3">
               {mobileLinks.map((l) => (
                 <li key={l.to}>

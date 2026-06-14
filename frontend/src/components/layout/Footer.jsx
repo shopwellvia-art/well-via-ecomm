@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, ArrowRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
@@ -23,8 +23,8 @@ export default function Footer() {
   return (
     <footer className="mt-6">
       {/* Trust badges row — light surface ABOVE the navy footer */}
-      {cfg.trust_features?.length > 0 && (
-        <TrustBadgesRow features={cfg.trust_features} />
+      {(cfg.trust_features ?? []).length > 0 && (
+        <TrustBadgesRow features={cfg.trust_features ?? []} />
       )}
 
       {/* Navy footer */}
@@ -39,7 +39,7 @@ export default function Footer() {
 
         {/* Main link columns */}
         <div className="mx-auto max-w-content px-6 py-10">
-          <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:grid-cols-[1.6fr_repeat(4,1fr)_1.4fr_1.4fr]">
+          <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 sm:gap-8 lg:grid-cols-[1.6fr_repeat(4,1fr)_1.4fr_1.4fr]">
             {/* Brand column */}
             <div className="col-span-2 sm:col-span-3 lg:col-span-1">
               <Link
@@ -60,15 +60,15 @@ export default function Footer() {
               </Link>
 
               {cfg.brand?.tagline && (
-                <p className="mt-2 max-w-[220px] text-xs leading-relaxed text-[#878787]">
+                <p className="mt-2 max-w-[220px] text-xs leading-relaxed text-white/65">
                   {cfg.brand.tagline}
                 </p>
               )}
 
               {/* Social links */}
-              {cfg.social_links?.length > 0 && (
+              {(cfg.social_links ?? []).length > 0 && (
                 <ul className="mt-4 flex items-center gap-2">
-                  {cfg.social_links.map(({ href, label, icon }) => {
+                  {(cfg.social_links ?? []).map(({ href, label, icon }) => {
                     const Icon = resolveIcon(icon);
                     return (
                       <li key={label}>
@@ -89,7 +89,7 @@ export default function Footer() {
             </div>
 
             {/* Link columns */}
-            {cfg.link_columns.map((col) => (
+            {(cfg.link_columns ?? []).map((col) => (
               <LinkColumn key={col.title} title={col.title} links={col.links} />
             ))}
 
@@ -126,7 +126,7 @@ export default function Footer() {
                     <span key={p.tel}>
                       <a
                         href={`tel:${p.tel}`}
-                        className="rounded-xs text-[#878787] transition-colors hover:text-white focus-visible:focus-ring"
+                        className="rounded-xs text-white/65 transition-colors hover:text-white focus-visible:focus-ring"
                       >
                         {p.display}
                       </a>
@@ -185,13 +185,13 @@ function NewsletterBand({ newsletter = {}, brand = {} }) {
   return (
     <div className="mx-auto max-w-content px-6 py-6">
       <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Mail className="size-5 shrink-0 text-[#878787]" aria-hidden="true" />
-          <div>
+        <div className="flex min-w-0 items-center gap-3">
+          <Mail className="size-5 shrink-0 text-white/65" aria-hidden="true" />
+          <div className="min-w-0">
             <p className="text-sm font-semibold text-white">
               Subscribe &amp; get {brand?.name || 'exclusive'} deals in your inbox
             </p>
-            <p className="text-xs text-[#878787]">
+            <p className="text-xs text-white/65">
               No spam. Unsubscribe anytime.
             </p>
           </div>
@@ -212,6 +212,11 @@ function NewsletterForm({ newsletter = {}, brand = {} }) {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
 
+  // Unique IDs so the form is safe when Footer is rendered more than once (e.g. tests).
+  const uid = useId();
+  const inputId = uid + '-email';
+  const msgId = uid + '-msg';
+
   function onSubmit(e) {
     e.preventDefault();
     const value = email.trim();
@@ -226,36 +231,34 @@ function NewsletterForm({ newsletter = {}, brand = {} }) {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate aria-label="Subscribe to the newsletter" className="shrink-0">
-      <div className="flex gap-2">
-        <label htmlFor="footer-newsletter" className="sr-only">
+    <form onSubmit={onSubmit} noValidate aria-label="Subscribe to the newsletter">
+      <div className="flex w-full gap-2 sm:w-auto">
+        <label htmlFor={inputId} className="sr-only">
           Email address
         </label>
-        <div className="relative">
-          <input
-            id="footer-newsletter"
-            type="email"
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              if (error) setError('');
-            }}
-            placeholder={placeholder}
-            autoComplete="email"
-            aria-invalid={error ? 'true' : undefined}
-            aria-describedby="footer-newsletter-msg"
-            className={cn(
-              'h-9 w-56 rounded-xs border bg-white/8 px-3 text-xs text-white',
-              'placeholder:text-white/35 transition-colors duration-150',
-              'focus:outline-none focus-visible:focus-ring',
-              error ? 'border-danger' : 'border-white/15 focus:border-white/40',
-            )}
-          />
-        </div>
+        <input
+          id={inputId}
+          type="email"
+          value={email}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            if (error) setError('');
+          }}
+          placeholder={placeholder}
+          autoComplete="email"
+          aria-invalid={error ? 'true' : undefined}
+          aria-describedby={msgId}
+          className={cn(
+            'h-9 w-full rounded-xs border bg-white/8 px-3 text-xs text-white',
+            'placeholder:text-white/35 transition-colors duration-150',
+            'focus:outline-none focus-visible:[box-shadow:0_0_0_2px_rgba(255,255,255,0.5)]',
+            error ? 'border-danger' : 'border-white/15 focus:border-white/40',
+          )}
+        />
         <button
           type="submit"
           className={cn(
-            'inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-xs',
+            'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xs',
             'bg-accent px-4 text-xs font-semibold text-white',
             'transition-colors duration-150 hover:bg-accent-hover',
             'focus-visible:focus-ring',
@@ -275,12 +278,12 @@ function NewsletterForm({ newsletter = {}, brand = {} }) {
         </button>
       </div>
       <p
-        id="footer-newsletter-msg"
+        id={msgId}
         role="status"
         aria-live="polite"
         className={cn(
           'mt-1 min-h-[1rem] text-[11px]',
-          error ? 'text-danger' : submitted ? 'text-[#9be8c0]' : 'sr-only',
+          error ? 'text-danger' : submitted ? 'text-success/80' : 'sr-only',
         )}
       >
         {error || (submitted ? success : '')}
@@ -297,19 +300,19 @@ function BottomBar({ paymentMethods, bottomLinks, copyright }) {
       <div className="mx-auto max-w-content px-6">
         <div className="flex flex-col gap-4 py-5 lg:flex-row lg:items-center lg:justify-between">
           {/* Copyright */}
-          <p className="text-[11px] text-[#878787] lg:shrink-0">{copyright}</p>
+          <p className="text-[11px] text-white/65 lg:shrink-0">{copyright}</p>
 
           {/* Legal links */}
-          <ul className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-            {bottomLinks.map(({ to, label, icon }) => {
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+            {(bottomLinks ?? []).map(({ to, label, icon }) => {
               const Icon = resolveIcon(icon);
               return (
                 <li key={to}>
                   <Link
                     to={to}
-                    className="flex items-center gap-1 rounded-xs text-[11px] text-[#878787] transition-colors hover:text-white focus-visible:focus-ring"
+                    className="flex items-center gap-1 rounded-xs text-[11px] text-white/65 transition-colors hover:text-white focus-visible:focus-ring"
                   >
-                    <Icon className="size-3 text-[#878787]" aria-hidden="true" />
+                    <Icon className="size-3 text-white/65" aria-hidden="true" />
                     <span>{label}</span>
                   </Link>
                 </li>
@@ -318,12 +321,12 @@ function BottomBar({ paymentMethods, bottomLinks, copyright }) {
           </ul>
 
           {/* Payment method chips */}
+          <p className="sr-only">Accepted payment methods</p>
           <ul className="flex flex-wrap items-center gap-1.5">
-            {paymentMethods.map((m) => (
+            {(paymentMethods ?? []).map((m) => (
               <li
                 key={m}
-                aria-label={m}
-                className="grid h-[20px] min-w-[2.5rem] place-items-center rounded-xs border border-white/12 bg-white/8 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#878787]"
+                className="grid h-[20px] min-w-[2.5rem] place-items-center rounded-xs border border-white/12 bg-white/8 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/65"
               >
                 {m}
               </li>
@@ -357,15 +360,16 @@ function LinkColumn({ title, links }) {
   );
 }
 
-function SectionHeading({ children, className }) {
+function SectionHeading({ children, className, level = 3 }) {
+  const Tag = `h${level}`;
   return (
-    <h3
+    <Tag
       className={cn(
-        'mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#878787]',
+        'mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/65',
         className,
       )}
     >
       {children}
-    </h3>
+    </Tag>
   );
 }

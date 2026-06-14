@@ -25,7 +25,7 @@ export function KeyFeatures({ product }) {
           const Icon = ICONS[i % ICONS.length];
           return (
             <li
-              key={i}
+              key={text.slice(0, 40)}
               className="flex items-start gap-3 rounded-sm border border-line-subtle bg-bg-elevated p-4 transition-shadow hover:shadow-md"
             >
               <span

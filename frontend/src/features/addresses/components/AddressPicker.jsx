@@ -22,7 +22,7 @@ import AddressForm from './AddressForm.jsx';
  *   Incomplete / none: { pincode: '', phone: '' }  (during editing)
  */
 export default function AddressPicker({ onChange }) {
-  const { data: addresses, isLoading, isError } = useAddresses();
+  const { data: addresses, isLoading, isError, refetch } = useAddresses();
   const createAddress = useCreateAddress();
 
   // Which saved address is selected (null = none / adding new)
@@ -111,17 +111,22 @@ export default function AddressPicker({ onChange }) {
   if (isLoading) {
     return (
       <div className="flex flex-col gap-3">
-        <Skeleton className="h-24 rounded-lg" />
-        <Skeleton className="h-24 rounded-lg" />
+        <Skeleton className="h-24 rounded-sm" />
+        <Skeleton className="h-24 rounded-sm" />
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex items-start gap-2.5 rounded-lg border border-danger/30 bg-danger/8 p-3.5 text-sm text-danger">
-        <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        Could not load your addresses. Please refresh and try again.
+      <div className="flex flex-col gap-2 rounded-sm border border-danger/30 bg-danger/12 p-3.5 text-sm text-danger">
+        <div className="flex items-start gap-2.5">
+          <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          Could not load your addresses. Please refresh and try again.
+        </div>
+        <Button size="sm" variant="outline" className="mt-1 self-start" onClick={() => refetch()}>
+          Retry
+        </Button>
       </div>
     );
   }
@@ -133,6 +138,8 @@ export default function AddressPicker({ onChange }) {
       {/* Saved address radio cards */}
       {hasSaved && (
         <motion.div
+          role="radiogroup"
+          aria-label="Select delivery address"
           variants={listStagger(0.05)}
           initial="hidden"
           animate="show"
@@ -144,6 +151,8 @@ export default function AddressPicker({ onChange }) {
               <motion.button
                 key={addr.id}
                 type="button"
+                role="radio"
+                aria-checked={isSelected}
                 variants={fadeUp}
                 onClick={() => handleSelectSaved(addr.id)}
                 className={cn(
@@ -194,6 +203,8 @@ export default function AddressPicker({ onChange }) {
         <button
           type="button"
           onClick={handleAddToggle}
+          aria-expanded={addOpen}
+          aria-controls="add-address-form"
           className="flex w-full items-center gap-2.5 px-4 py-3 text-sm font-medium text-ink-secondary transition-colors hover:text-ink-primary focus-visible:focus-ring"
         >
           <span
@@ -217,6 +228,7 @@ export default function AddressPicker({ onChange }) {
         <AnimatePresence initial={false}>
           {addOpen && (
             <motion.div
+              id="add-address-form"
               key="add-form"
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}

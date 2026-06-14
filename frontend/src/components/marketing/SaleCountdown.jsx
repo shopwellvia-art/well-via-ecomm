@@ -36,10 +36,10 @@ export function SaleCountdown({ target, className, tone = 'dark' }) {
         <div key={label} className="flex items-center gap-2">
           <div
             className={cn(
-              'flex min-w-[3rem] flex-col items-center rounded-xl px-2.5 py-1.5',
+              'flex min-w-[3rem] flex-col items-center rounded-sm px-2.5 py-1.5',
               tone === 'light'
-                ? 'bg-white/15 text-white backdrop-blur'
-                : 'bg-bg-base/80 text-ink-primary shadow-sm backdrop-blur',
+                ? 'bg-white/15 text-white'
+                : 'bg-bg-sunken text-ink-primary shadow-sm',
             )}
           >
             <span className="text-xl font-bold tabular-nums leading-none">

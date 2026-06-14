@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useReducedMotion } from 'framer-motion';
 import { useCategories } from '@/features/categories/hooks.js';
 import { useProducts } from '@/features/products/hooks.js';
+import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { cn } from '@/lib/utils.js';
 
 /*
@@ -10,45 +11,22 @@ import { cn } from '@/lib/utils.js';
  * Each tile links to /products?category=<slug>.
  */
 
-const BG_COLORS = [
-  'bg-rose-50',
-  'bg-indigo-50',
-  'bg-emerald-50',
-  'bg-fuchsia-50',
-  'bg-amber-50',
-  'bg-violet-50',
-  'bg-teal-50',
-  'bg-orange-50',
-];
+// Finding 6: replaced hardcoded palette arrays with a single token-based
+// accent tint pair — consistent with Flipkart design language and the token system.
+const CIRCLE_BG   = 'bg-accent/8';
+const CIRCLE_RING = 'ring-accent/20';
 
-const RING_COLORS = [
-  'ring-rose-200',
-  'ring-indigo-200',
-  'ring-emerald-200',
-  'ring-fuchsia-200',
-  'ring-amber-200',
-  'ring-violet-200',
-  'ring-teal-200',
-  'ring-orange-200',
-];
-
-function colorFor(slug) {
-  let h = 0;
-  for (let i = 0; i < slug.length; i += 1) {
-    h = (h * 31 + slug.charCodeAt(i)) >>> 0;
-  }
-  const idx = h % BG_COLORS.length;
-  return { bg: BG_COLORS[idx], ring: RING_COLORS[idx] };
-}
-
-function CategoryTile({ category, imageUrl }) {
-  const { bg, ring } = colorFor(category.slug);
-
+// Finding 4 + 5: added `py-1` for touch-target height; moved `focus-visible:focus-ring`
+// onto the <Link> itself; removed group-focus-visible/tile:focus-ring from inner span.
+// Finding 2: accepts `isHidden` prop and applies `tabIndex={-1}` to the <Link>
+// so keyboard users cannot reach duplicate (aria-hidden) tiles.
+function CategoryTile({ category, imageUrl, isHidden }) {
   return (
     <Link
       to={`/products?category=${encodeURIComponent(category.slug)}`}
-      className="group/tile flex shrink-0 flex-col items-center gap-2 focus-visible:outline-none"
+      className="group/tile flex shrink-0 flex-col items-center gap-2 py-1 focus-visible:outline-none focus-visible:focus-ring"
       aria-label={`Browse ${category.name}`}
+      tabIndex={isHidden ? -1 : undefined}
     >
       {/* Circle */}
       <span
@@ -57,9 +35,8 @@ function CategoryTile({ category, imageUrl }) {
           'ring-1',
           'transition-[transform,box-shadow] duration-200 ease-out',
           'group-hover/tile:-translate-y-1 group-hover/tile:shadow-md',
-          'group-focus-visible/tile:focus-ring',
-          bg,
-          ring,
+          CIRCLE_BG,
+          CIRCLE_RING,
         )}
       >
         {imageUrl ? (
@@ -86,10 +63,23 @@ function CategoryTile({ category, imageUrl }) {
   );
 }
 
+// Skeleton tile — matches the real tile dimensions so layout does not shift.
+function CategoryTileSkeleton() {
+  return (
+    <div className="flex shrink-0 flex-col items-center gap-2 py-1">
+      <Skeleton className="size-16 rounded-full" />
+      <Skeleton className="h-3 w-14 rounded-xs" />
+    </div>
+  );
+}
+
 export default function CategoryMarquee() {
   const reduce = useReducedMotion();
-  const { data: categories = [] } = useCategories();
-  const { data: productsPage } = useProducts({ page: 1, page_size: 100 });
+  // Finding 1 + 7: destructure isLoading so we can render a skeleton strip
+  // instead of returning null — prevents layout shift on initial load.
+  const { data: categories = [], isLoading } = useCategories();
+  // Finding 3: reduced page_size from 100 → 20 to cut initial-load payload.
+  const { data: productsPage } = useProducts({ page: 1, page_size: 20 });
 
   const imageByCategoryId = useMemo(() => {
     const map = new Map();
@@ -100,6 +90,30 @@ export default function CategoryMarquee() {
     }
     return map;
   }, [productsPage]);
+
+  // Show skeleton strip while loading to avoid layout shift.
+  if (isLoading) {
+    return (
+      <section
+        className="mx-auto mt-3 max-w-content px-4 sm:px-6"
+        aria-labelledby="category-strip-heading"
+        aria-busy="true"
+      >
+        <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
+          <div className="flex items-center justify-between border-b border-line-subtle px-5 py-3">
+            <h2 id="category-strip-heading" className="text-sm font-bold text-ink-primary">
+              Shop by Category
+            </h2>
+          </div>
+          <div className="flex items-start gap-6 overflow-hidden px-5 py-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <CategoryTileSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (!categories.length) return null;
 
@@ -137,25 +151,34 @@ export default function CategoryMarquee() {
             className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-bg-elevated to-transparent"
           />
 
+          {/* Finding 5: added aria-label to the list for AT context */}
           <ul
             className={cn(
               'flex w-max items-start gap-6 px-5 will-change-transform',
               !reduce && 'animate-marquee group-hover:[animation-play-state:paused]',
             )}
             role="list"
+            aria-label="Product categories"
           >
-            {loop.map((c, i) => (
-              <li
-                key={`${c.id}-${i}`}
-                aria-hidden={i >= categories.length ? 'true' : undefined}
-                className="shrink-0"
-              >
-                <CategoryTile
-                  category={c}
-                  imageUrl={imageByCategoryId.get(c.id)}
-                />
-              </li>
-            ))}
+            {loop.map((c, i) => {
+              // Finding 2: duplicate tiles are aria-hidden at the <li> level;
+              // isHidden passes through so CategoryTile sets tabIndex={-1} on
+              // the <Link>, keeping them out of the keyboard tab order.
+              const isDuplicate = i >= categories.length;
+              return (
+                <li
+                  key={`${c.id}-${i}`}
+                  aria-hidden={isDuplicate ? 'true' : undefined}
+                  className="shrink-0"
+                >
+                  <CategoryTile
+                    category={c}
+                    imageUrl={imageByCategoryId.get(c.id)}
+                    isHidden={isDuplicate}
+                  />
+                </li>
+              );
+            })}
           </ul>
         </div>
       </div>

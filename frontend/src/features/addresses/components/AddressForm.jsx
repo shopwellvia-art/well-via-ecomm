@@ -209,7 +209,7 @@ export default function AddressForm({
         <span className="text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
           Address type
         </span>
-        <div className="flex gap-2">
+        <div role="group" aria-label="Address type" className="flex gap-2">
           {LABELS.map((l) => {
             const meta = LABEL_META[l];
             const LabelIcon = meta.icon;
@@ -217,6 +217,7 @@ export default function AddressForm({
               <button
                 key={l}
                 type="button"
+                aria-pressed={values.label === l}
                 onClick={() => set('label', l)}
                 className={cn(
                   'flex flex-1 items-center justify-center gap-1.5 rounded-xs border py-2.5 text-xs font-semibold transition-colors duration-150 focus-visible:focus-ring',
@@ -251,6 +252,7 @@ export default function AddressForm({
           <Input
             label="Phone"
             placeholder="+91 98765 43210"
+            type="tel"
             inputMode="tel"
             autoComplete="tel"
             value={values.phone}
@@ -296,15 +298,15 @@ export default function AddressForm({
 
       {/* ── Section: Location ── */}
       <div>
-        <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 gap-y-2">
           <p className="text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
             Location
           </p>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
             <button
               type="button"
               onClick={() => setMapOpen(true)}
-              className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent/80 focus-visible:focus-ring"
+              className="inline-flex min-h-[44px] shrink-0 items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent/80 focus-visible:focus-ring"
             >
               <MapPinned className="size-3.5" aria-hidden="true" />
               Pick on map
@@ -313,7 +315,7 @@ export default function AddressForm({
               type="button"
               disabled={currentLocation.isPending}
               onClick={handleUseLocation}
-              className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent/80 focus-visible:focus-ring disabled:opacity-50"
+              className="inline-flex min-h-[44px] shrink-0 items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent/80 focus-visible:focus-ring disabled:opacity-50"
             >
               {currentLocation.isPending ? (
                 <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
@@ -327,7 +329,7 @@ export default function AddressForm({
         {geoError && (
           <p className="mb-2 text-xs text-danger">{geoError}</p>
         )}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 min-[480px]:grid-cols-3">
           <Input
             label="Pincode"
             placeholder="110001"
@@ -387,7 +389,7 @@ export default function AddressForm({
 
       {/* ── Map picker — lazy-loaded, only mounts when opened ── */}
       {mapOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<div className="flex h-64 items-center justify-center"><Loader2 className="size-6 animate-spin text-accent" /></div>}>
           <MapAddressPicker
             open={mapOpen}
             onClose={() => setMapOpen(false)}

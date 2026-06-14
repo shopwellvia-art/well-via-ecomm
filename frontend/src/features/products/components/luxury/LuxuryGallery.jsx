@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, ZoomIn } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
@@ -36,19 +36,30 @@ export function LuxuryGallery({ product }) {
   const stageRef = useRef(null);
   const touchX = useRef(null);
 
+  // Tracks whether the main stage image failed to load (404 / CDN error).
+  const [mainImgFailed, setMainImgFailed] = useState(false);
+  // Tracks per-thumbnail image load failures.
+  const [thumbFailed, setThumbFailed] = useState({});
+
+  const current = images[Math.min(active, images.length - 1)];
+
+  // Reset the main-image error flag whenever the active slide changes.
+  useEffect(() => {
+    setMainImgFailed(false);
+  }, [current?.url]);
+
   // No images at all — graceful gradient placeholder.
   if (images.length === 0) {
     return (
       <div className="flex flex-col-reverse gap-4 lg:flex-row">
         <div className="hidden lg:block lg:w-20 lg:shrink-0" />
-        <div className="aspect-square w-full overflow-hidden rounded-sm border border-line-subtle bg-white p-4">
+        <div className="aspect-square w-full overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated p-4">
           <ProductMedia product={product} className="object-contain" eager />
         </div>
       </div>
     );
   }
 
-  const current = images[Math.min(active, images.length - 1)];
   const currentIsVideo = isVideo(current.url);
 
   function onMouseMove(e) {
@@ -77,13 +88,19 @@ export function LuxuryGallery({ product }) {
     if (Math.abs(dx) > 40) step(dx < 0 ? 1 : -1);
     touchX.current = null;
   }
+  // Keyboard arrow navigation on the main stage.
+  function onKeyDown(e) {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+  }
 
   return (
     <div className="flex flex-col-reverse gap-4 lg:flex-row lg:items-start">
       {/* Thumbnail rail */}
       <div
-        className="flex shrink-0 gap-2.5 overflow-x-auto pb-1 lg:w-20 lg:flex-col lg:overflow-visible lg:pb-0"
+        role="tablist"
         aria-label="Product images"
+        className="flex shrink-0 gap-2.5 overflow-x-auto pb-1 lg:w-20 lg:flex-col lg:overflow-visible lg:pb-0"
       >
         {images.map((img, i) => {
           const vid = isVideo(img.url);
@@ -91,13 +108,14 @@ export function LuxuryGallery({ product }) {
             <button
               key={img.id}
               type="button"
+              role="tab"
               onMouseEnter={() => setActive(i)}
               onFocus={() => setActive(i)}
               onClick={() => setActive(i)}
               aria-label={`View ${vid ? 'video' : 'image'} ${i + 1}`}
-              aria-current={i === active}
+              aria-selected={i === active}
               className={cn(
-                'relative size-16 shrink-0 overflow-hidden rounded-sm border bg-white transition-all duration-200 focus-visible:focus-ring lg:size-20',
+                'relative size-16 shrink-0 overflow-hidden rounded-sm border bg-bg-elevated transition-all duration-200 focus-visible:focus-ring lg:size-20',
                 i === active
                   ? 'border-accent ring-1 ring-accent/40'
                   : 'border-line-subtle opacity-90 hover:opacity-100 hover:border-line-strong',
@@ -110,8 +128,17 @@ export function LuxuryGallery({ product }) {
                     <Play className="size-4 text-white" aria-hidden="true" />
                   </span>
                 </>
+              ) : thumbFailed[i] ? (
+                // Fallback for broken thumbnail URLs.
+                <ProductMedia product={product} className="size-full object-contain p-1" />
               ) : (
-                <img src={img.url} alt="" loading="lazy" className="size-full object-contain p-1" />
+                <img
+                  src={img.url}
+                  alt=""
+                  loading={i < 6 ? 'eager' : 'lazy'}
+                  className="size-full object-contain p-1"
+                  onError={() => setThumbFailed((prev) => ({ ...prev, [i]: true }))}
+                />
               )}
             </button>
           );
@@ -126,7 +153,10 @@ export function LuxuryGallery({ product }) {
           onMouseLeave={() => setLens(null)}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
-          className="group relative aspect-square w-full select-none overflow-hidden rounded-sm border border-line-subtle bg-white p-4"
+          onKeyDown={onKeyDown}
+          tabIndex={0}
+          aria-label={`Product image ${active + 1} of ${images.length}`}
+          className="group relative aspect-square w-full select-none overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated p-4"
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -144,6 +174,9 @@ export function LuxuryGallery({ product }) {
                   playsInline
                   className="size-full bg-black object-contain"
                 />
+              ) : mainImgFailed ? (
+                // Fallback when the main stage image URL is broken.
+                <ProductMedia product={product} className="size-full object-contain" />
               ) : (
                 <img
                   src={current.url}
@@ -151,6 +184,7 @@ export function LuxuryGallery({ product }) {
                   fetchpriority="high"
                   draggable={false}
                   className={cn('size-full object-contain', !lens && 'cursor-zoom-in')}
+                  onError={() => setMainImgFailed(true)}
                 />
               )}
             </motion.div>
@@ -159,7 +193,8 @@ export function LuxuryGallery({ product }) {
           {/* Lens — tracks the cursor over the source image */}
           {lens && !currentIsVideo && (
             <div
-              className="pointer-events-none absolute z-[2] rounded-sm border border-white/80 bg-white/10 shadow-[0_0_0_2000px_rgba(0,0,0,0.18)]"
+              className="pointer-events-none absolute z-[2] rounded-sm border border-line-subtle bg-ink-inverse/10 shadow-[0_0_0_2000px_rgba(0,0,0,0.18)]"
+              /* intentional vignette — no token equivalent */
               style={{ left: lens.x, top: lens.y, width: lens.w, height: lens.h }}
             />
           )}
@@ -177,11 +212,11 @@ export function LuxuryGallery({ product }) {
           )}
         </div>
 
-        {/* Magnifier panel */}
+        {/* Magnifier panel — only shown at xl+ where there is sufficient horizontal space */}
         {lens && !currentIsVideo && (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute left-[calc(100%+1.25rem)] top-0 z-40 hidden aspect-square w-[400px] overflow-hidden rounded-lg border border-line-strong bg-bg-elevated shadow-lg lg:block xl:w-[460px]"
+            className="pointer-events-none absolute left-[calc(100%+1.25rem)] top-0 z-40 hidden aspect-square overflow-hidden rounded-sm border border-line-strong bg-bg-elevated shadow-lg xl:block xl:w-[360px] 2xl:w-[460px]"
             style={{
               backgroundImage: `url(${current.url})`,
               backgroundRepeat: 'no-repeat',
@@ -191,13 +226,18 @@ export function LuxuryGallery({ product }) {
           />
         )}
 
-        {/* Dots (mobile) */}
-        <div className="mt-3 flex justify-center gap-1.5 lg:hidden">
+        {/* Dots (mobile) — interactive tab buttons for screen readers */}
+        <div role="tablist" aria-label="Image navigation" className="mt-3 flex justify-center gap-1.5 lg:hidden">
           {images.map((img, i) => (
-            <span
+            <button
               key={img.id}
+              type="button"
+              role="tab"
+              aria-selected={i === active}
+              aria-label={`Go to image ${i + 1}`}
+              onClick={() => setActive(i)}
               className={cn(
-                'h-1.5 rounded-full transition-all',
+                'h-1.5 rounded-full transition-all focus-visible:focus-ring',
                 i === active ? 'w-5 bg-accent' : 'w-1.5 bg-line-strong',
               )}
             />

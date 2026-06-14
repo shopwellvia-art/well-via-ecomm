@@ -6,6 +6,10 @@ import { ArrowRight } from 'lucide-react';
  * Flat style: no cinematic Framer Motion scale, no glassmorphism. The image
  * itself provides visual richness. Renders nothing when no image is available.
  * All logic (finding the hero image URL) unchanged.
+ *
+ * Text content is derived solely from real product data (name + first sentence
+ * of description) — never fabricated. This also fixes heading order: the <h2>
+ * reflects the actual product name rather than hardcoded marketing copy.
  */
 export function LifestyleBanner({ product }) {
   const hero =
@@ -15,6 +19,12 @@ export function LifestyleBanner({ product }) {
     )[0]?.url;
 
   if (!hero) return null;
+
+  // Derive the first sentence of the description for the sub-headline.
+  // Falls back to undefined (renders nothing) when description is absent.
+  const firstSentence = product.description
+    ? product.description.split(/(?<=[.!?])\s+/)[0]
+    : undefined;
 
   return (
     <section className="mt-10">
@@ -31,17 +41,12 @@ export function LifestyleBanner({ product }) {
           aria-hidden="true"
         />
         <div className="flex min-h-[220px] flex-col justify-center gap-3 p-8 sm:min-h-[280px] sm:p-12">
-          <span className="text-xs font-semibold uppercase tracking-widest text-white/70">
-            {product.name}
-          </span>
           <h2 className="max-w-md text-2xl font-semibold text-white sm:text-3xl">
-            Designed for modern life.
+            {product.name}
           </h2>
-          <div className="flex flex-wrap gap-4 text-sm font-medium text-white/80">
-            <span>Comfort.</span>
-            <span>Style.</span>
-            <span>Performance.</span>
-          </div>
+          {firstSentence && (
+            <p className="max-w-sm text-sm font-medium text-white/80">{firstSentence}</p>
+          )}
           <div className="mt-2">
             <Link
               to="/products"

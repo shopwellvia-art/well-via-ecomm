@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowUpRight, Newspaper } from 'lucide-react';
 import { safeUrl } from '@/lib/safeUrl.js';
@@ -18,18 +19,21 @@ function formatDate(iso) {
 }
 
 function StoryCard({ post }) {
+  const [imgError, setImgError] = useState(false);
   const inner = (
     <>
       {/* Thumbnail */}
       <div className="relative aspect-[16/9] overflow-hidden bg-bg-sunken">
-        {post.image ? (
+        {post.image && !imgError && (
           <img
             src={post.image}
-            alt=""
+            alt={post.title}
             loading="lazy"
             className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+            onError={() => setImgError(true)}
           />
-        ) : (
+        )}
+        {(!post.image || imgError) && (
           <div className="grid size-full place-items-center bg-accent-soft text-accent">
             <Newspaper className="size-8" aria-hidden="true" />
           </div>
@@ -57,7 +61,7 @@ function StoryCard({ post }) {
           </p>
         )}
         {post.url && (
-          <span className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-accent">
+          <span aria-hidden="true" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-accent">
             Read more
             <ArrowUpRight className="size-4" aria-hidden="true" />
           </span>
@@ -69,7 +73,7 @@ function StoryCard({ post }) {
   return (
     <Card interactive className="group overflow-hidden">
       {post.url ? (
-        <a href={safeUrl(post.url)} className="block rounded-sm focus-visible:focus-ring">
+        <a href={safeUrl(post.url)} aria-label={post.title} className="block rounded-sm focus-visible:focus-ring">
           {inner}
         </a>
       ) : (

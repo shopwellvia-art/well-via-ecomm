@@ -95,7 +95,10 @@ export default function MapAddressPicker({ open, onClose, onSelect }) {
   const [geoResult, setGeoResult]     = useState(null);   // reverseGeocode response
   const [hasResolved, setHasResolved] = useState(false);
 
-  const debounceRef = useRef(null);
+  const debounceRef  = useRef(null);
+  // Focus management refs
+  const closeButtonRef  = useRef(null);
+  const openerRef       = useRef(null); // stores document.activeElement before open
 
   // ── Escape key ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -104,6 +107,25 @@ export default function MapAddressPicker({ open, onClose, onSelect }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+
+  // ── Focus management: capture opener, move focus in, restore on close ───────
+  useEffect(() => {
+    if (open) {
+      // Capture the element that had focus before the modal opened
+      openerRef.current = document.activeElement;
+      // After paint, move focus to the close button
+      const raf = requestAnimationFrame(() => {
+        closeButtonRef.current?.focus();
+      });
+      return () => cancelAnimationFrame(raf);
+    } else {
+      // Restore focus to the opener when the modal closes
+      if (openerRef.current && typeof openerRef.current.focus === 'function') {
+        openerRef.current.focus();
+        openerRef.current = null;
+      }
+    }
+  }, [open]);
 
   // ── Reverse geocode (debounced) ──────────────────────────────────────────────
   const scheduleResolve = useCallback((lat, lng) => {
@@ -249,19 +271,21 @@ export default function MapAddressPicker({ open, onClose, onSelect }) {
             // stay inside the modal, not above the close button.
             className="isolate relative z-0 flex w-full h-full overflow-hidden bg-bg-elevated
                        flex-col
-                       md:flex-row md:w-[80vw] md:h-[80vh] md:max-w-5xl md:rounded-2xl
+                       md:flex-row md:w-[80vw] md:h-[80vh] md:max-w-5xl md:rounded-xl
                        md:border md:border-line-subtle md:shadow-lg"
           >
             {/* ── Close button (always on top of map) ── */}
             <button
+              ref={closeButtonRef}
               type="button"
               aria-label="Close map picker"
               onClick={onClose}
               className={cn(
                 'absolute top-3 right-3 z-[500]',
-                'grid size-8 place-items-center rounded-full',
-                'bg-bg-elevated/80 backdrop-blur-sm border border-line-subtle',
+                'grid size-8 place-items-center rounded-full p-2 -m-2',
+                'bg-bg-elevated border border-line-subtle',
                 'text-ink-tertiary transition-colors hover:text-ink-primary',
+                'focus-visible:focus-ring',
               )}
             >
               <X className="size-4" />
@@ -275,8 +299,7 @@ export default function MapAddressPicker({ open, onClose, onSelect }) {
                 zoom={INDIA_ZOOM}
                 zoomControl={false}
                 attributionControl={true}
-                className="h-full w-full"
-                style={{ background: '#e5e7eb' }}
+                className="h-full w-full bg-bg-sunken"
               >
                 <TileLayer
                   url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
@@ -306,24 +329,27 @@ export default function MapAddressPicker({ open, onClose, onSelect }) {
                     dragging && '-translate-y-[calc(100%+8px)] scale-105',
                   )}
                 >
-                  <svg
-                    width="34" height="46" viewBox="0 0 32 44" fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="drop-shadow-[0_6px_8px_rgba(0,0,0,0.35)]"
-                  >
-                    <path
-                      d="M16 0C7.163 0 0 7.163 0 16c0 11 16 28 16 28S32 27 32 16C32 7.163 24.837 0 16 0z"
-                      fill="#6366F1"
-                    />
-                    <circle cx="16" cy="16" r="6" fill="white" fillOpacity="0.95" />
-                  </svg>
+                  {/* text-accent makes currentColor resolve to the accent token */}
+                  <span className="text-accent">
+                    <svg
+                      width="34" height="46" viewBox="0 0 32 44" fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="drop-shadow-[0_6px_8px_rgba(0,0,0,0.35)]"
+                    >
+                      <path
+                        d="M16 0C7.163 0 0 7.163 0 16c0 11 16 28 16 28S32 27 32 16C32 7.163 24.837 0 16 0z"
+                        fill="currentColor"
+                      />
+                      <circle cx="16" cy="16" r="6" fill="white" fillOpacity="0.95" />
+                    </svg>
+                  </span>
                 </div>
               </div>
 
               {/* "Move the map" hint (auto-locate failed or not resolved yet) */}
               {geoStatus === 'idle' && !devicePos && !hasResolved && (
                 <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 z-[400]">
-                  <p className="rounded-full bg-bg-elevated/90 backdrop-blur-sm px-3 py-1.5
+                  <p className="rounded-sm bg-bg-elevated px-3 py-1.5
                                 text-xs text-ink-secondary shadow-md border border-line-subtle whitespace-nowrap">
                     Move the map to position the pin over your address
                   </p>
@@ -331,17 +357,22 @@ export default function MapAddressPicker({ open, onClose, onSelect }) {
               )}
 
               {/* "Use my current location" pill — bottom-center of map */}
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[460] flex flex-col items-center gap-1.5">
+              <div
+                className="absolute left-1/2 -translate-x-1/2 z-[460] flex flex-col items-center gap-1.5"
+                style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+              >
                 <button
                   type="button"
                   onClick={handleLocateMe}
                   disabled={geoStatus === 'locating'}
+                  aria-label={geoStatus === 'locating' ? 'Locating your position' : 'Use my current location'}
                   className={cn(
                     'inline-flex items-center gap-2 rounded-full px-4 py-2',
-                    'bg-bg-elevated/90 backdrop-blur-md border border-accent/30',
+                    'bg-bg-elevated border border-accent/30',
                     'text-sm font-semibold text-accent shadow-md',
-                    'transition-all hover:border-accent/60 hover:shadow-glow-sm',
+                    'transition-all hover:border-accent hover:shadow-sm',
                     'disabled:opacity-60 disabled:cursor-not-allowed',
+                    'focus-visible:focus-ring',
                   )}
                 >
                   {geoStatus === 'locating' ? (
@@ -352,8 +383,8 @@ export default function MapAddressPicker({ open, onClose, onSelect }) {
                   {geoStatus === 'locating' ? 'Locating…' : 'Use my current location'}
                 </button>
                 {geoStatus === 'error' && geoError && (
-                  <p className="max-w-[280px] rounded-lg bg-bg-elevated/90 px-3 py-1.5
-                                text-center text-xs text-danger shadow-md backdrop-blur-sm">
+                  <p className="max-w-[280px] rounded-sm bg-bg-elevated px-3 py-1.5
+                                text-center text-xs text-danger shadow-md border border-line-subtle">
                     {geoError}
                   </p>
                 )}
@@ -365,6 +396,7 @@ export default function MapAddressPicker({ open, onClose, onSelect }) {
               className={cn(
                 'flex flex-col gap-4 bg-bg-elevated p-5',
                 'flex-[45_1_0%] overflow-y-auto',
+                'pb-[env(safe-area-inset-bottom,1rem)]',
                 'md:flex-none md:w-72 md:border-l md:border-line-subtle',
                 'border-t border-line-subtle md:border-t-0',
               )}
@@ -425,7 +457,7 @@ export default function MapAddressPicker({ open, onClose, onSelect }) {
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.2 }}
-                      className="rounded-lg border border-warning/30 bg-warning/10 p-3"
+                      className="rounded-sm border border-warning/30 bg-warning/12 p-3"
                     >
                       <p className="text-xs text-warning leading-relaxed">
                         We couldn&apos;t find a deliverable pincode here — move the map

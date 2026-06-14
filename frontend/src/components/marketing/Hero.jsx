@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Flame } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Flame, Pause, Play } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/Button.jsx';
 import { cn } from '@/lib/utils.js';
 import { duration, ease } from '@/lib/motion.js';
@@ -52,7 +52,7 @@ function SaleSlide({ slide, fallbackImage }) {
   const effectiveCountdown = countdownTarget ?? (slide._isFallback ? saleTarget : null);
 
   return (
-    <div className="grid items-center gap-0 lg:grid-cols-2" style={{ minHeight: '340px' }}>
+    <div className="grid grid-cols-1 items-center gap-0 min-h-[240px] lg:grid-cols-2 lg:min-h-[340px]">
       {/* Left — copy */}
       <div className="flex flex-col items-start px-6 py-8 sm:px-8 sm:py-10">
         {eyebrow && (
@@ -62,9 +62,9 @@ function SaleSlide({ slide, fallbackImage }) {
           </span>
         )}
 
-        <h1 className="mt-4 max-w-sm text-2xl font-bold leading-tight text-ink-primary sm:text-3xl">
+        <h2 className="mt-4 max-w-sm text-2xl font-bold leading-tight text-ink-primary sm:text-3xl">
           {heading}
-        </h1>
+        </h2>
 
         <p className="mt-2 max-w-xs text-sm leading-relaxed text-ink-secondary">
           {subtext}
@@ -118,7 +118,7 @@ function SaleSlide({ slide, fallbackImage }) {
       </div>
 
       {/* Right — product image */}
-      <div className="relative flex items-center justify-center bg-gradient-to-br from-[#EEF4FD] to-[#F8FAFF] lg:h-full" style={{ minHeight: '260px' }}>
+      <div className="relative flex items-center justify-center bg-gradient-to-br from-accent/5 to-bg-elevated min-h-[180px] lg:min-h-0 lg:h-full">
         {/* Sale badge */}
         {slide.badge_text && (
           <div
@@ -133,16 +133,18 @@ function SaleSlide({ slide, fallbackImage }) {
         )}
 
         {showImage ? (
-          <motion.img
-            src={image}
-            alt={slide.alt || ''}
-            onError={() => setImgFailed(true)}
-            className="h-56 w-auto max-w-xs object-contain drop-shadow-lg sm:h-64 lg:h-72"
-            animate={reduce ? undefined : { y: [0, -8, 0] }}
-            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-          />
+          <div style={{ contain: 'layout paint' }}>
+            <motion.img
+              src={image}
+              alt={slide.alt || ''}
+              onError={() => setImgFailed(true)}
+              className="h-56 w-auto max-w-xs object-contain drop-shadow-lg will-change-transform sm:h-64 lg:h-72"
+              animate={reduce ? undefined : { y: [0, -8, 0] }}
+              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+            />
+          </div>
         ) : (
-          <div className="grid size-40 place-items-center rounded-full bg-accent/15 text-5xl font-bold text-accent/40">
+          <div className="grid size-40 place-items-center rounded-full bg-accent/12 text-5xl font-bold text-accent/40">
             ✦
           </div>
         )}
@@ -158,14 +160,11 @@ function PhotoSlide({ slide }) {
   const showImage = slide.image_url && !imgFailed;
 
   return (
-    <div
-      className="relative w-full overflow-hidden"
-      style={{ minHeight: '340px' }}
-    >
+    <div className="relative w-full aspect-[16/7] sm:aspect-[16/6] overflow-hidden">
       {showImage ? (
         <img
           src={slide.image_url}
-          alt={slide.alt || ''}
+          alt={slide.alt || (hasOverlay ? '' : (slide.heading ?? 'Promotional banner'))}
           onError={() => setImgFailed(true)}
           className="absolute inset-0 size-full object-cover"
         />
@@ -188,14 +187,14 @@ function PhotoSlide({ slide }) {
           />
           <div className="absolute bottom-0 left-0 flex flex-col items-start gap-4 px-6 pb-8 sm:px-8">
             {slide.heading && (
-              <h1
+              <h2
                 className={cn(
                   'max-w-md text-2xl font-bold leading-tight sm:text-3xl',
                   isLight ? 'text-white drop-shadow-sm' : 'text-ink-primary',
                 )}
               >
                 {slide.heading}
-              </h1>
+              </h2>
             )}
             {slide.cta_label && slide.cta_href && (
               <Link
@@ -251,7 +250,7 @@ function NavArrow({ direction, onClick, disabled }) {
       className={cn(
         'absolute top-1/2 z-10 -translate-y-1/2',
         direction === 'prev' ? 'left-2' : 'right-2',
-        'grid size-8 place-items-center rounded-full',
+        'grid size-11 place-items-center rounded-full',
         'bg-white/90 text-ink-primary shadow-sm',
         'border border-line-subtle',
         'transition-opacity duration-150 hover:opacity-100 hover:shadow-md',
@@ -269,7 +268,7 @@ function NavArrow({ direction, onClick, disabled }) {
 
 export default function Hero() {
   const reduce = useReducedMotion();
-  const { data: slides = [] } = useHeroSlides();
+  const { data: slides = [], isLoading } = useHeroSlides();
   const { data: bestsellers = [] } = useBestsellers(4);
   const saleTarget = useSaleTarget();
 
@@ -295,6 +294,7 @@ export default function Hero() {
   const total = effectiveSlides.length;
   const [current, setCurrent] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [manuallyPaused, setManuallyPaused] = useState(false);
   const timerRef = useRef(null);
 
   const goTo = useCallback(
@@ -309,24 +309,24 @@ export default function Hero() {
   const goNext = useCallback(() => goTo(current + 1), [goTo, current]);
 
   useEffect(() => {
-    if (reduce || paused || total <= 1) return;
+    if (reduce || paused || manuallyPaused || total <= 1) return;
     timerRef.current = setInterval(() => {
       setCurrent((c) => (c + 1) % total);
     }, INTERVAL_MS);
     return () => clearInterval(timerRef.current);
-  }, [reduce, paused, total]);
+  }, [reduce, paused, manuallyPaused, total]);
 
   const [restartKey, setRestartKey] = useState(0);
 
   useEffect(() => {
-    if (reduce || paused || total <= 1) return;
+    if (reduce || paused || manuallyPaused || total <= 1) return;
     clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setCurrent((c) => (c + 1) % total);
     }, INTERVAL_MS);
     return () => clearInterval(timerRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reduce, paused, total, restartKey]);
+  }, [reduce, paused, manuallyPaused, total, restartKey]);
 
   function handleGoTo(i) {
     goTo(i);
@@ -346,15 +346,25 @@ export default function Hero() {
   const currentSlide = effectiveSlides[current] ?? effectiveSlides[0];
   const fallbackImage = bestsellers[0]?.image_url ?? null;
 
+  if (isLoading) {
+    return (
+      <section className="mx-auto mt-3 max-w-content px-4 sm:px-6" aria-label="Featured promotions">
+        <div className="h-[340px] animate-pulse rounded-sm bg-bg-sunken" />
+      </section>
+    );
+  }
+
   return (
     <section
       className="mx-auto mt-3 max-w-content px-4 sm:px-6"
+      aria-label="Featured promotions"
+      aria-roledescription="carousel"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
       onBlur={() => setPaused(false)}
     >
-      <div className="relative isolate overflow-hidden rounded-sm border border-line-subtle bg-gradient-to-r from-[#F2F7FE] to-white shadow-sm">
+      <div className="relative isolate overflow-hidden rounded-sm border border-line-subtle bg-gradient-to-r from-accent/4 to-bg-elevated shadow-sm">
         {/* Slides — crossfade via AnimatePresence */}
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
@@ -363,12 +373,20 @@ export default function Hero() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: duration.base, ease: ease.standard }}
+            aria-live={paused || manuallyPaused ? 'polite' : 'off'}
+            aria-atomic="true"
           >
-            {(currentSlide.kind === 'sale' || currentSlide._isFallback) ? (
-              <SaleSlide slide={currentSlide} fallbackImage={fallbackImage} />
-            ) : (
-              <PhotoSlide slide={currentSlide} />
-            )}
+            <div
+              role="group"
+              aria-roledescription="slide"
+              aria-label={`Slide ${current + 1} of ${total}`}
+            >
+              {(currentSlide.kind === 'sale' || currentSlide._isFallback) ? (
+                <SaleSlide slide={currentSlide} fallbackImage={fallbackImage} />
+              ) : (
+                <PhotoSlide slide={currentSlide} />
+              )}
+            </div>
           </motion.div>
         </AnimatePresence>
 
@@ -381,9 +399,23 @@ export default function Hero() {
         )}
       </div>
 
-      {/* Dot indicators */}
+      {/* Dot indicators + pause/play toggle */}
       {total > 1 && (
-        <Dots count={total} active={current} onGo={handleGoTo} />
+        <div className="flex items-center justify-center gap-3 py-2">
+          <Dots count={total} active={current} onGo={handleGoTo} />
+          <button
+            type="button"
+            aria-label={manuallyPaused ? 'Play slideshow' : 'Pause slideshow'}
+            onClick={() => setManuallyPaused((mp) => !mp)}
+            className="grid size-6 place-items-center rounded-full text-ink-tertiary transition-colors hover:text-ink-primary focus-visible:focus-ring"
+          >
+            {manuallyPaused ? (
+              <Play className="size-3.5" aria-hidden="true" />
+            ) : (
+              <Pause className="size-3.5" aria-hidden="true" />
+            )}
+          </button>
+        </div>
       )}
     </section>
   );

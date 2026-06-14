@@ -26,8 +26,8 @@ export default function FreeShippingNudge({ subtotal }) {
       className={
         'flex items-center gap-2 rounded-sm border px-3 py-2 text-xs ' +
         (unlocked
-          ? 'border-success/30 bg-success/10 text-success'
-          : 'border-accent/30 bg-accent/10 text-accent')
+          ? 'border-success/30 bg-success/12 text-success'
+          : 'border-accent/30 bg-accent/12 text-accent')
       }
     >
       {unlocked ? (

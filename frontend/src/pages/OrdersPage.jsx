@@ -10,6 +10,7 @@ import {
   Undo2,
   Banknote,
   MapPin,
+  AlertTriangle,
 } from 'lucide-react';
 import { apiClient } from '@/services/apiClient.js';
 import { Page } from '@/components/layout/Page.jsx';
@@ -90,6 +91,8 @@ function TrackingDisclosure({ order }) {
     <div className="mt-3 rounded-sm border border-line-subtle bg-bg-sunken px-3 py-2.5">
       <button
         type="button"
+        aria-expanded={open}
+        aria-label={open ? 'Collapse tracking' : 'Show tracking'}
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between gap-2 text-left focus-visible:focus-ring"
       >
@@ -153,15 +156,16 @@ function useMyOrders() {
 }
 
 function ReturnsSummary() {
-  const { data: returns, isLoading } = useMyReturns();
+  const { data: returns, isLoading, isError } = useMyReturns();
   if (isLoading) return null;
+  if (isError) return <p className="mt-4 text-xs text-danger">Couldn't load returns.</p>;
   if (!returns || returns.length === 0) return null;
 
   return (
     <div className="mt-6 rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
       {/* Header */}
       <div className="flex items-center gap-2.5 border-b border-line-subtle px-4 py-3">
-        <span className="grid size-7 shrink-0 place-items-center rounded-sm bg-accent/10 text-accent">
+        <span className="grid size-7 shrink-0 place-items-center rounded-sm bg-accent/12 text-accent">
           <Undo2 className="size-4" aria-hidden="true" />
         </span>
         <h2 className="text-sm font-semibold text-ink-primary">Your returns</h2>
@@ -198,7 +202,7 @@ function ReturnsSummary() {
 
 export default function OrdersPage() {
   const user = useAuthStore((s) => s.user);
-  const { data, isLoading } = useMyOrders();
+  const { data, isLoading, isError, refetch } = useMyOrders();
   const orders = data ?? [];
   const [returnOrder, setReturnOrder] = useState(null);
 
@@ -218,7 +222,15 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <EmptyState
+          icon={AlertTriangle}
+          iconTone="danger"
+          title="Couldn't load your orders"
+          description="Something went wrong. Please try again."
+          action={<Button size="sm" onClick={() => refetch()}>Retry</Button>}
+        />
+      ) : isLoading ? (
         <div className="flex flex-col gap-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-32 rounded-sm" />
@@ -249,9 +261,9 @@ export default function OrdersPage() {
                 {/* Flipkart-style order card: white block, left accent strip on delivered */}
                 <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
                   {/* Top meta row */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-subtle bg-bg-sunken px-4 py-2.5">
-                    <div className="flex items-center gap-3">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-tertiary">
+                  <div className="flex flex-col gap-1 border-b border-line-subtle bg-bg-sunken px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="max-w-[8rem] truncate text-[11px] font-semibold uppercase tracking-wider text-ink-tertiary sm:max-w-none">
                         Order #{o.id}
                       </span>
                       <Badge tone={badgeTone} size="md" className="capitalize">
@@ -262,13 +274,13 @@ export default function OrdersPage() {
                         o.status !== 'delivered' &&
                         o.status !== 'cancelled' &&
                         o.status !== 'refunded' && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-warning/12 px-2 py-0.5 text-[10px] font-semibold text-warning">
                             <Banknote className="size-3" aria-hidden="true" />
                             {formatPrice(o.cod_balance, o.currency)} COD
                           </span>
                         )}
                     </div>
-                    <span className="text-[11px] text-ink-tertiary">
+                    <span className="shrink-0 text-[11px] text-ink-tertiary">
                       {new Date(o.created_at).toLocaleDateString(undefined, {
                         day: 'numeric',
                         month: 'short',
@@ -282,18 +294,32 @@ export default function OrdersPage() {
                       {/* Item thumbnails + names */}
                       <div className="flex min-w-0 flex-1 flex-col gap-2">
                         {o.items.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex gap-2 overflow-x-auto pb-0.5">
                             {o.items.slice(0, 3).map((it, idx) => (
-                              <div key={idx} className="flex items-center gap-2">
-                                {/* Thumbnail placeholder */}
+                              <div
+                                key={it.id ?? it.product_id ?? idx}
+                                className={`flex shrink-0 items-center gap-2${idx === 2 ? ' hidden sm:flex' : ''}`}
+                              >
+                                {/* Thumbnail */}
                                 <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-line-subtle bg-bg-sunken">
                                   {it.image_url ? (
-                                    <img
-                                      src={it.image_url}
-                                      alt=""
-                                      loading="lazy"
-                                      className="size-full object-contain"
-                                    />
+                                    <>
+                                      <img
+                                        src={it.image_url}
+                                        alt={it.name || 'Product'}
+                                        loading="lazy"
+                                        className="size-full object-contain"
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = 'none';
+                                          e.currentTarget.nextElementSibling?.removeAttribute('hidden');
+                                        }}
+                                      />
+                                      <Package
+                                        hidden
+                                        className="size-5 text-ink-tertiary"
+                                        aria-hidden="true"
+                                      />
+                                    </>
                                   ) : (
                                     <Package className="size-5 text-ink-tertiary" aria-hidden="true" />
                                   )}

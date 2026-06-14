@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, ShoppingBag, Check } from 'lucide-react';
+import { Plus, ShoppingBag, Check, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { useAddToCart } from '@/features/cart/hooks.js';
 import { useAuthStore } from '@/features/auth/store.js';
@@ -15,6 +15,7 @@ export function FrequentlyBoughtTogether({ product, related, isLoading }) {
   const user = useAuthStore((s) => s.user);
   const addToCart = useAddToCart();
   const [doneAt, setDoneAt] = useState(0);
+  const [addError, setAddError] = useState(null);
 
   const companions = useMemo(
     () => (related || []).filter((p) => p.stock > 0).slice(0, 2),
@@ -56,9 +57,14 @@ export function FrequentlyBoughtTogether({ product, related, isLoading }) {
       window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
       return;
     }
+    setAddError(null);
     const ids = all.filter((p) => selected.has(p.id)).map((p) => p.id);
-    await Promise.all(ids.map((productId) => addToCart.mutateAsync({ productId, quantity: 1 })));
-    setDoneAt(Date.now());
+    try {
+      await Promise.all(ids.map((productId) => addToCart.mutateAsync({ productId, quantity: 1 })));
+      setDoneAt(Date.now());
+    } catch {
+      setAddError('Couldn’t add items — please try again.');
+    }
   }
 
   return (
@@ -69,9 +75,9 @@ export function FrequentlyBoughtTogether({ product, related, isLoading }) {
 
       <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated">
         {/* Product tiles row */}
-        <div className="flex flex-wrap items-center gap-4 border-b border-line-subtle p-4">
+        <div className="flex items-center gap-3 overflow-x-auto pb-1 sm:flex-wrap sm:gap-4 sm:overflow-visible border-b border-line-subtle p-4">
           {all.map((p, i) => (
-            <div key={p.id} className="flex items-center gap-3">
+            <div key={p.id} className="flex shrink-0 items-center gap-3">
               <BundleTile
                 product={p}
                 isSource={i === 0}
@@ -104,7 +110,12 @@ export function FrequentlyBoughtTogether({ product, related, isLoading }) {
             disabled={selectedCount === 0 || addToCart.isPending}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-sm bg-accent px-5 text-sm font-semibold text-white transition-[background-color] hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 disabled:pointer-events-none"
           >
-            {doneAt ? (
+            {addToCart.isPending ? (
+              <>
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                Adding…
+              </>
+            ) : doneAt ? (
               <>
                 <Check className="size-4" aria-hidden="true" />
                 Added to Cart
@@ -117,6 +128,9 @@ export function FrequentlyBoughtTogether({ product, related, isLoading }) {
             )}
           </button>
         </div>
+        {addError && (
+          <p className="px-4 pb-3 text-xs text-danger">{addError}</p>
+        )}
       </div>
     </section>
   );

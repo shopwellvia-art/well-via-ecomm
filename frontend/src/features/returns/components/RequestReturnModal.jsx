@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Undo2, AlertTriangle, Check, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/Card.jsx';
@@ -31,6 +31,29 @@ export default function RequestReturnModal({ order, onClose, onCreated }) {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState(null);
   const create = useCreateReturn();
+
+  // a11y: ref to the close button so we can move focus here on open
+  const closeButtonRef = useRef(null);
+  // a11y: remember what had focus before the modal opened so we can restore it on close
+  const previousFocusRef = useRef(null);
+
+  // Focus management: capture trigger, move focus into dialog on mount, restore on unmount
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement;
+    closeButtonRef.current?.focus();
+    return () => {
+      previousFocusRef.current?.focus();
+    };
+  }, []);
+
+  // Keyboard: close on Escape while not submitting
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape' && !create.isPending) onClose?.();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [create.isPending, onClose]);
 
   function setQty(itemId, value) {
     setQtys((q) => ({ ...q, [itemId]: Math.max(0, value) }));
@@ -93,11 +116,12 @@ export default function RequestReturnModal({ order, onClose, onCreated }) {
               </p>
             </div>
             <button
+              ref={closeButtonRef}
               type="button"
               onClick={onClose}
               aria-label="Close"
               disabled={create.isPending}
-              className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring disabled:pointer-events-none"
+              className="grid size-11 shrink-0 place-items-center rounded-lg text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring disabled:pointer-events-none"
             >
               <X className="size-4" aria-hidden="true" />
             </button>
@@ -138,9 +162,10 @@ export default function RequestReturnModal({ order, onClose, onCreated }) {
                         type="number"
                         min={0}
                         max={it.quantity}
+                        step={1}
                         value={qtys[it.id] ?? 0}
                         onChange={(e) => setQty(it.id, Number(e.target.value))}
-                        className="w-20 rounded-lg border border-line-subtle bg-bg-elevated px-2.5 py-1.5 text-right text-sm text-ink-primary transition-colors hover:border-line-strong focus:border-accent focus:outline-none nums"
+                        className="w-20 rounded-lg border border-line-subtle bg-bg-elevated px-2.5 py-2 text-right text-sm text-ink-primary transition-colors hover:border-line-strong focus:border-accent focus:outline-none nums"
                       />
                     </div>
                   </li>
