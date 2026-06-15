@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowRight, Flame, Clock, Loader2 } from 'lucide-react';
+import { Flame, Clock, Loader2 } from 'lucide-react';
 import { SaleCountdown, useSaleTarget } from './SaleCountdown.jsx';
 import { useProducts } from '@/features/products/hooks.js';
 import { useAddToCart } from '@/features/cart/hooks.js';
@@ -62,27 +62,23 @@ export default function DealsBanner() {
         transition={{ duration: 0.4 }}
         className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm"
       >
-        {/* Blue header bar */}
-        <div className="flex flex-col gap-3 bg-accent px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <Flame className="size-5 text-white" aria-hidden="true" />
-            <h2 className="text-base font-bold text-white">Deals of the Day</h2>
+        {/* Orange gradient header bar — matches mock */}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 bg-gradient-to-r from-cta to-[#ff8a4d] px-5 py-4">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-white">
+            <Flame className="size-5 fill-white text-white" aria-hidden="true" />
+            Deals of the Day
+          </h2>
+          <div className="flex items-center gap-2 text-white/90">
+            <span className="text-[11px] font-semibold uppercase tracking-wide">Ends in</span>
+            <SaleCountdown target={target} tone="light" compact />
           </div>
-          {/* gap-2 on mobile keeps countdown and View All from touching;
-              py-2 on the link ensures a ≥44 px tap target on narrow screens */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-            <div className="flex items-center gap-2">
-              <Clock className="size-4 text-white/80" aria-hidden="true" />
-              <span className="text-xs font-medium text-white/80 uppercase tracking-wide">Ends in</span>
-              <SaleCountdown target={target} tone="light" />
-            </div>
-            <Link
-              to="/products"
-              className="inline-flex items-center gap-1 rounded-xs border border-white/40 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/15 focus-visible:focus-ring"
-            >
-              View All ›
-            </Link>
-          </div>
+          <Link
+            to="/products"
+            className="ml-auto inline-flex h-8 items-center gap-1 rounded-sm bg-white px-4 text-xs font-bold uppercase tracking-wide text-cta transition-colors hover:bg-white/90 focus-visible:focus-ring"
+          >
+            View all
+            <Clock className="size-3" aria-hidden="true" />
+          </Link>
         </div>
 
         {/* Product rail */}

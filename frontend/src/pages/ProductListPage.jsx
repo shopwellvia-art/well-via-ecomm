@@ -124,7 +124,7 @@ export default function ProductListPage() {
       <div className="flex gap-0 lg:gap-5">
         {/* ── FILTER SIDEBAR (desktop) ── */}
         <aside className="hidden lg:block w-60 xl:w-64 shrink-0">
-          <div className="sticky top-20 rounded-sm border border-line-subtle bg-bg-elevated shadow-sm overflow-hidden">
+          <div className="sticky top-[120px] rounded-lg border border-line-subtle bg-bg-elevated shadow-sm overflow-hidden">
             {/* Sidebar header */}
             <div className="flex items-center justify-between border-b border-line-subtle px-4 py-3">
               <span className="text-sm font-semibold text-ink-primary">Filters</span>
@@ -199,7 +199,7 @@ export default function ProductListPage() {
         {/* ── RIGHT COLUMN ── */}
         <div className="min-w-0 flex-1">
           {/* SORT BAR */}
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-line-subtle bg-bg-elevated px-4 py-3 shadow-sm">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line-subtle bg-bg-elevated px-4 py-3 shadow-sm">
             {/* Left: count + mobile filter button */}
             <div className="flex items-center gap-3">
               {/* Mobile filter trigger */}
@@ -247,10 +247,10 @@ export default function ProductListPage() {
                     type="button"
                     onClick={() => { setSortBy(opt.value); setPage(1); }}
                     className={cn(
-                      'shrink-0 rounded-full px-3 py-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                      'shrink-0 rounded-sm px-3 py-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                       sortBy === opt.value
                         ? 'bg-accent text-white'
-                        : 'text-ink-secondary hover:text-ink-primary',
+                        : 'text-ink-secondary hover:text-accent',
                     )}
                   >
                     {opt.label}

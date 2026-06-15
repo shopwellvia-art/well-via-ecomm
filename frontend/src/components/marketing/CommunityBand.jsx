@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Mail, ArrowRight, Check } from 'lucide-react';
+import { Mail, Check } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 
 /**
@@ -34,18 +34,20 @@ export default function CommunityBand() {
         whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.3 }}
         transition={{ duration: 0.4 }}
-        className="overflow-hidden rounded-sm bg-accent"
+        className="overflow-hidden rounded-sm bg-bg-elevated shadow-sm"
       >
-        <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8 sm:py-6">
-          {/* Left — copy */}
-          <div className="flex items-center gap-4">
-            <Mail className="size-8 shrink-0 text-white/80" aria-hidden="true" />
+        <div className="flex flex-col items-center gap-4 px-6 py-8 text-center sm:flex-row sm:justify-between sm:text-left sm:px-8">
+          {/* Left — icon + copy */}
+          <div className="flex items-center gap-3">
+            <span className="grid size-11 shrink-0 place-items-center rounded-sm bg-accent/10 text-accent">
+              <Mail className="size-[22px]" aria-hidden="true" />
+            </span>
             <div>
-              <h2 className="text-base font-bold text-white">
+              <h3 className="text-base font-bold text-ink-primary">
                 Get exclusive deals in your inbox
-              </h2>
-              <p className="mt-0.5 text-sm text-white/75">
-                Subscribe and never miss a sale. No spam — unsubscribe anytime.
+              </h3>
+              <p className="mt-0.5 text-sm text-ink-tertiary">
+                No spam — unsubscribe anytime.
               </p>
             </div>
           </div>
@@ -55,7 +57,7 @@ export default function CommunityBand() {
             onSubmit={onSubmit}
             noValidate
             aria-label="Subscribe to newsletter"
-            className="relative flex shrink-0 flex-col gap-1.5 sm:flex-row sm:items-start"
+            className="relative flex w-full max-w-md shrink-0 flex-col gap-1.5 sm:flex-row sm:items-start"
           >
             <label htmlFor="community-email" className="sr-only">
               Email address
@@ -73,14 +75,12 @@ export default function CommunityBand() {
               aria-invalid={error ? 'true' : undefined}
               aria-describedby="community-email-msg"
               className={cn(
-                'h-10 w-full rounded-xs border bg-white/10 px-3 text-sm text-white',
-                'placeholder:text-white/50',
+                'h-11 flex-1 rounded-sm border bg-bg-sunken px-4 text-sm text-ink-primary outline-none',
+                'placeholder:text-ink-tertiary',
                 'transition-colors duration-150',
-                'focus:outline-none focus-visible:bg-white/15',
                 error
                   ? 'border-danger/60'
-                  : 'border-white/30 focus-visible:border-white/60',
-                'sm:w-60',
+                  : 'border-line-strong focus:border-accent',
               )}
             />
 
@@ -88,10 +88,10 @@ export default function CommunityBand() {
               type="submit"
               disabled={submitted}
               className={cn(
-                'inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xs',
-                'bg-white px-5 text-sm font-semibold text-accent',
-                'transition-colors duration-150 hover:bg-white/90',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white',
+                'inline-flex h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm',
+                'bg-accent px-6 text-sm font-semibold text-white',
+                'transition-colors duration-150 hover:bg-accent-hover',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
               )}
             >
               {submitted ? (
@@ -100,10 +100,7 @@ export default function CommunityBand() {
                   Subscribed
                 </>
               ) : (
-                <>
-                  Subscribe
-                  <ArrowRight className="size-4" aria-hidden="true" />
-                </>
+                'Subscribe'
               )}
             </button>
 
@@ -113,7 +110,7 @@ export default function CommunityBand() {
               aria-live="polite"
               className={cn(
                 'absolute -bottom-5 left-0 min-h-[1rem] text-xs sm:bottom-auto sm:top-full sm:mt-1',
-                error ? 'text-white/90' : submitted ? 'text-white/80' : 'sr-only',
+                error ? 'text-danger' : submitted ? 'text-rating' : 'sr-only',
               )}
             >
               {error || (submitted ? "You're in! Check your inbox soon." : '')}

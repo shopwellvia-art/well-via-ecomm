@@ -14,20 +14,50 @@ const INTERVAL_MS = 5000;
 
 // --- Slide renderers ---
 
-function SaleSlide({ slide, fallbackImage }) {
+/* Slide background presets — used when no backend override is present */
+const SLIDE_PRESETS = [
+  {
+    gradient: 'linear-gradient(105deg,#0d3a8a 0%,#2874F0 58%,#5C97F5 100%)',
+    eyebrowBg: 'bg-white/15',
+    eyebrowText: 'text-white',
+    headingHighlight: 'text-[#FFE11B]',
+    ctaVariant: 'white-on-blue', // white bg, accent text
+    cta2Variant: 'ghost-white',
+  },
+  {
+    gradient: 'linear-gradient(105deg,#101826 0%,#1f2d45 60%,#324a73 100%)',
+    eyebrowBg: 'bg-[#FFE11B]/20',
+    eyebrowText: 'text-[#FFE11B]',
+    headingHighlight: 'text-[#FFE11B]',
+    ctaVariant: 'cta-solid', // orange bg
+    cta2Variant: null,
+  },
+  {
+    gradient: 'linear-gradient(105deg,#7a3b00 0%,#c0560f 55%,#FB641E 100%)',
+    eyebrowBg: 'bg-white/15',
+    eyebrowText: 'text-white',
+    headingHighlight: 'text-white',
+    ctaVariant: 'white-on-cta', // white bg, cta text
+    cta2Variant: null,
+  },
+];
+
+function SaleSlide({ slide, fallbackImage, slideIndex = 0 }) {
   const reduce = useReducedMotion();
   const saleTarget = useSaleTarget();
 
-  const heading = slide.heading ?? 'Shopping, refined to a feeling.';
+  const preset = SLIDE_PRESETS[slideIndex % SLIDE_PRESETS.length];
+
+  const heading = slide.heading ?? 'Up to 60% off on audio, wearables & more';
   const subtext =
     slide.subtext ??
-    'A premium store built for speed and delight. Curated essentials, fair prices, and a checkout that just works.';
-  const ctaLabel = slide.cta_label ?? 'Shop the collection';
+    'Free delivery, 7-day returns and no-cost EMI on top brands — for a limited time.';
+  const ctaLabel = slide.cta_label ?? 'Shop the sale';
   const ctaHref = slide.cta_href ?? '/products';
 
-  const eyebrow = slide.eyebrow == null ? 'Mega season sale is live' : slide.eyebrow;
+  const eyebrow = slide.eyebrow == null ? 'Mega Season Sale · Live now' : slide.eyebrow;
 
-  const cta2Label = slide.cta2_label == null ? 'Browse new arrivals' : slide.cta2_label;
+  const cta2Label = slide.cta2_label == null ? 'New arrivals' : slide.cta2_label;
   const cta2Href = slide.cta2_href || '/products?sort=newest';
 
   const perks = slide.perks == null ? DEFAULT_PERKS : slide.perks;
@@ -51,37 +81,56 @@ function SaleSlide({ slide, fallbackImage }) {
   })();
   const effectiveCountdown = countdownTarget ?? (slide._isFallback ? saleTarget : null);
 
+  // CTA button styles per preset variant
+  function ctaClass(variant) {
+    if (variant === 'white-on-blue')
+      return 'inline-flex h-11 items-center gap-2 rounded-sm bg-white px-7 text-sm font-bold uppercase tracking-wide text-accent shadow-md transition-transform hover:-translate-y-0.5';
+    if (variant === 'cta-solid')
+      return 'inline-flex h-11 items-center gap-2 rounded-sm bg-cta px-7 text-sm font-bold uppercase tracking-wide text-white shadow-md transition-transform hover:-translate-y-0.5';
+    if (variant === 'white-on-cta')
+      return 'inline-flex h-11 items-center gap-2 rounded-sm bg-white px-7 text-sm font-bold uppercase tracking-wide text-cta shadow-md transition-transform hover:-translate-y-0.5';
+    return 'inline-flex h-11 items-center gap-2 rounded-sm bg-white px-7 text-sm font-bold uppercase tracking-wide text-accent shadow-md transition-transform hover:-translate-y-0.5';
+  }
+
+  const slideBg = slide.gradient ?? preset.gradient;
+
   return (
-    <div className="grid grid-cols-1 items-center gap-0 min-h-[240px] lg:grid-cols-2 lg:min-h-[340px]">
+    <div
+      className="relative flex items-center overflow-hidden min-h-[224px] sm:min-h-[300px]"
+      style={{ background: slideBg }}
+    >
       {/* Left — copy */}
-      <div className="flex flex-col items-start px-6 py-8 sm:px-8 sm:py-10">
+      <div className="relative z-10 flex-1 px-6 py-8 sm:px-12 sm:py-12">
         {eyebrow && (
-          <span className="inline-flex items-center gap-1.5 rounded-xs bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">
-            <Flame className="size-3.5" aria-hidden="true" />
+          <span
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-xs px-3 py-1 text-[11px] font-semibold uppercase tracking-wide',
+              preset.eyebrowBg,
+              preset.eyebrowText,
+            )}
+          >
+            <Flame className="size-3 opacity-80" aria-hidden="true" />
             {eyebrow}
           </span>
         )}
 
-        <h2 className="mt-4 max-w-sm text-2xl font-bold leading-tight text-ink-primary sm:text-3xl">
+        <h2 className="mt-4 max-w-md text-3xl font-bold leading-tight text-white sm:text-[2.6rem]">
           {heading}
         </h2>
 
-        <p className="mt-2 max-w-xs text-sm leading-relaxed text-ink-secondary">
+        <p className="mt-2 max-w-sm text-sm text-white/85">
           {subtext}
         </p>
 
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Link
-            to={ctaHref}
-            className={cn(buttonVariants({ variant: 'primary', size: 'md' }))}
-          >
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link to={ctaHref} className={ctaClass(preset.ctaVariant)}>
             {ctaLabel}
             <ArrowRight className="size-4" aria-hidden="true" />
           </Link>
-          {cta2Label && (
+          {preset.cta2Variant && cta2Label && (
             <Link
               to={cta2Href}
-              className={cn(buttonVariants({ variant: 'outline', size: 'md' }))}
+              className="inline-flex h-11 items-center rounded-sm border border-white/45 px-6 text-sm font-semibold text-white transition-colors hover:bg-white/10"
             >
               {cta2Label}
             </Link>
@@ -95,9 +144,9 @@ function SaleSlide({ slide, fallbackImage }) {
               return (
                 <li
                   key={`${label}-${i}`}
-                  className="inline-flex items-center gap-1.5 text-xs text-ink-secondary"
+                  className="inline-flex items-center gap-1.5 text-xs text-white/80"
                 >
-                  <Icon className="size-3.5 text-accent" aria-hidden="true" />
+                  <Icon className="size-3.5 text-white/70" aria-hidden="true" />
                   {label}
                 </li>
               );
@@ -108,27 +157,21 @@ function SaleSlide({ slide, fallbackImage }) {
         {effectiveCountdown && (
           <div className="mt-5 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
             {countdownLabel && (
-              <span className="text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-white/70">
                 {countdownLabel}:
               </span>
             )}
-            <SaleCountdown target={effectiveCountdown} />
+            <SaleCountdown target={effectiveCountdown} tone="light" />
           </div>
         )}
       </div>
 
-      {/* Right — product image */}
-      <div className="relative flex items-center justify-center bg-gradient-to-br from-accent/5 to-bg-elevated min-h-[180px] lg:min-h-0 lg:h-full">
+      {/* Right — product image (hidden on mobile) */}
+      <div className="relative hidden w-[42%] items-center justify-center self-stretch sm:flex">
         {/* Sale badge */}
         {slide.badge_text && (
-          <div
-            className="absolute right-4 top-4 z-10 grid size-20 place-items-center rounded-full text-center text-white shadow-md bg-accent"
-          >
-            <div>
-              <p className="px-1 text-[10px] font-extrabold uppercase leading-tight tracking-wide">
-                {slide.badge_text}
-              </p>
-            </div>
+          <div className="absolute right-8 top-8 z-10 grid size-[88px] place-items-center rounded-full bg-cta text-center text-[11px] font-extrabold uppercase leading-tight text-white shadow-lg">
+            <p className="px-1">{slide.badge_text}</p>
           </div>
         )}
 
@@ -138,13 +181,13 @@ function SaleSlide({ slide, fallbackImage }) {
               src={image}
               alt={slide.alt || ''}
               onError={() => setImgFailed(true)}
-              className="h-56 w-auto max-w-xs object-contain drop-shadow-lg will-change-transform sm:h-64 lg:h-72"
+              className="h-56 w-auto max-w-xs object-contain drop-shadow-xl will-change-transform sm:h-64 lg:h-72"
               animate={reduce ? undefined : { y: [0, -8, 0] }}
               transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
             />
           </div>
         ) : (
-          <div className="grid size-40 place-items-center rounded-full bg-accent/12 text-5xl font-bold text-accent/40">
+          <div className="grid size-40 place-items-center rounded-full bg-white/10 text-5xl font-bold text-white/30">
             ✦
           </div>
         )}
@@ -218,7 +261,11 @@ function PhotoSlide({ slide }) {
 
 function Dots({ count, active, onGo }) {
   return (
-    <div className="flex items-center justify-center gap-1.5 py-2" role="tablist" aria-label="Slide indicators">
+    <div
+      className="absolute inset-x-0 bottom-3 z-10 flex items-center justify-center gap-1.5"
+      role="tablist"
+      aria-label="Slide indicators"
+    >
       {Array.from({ length: count }, (_, i) => (
         <button
           key={i}
@@ -227,10 +274,10 @@ function Dots({ count, active, onGo }) {
           aria-label={`Go to slide ${i + 1}`}
           onClick={() => onGo(i)}
           className={cn(
-            'h-1.5 rounded-full transition-all duration-300 focus-visible:focus-ring',
+            'h-1.5 rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white',
             i === active
-              ? 'w-5 bg-accent'
-              : 'w-1.5 bg-ink-tertiary/40 hover:bg-ink-tertiary/70',
+              ? 'w-6 bg-white'
+              : 'w-1.5 bg-white/40 hover:bg-white/70',
           )}
         />
       ))}
@@ -249,14 +296,13 @@ function NavArrow({ direction, onClick, disabled }) {
       onClick={onClick}
       className={cn(
         'absolute top-1/2 z-10 -translate-y-1/2',
-        direction === 'prev' ? 'left-2' : 'right-2',
-        'grid size-11 place-items-center rounded-full',
+        direction === 'prev' ? 'left-3' : 'right-3',
+        'grid size-10 place-items-center rounded-full',
         'bg-white/90 text-ink-primary shadow-sm',
         'border border-line-subtle',
-        'transition-opacity duration-150 hover:opacity-100 hover:shadow-md',
-        'focus-visible:focus-ring',
+        'transition hover:bg-white hover:shadow-md',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white',
         'disabled:pointer-events-none disabled:opacity-30',
-        'opacity-60',
       )}
     >
       <Icon className="size-4" aria-hidden="true" />
@@ -270,7 +316,6 @@ export default function Hero() {
   const reduce = useReducedMotion();
   const { data: slides = [], isLoading } = useHeroSlides();
   const { data: bestsellers = [] } = useBestsellers(4);
-  const saleTarget = useSaleTarget();
 
   const effectiveSlides = slides.length > 0
     ? slides
@@ -349,7 +394,7 @@ export default function Hero() {
   if (isLoading) {
     return (
       <section className="mx-auto mt-3 max-w-content px-4 sm:px-6" aria-label="Featured promotions">
-        <div className="h-[340px] animate-pulse rounded-sm bg-bg-sunken" />
+        <div className="h-[224px] animate-pulse rounded-sm bg-bg-sunken sm:h-[300px]" />
       </section>
     );
   }
@@ -364,7 +409,8 @@ export default function Hero() {
       onFocus={() => setPaused(true)}
       onBlur={() => setPaused(false)}
     >
-      <div className="relative isolate overflow-hidden rounded-sm border border-line-subtle bg-gradient-to-r from-accent/4 to-bg-elevated shadow-sm">
+      {/* Carousel container — dots and arrows live inside here */}
+      <div className="relative isolate overflow-hidden rounded-sm shadow-sm">
         {/* Slides — crossfade via AnimatePresence */}
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
@@ -382,7 +428,7 @@ export default function Hero() {
               aria-label={`Slide ${current + 1} of ${total}`}
             >
               {(currentSlide.kind === 'sale' || currentSlide._isFallback) ? (
-                <SaleSlide slide={currentSlide} fallbackImage={fallbackImage} />
+                <SaleSlide slide={currentSlide} fallbackImage={fallbackImage} slideIndex={current} />
               ) : (
                 <PhotoSlide slide={currentSlide} />
               )}
@@ -390,33 +436,35 @@ export default function Hero() {
           </motion.div>
         </AnimatePresence>
 
-        {/* Prev / Next arrows */}
+        {/* Prev / Next arrows — white circular, always visible */}
         {total > 1 && (
           <>
             <NavArrow direction="prev" onClick={handlePrev} />
             <NavArrow direction="next" onClick={handleNext} />
           </>
         )}
-      </div>
 
-      {/* Dot indicators + pause/play toggle */}
-      {total > 1 && (
-        <div className="flex items-center justify-center gap-3 py-2">
+        {/* Dot indicators — overlaid at bottom of slide */}
+        {total > 1 && (
           <Dots count={total} active={current} onGo={handleGoTo} />
+        )}
+
+        {/* Pause / play toggle — small button top-right */}
+        {total > 1 && (
           <button
             type="button"
             aria-label={manuallyPaused ? 'Play slideshow' : 'Pause slideshow'}
             onClick={() => setManuallyPaused((mp) => !mp)}
-            className="grid size-6 place-items-center rounded-full text-ink-tertiary transition-colors hover:text-ink-primary focus-visible:focus-ring"
+            className="absolute right-14 top-3 z-20 grid size-6 place-items-center rounded-full bg-black/25 text-white transition-colors hover:bg-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             {manuallyPaused ? (
-              <Play className="size-3.5" aria-hidden="true" />
+              <Play className="size-3" aria-hidden="true" />
             ) : (
-              <Pause className="size-3.5" aria-hidden="true" />
+              <Pause className="size-3" aria-hidden="true" />
             )}
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </section>
   );
 }

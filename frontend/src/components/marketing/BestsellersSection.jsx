@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
-import { TrendingUp, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/Button.jsx';
 import { useBestsellers } from '@/features/products/hooks.js';
 import { useAddToCart } from '@/features/cart/hooks.js';
@@ -57,16 +57,15 @@ export default function BestsellersSection({ limit = 8 }) {
         transition={{ duration: 0.4 }}
         className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm"
       >
-        {/* Section header */}
-        <div className="flex items-center justify-between border-b border-line-subtle px-5 py-3">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="size-4 text-accent" aria-hidden="true" />
-            <h2 className="text-sm font-bold text-ink-primary">Bestsellers</h2>
-            <span className="text-xs text-ink-secondary">Loved by customers</span>
+        {/* Section header — matches mock: larger title + subtitle + view all */}
+        <div className="flex items-center justify-between border-b border-line-subtle px-5 py-4">
+          <div>
+            <h2 className="text-lg font-bold text-ink-primary">Bestsellers</h2>
+            <p className="text-xs text-ink-tertiary">Loved by customers this week</p>
           </div>
           <Link
             to="/products?sort=bestsellers"
-            className="text-xs font-semibold text-accent transition-colors hover:text-accent-hover focus-visible:focus-ring"
+            className="text-sm font-semibold text-accent transition-colors hover:text-accent-hover focus-visible:focus-ring"
           >
             View all ›
           </Link>
@@ -79,7 +78,7 @@ export default function BestsellersSection({ limit = 8 }) {
               {Array.from({ length: limit }).map((_, i) => (
                 <div
                   key={i}
-                  className="flex h-[220px] w-40 shrink-0 animate-pulse flex-col gap-2 border-r border-line-subtle px-3 last:border-r-0"
+                  className="flex h-[220px] w-[200px] shrink-0 animate-pulse flex-col gap-2 border-r border-line-subtle px-3 last:border-r-0"
                 />
               ))}
             </div>
@@ -96,7 +95,7 @@ export default function BestsellersSection({ limit = 8 }) {
                 return (
                   <li
                     key={p.id}
-                    className="flex w-44 shrink-0 flex-col items-center border-r border-line-subtle px-3 py-3 last:border-r-0 transition-colors hover:bg-bg-sunken"
+                    className="flex w-[200px] shrink-0 snap-start flex-col items-center border-r border-line-subtle px-3 py-3 last:border-r-0 transition-colors hover:bg-bg-sunken"
                   >
                     <Link
                       to={`/products/${p.id}`}

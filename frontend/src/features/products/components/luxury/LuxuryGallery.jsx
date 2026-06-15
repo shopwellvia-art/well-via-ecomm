@@ -51,9 +51,8 @@ export function LuxuryGallery({ product }) {
   // No images at all — graceful gradient placeholder.
   if (images.length === 0) {
     return (
-      <div className="flex flex-col-reverse gap-4 lg:flex-row">
-        <div className="hidden lg:block lg:w-20 lg:shrink-0" />
-        <div className="aspect-square w-full overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated p-4">
+      <div className="flex gap-3">
+        <div className="aspect-square w-full overflow-hidden rounded-lg border border-line-subtle bg-bg-elevated p-4">
           <ProductMedia product={product} className="object-contain" eager />
         </div>
       </div>
@@ -95,12 +94,12 @@ export function LuxuryGallery({ product }) {
   }
 
   return (
-    <div className="flex flex-col-reverse gap-4 lg:flex-row lg:items-start">
-      {/* Thumbnail rail */}
+    <div className="flex gap-3">
+      {/* Thumbnail rail — vertical column of ~size-14 chips */}
       <div
         role="tablist"
         aria-label="Product images"
-        className="flex shrink-0 gap-2.5 overflow-x-auto pb-1 lg:w-20 lg:flex-col lg:overflow-visible lg:pb-0"
+        className="flex shrink-0 flex-col gap-2.5 overflow-y-auto"
       >
         {images.map((img, i) => {
           const vid = isVideo(img.url);
@@ -115,7 +114,7 @@ export function LuxuryGallery({ product }) {
               aria-label={`View ${vid ? 'video' : 'image'} ${i + 1}`}
               aria-selected={i === active}
               className={cn(
-                'relative size-16 shrink-0 overflow-hidden rounded-sm border bg-bg-elevated transition-all duration-200 focus-visible:focus-ring lg:size-20',
+                'relative size-14 shrink-0 overflow-hidden rounded-lg border bg-bg-elevated transition-all duration-200 focus-visible:focus-ring',
                 i === active
                   ? 'border-accent ring-1 ring-accent/40'
                   : 'border-line-subtle opacity-90 hover:opacity-100 hover:border-line-strong',
@@ -156,7 +155,7 @@ export function LuxuryGallery({ product }) {
           onKeyDown={onKeyDown}
           tabIndex={0}
           aria-label={`Product image ${active + 1} of ${images.length}`}
-          className="group relative aspect-square w-full select-none overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated p-4"
+          className="group relative aspect-square w-full select-none overflow-hidden rounded-lg border border-line-subtle bg-bg-elevated p-4"
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -227,7 +226,7 @@ export function LuxuryGallery({ product }) {
         )}
 
         {/* Dots (mobile) — interactive tab buttons for screen readers */}
-        <div role="tablist" aria-label="Image navigation" className="mt-3 flex justify-center gap-1.5 lg:hidden">
+        <div role="tablist" aria-label="Image navigation" className="mt-3 flex justify-center gap-1.5">
           {images.map((img, i) => (
             <button
               key={img.id}

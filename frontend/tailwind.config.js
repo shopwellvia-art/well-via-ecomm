@@ -125,13 +125,13 @@ export default {
         sm: ['0.875rem', { lineHeight: '1.57' }],
         xs: ['0.75rem', { lineHeight: '1.5', fontWeight: '500' }],
       },
-      // Flipkart is near-square — small radii everywhere.
+      // Flipkart marketplace, softened a touch for a premium feel (README deltas).
       borderRadius: {
-        xs: '2px',
-        sm: '4px',
-        md: '6px',
-        lg: '8px',
-        xl: '12px',
+        xs: '3px',
+        sm: '7px',
+        md: '9px',
+        lg: '12px',
+        xl: '16px',
       },
       boxShadow: {
         sm: 'var(--shadow-sm)',

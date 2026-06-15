@@ -3,10 +3,16 @@ import { listStagger, fadeUp } from '@/lib/motion.js';
 import { ProductCard } from './ProductCard.jsx';
 import { ProductCardSkeleton } from './ProductCardSkeleton.jsx';
 
-const GRID = 'grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-3 lg:grid-cols-4';
+// Two density variants. The list page (with its filter sidebar) tops out at 4
+// columns; the full-bleed home "Recommended" grid goes to 5.
+const GRID_COLS = {
+  4: 'grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4',
+  5: 'grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5',
+};
 
 /** Responsive product grid with staggered reveal and a matching skeleton state. */
-export function ProductGrid({ products = [], loading = false, onQuickAdd, skeletonCount = 8 }) {
+export function ProductGrid({ products = [], loading = false, onQuickAdd, skeletonCount = 8, columns = 4 }) {
+  const GRID = GRID_COLS[columns] ?? GRID_COLS[4];
   if (loading) {
     return (
       <div className={GRID}>

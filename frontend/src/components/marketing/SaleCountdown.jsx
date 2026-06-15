@@ -14,14 +14,43 @@ function remaining(target) {
 /**
  * Live sale countdown — ticks every second toward `target` (a ms timestamp).
  * `tone="light"` renders white-on-dark cells for use over dark banners.
+ * `compact` renders HH:MM:SS chip style (no labels, smaller cells) for the
+ *   Deals-of-the-Day orange header bar.
  */
-export function SaleCountdown({ target, className, tone = 'dark' }) {
+export function SaleCountdown({ target, className, tone = 'dark', compact = false }) {
   const [t, setT] = useState(() => remaining(target));
 
   useEffect(() => {
     const id = setInterval(() => setT(remaining(target)), 1000);
     return () => clearInterval(id);
   }, [target]);
+
+  if (compact) {
+    // HH:MM:SS chips — Flipkart Deals-of-the-Day style
+    const hh = String(t.h + t.d * 24).padStart(2, '0');
+    const mm = String(t.m).padStart(2, '0');
+    const ss = String(t.s).padStart(2, '0');
+    const chips = [hh, mm, ss];
+    return (
+      <div className={cn('flex items-center gap-1 font-bold nums', className)}>
+        {chips.map((v, i) => (
+          <span key={i} className="flex items-center gap-1">
+            <span
+              className={cn(
+                'grid h-7 min-w-[1.75rem] place-items-center rounded-xs px-1 text-sm tabular-nums',
+                tone === 'light' ? 'bg-white/20 text-white' : 'bg-bg-sunken text-ink-primary',
+              )}
+            >
+              {v}
+            </span>
+            {i < chips.length - 1 && (
+              <span className={tone === 'light' ? 'text-white/80' : 'text-ink-tertiary'}>:</span>
+            )}
+          </span>
+        ))}
+      </div>
+    );
+  }
 
   const cells = [
     ['Days', t.d],

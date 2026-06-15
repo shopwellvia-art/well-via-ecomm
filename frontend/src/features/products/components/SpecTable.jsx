@@ -1,8 +1,9 @@
 import { formatPrice } from '@/lib/utils.js';
 
 /**
- * Product specifications — Amazon-style striped key/value table.
- * Flat, no motion, clean border. All data derived from real product fields.
+ * Product specifications — Flipkart-style spec table.
+ * Each row has `border-b border-line-subtle`; first cell is `w-40 text-ink-tertiary`,
+ * second is `text-ink-primary`. No alternating stripe, clean white background.
  */
 export function SpecTable({ product, categoryName }) {
   const rows = [
@@ -15,31 +16,21 @@ export function SpecTable({ product, categoryName }) {
 
   return (
     <section className="mt-6" aria-label="Product specifications">
-      <div className="overflow-hidden rounded-sm border border-line-subtle">
-        <p className="border-b border-line-subtle bg-bg-elevated px-4 py-2.5 text-sm font-semibold text-ink-primary">
-          Product details
-        </p>
-        <table className="w-full text-sm">
-          <tbody>
-            {rows.map(([k, v], i) => (
-              <tr
-                key={k}
-                className={i % 2 === 0 ? 'bg-bg-elevated' : 'bg-bg-sunken'}
-              >
-                <th
-                  scope="row"
-                  className="w-2/5 border-r border-line-subtle px-4 py-2.5 text-left text-xs font-medium text-ink-secondary"
-                >
-                  {k}
-                </th>
-                <td className="px-4 py-2.5 text-xs text-ink-primary">
-                  <span className={k === 'Price' ? 'nums font-semibold' : undefined}>{v}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <h2 className="text-sm font-bold text-ink-primary">Product details</h2>
+      <table className="mt-2 w-full text-sm">
+        <tbody>
+          {rows.map(([k, v]) => (
+            <tr key={k}>
+              <td className="w-40 border-b border-line-subtle py-2.5 text-ink-tertiary align-top">
+                {k}
+              </td>
+              <td className="border-b border-line-subtle py-2.5 pl-3 text-ink-primary">
+                <span className={k === 'Price' ? 'nums font-semibold' : undefined}>{v}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </section>
   );
 }

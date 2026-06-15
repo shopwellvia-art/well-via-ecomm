@@ -96,13 +96,13 @@
     --glass-highlight: rgba(255, 255, 255, 0);
     --grid-line: rgba(0, 0, 0, 0.03);
 
-    /* Shadows — Flipkart is nearly flat; cards lift only a hair on hover. */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
-    --shadow-md: 0 1px 4px rgba(0, 0, 0, 0.1), 0 2px 10px rgba(0, 0, 0, 0.05);
-    --shadow-lg: 0 4px 18px rgba(0, 0, 0, 0.14);
+    /* Shadows — soft + diffuse for a premium marketplace feel (README deltas). */
+    --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.05), 0 1px 3px rgba(17, 24, 39, 0.05);
+    --shadow-md: 0 2px 8px rgba(17, 24, 39, 0.06), 0 8px 24px rgba(17, 24, 39, 0.05);
+    --shadow-lg: 0 12px 40px rgba(17, 24, 39, 0.13), 0 4px 12px rgba(17, 24, 39, 0.06);
 
-    /* Card hover lift — subtle */
-    --shadow-lift: 0 2px 14px rgba(0, 0, 0, 0.14);
+    /* Card hover lift — soft, diffuse */
+    --shadow-lift: 0 14px 34px rgba(17, 24, 39, 0.13), 0 3px 10px rgba(17, 24, 39, 0.06);
 
     /* Accent focus ring — Flipkart blue */
     --accent-glow: 0 0 0 3px rgba(40, 116, 240, 0.18);
@@ -290,6 +290,33 @@
   }
   .card-interactive:active {
     transform: translateY(-1px);
+  }
+
+  /* ─── Horizontal rail ───────────────────────────────────────────────────── */
+  /* Scroll-snapping horizontal strip with a hidden scrollbar. Used by the
+     category nav, deals / bestsellers / related rails. Arrow buttons (where
+     present) drive scrollBy(); on touch the rail scrolls directly. */
+  .rail {
+    scrollbar-width: none;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+  .rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ─── Flipkart-style rating pill ────────────────────────────────────────── */
+  .rating-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: var(--rating, #388e3c);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 3px 5px 3px 6px;
+    border-radius: 3px;
   }
 
   /* ─── Shimmer skeleton (base class) ─────────────────────────────────────── */

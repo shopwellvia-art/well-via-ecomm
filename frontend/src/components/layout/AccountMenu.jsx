@@ -12,7 +12,7 @@ import { authApi } from '@/features/auth/api.js';
  * - Signed in: an avatar button opening a menu with the email, an admin
  *   shortcut (admins only), and Sign out.
  */
-export default function AccountMenu() {
+export default function AccountMenu({ onAccent = false }) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
@@ -91,9 +91,19 @@ export default function AccountMenu() {
     }
   }
 
-  // Signed out: a dark icon + "Login" label, consistent with the other
-  // white-header actions (Wishlist / Cart).
+  // Signed out: on the blue chrome this is the Flipkart white "Login" pill;
+  // elsewhere a dark icon + label consistent with other header actions.
   if (!user) {
+    if (onAccent) {
+      return (
+        <Link
+          to="/login"
+          className="hidden h-8 items-center rounded-sm bg-white px-6 text-sm font-semibold text-accent shadow-sm transition-colors hover:bg-white/90 focus-visible:focus-ring sm:inline-flex"
+        >
+          Login
+        </Link>
+      );
+    }
     return (
       <Link
         to="/login"
@@ -139,12 +149,25 @@ export default function AccountMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Account menu"
-        className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-ink-secondary transition-colors hover:text-accent focus-visible:focus-ring"
+        className={cn(
+          'flex items-center gap-2 rounded-sm px-2 py-1.5 transition-colors focus-visible:focus-ring',
+          onAccent ? 'text-white hover:text-white' : 'text-ink-secondary hover:text-accent',
+        )}
       >
-        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-accent text-xs font-bold text-white">
+        <span
+          className={cn(
+            'grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold',
+            onAccent ? 'bg-white text-accent' : 'bg-accent text-white',
+          )}
+        >
           {initial}
         </span>
-        <span className="hidden max-w-[8rem] truncate text-sm font-medium text-ink-primary lg:inline">
+        <span
+          className={cn(
+            'hidden max-w-[8rem] truncate text-sm font-medium lg:inline',
+            onAccent ? 'text-white' : 'text-ink-primary',
+          )}
+        >
           {displayName}
         </span>
         <ChevronDown

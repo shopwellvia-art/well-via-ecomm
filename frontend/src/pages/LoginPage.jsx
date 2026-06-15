@@ -5,16 +5,15 @@ import {
   Mail,
   Lock,
   User,
-  Sparkles,
-  Gift,
   ShieldCheck,
   ArrowLeft,
   Star,
   Shield,
   Truck,
-  Clock,
   Package,
   BadgeCheck,
+  Sparkles,
+  Gift,
 } from 'lucide-react';
 import { Input } from '@/components/ui/Input.jsx';
 import { Button, buttonVariants } from '@/components/ui/Button.jsx';
@@ -33,7 +32,6 @@ const TRUST_ICONS = {
   star: Star,
   shield: Shield,
   truck: Truck,
-  clock: Clock,
   package: Package,
   badge: BadgeCheck,
 };
@@ -100,6 +98,25 @@ function GoogleIcon() {
         fill="#34A853"
         d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
       />
+    </svg>
+  );
+}
+
+// Yellow check SVG matching the design mock.
+function YellowCheck() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="#FFE11B"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M20 6 9 17l-5-5" />
     </svg>
   );
 }
@@ -224,62 +241,63 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-[calc(100vh-8.5rem)] md:min-h-[calc(100vh-4rem)] w-full items-stretch bg-bg-base">
-      {/* ── LEFT promo panel (hidden on mobile) ── */}
-      <div className="hidden w-[360px] shrink-0 flex-col justify-between bg-accent p-10 lg:flex">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <span className="grid size-9 place-items-center rounded-sm bg-white/20">
-              <Sparkles className="size-5 text-white" aria-hidden="true" />
-            </span>
-            <span className="text-lg font-bold text-white tracking-tight">ShopFlow</span>
+    <main className="grid min-h-[calc(100vh-200px)] place-items-center px-4 py-10">
+      <div className="grid w-full max-w-3xl grid-cols-1 overflow-hidden rounded-xl bg-bg-elevated shadow-lg sm:grid-cols-[40%_1fr]">
+
+        {/* ── LEFT brand panel ── */}
+        <div
+          className="flex flex-col justify-between gap-8 p-8"
+          style={{ background: 'linear-gradient(160deg,#1f63d6,#2874F0)' }}
+        >
+          <div>
+            {/* Brand mark */}
+            <div className="mb-6 flex items-center gap-2">
+              <span className="grid size-8 place-items-center rounded-sm bg-white/20">
+                <Sparkles className="size-4 text-white" aria-hidden="true" />
+              </span>
+              <span className="text-base font-bold text-white">ShopWell</span>
+            </div>
+
+            <h2 className="text-2xl font-bold leading-tight text-white">
+              {isRegister ? 'Join ShopWell' : 'Login'}
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-white/85">
+              {isRegister
+                ? 'Create your account to start shopping with exclusive member benefits.'
+                : 'Get access to your orders, wishlist and personalised recommendations.'}
+            </p>
           </div>
 
-          <h2 className="mt-12 text-[2rem] font-bold leading-tight text-white">
-            India&apos;s fastest <br /> growing marketplace
-          </h2>
-          <p className="mt-4 text-sm leading-relaxed text-white/75">
-            Millions of products. Trusted sellers. Secure payments. All in one place.
-          </p>
-
-          <ul className="mt-10 flex flex-col gap-4">
-            {[
-              { icon: Package, text: '2-day delivery on eligible orders' },
-              { icon: Shield, text: 'Buyer protection on every order' },
-              { icon: Truck, text: 'Easy returns within 10 days' },
-              { icon: Star, text: 'Verified seller ratings & reviews' },
-            ].map(({ icon: Icon, text }) => (
-              <li key={text} className="flex items-center gap-3 text-sm text-white/80">
-                <Icon className="size-4 shrink-0 text-white" aria-hidden="true" />
-                {text}
-              </li>
-            ))}
+          <ul className="space-y-3 text-sm text-white/90">
+            <li className="flex items-center gap-2.5">
+              <YellowCheck />
+              Faster checkout
+            </li>
+            <li className="flex items-center gap-2.5">
+              <YellowCheck />
+              Order tracking
+            </li>
+            <li className="flex items-center gap-2.5">
+              <YellowCheck />
+              Exclusive member deals
+            </li>
           </ul>
+
+          {/* Toggle hint at the bottom of the panel */}
+          <p className="text-[11px] text-white/50">
+            {isRegister ? 'Already have an account?' : 'New to ShopWell?'}{' '}
+            <button
+              type="button"
+              onClick={() => { setMode(isRegister ? 'login' : 'register'); setError(null); }}
+              className="font-semibold text-white/80 underline underline-offset-2 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            >
+              {isRegister ? 'Sign in' : 'Create a free account'}
+            </button>
+          </p>
         </div>
 
-        <p className="text-[11px] text-white/40">
-          New to ShopFlow?{' '}
-          <button
-            type="button"
-            onClick={() => { setMode('register'); setError(null); }}
-            className="font-semibold text-white/70 underline underline-offset-2 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-accent"
-          >
-            Create a free account
-          </button>
-        </p>
-      </div>
-
-      {/* ── RIGHT form panel ── */}
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-10">
-        <div className="w-full max-w-sm">
-
-          {/* Mobile brand mark */}
-          <div className="mb-7 flex items-center gap-2 lg:hidden">
-            <span className="grid size-8 place-items-center rounded-sm bg-accent">
-              <Sparkles className="size-4 text-white" aria-hidden="true" />
-            </span>
-            <span className="text-base font-bold text-ink-primary">ShopFlow</span>
-          </div>
+        {/* ── RIGHT form panel ── */}
+        <div className="p-8">
 
           {/* TOTP step */}
           {pendingTotp ? (
@@ -295,9 +313,7 @@ export default function LoginPage() {
                   <ShieldCheck className="size-4 text-accent" aria-hidden="true" />
                   Open your authenticator app
                 </p>
-                <p className="mt-1 leading-relaxed">
-                  No device? Use a backup code instead.
-                </p>
+                <p className="mt-1 leading-relaxed">No device? Use a backup code instead.</p>
               </div>
 
               <form onSubmit={handleTotpSubmit} className="mt-5">
@@ -331,11 +347,11 @@ export default function LoginPage() {
             </div>
           ) : (
             <>
-              {/* Mode toggle */}
+              {/* Mode toggle tabs */}
               <div
                 role="tablist"
                 aria-label="Authentication mode"
-                className="mb-6 flex rounded-sm border border-line-subtle bg-bg-elevated overflow-hidden"
+                className="mb-6 flex overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated"
                 onKeyDown={(e) => {
                   const tabs = ['login', 'register'];
                   const idx = tabs.indexOf(mode);
@@ -364,7 +380,7 @@ export default function LoginPage() {
                       'flex-1 py-3 text-sm font-medium transition-colors duration-150 focus-visible:focus-ring',
                       mode === m
                         ? 'bg-accent text-white'
-                        : 'text-ink-secondary hover:text-ink-primary hover:bg-bg-sunken',
+                        : 'text-ink-secondary hover:bg-bg-sunken hover:text-ink-primary',
                     )}
                   >
                     {m === 'login' ? 'Login' : 'New Customer? Sign up'}
@@ -372,18 +388,9 @@ export default function LoginPage() {
                 ))}
               </div>
 
-              <h1 className="text-xl font-semibold text-ink-primary">
-                {isRegister ? 'Create account' : 'Login'}
-              </h1>
-              <p className="mt-0.5 text-xs text-ink-secondary">
-                {isRegister
-                  ? 'Fill in the details below to get started'
-                  : 'Get access to your Orders, Wishlist and Recommendations'}
-              </p>
-
               {/* Referral banner */}
               {pendingReferral && (
-                <div className="mt-4 flex items-start gap-2.5 rounded-sm border border-accent/20 bg-accent/12 px-3 py-2.5 text-xs text-ink-primary">
+                <div className="mb-4 flex items-start gap-2.5 rounded-sm border border-accent/20 bg-accent/12 px-3 py-2.5 text-xs text-ink-primary">
                   <Gift className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden="true" />
                   <span>
                     You were invited by a friend. Sign up to claim your{' '}
@@ -396,41 +403,58 @@ export default function LoginPage() {
               )}
 
               {/* Main form */}
-              <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-0.5">
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 {isRegister && (
-                  <Input
-                    label="Full name"
-                    icon={User}
-                    placeholder="Jane Doe"
-                    autoComplete="name"
-                    value={form.full_name}
-                    onChange={set('full_name')}
-                  />
+                  <label className="block">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
+                      Full name
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Jane Doe"
+                      autoComplete="name"
+                      value={form.full_name}
+                      onChange={set('full_name')}
+                      className="mt-1.5 h-11 w-full rounded-lg border border-line-strong bg-bg-sunken px-3.5 text-sm outline-none transition-colors focus:border-accent"
+                    />
+                  </label>
                 )}
-                <Input
-                  label="Email"
-                  type="email"
-                  icon={Mail}
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  required
-                  value={form.email}
-                  onChange={set('email')}
-                />
-                <Input
-                  label="Password"
-                  type="password"
-                  icon={Lock}
-                  placeholder="••••••••"
-                  autoComplete={isRegister ? 'new-password' : 'current-password'}
-                  required
-                  value={form.password}
-                  onChange={set('password')}
-                  helper={isRegister ? 'At least 8 characters.' : undefined}
-                />
+
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
+                    Email
+                  </span>
+                  <input
+                    type="email"
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    required
+                    value={form.email}
+                    onChange={set('email')}
+                    className="mt-1.5 h-11 w-full rounded-lg border border-line-strong bg-bg-sunken px-3.5 text-sm outline-none transition-colors focus:border-accent"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
+                    Password
+                  </span>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    autoComplete={isRegister ? 'new-password' : 'current-password'}
+                    required
+                    value={form.password}
+                    onChange={set('password')}
+                    className="mt-1.5 h-11 w-full rounded-lg border border-line-strong bg-bg-sunken px-3.5 text-sm outline-none transition-colors focus:border-accent"
+                  />
+                  {isRegister && (
+                    <p className="mt-1 text-[11px] text-ink-tertiary">At least 8 characters.</p>
+                  )}
+                </label>
 
                 {!isRegister && (
-                  <div className="-mt-1 mb-3 text-right">
+                  <div className="-mt-2 text-right">
                     <Link
                       to="/forgot-password"
                       className="rounded-xs text-xs text-accent transition-colors hover:text-accent-hover focus-visible:focus-ring"
@@ -439,6 +463,18 @@ export default function LoginPage() {
                     </Link>
                   </div>
                 )}
+
+                <p className="text-[11px] leading-relaxed text-ink-tertiary">
+                  By continuing, you agree to ShopWell&apos;s{' '}
+                  <a href="#" className="text-accent hover:underline">
+                    Terms of Use
+                  </a>{' '}
+                  and{' '}
+                  <a href="#" className="text-accent hover:underline">
+                    Privacy Policy
+                  </a>
+                  .
+                </p>
 
                 {error && (
                   <div
@@ -449,23 +485,41 @@ export default function LoginPage() {
                   </div>
                 )}
 
-                <Button type="submit" block size="lg" loading={busy} className="mt-2">
-                  {isRegister ? 'Create account' : 'Login'}
-                </Button>
+                <button
+                  type="submit"
+                  disabled={busy}
+                  aria-busy={busy}
+                  className={cn(
+                    'flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-cta text-sm font-bold uppercase tracking-wide text-white shadow-sm',
+                    'transition-transform hover:-translate-y-0.5 active:translate-y-0',
+                    'focus-visible:focus-ring disabled:opacity-50 disabled:pointer-events-none',
+                  )}
+                >
+                  {busy ? (
+                    <svg className="size-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : isRegister ? (
+                    'Create account'
+                  ) : (
+                    'Login'
+                  )}
+                </button>
               </form>
 
               {/* Google OAuth */}
               {googleEnabled && (
                 <div>
-                  <div className="my-5 flex items-center gap-3">
+                  <div className="my-4 flex items-center gap-3 text-xs text-ink-tertiary">
                     <span className="h-px flex-1 bg-line-subtle" />
-                    <span className="text-xs text-ink-tertiary">or</span>
+                    OR
                     <span className="h-px flex-1 bg-line-subtle" />
                   </div>
                   <a
                     href={`${env.apiBaseUrl}/auth/google/login`}
                     className={cn(
-                      buttonVariants({ variant: 'outline', size: 'lg', block: true }),
+                      buttonVariants({ variant: 'outline', size: 'md', block: true }),
                     )}
                   >
                     <GoogleIcon />
@@ -474,12 +528,27 @@ export default function LoginPage() {
                 </div>
               )}
 
+              {/* OTP button */}
+              <div className="mt-3">
+                <div className="flex items-center gap-3 text-xs text-ink-tertiary">
+                  <span className="h-px flex-1 bg-line-subtle" />
+                  OR
+                  <span className="h-px flex-1 bg-line-subtle" />
+                </div>
+                <button
+                  type="button"
+                  className="mt-3 h-11 w-full rounded-lg border border-line-strong bg-bg-elevated text-sm font-semibold text-ink-primary transition-colors hover:border-accent hover:text-accent focus-visible:focus-ring"
+                >
+                  Request OTP on email
+                </button>
+              </div>
+
               {/* Dev/test quick logins */}
               {showTestLogins && (
                 <div>
-                  <div className="my-5 flex items-center gap-3">
+                  <div className="my-4 flex items-center gap-3 text-xs text-ink-tertiary">
                     <span className="h-px flex-1 bg-line-subtle" />
-                    <span className="text-xs text-ink-tertiary">testing only</span>
+                    testing only
                     <span className="h-px flex-1 bg-line-subtle" />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -500,13 +569,25 @@ export default function LoginPage() {
                 </div>
               )}
 
-              {/* Trust badges */}
+              {/* Trust badges from CMS */}
               <TrustBadges />
+
+              {/* Create account link */}
+              <p className="mt-5 text-center text-sm text-ink-secondary">
+                {isRegister ? 'Already have an account? ' : 'New to ShopWell? '}
+                <button
+                  type="button"
+                  onClick={() => { setMode(isRegister ? 'login' : 'register'); setError(null); }}
+                  className="font-semibold text-accent hover:underline focus-visible:focus-ring"
+                >
+                  {isRegister ? 'Sign in' : 'Create an account'}
+                </button>
+              </p>
             </>
           )}
 
           {/* Footer link */}
-          <p className="mt-6 text-center text-xs text-ink-tertiary">
+          <p className="mt-5 text-center text-xs text-ink-tertiary">
             <Link
               to="/products"
               className="rounded-xs transition-colors hover:text-ink-secondary focus-visible:focus-ring"

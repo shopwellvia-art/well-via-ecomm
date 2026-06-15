@@ -1,52 +1,45 @@
-import { Truck, RefreshCw, ShieldCheck, Tag } from 'lucide-react';
+import { Tag } from 'lucide-react';
 
 const OFFERS = [
   {
-    icon: Tag,
     label: 'Bank Offer',
     detail: '10% instant discount on HDFC Bank Debit and Credit Cards',
   },
   {
-    icon: Truck,
-    label: 'Free Delivery',
-    detail: 'Free shipping on all orders to all serviceable pincodes',
+    label: 'No-cost EMI',
+    detail: 'From ₹999/month on orders above ₹5,000',
   },
   {
-    icon: RefreshCw,
-    label: '7 Day Returns',
-    detail: 'Changed your mind? Easy free returns within 7 days',
+    label: 'Free delivery',
+    detail: 'On all serviceable pincodes',
   },
   {
-    icon: ShieldCheck,
     label: '1 Year Warranty',
     detail: 'Backed by ShopWell quality guarantee on all products',
   },
 ];
 
 /**
- * Amazon-style compact offer strip — labelled rows with icon + bold label +
- * detail text. Flat white card, no shadows or gradients.
+ * "Available offers" card — Flipkart-style rows: green tag icon + bold label + detail.
+ * Flat white card with a header title and border separators.
  */
 export function OfferStrip() {
   return (
     <section className="mt-5" aria-label="Available offers">
-      <div className="rounded-sm border border-line-subtle bg-bg-elevated">
-        <p className="border-b border-line-subtle px-4 py-2.5 text-sm font-semibold text-ink-primary">
-          Available Offers
-        </p>
-        <ul className="divide-y divide-line-subtle">
-          {OFFERS.map(({ icon: Icon, label, detail }) => (
-            <li key={label} className="flex items-start gap-3 px-4 py-3">
-              <span
-                className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-sm bg-success/10 text-success"
-                aria-hidden="true"
-              >
-                <Icon className="size-3.5" />
+      <div className="rounded-lg border border-line-subtle">
+        <h2 className="border-b border-line-subtle px-4 py-2.5 text-sm font-bold text-ink-primary">
+          Available offers
+        </h2>
+        <ul className="space-y-2.5 px-4 py-3.5 text-sm">
+          {OFFERS.map(({ label, detail }) => (
+            <li key={label} className="flex gap-2.5">
+              <span className="mt-0.5 shrink-0 text-rating" aria-hidden="true">
+                <Tag className="size-4" strokeWidth={1.8} />
               </span>
-              <p className="text-xs leading-relaxed text-ink-secondary">
-                <span className="font-semibold text-ink-primary">{label}: </span>
+              <span>
+                <b className="font-semibold text-ink-primary">{label} </b>
                 {detail}
-              </p>
+              </span>
             </li>
           ))}
         </ul>

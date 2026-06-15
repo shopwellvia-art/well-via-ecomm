@@ -9,8 +9,12 @@ import { ProductMedia } from './ProductMedia.jsx';
 /**
  * Horizontally-scrolling product rail — Flipkart style.
  * White cards with flat border on grey bg. Native touch-swipe; arrow buttons on desktop.
+ *
+ * `cardStyle` — when true, wraps the rail in a white rounded-lg card with a
+ * header row (title + "View all ›" link) matching the mock's "You may also like"
+ * section. Defaults to the plain section layout.
  */
-export function ProductRail({ title, products, isLoading }) {
+export function ProductRail({ title, products, isLoading, cardStyle = false }) {
   const scroller = useRef(null);
 
   function scrollBy(dir) {
@@ -21,6 +25,28 @@ export function ProductRail({ title, products, isLoading }) {
   }
 
   if (isLoading) {
+    if (cardStyle) {
+      return (
+        <section className="mt-3 overflow-hidden rounded-lg bg-bg-elevated shadow-sm" aria-label={title}>
+          <div className="flex items-center justify-between border-b border-line-subtle px-5 py-4">
+            <Skeleton className="h-5 w-36" />
+            <Skeleton className="h-4 w-16" />
+          </div>
+          <div className="flex gap-3 overflow-hidden px-4 py-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="w-[200px] shrink-0">
+                <Skeleton className="aspect-square rounded-lg" />
+                <div className="mt-2 flex flex-col gap-1.5 p-1">
+                  <Skeleton variant="text" className="h-3 w-full" />
+                  <Skeleton variant="text" className="h-3 w-2/3" />
+                  <Skeleton variant="text" className="h-4 w-14" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+    }
     return (
       <section className="mt-10" aria-label={title}>
         <div className="flex items-center justify-between gap-4 mb-3">
@@ -48,6 +74,49 @@ export function ProductRail({ title, products, isLoading }) {
 
   if (!products || products.length === 0) return null;
 
+  if (cardStyle) {
+    return (
+      <section className="mt-3 overflow-hidden rounded-lg bg-bg-elevated shadow-sm" aria-label={title}>
+        <div className="flex items-center justify-between border-b border-line-subtle px-5 py-4">
+          <h2 className="text-lg font-bold text-ink-primary">{title}</h2>
+          <Link
+            to="/products"
+            className="text-sm font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            View all ›
+          </Link>
+        </div>
+        <div className="relative px-4 py-4">
+          <div
+            ref={scroller}
+            className="rail flex snap-x snap-mandatory gap-3 overflow-x-auto"
+          >
+            {products.map((p) => (
+              <RailCard key={p.id} product={p} wide />
+            ))}
+          </div>
+          {/* Arrow buttons — desktop only */}
+          <button
+            type="button"
+            onClick={() => scrollBy(-1)}
+            aria-label="Scroll left"
+            className="absolute left-1.5 top-1/2 hidden size-9 -translate-y-1/2 place-items-center rounded-full border border-line-subtle bg-bg-elevated text-ink-primary shadow-md transition hover:bg-bg-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:grid"
+          >
+            <ChevronLeft className="size-4" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollBy(1)}
+            aria-label="Scroll right"
+            className="absolute right-1.5 top-1/2 hidden size-9 -translate-y-1/2 place-items-center rounded-full border border-line-subtle bg-bg-elevated text-ink-primary shadow-md transition hover:bg-bg-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:grid"
+          >
+            <ChevronRight className="size-4" aria-hidden="true" />
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="mt-10" aria-label={title}>
       <div className="mb-3 flex items-center justify-between gap-4">
@@ -70,13 +139,13 @@ export function ProductRail({ title, products, isLoading }) {
   );
 }
 
-function RailCard({ product }) {
+function RailCard({ product, wide = false }) {
   const stock = stockLabel(product.stock);
   return (
-    <div className="w-40 shrink-0 snap-start">
+    <div className={wide ? 'w-[200px] shrink-0 snap-start' : 'w-40 shrink-0 snap-start'}>
       <Link
         to={`/products/${product.id}`}
-        className="group block overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="group block overflow-hidden rounded-lg border border-line-subtle bg-bg-elevated shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <div className="aspect-square overflow-hidden bg-bg-sunken">
           <div className="size-full transition-transform duration-300 group-hover:scale-[1.03]">

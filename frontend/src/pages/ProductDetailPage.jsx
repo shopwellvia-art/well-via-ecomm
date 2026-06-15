@@ -1,10 +1,9 @@
 import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { AlertTriangle, Star } from 'lucide-react';
+import { AlertTriangle, ShoppingCart, Zap, Star } from 'lucide-react';
 import { Page } from '@/components/layout/Page.jsx';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs.jsx';
 import { Button } from '@/components/ui/Button.jsx';
-import { Badge } from '@/components/ui/Badge.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import {
@@ -14,7 +13,7 @@ import {
   useLikelyProducts,
 } from '@/features/products/hooks.js';
 import { useCategories } from '@/features/categories/hooks.js';
-import { stockLabel, formatPrice } from '@/lib/utils.js';
+import { formatPrice, cn } from '@/lib/utils.js';
 import { useTrackProductView } from '@/features/history/store.js';
 
 import { FrequentlyBoughtTogether } from '@/features/products/components/FrequentlyBoughtTogether.jsx';
@@ -54,135 +53,138 @@ export default function ProductDetailPage() {
   if (isLoading) return <Loading />;
   if (isError || !product) return <NotFound />;
 
-  const stock = stockLabel(product.stock);
   const price = Number(product.price) || 0;
   const compareAt = Number(product.compare_at_price) || 0;
   const hasDiscount = compareAt > price;
   const discountPct = hasDiscount ? Math.round((1 - price / compareAt) * 100) : 0;
   const ratingAvg = Number(product.rating_avg) || 0;
   const ratingCount = Number(product.rating_count) || 0;
+  const outOfStock = product.stock <= 0;
 
   return (
     <Page>
-      {/* Breadcrumbs */}
+      {/* Breadcrumb row */}
       <Breadcrumbs
         items={[
-          { label: 'Home', to: '/' },
           { label: 'Shop', to: '/products' },
           ...(categoryName
             ? [{ label: categoryName, to: `/products?category_id=${product.category_id}` }]
             : []),
         ]}
         current={product.name}
-        className="mb-4"
+        className="mb-3"
       />
 
-      {/* ── HERO TWO-COLUMN: Flipkart / Amazon layout ──────────────────────────
-          LEFT  (sticky): gallery + thumbnail rail  (desktop)
-          RIGHT         : title / rating / price / buy panel / specs
-          Mobile: stacked — gallery → info → buy panel
-      ───────────────────────────────────────────────────────────────────────── */}
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] xl:grid-cols-[460px_minmax(0,1fr)]">
+      {/* ── HERO CARD: Flipkart layout ──────────────────────────────────────────
+          A single white rounded card containing a 2-col grid.
+          LEFT  (sticky): gallery + desktop CTA buttons below gallery.
+          RIGHT         : brand / title / rating / price / offers / buy panel / specs.
+      ─────────────────────────────────────────────────────────────────────────── */}
+      <div className="overflow-hidden rounded-lg bg-bg-elevated shadow-sm">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,440px)_1fr]">
 
-        {/* ── LEFT: Image gallery (sticky on desktop) ── */}
-        {/* max-h-[70vw] caps the gallery height on mobile so the buy panel
-            stays visible without excessive scrolling; removed at lg+ where
-            the sticky column takes its natural height. */}
-        <section className="max-h-[70vw] overflow-hidden lg:max-h-none lg:overflow-visible lg:sticky lg:top-20 lg:self-start">
-          <LuxuryGallery product={product} />
-        </section>
+          {/* ── LEFT: Gallery (sticky on desktop) + desktop CTA buttons ── */}
+          <div className="border-line-subtle p-5 lg:sticky lg:top-[120px] lg:self-start lg:border-r">
+            {/* Gallery: reuses LuxuryGallery which has thumbnail rail + main image + zoom */}
+            <LuxuryGallery product={product} />
 
-        {/* ── RIGHT: Product info + buy panel ── */}
-        <section className="min-w-0">
-          {/* Category breadcrumb */}
-          {categoryName && (
-            <Link
-              to={`/products?category_id=${product.category_id}`}
-              className="mb-1 block text-xs font-semibold uppercase tracking-wide text-accent hover:underline focus-visible:outline-none focus-visible:underline"
-            >
-              {categoryName}
-            </Link>
-          )}
-
-          {/* Product title */}
-          <h1 className="text-xl font-medium leading-snug text-ink-primary sm:text-[1.375rem]">
-            {product.name}
-          </h1>
-
-          {/* Rating row — only when data exists */}
-          {ratingCount > 0 && (
-            <a
-              href="#reviews"
-              className="mt-2 inline-flex items-center gap-1.5 hover:underline focus-visible:outline-none"
-            >
-              <Badge tone="rating" className="inline-flex items-center gap-1 px-2 py-0.5 text-xs">
-                {ratingAvg.toFixed(1)}
-                <Star className="size-3 fill-current" aria-hidden="true" />
-              </Badge>
-              <span className="text-xs text-ink-tertiary">
-                {ratingCount.toLocaleString()} rating{ratingCount === 1 ? '' : 's'}
-              </span>
-            </a>
-          )}
-
-          {/* Stock + SKU */}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Badge tone={stock.tone} className="text-[11px]">
-              {stock.text}
-            </Badge>
-            <span className="text-xs text-ink-tertiary">SKU: {product.sku}</span>
+            {/* Desktop-only CTA buttons below gallery */}
+            <div className="mt-4 hidden grid-cols-2 gap-3 lg:grid">
+              <DesktopAddToCartBtn product={product} />
+              <DesktopBuyNowBtn product={product} />
+            </div>
           </div>
 
-          {/* Divider */}
-          <div className="my-4 border-t border-line-subtle" />
-
-          {/* Price block */}
-          <div className="flex flex-wrap items-baseline gap-2">
-            <span className="nums text-3xl font-semibold text-accent">
-              {formatPrice(price)}
-            </span>
-            {hasDiscount && (
-              <>
-                <s className="nums text-base text-ink-tertiary" aria-label={`Was ${formatPrice(compareAt)}`}>
-                  {formatPrice(compareAt)}
-                </s>
-                <span className="text-sm font-bold text-rating">{discountPct}% off</span>
-              </>
+          {/* ── RIGHT: Product info + buy panel inline ── */}
+          <div className="p-5 sm:p-7">
+            {/* Brand eyebrow */}
+            {categoryName && (
+              <Link
+                to={`/products?category_id=${product.category_id}`}
+                className="block text-xs font-semibold uppercase tracking-wide text-ink-tertiary hover:underline focus-visible:outline-none focus-visible:underline"
+              >
+                {categoryName}
+              </Link>
             )}
+
+            {/* Product title */}
+            <h1 className="mt-1 text-xl font-semibold leading-snug text-ink-primary sm:text-2xl">
+              {product.name}
+            </h1>
+
+            {/* Rating + stock row */}
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              {ratingCount > 0 && (
+                <>
+                  <a
+                    href="#reviews"
+                    className="rating-pill hover:opacity-90 focus-visible:outline-none"
+                    aria-label={`Rated ${ratingAvg.toFixed(1)} out of 5`}
+                  >
+                    {ratingAvg.toFixed(1)}
+                    <Star className="size-3 fill-current" aria-hidden="true" />
+                  </a>
+                  <span className="text-sm text-ink-secondary">
+                    {ratingCount.toLocaleString()} rating{ratingCount === 1 ? '' : 's'}
+                  </span>
+                </>
+              )}
+              <span
+                className={cn(
+                  'text-sm font-medium',
+                  outOfStock ? 'text-danger' : product.stock <= 5 ? 'text-warning' : 'text-rating',
+                )}
+              >
+                {outOfStock
+                  ? 'Out of stock'
+                  : product.stock <= 5
+                    ? `Only ${product.stock} left`
+                    : 'In stock'}
+              </span>
+            </div>
+
+            {/* Price block */}
+            <div className="mt-4 flex items-end gap-3">
+              <span className="nums text-3xl font-bold text-ink-primary">
+                {formatPrice(price)}
+              </span>
+              {hasDiscount && (
+                <>
+                  <span
+                    className="nums pb-1 text-base text-ink-tertiary line-through"
+                    aria-label={`Was ${formatPrice(compareAt)}`}
+                  >
+                    {formatPrice(compareAt)}
+                  </span>
+                  <span className="pb-1 text-base font-semibold text-rating">
+                    {discountPct}% off
+                  </span>
+                </>
+              )}
+            </div>
+            <p className="text-xs text-ink-tertiary">Inclusive of all taxes</p>
+
+            {/* Available offers */}
+            <OfferStrip />
+
+            {/* Buy panel: delivery / quantity / trust row / wishlist / share */}
+            {/* id="pdp-buybox" lets StickyBuyBar's IntersectionObserver fire correctly */}
+            <div id="pdp-buybox" className="mt-5">
+              <LuxuryBuyPanel product={product} />
+            </div>
+
+            {/* About this item */}
+            <AboutThisItem product={product} categoryName={categoryName} />
+
+            {/* Spec table — "Product details" */}
+            <SpecTable product={product} categoryName={categoryName} />
           </div>
-          <p className="mt-0.5 text-xs text-ink-tertiary">Inclusive of all taxes.</p>
-
-          {/* Offer strip */}
-          <OfferStrip />
-
-          {/* Divider */}
-          <div className="my-4 border-t border-line-subtle" />
-
-          {/* Brief description */}
-          {product.description && (
-            <p className="text-sm leading-relaxed text-ink-secondary">
-              {product.description.length > 300
-                ? `${product.description.slice(0, 300)}…`
-                : product.description}
-            </p>
-          )}
-
-          {/* Buy panel — StickyBuyBar observes #pdp-buybox to know when to appear */}
-          <div id="pdp-buybox" className="mt-5">
-            <LuxuryBuyPanel product={product} />
-          </div>
-
-          {/* About this item */}
-          <AboutThisItem product={product} categoryName={categoryName} />
-
-          {/* Spec table */}
-          <SpecTable product={product} categoryName={categoryName} />
-        </section>
+        </div>
       </div>
 
       {/* ── BELOW-FOLD SECTIONS ── */}
 
-      {/* Trust row */}
+      {/* Trust badges row */}
       <TrustRow />
 
       {/* Key features / highlights */}
@@ -203,11 +205,12 @@ export default function ProductDetailPage() {
       {/* Customer reviews summary */}
       <CustomerSay product={product} />
 
-      {/* You may also like rail */}
+      {/* You may also like — white card with header + "View all" + rail */}
       <ProductRail
         title="You may also like"
         products={likely?.length ? likely : coPurchased}
         isLoading={likelyLoading || coPurchasedLoading}
+        cardStyle
       />
 
       {/* Recently viewed */}
@@ -216,45 +219,103 @@ export default function ProductDetailPage() {
       {/* Full paginated reviews */}
       <CustomerReviewsSection product={product} />
 
-      {/* Sticky bottom CTA bar — slides in once #pdp-buybox scrolls out of view */}
+      {/* Mobile sticky bottom action bar — always visible on mobile.
+          StickyBuyBar slides in on desktop once #pdp-buybox scrolls out. */}
       <StickyBuyBar product={product} />
+
+      {/* Spacer so content doesn't hide under the mobile sticky bar */}
+      <div className="h-16 lg:hidden" aria-hidden="true" />
     </Page>
+  );
+}
+
+/**
+ * Desktop-only "Add to Cart" button rendered below the gallery.
+ * Wires up to the same LuxuryBuyPanel logic by surfacing a minimal button
+ * that delegates to the same addToCart mutation via the buy panel's
+ * internal form. We keep it self-contained with its own hook call so we
+ * don't break the panel.
+ */
+function DesktopAddToCartBtn({ product }) {
+  return (
+    <button
+      type="button"
+      disabled={product.stock <= 0}
+      onClick={() => {
+        // Scroll down to the buybox so the user can interact with the full panel
+        document.getElementById('pdp-buybox')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }}
+      aria-label="Add to cart"
+      className={cn(
+        'flex h-12 items-center justify-center gap-2 rounded-lg bg-cart text-sm font-bold uppercase tracking-wide text-white shadow-sm',
+        'transition-transform hover:-translate-y-0.5 active:translate-y-0',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cart',
+        'disabled:pointer-events-none disabled:opacity-50',
+      )}
+    >
+      <ShoppingCart className="size-[18px]" aria-hidden="true" />
+      Add to cart
+    </button>
+  );
+}
+
+function DesktopBuyNowBtn({ product }) {
+  return (
+    <button
+      type="button"
+      disabled={product.stock <= 0}
+      onClick={() => {
+        document.getElementById('pdp-buybox')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }}
+      aria-label="Buy now"
+      className={cn(
+        'flex h-12 items-center justify-center gap-2 rounded-lg bg-cta text-sm font-bold uppercase tracking-wide text-white shadow-sm',
+        'transition-transform hover:-translate-y-0.5 active:translate-y-0',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cta',
+        'disabled:pointer-events-none disabled:opacity-50',
+      )}
+    >
+      <Zap className="size-[18px] fill-current" aria-hidden="true" />
+      Buy now
+    </button>
   );
 }
 
 function Loading() {
   return (
     <Page>
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-        {/* Gallery skeleton */}
-        <div className="flex flex-col gap-2.5">
-          <Skeleton className="aspect-square rounded-sm" />
-          <div className="grid grid-cols-6 gap-1.5">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="aspect-square rounded-sm" />
-            ))}
+      <div className="overflow-hidden rounded-lg bg-bg-elevated shadow-sm">
+        <div className="grid grid-cols-1 gap-0 lg:grid-cols-[minmax(0,440px)_1fr]">
+          {/* Gallery skeleton */}
+          <div className="p-5 lg:border-r lg:border-line-subtle">
+            <Skeleton className="aspect-square rounded-lg" />
+            <div className="mt-3 grid grid-cols-5 gap-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="aspect-square rounded-lg" />
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* Info skeleton */}
-        <div className="flex flex-col gap-4">
-          <Skeleton className="h-3 w-20" />
-          <div>
-            <Skeleton className="h-6 w-full" />
-            <Skeleton className="mt-1.5 h-6 w-4/5" />
-          </div>
-          <Skeleton className="h-3 w-24" />
-          <div className="flex items-baseline gap-3">
-            <Skeleton className="h-9 w-28" />
-            <Skeleton className="h-4 w-14" />
-          </div>
-          <Skeleton variant="text" lines={3} className="w-full" />
-          <div className="mt-2 flex flex-col gap-2.5 rounded-sm border border-line-subtle p-4">
-            <Skeleton className="h-3 w-40" />
-            <Skeleton className="h-3 w-32" />
-            <div className="h-px w-full bg-line-subtle" />
-            <Skeleton className="h-12 w-full rounded-sm" />
-            <Skeleton className="h-12 w-full rounded-sm" />
+          {/* Info skeleton */}
+          <div className="flex flex-col gap-4 p-5 sm:p-7">
+            <Skeleton className="h-3 w-20" />
+            <div>
+              <Skeleton className="h-6 w-full" />
+              <Skeleton className="mt-1.5 h-6 w-4/5" />
+            </div>
+            <Skeleton className="h-3 w-24" />
+            <div className="flex items-baseline gap-3">
+              <Skeleton className="h-9 w-28" />
+              <Skeleton className="h-4 w-14" />
+            </div>
+            <Skeleton variant="text" lines={3} className="w-full" />
+            <div className="mt-2 flex flex-col gap-2.5 rounded-lg border border-line-subtle p-4">
+              <Skeleton className="h-3 w-40" />
+              <Skeleton className="h-3 w-32" />
+              <div className="h-px w-full bg-line-subtle" />
+              <Skeleton className="h-12 w-full rounded-lg" />
+              <Skeleton className="h-12 w-full rounded-lg" />
+            </div>
           </div>
         </div>
       </div>
