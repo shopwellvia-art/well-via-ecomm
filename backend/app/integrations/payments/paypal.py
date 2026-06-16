@@ -22,6 +22,7 @@ from app.integrations.payments.base import (
     InitiateResponse,
     PaymentStatus,
     StatusResponse,
+    provider_rejection,
 )
 
 logger = logging.getLogger(__name__)
@@ -190,10 +191,7 @@ class PayPalProvider:
                 return r.json()["access_token"]
         except httpx.HTTPStatusError as exc:
             logger.warning("paypal token %s", exc.response.text[:500])
-            raise PayPalError(
-                "PayPal authentication failed.",
-                details={"status": exc.response.status_code},
-            )
+            raise provider_rejection(PayPalError, "PayPal authentication failed", exc.response)
         except httpx.HTTPError as exc:
             logger.warning("paypal token network error: %s", exc)
             raise PayPalError("Could not reach PayPal.")
@@ -214,10 +212,7 @@ class PayPalProvider:
                 return {}
         except httpx.HTTPStatusError as exc:
             logger.warning("paypal POST %s -> %s", path, exc.response.text[:500])
-            raise PayPalError(
-                "PayPal rejected the request.",
-                details={"status": exc.response.status_code},
-            )
+            raise provider_rejection(PayPalError, "PayPal rejected the request", exc.response)
         except httpx.HTTPError as exc:
             logger.warning("paypal POST %s network error: %s", path, exc)
             raise PayPalError("Could not reach PayPal.")
@@ -232,10 +227,7 @@ class PayPalProvider:
                 return r.json()
         except httpx.HTTPStatusError as exc:
             logger.warning("paypal GET %s -> %s", path, exc.response.text[:500])
-            raise PayPalError(
-                "PayPal status check failed.",
-                details={"status": exc.response.status_code},
-            )
+            raise provider_rejection(PayPalError, "PayPal status check failed", exc.response)
         except httpx.HTTPError as exc:
             logger.warning("paypal GET %s network error: %s", path, exc)
             raise PayPalError("Could not reach PayPal.")

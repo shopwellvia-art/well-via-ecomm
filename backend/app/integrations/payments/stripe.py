@@ -20,6 +20,7 @@ from app.integrations.payments.base import (
     InitiateResponse,
     PaymentStatus,
     StatusResponse,
+    provider_rejection,
 )
 
 logger = logging.getLogger(__name__)
@@ -169,10 +170,7 @@ class StripeProvider:
                 return r.json()
         except httpx.HTTPStatusError as exc:
             logger.warning("stripe POST %s -> %s", path, exc.response.text[:500])
-            raise StripeError(
-                "Stripe rejected the request.",
-                details={"status": exc.response.status_code},
-            )
+            raise provider_rejection(StripeError, "Stripe rejected the request", exc.response)
         except httpx.HTTPError as exc:
             logger.warning("stripe POST %s network error: %s", path, exc)
             raise StripeError("Could not reach Stripe.")
@@ -189,10 +187,7 @@ class StripeProvider:
                 return r.json()
         except httpx.HTTPStatusError as exc:
             logger.warning("stripe GET %s -> %s", path, exc.response.text[:500])
-            raise StripeError(
-                "Stripe status check failed.",
-                details={"status": exc.response.status_code},
-            )
+            raise provider_rejection(StripeError, "Stripe status check failed", exc.response)
         except httpx.HTTPError as exc:
             logger.warning("stripe GET %s network error: %s", path, exc)
             raise StripeError("Could not reach Stripe.")

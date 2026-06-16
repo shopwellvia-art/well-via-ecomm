@@ -19,6 +19,7 @@ from app.integrations.payments.base import (
     InitiateResponse,
     PaymentStatus,
     StatusResponse,
+    provider_rejection,
 )
 
 logger = logging.getLogger(__name__)
@@ -160,10 +161,7 @@ class FlutterwaveProvider:
                 return r.json()
         except httpx.HTTPStatusError as exc:
             logger.warning("flutterwave POST %s -> %s", path, exc.response.text[:500])
-            raise FlutterwaveError(
-                "Flutterwave rejected the request.",
-                details={"status": exc.response.status_code},
-            )
+            raise provider_rejection(FlutterwaveError, "Flutterwave rejected the request", exc.response)
         except httpx.HTTPError as exc:
             logger.warning("flutterwave POST %s network error: %s", path, exc)
             raise FlutterwaveError("Could not reach Flutterwave.")
@@ -177,10 +175,7 @@ class FlutterwaveProvider:
                 return r.json()
         except httpx.HTTPStatusError as exc:
             logger.warning("flutterwave GET %s -> %s", path, exc.response.text[:500])
-            raise FlutterwaveError(
-                "Flutterwave status check failed.",
-                details={"status": exc.response.status_code},
-            )
+            raise provider_rejection(FlutterwaveError, "Flutterwave status check failed", exc.response)
         except httpx.HTTPError as exc:
             logger.warning("flutterwave GET %s network error: %s", path, exc)
             raise FlutterwaveError("Could not reach Flutterwave.")

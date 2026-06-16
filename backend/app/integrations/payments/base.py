@@ -17,6 +17,10 @@ import enum
 from dataclasses import dataclass
 from typing import Protocol
 
+import httpx
+
+from app.core.exceptions import AppError
+
 
 class PaymentStatus(str, enum.Enum):
     PENDING = "pending"
@@ -68,3 +72,101 @@ class PaymentProvider(Protocol):
 
     def parse_webhook(self, body: bytes) -> StatusResponse:
         """Extract the resolved status from a (verified) webhook body."""
+
+
+# ----------------------------------------------------------------------
+# Shared error-surfacing helpers
+#
+# Every provider wraps an upstream HTTP error in its own AppError subclass.
+# Historically that wrapper threw away the gateway's own error code/message,
+# leaving operators to grep logs to find out *why* a charge was rejected.
+# These helpers pull the real reason out of the response body so it flows
+# into the API response and admin UI.
+# ----------------------------------------------------------------------
+
+_MAX_DETAIL = 300
+
+
+def _clean(value: object) -> str | None:
+    """Stringify a provider-supplied field, trimming whitespace and capping
+    length. Returns None for missing/blank values so callers can skip them."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    return text[:_MAX_DETAIL]
+
+
+def extract_provider_error(
+    response: httpx.Response,
+) -> tuple[str | None, str | None]:
+    """Best-effort pull of a gateway's own ``(code, human_message)`` out of an
+    error response body, so the real reason surfaces instead of a generic
+    'rejected' wrapper.
+
+    Covers the documented error envelopes of every integrated gateway::
+
+        Razorpay      {"error": {"code", "description"}}
+        Stripe        {"error": {"code"|"type", "message"}}
+        PayPal token  {"error", "error_description"}
+        PayPal Orders {"name", "message", "details": [{"issue", "description"}]}
+        Paystack      {"status": false, "message", "code"?}
+        Flutterwave   {"status": "error", "message"}
+        PhonePe       {"code", "message"}
+
+    Returns ``(None, None)`` when the body is not a JSON object (e.g. an HTML
+    502 page from an upstream proxy).
+    """
+    try:
+        body = response.json()
+    except ValueError:  # json.JSONDecodeError is a ValueError subclass
+        return None, None
+    if not isinstance(body, dict):
+        return None, None
+
+    err = body.get("error")
+    # Nested envelope: Razorpay / Stripe.
+    if isinstance(err, dict):
+        code = err.get("code") or err.get("type")
+        message = err.get("description") or err.get("message")
+        return _clean(code), _clean(message)
+    # OAuth-style flat error string: PayPal token endpoint.
+    if isinstance(err, str):
+        return _clean(err), _clean(body.get("error_description"))
+
+    # Flat envelopes: PhonePe / Paystack / Flutterwave / PayPal Orders.
+    code = body.get("code") or body.get("name")
+    message = body.get("message")
+    # PayPal puts the actionable reason in details[0].
+    details = body.get("details")
+    if isinstance(details, list) and details and isinstance(details[0], dict):
+        code = code or details[0].get("issue")
+        desc = details[0].get("description")
+        if desc:
+            message = f"{message} ({desc})" if message else desc
+    return _clean(code), _clean(message)
+
+
+def provider_rejection(
+    error_cls: type[AppError], prefix: str, response: httpx.Response
+) -> AppError:
+    """Build a provider error that carries the gateway's own code + message.
+
+    Use inside the ``httpx.HTTPStatusError`` branch of a provider's HTTP
+    helpers. The returned exception's ``message`` reads e.g.
+    "Razorpay rejected the request: BAD_REQUEST_ERROR — amount is invalid",
+    and its ``details`` carries machine-readable ``provider_code`` /
+    ``provider_message`` / ``status`` for the admin UI and logs.
+    """
+    code, message = extract_provider_error(response)
+    detail = " — ".join(part for part in (code, message) if part)
+    full_message = f"{prefix}: {detail}" if detail else f"{prefix}."
+    return error_cls(
+        full_message,
+        details={
+            "status": response.status_code,
+            "provider_code": code,
+            "provider_message": message,
+        },
+    )

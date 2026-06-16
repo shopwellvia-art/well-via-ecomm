@@ -19,6 +19,7 @@ from app.integrations.payments.base import (
     InitiateResponse,
     PaymentStatus,
     StatusResponse,
+    provider_rejection,
 )
 
 logger = logging.getLogger(__name__)
@@ -142,10 +143,7 @@ class RazorpayProvider:
                 return r.json()
         except httpx.HTTPStatusError as exc:
             logger.warning("razorpay POST %s -> %s", path, exc.response.text[:500])
-            raise RazorpayError(
-                "Razorpay rejected the request.",
-                details={"status": exc.response.status_code},
-            )
+            raise provider_rejection(RazorpayError, "Razorpay rejected the request", exc.response)
         except httpx.HTTPError as exc:
             logger.warning("razorpay POST %s network error: %s", path, exc)
             raise RazorpayError("Could not reach Razorpay.")
@@ -159,10 +157,7 @@ class RazorpayProvider:
                 return r.json()
         except httpx.HTTPStatusError as exc:
             logger.warning("razorpay GET %s -> %s", path, exc.response.text[:500])
-            raise RazorpayError(
-                "Razorpay status check failed.",
-                details={"status": exc.response.status_code},
-            )
+            raise provider_rejection(RazorpayError, "Razorpay status check failed", exc.response)
         except httpx.HTTPError as exc:
             logger.warning("razorpay GET %s network error: %s", path, exc)
             raise RazorpayError("Could not reach Razorpay.")

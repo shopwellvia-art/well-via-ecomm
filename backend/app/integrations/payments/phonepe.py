@@ -28,6 +28,7 @@ from app.integrations.payments.base import (
     InitiateResponse,
     PaymentStatus,
     StatusResponse,
+    provider_rejection,
 )
 
 logger = logging.getLogger(__name__)
@@ -164,7 +165,7 @@ class PhonePeProvider:
                 return r.json()
         except httpx.HTTPStatusError as e:  # surface PhonePe's error envelope
             logger.warning("phonepe POST %s -> %s", endpoint, e.response.text[:500])
-            raise PhonePeError("PhonePe rejected the request.", details={"status": e.response.status_code})
+            raise provider_rejection(PhonePeError, "PhonePe rejected the request", e.response)
         except httpx.HTTPError as e:
             logger.warning("phonepe POST %s network error: %s", endpoint, e)
             raise PhonePeError("Could not reach PhonePe.")
@@ -179,7 +180,7 @@ class PhonePeProvider:
                 return r.json()
         except httpx.HTTPStatusError as e:
             logger.warning("phonepe GET %s -> %s", endpoint, e.response.text[:500])
-            raise PhonePeError("PhonePe status check failed.", details={"status": e.response.status_code})
+            raise provider_rejection(PhonePeError, "PhonePe status check failed", e.response)
         except httpx.HTTPError as e:
             logger.warning("phonepe GET %s network error: %s", endpoint, e)
             raise PhonePeError("Could not reach PhonePe.")
