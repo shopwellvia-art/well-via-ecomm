@@ -30,6 +30,8 @@ from app.integrations.payments import (
 )
 from app.models.coupon import Coupon
 from app.models.order import Order, OrderItem, OrderStatus
+from app.models.payment_event import PaymentEventType
+from app.services.payment_audit import record_payment_event
 from app.models.user import User
 from app.repositories.coupon_repository import CouponRepository
 from app.repositories.order_repository import OrderRepository
@@ -254,8 +256,28 @@ class PaymentService:
     ) -> Order:
         provider = get_payment_provider(self.db, gateway_code)
         if not provider.verify_webhook(body, signature):
+            record_payment_event(
+                event_type=PaymentEventType.WEBHOOK_SIGNATURE_INVALID,
+                gateway_code=gateway_code,
+                signature_valid=False,
+            )
             raise ForbiddenError("Invalid payment signature.")
-        result = provider.parse_webhook(body)
+        try:
+            result = provider.parse_webhook(body)
+        except Exception as exc:
+            record_payment_event(
+                event_type=PaymentEventType.GATEWAY_ERROR,
+                gateway_code=gateway_code,
+                message=str(exc),
+            )
+            raise
+        record_payment_event(
+            event_type=PaymentEventType.WEBHOOK_RECEIVED,
+            gateway_code=gateway_code,
+            signature_valid=True,
+            merchant_transaction_id=result.merchant_transaction_id,
+            payment_status=result.status.value if result.status else None,
+        )
         order = self._order_for_mtid(result.merchant_transaction_id)
         self._apply_status(order, result.status, gateway_amount_minor=result.amount_minor)
         return order
@@ -272,6 +294,14 @@ class PaymentService:
                 result = provider.fetch_status(
                     merchant_transaction_id, order.payment_provider_ref
                 )
+                record_payment_event(
+                    event_type=PaymentEventType.STATUS_POLL,
+                    order_id=order.id,
+                    merchant_transaction_id=merchant_transaction_id,
+                    gateway_code=order.gateway_code,
+                    payment_status=result.status.value if result.status else None,
+                    provider_ref=result.provider_transaction_id,
+                )
                 if result.status != PaymentStatus.PENDING:
                     self._apply_status(
                         order, result.status,
@@ -279,12 +309,32 @@ class PaymentService:
                     )
             except Exception as exc:  # don't fail the poll on a flaky provider
                 logger.warning("status check failed for %s: %s", merchant_transaction_id, exc)
+                record_payment_event(
+                    event_type=PaymentEventType.GATEWAY_ERROR,
+                    order_id=order.id,
+                    merchant_transaction_id=merchant_transaction_id,
+                    gateway_code=order.gateway_code,
+                    message=str(exc),
+                )
         return order
 
     def mark_mock_decision(self, mtid: str, action: str) -> Order:
         """Dev-only — drives the mock simulator without going through the
         signed-webhook path. Reuses the same `_apply_status` so behavior is
-        identical to the real path."""
+        identical to the real path.
+
+        Authorization is per-order: only an order that was actually routed
+        through the mock provider at checkout (``gateway_code == "mock"``) may
+        be settled here. We deliberately do NOT consult the deprecated
+        PaymentGatewayConfig "active provider" row — the checkout factory no
+        longer reads it, so trusting it created a split-brain where a real
+        order could be mock-settled or a genuine mock order blocked.
+        """
+        order = self._order_for_mtid(mtid)
+        if (order.gateway_code or "mock").lower() != "mock":
+            raise ForbiddenError(
+                "This order was not placed through the mock gateway."
+            )
         provider = get_payment_provider(self.db, "mock")
         if provider.name != "mock":
             raise ForbiddenError("Mock decisions are disabled.")
@@ -292,9 +342,105 @@ class PaymentService:
         # Also persist the decision in Redis so a status poll matches.
         body = f'{{"merchant_transaction_id":"{mtid}","action":"{action}"}}'.encode()
         provider.parse_webhook(body)
-        order = self._order_for_mtid(mtid)
         self._apply_status(order, status_)
         return order
+
+    def reconcile_pending(
+        self, older_than_minutes: int = 30, limit: int = 100
+    ) -> dict:
+        """Poll the gateway for every stale PENDING order and settle it.
+
+        Selects up to `limit` gateway-routed PENDING orders whose `created_at`
+        is older than `older_than_minutes`, oldest first.  For each one it
+        calls the provider's fetch_status and, when the status has moved,
+        applies the transition via _apply_status.
+
+        Returns a summary dict with keys:
+            checked, settled_paid, cancelled, still_pending, errors
+        """
+        from datetime import datetime, timedelta, timezone
+
+        from sqlalchemy import and_
+
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=older_than_minutes)
+
+        stmt = (
+            select(Order)
+            .where(
+                and_(
+                    Order.status == OrderStatus.PENDING,
+                    Order.created_at < cutoff,
+                    Order.gateway_code.isnot(None),
+                    Order.payment_method.in_(["prepaid", "split_cod"]),
+                )
+            )
+            .order_by(Order.created_at.asc())
+            .limit(limit)
+        )
+        orders = self.db.execute(stmt).scalars().all()
+
+        checked = 0
+        settled_paid = 0
+        cancelled = 0
+        still_pending = 0
+        errors = 0
+
+        for order in orders:
+            checked += 1
+            try:
+                provider = get_provider_for_order(self.db, order)
+                result = provider.fetch_status(
+                    order.payment_intent_id, order.payment_provider_ref
+                )
+                if result.status != PaymentStatus.PENDING:
+                    self._apply_status(
+                        order, result.status,
+                        gateway_amount_minor=result.amount_minor,
+                    )
+                    if result.status == PaymentStatus.SUCCESS:
+                        settled_paid += 1
+                    else:
+                        cancelled += 1
+                    outcome = result.status.value
+                else:
+                    still_pending += 1
+                    outcome = PaymentStatus.PENDING.value
+
+                record_payment_event(
+                    event_type=PaymentEventType.RECONCILE,
+                    order_id=order.id,
+                    merchant_transaction_id=order.payment_intent_id,
+                    gateway_code=order.gateway_code,
+                    payment_status=outcome,
+                    provider_ref=result.provider_transaction_id,
+                )
+            except Exception as exc:
+                errors += 1
+                logger.warning(
+                    "reconcile_pending: error on order=%s mtid=%s: %s",
+                    order.id,
+                    order.payment_intent_id,
+                    exc,
+                )
+                record_payment_event(
+                    event_type=PaymentEventType.GATEWAY_ERROR,
+                    order_id=order.id,
+                    merchant_transaction_id=order.payment_intent_id,
+                    gateway_code=order.gateway_code,
+                    message=str(exc),
+                )
+
+        logger.info(
+            "reconcile_pending: checked=%s paid=%s cancelled=%s pending=%s errors=%s",
+            checked, settled_paid, cancelled, still_pending, errors,
+        )
+        return {
+            "checked": checked,
+            "settled_paid": settled_paid,
+            "cancelled": cancelled,
+            "still_pending": still_pending,
+            "errors": errors,
+        }
 
     # ---- internals ----
 
@@ -597,6 +743,15 @@ class PaymentService:
                         expected_minor,
                         gateway_amount_minor,
                     )
+                    record_payment_event(
+                        event_type=PaymentEventType.AMOUNT_MISMATCH,
+                        order_id=order.id,
+                        merchant_transaction_id=order.payment_intent_id,
+                        gateway_code=order.gateway_code,
+                        payment_status=PaymentStatus.SUCCESS.value,
+                        amount_reported_minor=gateway_amount_minor,
+                        amount_expected_minor=expected_minor,
+                    )
                     self.db.commit()
                     return
             self._mark_paid(order)
@@ -606,6 +761,17 @@ class PaymentService:
             self._restore_stock(order)
         # PENDING -> no change.
         self.db.commit()
+
+        # Record the real transition (SUCCESS→PAID or FAILED→CANCELLED).
+        # Skip PENDING since no state change happened.
+        if payment_status in (PaymentStatus.SUCCESS, PaymentStatus.FAILED):
+            record_payment_event(
+                event_type=PaymentEventType.STATUS_APPLIED,
+                order_id=order.id,
+                merchant_transaction_id=order.payment_intent_id,
+                gateway_code=order.gateway_code,
+                payment_status=payment_status.value,
+            )
 
         # Notifications go AFTER commit so the customer never gets a
         # "your order is paid" email for a row that didn't actually save.

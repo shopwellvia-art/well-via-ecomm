@@ -17,3 +17,22 @@ services:
 
   nginx:
     restart: always
+
+  payment-reconcile-cron:
+    image: alpine:3.20
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      BACKEND_URL: http://backend:8000
+      PAYMENT_RECONCILE_TOKEN: ${PAYMENT_RECONCILE_TOKEN}
+    command: >
+      sh -c "apk add --no-cache curl &&
+             while true; do
+               sleep 600 &&
+               curl -sS -X POST
+                 -H \"Authorization: Bearer $$PAYMENT_RECONCILE_TOKEN\"
+                 -H \"Content-Type: application/json\"
+                 -d '{\"older_than_minutes\":30,\"limit\":100}'
+                 $$BACKEND_URL/api/v1/payments/admin/reconcile-pending;
+             done"

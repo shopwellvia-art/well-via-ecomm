@@ -12,7 +12,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Header, Request, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db, require_permission
 from app.core.config import settings
 from app.core.exceptions import ForbiddenError, NotFoundError, ValidationError
 from app.integrations.payments.registry import get_gateway
@@ -24,9 +24,9 @@ from app.schemas.payment import (
     CheckoutResponse,
     MockWebhookRequest,
     PaymentStatusResponse,
+    ReconcilePendingRequest,
+    ReconcilePendingResponse,
 )
-from app.services.payment_gateway_service import PaymentGatewayService
-from app.services.payment_method_config_service import PaymentMethodConfigService
 from app.services.payment_service import PaymentService
 
 checkout_router = APIRouter()
@@ -110,18 +110,17 @@ def mock_webhook(
     payload: MockWebhookRequest,
     db: Session = Depends(get_db),
 ):
-    # Guard so this stays out of production paths. The active provider now
-    # lives in the DB (admin-configurable), so read it from there rather than
-    # the env var. Additionally, reject in production even if the DB still has
-    # the mock provider set — a misconfigured prod deployment must not expose
-    # this endpoint.
+    # Hard-disable in production regardless of any DB state — a misconfigured
+    # prod deployment must never expose this unsigned settle path.
     if (settings.ENVIRONMENT or "").lower() == "production":
         raise ForbiddenError("Mock webhook is disabled in production.")
-    active_provider = (PaymentGatewayService(db).get().provider or "mock").lower()
-    if active_provider != "mock":
-        raise ForbiddenError("Mock webhook disabled when a real provider is configured.")
     if payload.action not in {"approve", "decline"}:
         raise ValidationError("action must be 'approve' or 'decline'.")
+    # Whether this settle is allowed is decided per-order from the order's own
+    # gateway_code inside mark_mock_decision — NOT from the deprecated
+    # PaymentGatewayConfig "active provider" row, which the checkout factory no
+    # longer consults. Reading that stale row caused a split-brain: a real
+    # order could be mock-settled, or a genuine mock order blocked.
     order = PaymentService(db).mark_mock_decision(
         payload.merchant_transaction_id, payload.action
     )
@@ -179,3 +178,26 @@ async def generic_webhook(
 
     PaymentService(db).handle_webhook(body, signature, gateway_code=gateway_code)
     return {"ok": True}
+
+
+@payments_router.post(
+    "/admin/reconcile-pending",
+    response_model=ReconcilePendingResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_permission("payments.manage"))],
+    summary="Reconcile stale PENDING gateway orders against the provider",
+)
+def reconcile_pending(
+    payload: ReconcilePendingRequest = ReconcilePendingRequest(),
+    db: Session = Depends(get_db),
+) -> ReconcilePendingResponse:
+    """Poll the gateway for every PENDING order older than `older_than_minutes`
+    and settle any whose status has moved.  Capped at `limit` orders per call.
+
+    Requires the ``payments.manage`` permission.
+    """
+    result = PaymentService(db).reconcile_pending(
+        older_than_minutes=payload.older_than_minutes,
+        limit=payload.limit,
+    )
+    return ReconcilePendingResponse(**result)

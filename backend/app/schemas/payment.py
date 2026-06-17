@@ -98,3 +98,30 @@ class MockWebhookRequest(BaseModel):
 
     merchant_transaction_id: str
     action: str = Field(pattern="^(approve|decline)$")
+
+
+class ReconcilePendingRequest(BaseModel):
+    """Optional body for POST /payments/admin/reconcile-pending."""
+
+    older_than_minutes: int = Field(
+        default=30,
+        ge=1,
+        le=1440,
+        description="Reconcile orders older than this many minutes (1–1440).",
+    )
+    limit: int = Field(
+        default=100,
+        ge=1,
+        le=500,
+        description="Maximum number of orders to check per run (1–500).",
+    )
+
+
+class ReconcilePendingResponse(BaseModel):
+    """Summary returned by POST /payments/admin/reconcile-pending."""
+
+    checked: int
+    settled_paid: int
+    cancelled: int
+    still_pending: int
+    errors: int

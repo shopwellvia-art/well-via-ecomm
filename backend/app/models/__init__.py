@@ -13,6 +13,7 @@ from app.models.loyalty import (
     VipTier,
 )
 from app.models.order import Order, OrderItem, OrderStatus
+from app.models.payment_event import PaymentEvent, PaymentEventType
 from app.models.payment_gateway import PaymentGatewayConfig
 from app.models.payment_method import PaymentMethod
 from app.models.product import Category, Product, ProductImage
@@ -49,6 +50,8 @@ __all__ = [
     "Order",
     "OrderItem",
     "OrderStatus",
+    "PaymentEvent",
+    "PaymentEventType",
     "PaymentGatewayConfig",
     "PaymentMethod",
     "Permission",
