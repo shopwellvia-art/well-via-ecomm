@@ -14,10 +14,10 @@ import time
 
 import httpx
 
-from app.core.exceptions import AppError
 from app.integrations.payments.base import (
     InitiateRequest,
     InitiateResponse,
+    PaymentGatewayError,
     PaymentStatus,
     StatusResponse,
     provider_rejection,
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 _BASE = "https://api.stripe.com/v1"
 
 
-class StripeError(AppError):
+class StripeError(PaymentGatewayError):
     code = "payment_provider_error"
 
 

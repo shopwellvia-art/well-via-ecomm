@@ -16,10 +16,10 @@ import logging
 
 import httpx
 
-from app.core.exceptions import AppError
 from app.integrations.payments.base import (
     InitiateRequest,
     InitiateResponse,
+    PaymentGatewayError,
     PaymentStatus,
     StatusResponse,
     provider_rejection,
@@ -33,7 +33,7 @@ _BASES = {
 }
 
 
-class PayPalError(AppError):
+class PayPalError(PaymentGatewayError):
     code = "payment_provider_error"
 
 

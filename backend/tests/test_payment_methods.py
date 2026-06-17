@@ -144,6 +144,13 @@ def _reset_razorpay(db: Session) -> None:
     )
 
 
+def _enable_mock(db: Session) -> None:
+    """Ensure the mock gateway is enabled — tests must not assume it. The seed
+    migration disables mock once a real gateway is configured, and other test
+    modules toggle it, so any test relying on mock enables it explicitly."""
+    PaymentMethodConfigService(db).update("mock", PaymentMethodUpdate(enabled=True))
+
+
 def _get_admin_token(client: TestClient) -> str:
     """Obtain a bearer token for the seeded admin account.
 
@@ -402,6 +409,7 @@ class TestPublicActiveGatewayList:
         db = SessionLocal()
         try:
             _reset_razorpay(db)  # ensure razorpay is disabled and has no creds
+            _enable_mock(db)     # mock is the gateway this test expects active
             svc = PaymentMethodConfigService(db)
             all_items = svc.list_items()
             active = [i for i in all_items if i.enabled and i.implemented and i.ready]
@@ -560,6 +568,7 @@ class TestCheckoutWithGatewayCode:
         order_ids: list[int] = []
         db = SessionLocal()
         try:
+            _enable_mock(db)
             user = _make_user(db)
             user_ids.append(user.id)
             prod = _make_product(db)
@@ -594,9 +603,22 @@ class TestCheckoutWithGatewayCode:
         user_ids: list[int] = []
         product_ids: list[int] = []
         order_ids: list[int] = []
+        re_enable: list[str] = []
         db = SessionLocal()
         try:
             _reset_razorpay(db)  # ensure no real gateway is enabled
+            # Make mock the ONLY enabled implemented gateway so auto-resolve is
+            # deterministic regardless of ambient dev config (e.g. a PhonePe UAT
+            # row left enabled — it has a lower sort_order than mock and would
+            # otherwise win). Snapshot the others, disable them, restore later.
+            cfg = PaymentMethodConfigService(db)
+            re_enable = [
+                i.code for i in cfg.list_items()
+                if i.implemented and i.enabled and i.code != "mock"
+            ]
+            for code in re_enable:
+                cfg.update(code, PaymentMethodUpdate(enabled=False))
+            cfg.update("mock", PaymentMethodUpdate(enabled=True))
 
             user = _make_user(db)
             user_ids.append(user.id)
@@ -619,6 +641,13 @@ class TestCheckoutWithGatewayCode:
             )
             assert order.status.value == "pending"
         finally:
+            # Restore the gateways we disabled (creds unchanged → still ready).
+            restore = PaymentMethodConfigService(db)
+            for code in re_enable:
+                try:
+                    restore.update(code, PaymentMethodUpdate(enabled=True))
+                except Exception:
+                    pass
             db.rollback()
             _cleanup(user_ids, product_ids, order_ids)
             db.close()

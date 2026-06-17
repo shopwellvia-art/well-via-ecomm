@@ -18,8 +18,40 @@ from dataclasses import dataclass
 from typing import Protocol
 
 import httpx
+from fastapi import status
 
 from app.core.exceptions import AppError
+
+
+class PaymentGatewayError(AppError):
+    """Upstream payment gateway rejected or failed a request.
+
+    Surfaces as 502 Bad Gateway — the failure is upstream, not a bug in our
+    app — and carries the gateway's own code/message via ``message`` /
+    ``details`` (see ``provider_rejection``). Every concrete provider error
+    class subclasses this so a gateway failure during checkout never reads as
+    a generic 500 Internal Server Error.
+    """
+
+    status_code = status.HTTP_502_BAD_GATEWAY
+    code = "payment_provider_error"
+
+
+_LIVE_ALIASES = {"live", "production", "prod"}
+
+
+def normalize_environment(value: str | None) -> str:
+    """Canonicalize a gateway environment to exactly ``"sandbox"`` or ``"live"``.
+
+    Accepts common live aliases (``"production"``, ``"prod"``) so a
+    misconfigured row can't silently fall through to the sandbox base URL in
+    the factory. Anything not recognized as live (``None``, ``"sandbox"``,
+    ``"test"``, ``"uat"``, unknown) resolves to ``"sandbox"`` — the safe
+    default that never makes real charges.
+    """
+    if value and value.strip().lower() in _LIVE_ALIASES:
+        return "live"
+    return "sandbox"
 
 
 class PaymentStatus(str, enum.Enum):

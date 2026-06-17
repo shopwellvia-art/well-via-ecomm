@@ -13,10 +13,10 @@ import logging
 
 import httpx
 
-from app.core.exceptions import AppError
 from app.integrations.payments.base import (
     InitiateRequest,
     InitiateResponse,
+    PaymentGatewayError,
     PaymentStatus,
     StatusResponse,
     provider_rejection,
@@ -34,7 +34,7 @@ _STATUS_MAP = {
 }
 
 
-class RazorpayError(AppError):
+class RazorpayError(PaymentGatewayError):
     code = "payment_provider_error"
 
 

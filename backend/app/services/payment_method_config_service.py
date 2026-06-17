@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.crypto import decrypt_secret, encrypt_secret
 from app.core.exceptions import NotFoundError, ValidationError
+from app.integrations.payments.base import normalize_environment
 from app.integrations.payments.registry import GatewayDef, get_gateway
 from app.models.payment_method import PaymentMethod
 from app.schemas.payment_method import (
@@ -58,7 +59,7 @@ class PaymentMethodConfigService:
 
         # --- environment ---
         if payload.environment is not None:
-            row.environment = payload.environment
+            row.environment = normalize_environment(payload.environment)
 
         # --- credentials merge ---
         current_creds = self._decrypt_creds(row)

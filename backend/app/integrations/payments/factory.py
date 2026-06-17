@@ -20,7 +20,7 @@ import logging
 from sqlalchemy.orm import Session
 
 from app.core.config import settings as env_settings
-from app.integrations.payments.base import PaymentProvider
+from app.integrations.payments.base import PaymentProvider, normalize_environment
 from app.integrations.payments.flutterwave import FlutterwaveProvider
 from app.integrations.payments.mock import MockProvider
 from app.integrations.payments.paypal import PayPalProvider
@@ -77,7 +77,7 @@ def get_provider_for_order(db: Session, order: Order) -> PaymentProvider:
 
 def _build_provider(row: PaymentMethod, creds: dict[str, str]) -> PaymentProvider:
     code = row.gateway_code
-    env = row.environment or "sandbox"
+    env = normalize_environment(row.environment)
 
     if code == "mock":
         return MockProvider(

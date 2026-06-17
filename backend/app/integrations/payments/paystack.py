@@ -13,10 +13,10 @@ import logging
 
 import httpx
 
-from app.core.exceptions import AppError
 from app.integrations.payments.base import (
     InitiateRequest,
     InitiateResponse,
+    PaymentGatewayError,
     PaymentStatus,
     StatusResponse,
     provider_rejection,
@@ -29,7 +29,7 @@ _BASE = "https://api.paystack.co"
 _FAILED_STATUSES = {"failed", "abandoned", "reversed"}
 
 
-class PaystackError(AppError):
+class PaystackError(PaymentGatewayError):
     code = "payment_provider_error"
 
 

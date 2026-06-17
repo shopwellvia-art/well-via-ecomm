@@ -70,7 +70,10 @@ jobs:
             tests/test_payment_webhook_lifecycle.py \
             tests/test_payment_status_polling.py \
             tests/test_cod_and_split_checkout.py \
-            tests/test_payment_events_and_reconcile.py -v
+            tests/test_payment_events_and_reconcile.py \
+            tests/test_payment_robustness.py \
+            tests/test_payment_methods.py \
+            tests/unit/test_payment_provider_errors.py -v
 
       - name: Dump backend logs on failure
         if: failure()
