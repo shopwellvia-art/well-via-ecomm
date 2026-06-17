@@ -10,6 +10,7 @@ from app.api.v1.endpoints import (
     cod,
     coupons,
     dashboard,
+    database,
     footer,
     hero_slides,
     loyalty,
@@ -73,6 +74,8 @@ api_router.include_router(cod.router, prefix="/cod", tags=["cod"])
 api_router.include_router(returns.admin_router, prefix="/returns/admin", tags=["returns"])
 api_router.include_router(returns.customer_router, prefix="/returns", tags=["returns"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
+# Superadmin-only destructive maintenance: POST /admin/database/truncate
+api_router.include_router(database.router, prefix="/admin/database", tags=["database"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(footer.router, prefix="/footer", tags=["footer"])
 api_router.include_router(site_pages.router, prefix="/site-pages", tags=["site-pages"])

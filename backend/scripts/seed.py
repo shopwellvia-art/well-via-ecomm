@@ -20,9 +20,9 @@ from app.models.product import Category, Product  # noqa: E402
 from app.models.user import User  # noqa: E402
 
 ADMIN = {
-    "email": "admin@lumen.store",
-    "full_name": "Lumen Admin",
-    "password": "Admin123!",
+    "email": "vinay@gmail.com",
+    "full_name": "Vinay",
+    "password": "vinay@123",
 }
 
 # Fixed storefront account for local/dev testing (quick-login button on /login).

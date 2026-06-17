@@ -32,7 +32,7 @@ def login(email, pwd):
     return body["access_token"]
 
 
-admin = login("admin@lumen.store", "Admin123!")
+admin = login("vinay@gmail.com", "vinay@123")
 req("PATCH", "/settings", {"updates": {
     "cod.enabled": "true",
     "cod.require_otp": "true",

@@ -67,8 +67,8 @@ function TrustBadges() {
 const TEST_ACCOUNTS = [
   {
     label: 'Admin',
-    email: 'admin@lumen.store',
-    password: 'Admin123!',
+    email: 'vinay@gmail.com',
+    password: 'vinay@123',
     icon: ShieldCheck,
   },
   {

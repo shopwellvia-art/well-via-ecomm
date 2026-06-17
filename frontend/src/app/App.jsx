@@ -5,6 +5,7 @@ import Layout from '@/components/layout/Layout.jsx';
 import AdminLayout from '@/components/admin/AdminLayout.jsx';
 import RequireAdmin from './RequireAdmin.jsx';
 import RequirePermission from './RequirePermission.jsx';
+import RequireSuperadmin from './RequireSuperadmin.jsx';
 import ScrollToTop from './ScrollToTop.jsx';
 import AuthBootstrap from './AuthBootstrap.jsx';
 import { PageFallback } from '@/components/feedback/PageFallback.jsx';
@@ -56,6 +57,7 @@ const AdminOrderDetailPage = lazy(() => import('@/pages/admin/AdminOrderDetailPa
 const AdminReturnsPage = lazy(() => import('@/pages/admin/AdminReturnsPage.jsx'));
 const AdminSalesAnalyticsPage = lazy(() => import('@/pages/admin/AdminSalesAnalyticsPage.jsx'));
 const AdminProfitAnalyticsPage = lazy(() => import('@/pages/admin/AdminProfitAnalyticsPage.jsx'));
+const AdminDangerZonePage = lazy(() => import('@/pages/admin/AdminDangerZonePage.jsx'));
 
 export default function App() {
   return (
@@ -231,6 +233,14 @@ export default function App() {
                 <RequirePermission permission="dashboard.view">
                   <AdminProfitAnalyticsPage />
                 </RequirePermission>
+              }
+            />
+            <Route
+              path="admin/danger"
+              element={
+                <RequireSuperadmin>
+                  <AdminDangerZonePage />
+                </RequireSuperadmin>
               }
             />
           </Route>

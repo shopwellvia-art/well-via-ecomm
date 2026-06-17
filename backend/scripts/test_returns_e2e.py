@@ -26,7 +26,7 @@ def req(method, path, body=None, token=None):
         return e.code, json.loads(e.read() or b"null")
 
 
-_, alogin = req("POST", "/auth/login", {"email": "admin@lumen.store", "password": "Admin123!"})
+_, alogin = req("POST", "/auth/login", {"email": "vinay@gmail.com", "password": "vinay@123"})
 admin = alogin["access_token"]
 
 req("PATCH", "/settings", {"updates": {

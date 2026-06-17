@@ -29,7 +29,7 @@ def login(email, password):
     return body["access_token"]
 
 
-admin = login("admin@lumen.store", "Admin123!")
+admin = login("vinay@gmail.com", "vinay@123")
 
 req("PATCH", "/settings", {"updates": {
     "shipping.free_threshold": "500",

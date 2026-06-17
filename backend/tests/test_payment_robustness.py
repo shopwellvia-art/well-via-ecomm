@@ -122,7 +122,7 @@ def _admin_token(client: TestClient) -> str:
     try:
         resp = client.post(
             "/api/v1/auth/login",
-            json={"email": "admin@lumen.store", "password": "Admin123!"},
+            json={"email": "vinay@gmail.com", "password": "vinay@123"},
         )
         assert resp.status_code == 200, f"Login failed: {resp.text}"
         return resp.json()["access_token"]

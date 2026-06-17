@@ -28,6 +28,7 @@ import {
   BarChart3,
   TrendingUp,
   PiggyBank,
+  AlertOctagon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { useAuthStore } from '@/features/auth/store.js';
@@ -79,6 +80,9 @@ function useVisibleNav() {
   const perms = user?.permissions || [];
 
   function isVisible(item) {
+    // `superadminOnly` items show ONLY for the is_admin tier — never for scoped
+    // staff, even those who happen to hold every granular permission.
+    if (item.superadminOnly) return isAdmin;
     if (item.permission == null) return true;
     if (isAdmin) return true;
     return perms.includes(item.permission);
@@ -88,7 +92,7 @@ function useVisibleNav() {
   const frontendChildren = FRONTEND_GROUP.children.filter(isVisible);
   const analyticsChildren = ANALYTICS_GROUP.children.filter(isVisible);
 
-  return { flatItems, frontendChildren, analyticsChildren };
+  return { flatItems, frontendChildren, analyticsChildren, isSuperadmin: isAdmin };
 }
 
 function NavItem({ item, onNavigate }) {
@@ -192,7 +196,7 @@ function FrontendGroup({ children, onNavigate }) {
 function SidebarContent({ onNavigate }) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const { flatItems, frontendChildren, analyticsChildren } = useVisibleNav();
+  const { flatItems, frontendChildren, analyticsChildren, isSuperadmin } = useVisibleNav();
 
   // Split flat items: place Frontend group where the Hero item used to be
   // (after Categories, before Coupons — index 4 in the original NAV order).
@@ -236,6 +240,30 @@ function SidebarContent({ onNavigate }) {
 
         {/* Collapsible Analytics group */}
         <CollapsibleGroup group={ANALYTICS_GROUP} children={analyticsChildren} onNavigate={onNavigate} />
+
+        {/* Danger zone — superadmin (is_admin) only, visually set apart in red. */}
+        {isSuperadmin && (
+          <div className="mt-2 border-t border-line-subtle pt-2">
+            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-danger/70">
+              Danger zone
+            </p>
+            <NavLink
+              to="/admin/danger"
+              onClick={onNavigate}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-3 rounded-sm px-3 py-2.5 text-sm transition-colors focus-visible:focus-ring',
+                  isActive
+                    ? 'bg-danger/12 text-danger'
+                    : 'text-danger/80 hover:bg-danger/10 hover:text-danger',
+                )
+              }
+            >
+              <AlertOctagon className="size-4" aria-hidden="true" />
+              Truncate database
+            </NavLink>
+          </div>
+        )}
       </nav>
 
       <div className="mt-auto flex shrink-0 flex-col gap-1 border-t border-line-subtle pt-3">

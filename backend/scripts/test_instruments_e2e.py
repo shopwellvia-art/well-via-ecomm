@@ -22,7 +22,7 @@ def req(m, p, b=None, t=None):
         return e.code, json.loads(e.read() or b"null")
 
 
-admin = req("POST", "/auth/login", {"email": "admin@lumen.store", "password": "Admin123!"})[1]["access_token"]
+admin = req("POST", "/auth/login", {"email": "vinay@gmail.com", "password": "vinay@123"})[1]["access_token"]
 req("PATCH", "/settings", {"updates": {
     "payments.instruments.upi.enabled": "true",
     "payments.instruments.upi.discount_percent": "5",
