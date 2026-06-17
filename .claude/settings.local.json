@@ -117,7 +117,11 @@
       "PowerShell(try { \\(Invoke-WebRequest -Uri \"http://localhost:5174/\" -UseBasicParsing -TimeoutSec 5\\).StatusCode } catch { \"5174 ERROR: $\\($_.Exception.Message\\)\" }; try { \\(Invoke-WebRequest -Uri \"http://localhost:5173/\" -UseBasicParsing -TimeoutSec 5\\).StatusCode } catch { \"5173 ERROR: $\\($_.Exception.Message\\)\" })",
       "PowerShell(Start-Sleep -Seconds 3; try { \\(Invoke-WebRequest -Uri \"http://localhost:8000/health\" -UseBasicParsing -TimeoutSec 5\\).Content } catch { \"ERROR: $\\($_.Exception.Message\\)\" }; docker ps --filter \"name=simpleecomers-backend-1\" --format \"{{.Status}}\")",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\); console.log\\('deps:', Object.keys\\(p.dependencies||{}\\).join\\(', '\\)\\)\")",
-      "Bash(ls src *)"
+      "Bash(ls src *)",
+      "Bash(python -m py_compile app/api/v1/endpoints/payments.py app/services/payment_service.py)",
+      "Bash(python -m py_compile app/integrations/payments/phonepe.py)",
+      "Bash(python -m py_compile app/integrations/payments/base.py app/integrations/payments/phonepe.py app/integrations/payments/razorpay.py app/integrations/payments/stripe.py app/integrations/payments/paystack.py app/integrations/payments/flutterwave.py app/integrations/payments/paypal.py)",
+      "Bash(xargs grep -l \"refund\")"
     ]
   }
 }
