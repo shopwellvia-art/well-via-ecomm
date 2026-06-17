@@ -1,0 +1,80 @@
+name: Backend tests
+
+# Runs the payment integration suite against a real MySQL + Redis stack.
+# These are integration tests (live DB via SessionLocal + FastAPI TestClient),
+# so we bring the compose stack up rather than running pytest bare.
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  payment-tests:
+    name: Payment integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # backend/.env is gitignored; synthesize a CI one. ENVIRONMENT must NOT be
+      # "production" or the mock webhook (used by several tests) is hard-disabled.
+      - name: Create backend/.env for CI
+        run: |
+          cat > backend/.env <<'EOF'
+          ENVIRONMENT=test
+          DEBUG=true
+          SECRET_KEY=ci-only-not-a-real-secret-rotate-me-0123456789abcdef
+          ACCESS_TOKEN_EXPIRE_MINUTES=30
+          REFRESH_TOKEN_EXPIRE_DAYS=7
+          MYSQL_HOST=mysql
+          MYSQL_PORT=3306
+          MYSQL_USER=ecom
+          MYSQL_PASSWORD=ecom_password
+          MYSQL_DB=ecommerce
+          REDIS_URL=redis://redis:6379/0
+          CORS_ORIGINS=["http://localhost:5173"]
+          EMAIL_BACKEND=console
+          STORAGE_BACKEND=local
+          FRONTEND_URL=http://localhost:5173
+          PAYMENT_RETURN_URL=http://localhost:5173/payments/return
+          EOF
+
+      - name: Start mysql, redis, backend
+        run: docker compose up -d --build mysql redis backend
+
+      - name: Wait for MySQL to be healthy
+        run: |
+          for i in $(seq 1 30); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q mysql)" 2>/dev/null || echo starting)"
+            if [ "$status" = "healthy" ]; then echo "MySQL healthy"; exit 0; fi
+            echo "waiting for mysql ($i): $status"; sleep 5
+          done
+          echo "MySQL did not become healthy in time"; docker compose logs mysql; exit 1
+
+      # Migrations seed the 26 payment_methods rows + COD/system settings the
+      # tests rely on. Retry briefly in case the backend container is still
+      # finishing its first boot.
+      - name: Apply migrations
+        run: |
+          for i in $(seq 1 6); do
+            if docker compose exec -T backend alembic upgrade head; then exit 0; fi
+            echo "migration attempt $i failed, retrying…"; sleep 5
+          done
+          echo "alembic upgrade head failed"; docker compose logs backend; exit 1
+
+      - name: Run payment integration tests
+        run: |
+          docker compose exec -T backend pytest \
+            tests/test_payment_webhook_lifecycle.py \
+            tests/test_payment_status_polling.py \
+            tests/test_cod_and_split_checkout.py -v
+
+      - name: Dump backend logs on failure
+        if: failure()
+        run: docker compose logs backend
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
