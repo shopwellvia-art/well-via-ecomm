@@ -32,3 +32,7 @@ export function useTestSms() {
     mutationFn: ({ to, body }) => settingsApi.testSms(to, body),
   });
 }
+
+export function useTestStorage() {
+  return useMutation({ mutationFn: () => settingsApi.testStorage() });
+}

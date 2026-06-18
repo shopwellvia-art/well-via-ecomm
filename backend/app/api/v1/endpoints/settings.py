@@ -159,3 +159,38 @@ def send_test_sms(
     except Exception as exc:  # noqa: BLE001
         raise AppError(f"SMS send failed: {exc}") from exc
     return {"detail": f"Test SMS sent to {payload.to}."}
+
+
+@router.post(
+    "/test-storage",
+    status_code=status.HTTP_200_OK,
+)
+def test_storage_connection(
+    actor: User = Depends(require_permission("settings.manage")),
+    db: Session = Depends(get_db),
+):
+    """Verify the saved S3 settings with a head_bucket call.
+
+    Mirrors test-email / test-sms: 200 with {detail} on success, AppError
+    otherwise (the admin UI renders the message in a banner). Reads the
+    effective config (DB settings + env fallback) via resolve_config, so the
+    real secret value is used — never the masked view_value.
+    """
+    from app.storage import resolve_config
+
+    cfg = resolve_config(db)
+    if cfg["backend"] != "s3":
+        raise AppError(
+            "Storage backend is not set to S3. Switch it to S3 and save before testing."
+        )
+    if not (cfg.get("bucket") or "").strip():
+        raise AppError("No S3 bucket configured.")
+
+    from app.storage.s3 import S3Storage  # boto3 imported lazily
+
+    store = S3Storage(cfg)
+    try:
+        store.client.head_bucket(Bucket=store.bucket)
+    except Exception as exc:  # noqa: BLE001 — surface any boto3 / network error
+        raise AppError(f"S3 test failed: {exc}") from exc
+    return {"detail": f"S3 connection OK (bucket {store.bucket})."}

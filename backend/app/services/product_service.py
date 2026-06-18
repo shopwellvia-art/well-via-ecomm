@@ -13,7 +13,15 @@ class ProductService:
     def __init__(self, db: Session):
         self.db = db
         self.repo = ProductRepository(db)
-        self.storage = get_storage()
+        self._storage = None
+
+    @property
+    def storage(self):
+        # Built lazily so read-only paths (listing/search) never construct a
+        # storage backend; resolves admin-configured settings via self.db.
+        if self._storage is None:
+            self._storage = get_storage(self.db)
+        return self._storage
 
     def create(self, data: ProductCreate) -> Product:
         if self.repo.get_by_sku(data.sku):

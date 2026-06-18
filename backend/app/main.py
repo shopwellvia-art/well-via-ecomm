@@ -60,11 +60,12 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
-    # Serve locally-stored uploads. With STORAGE_BACKEND=s3 this is unused —
+    # Serve locally-stored uploads. Mounted unconditionally so an admin can
+    # switch the storage backend to local at runtime (Settings → Storage) and
+    # still have /media served. With S3 selected this is simply unused —
     # images are served straight from the bucket / CDN.
-    if settings.STORAGE_BACKEND == "local":
-        os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-        app.mount("/media", StaticFiles(directory=settings.UPLOAD_DIR), name="media")
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    app.mount("/media", StaticFiles(directory=settings.UPLOAD_DIR), name="media")
 
     @app.get("/health", tags=["system"])
     def health():

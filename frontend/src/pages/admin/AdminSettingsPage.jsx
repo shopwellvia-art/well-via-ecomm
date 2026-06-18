@@ -17,6 +17,7 @@ import {
   LogIn,
   PiggyBank,
   AlertOctagon,
+  Cloud,
 } from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Button } from '@/components/ui/Button.jsx';
@@ -32,6 +33,7 @@ import {
   useUpdateSettings,
   useTestEmail,
   useTestSms,
+  useTestStorage,
 } from '@/features/settings/hooks.js';
 
 const REDACTED = '***';
@@ -161,12 +163,26 @@ const FIELD_META = {
   'payments.instruments.wallet.enabled':        { label: 'Wallet — enabled', type: 'bool' },
   'payments.instruments.wallet.discount_percent': { label: 'Wallet — discount %', type: 'number',
     placeholder: '0' },
+
+  'storage.backend': { label: 'Storage backend', type: 'select', options: [
+    { value: '',      label: 'Default (from environment)' },
+    { value: 'local', label: 'Local disk (served at /media)' },
+    { value: 's3',    label: 'AWS S3 / S3-compatible' },
+  ]},
+  'storage.s3_region':          { label: 'S3 region', type: 'text', placeholder: 'ap-south-1' },
+  'storage.s3_bucket':          { label: 'S3 bucket name', type: 'text', placeholder: 'my-shop-media' },
+  'storage.s3_endpoint_url':    { label: 'S3 endpoint URL', type: 'text',
+    placeholder: 'Blank for AWS; https://blr1.digitaloceanspaces.com for Spaces' },
+  'storage.s3_public_base_url': { label: 'Public base URL / CDN', type: 'text',
+    placeholder: 'Blank = bucket URL; e.g. https://cdn.example.com' },
+  'storage.s3_access_key':      { label: 'Access key ID', type: 'text', placeholder: 'AKIA…' },
+  'storage.s3_secret_key':      { label: 'Secret access key', type: 'password' },
 };
 
 // Tabs that carry a danger-zone extra section (visual cue)
 const DANGER_ZONE_CATEGORIES = new Set(['security', 'cod']);
 
-const CATEGORY_ORDER = ['costs', 'payments', 'shipping', 'cod', 'login', 'email', 'sms', 'notifications', 'security', 'general'];
+const CATEGORY_ORDER = ['costs', 'payments', 'shipping', 'cod', 'login', 'email', 'sms', 'storage', 'notifications', 'security', 'general'];
 const TAB_META = {
   costs:         { label: 'Costs',         icon: PiggyBank  },
   payments:      { label: 'Payments',      icon: CreditCard },
@@ -175,6 +191,7 @@ const TAB_META = {
   login:         { label: 'Login Page',    icon: LogIn      },
   email:         { label: 'Email & SMTP',  icon: Mail       },
   sms:           { label: 'SMS',           icon: MessageSquare },
+  storage:       { label: 'Storage',       icon: Cloud      },
   notifications: { label: 'Notifications', icon: Bell       },
   security:      { label: 'Security',      icon: ShieldCheck },
   general:       { label: 'General',       icon: SettingsIcon },
@@ -458,6 +475,7 @@ export default function AdminSettingsPage() {
   // Test send
   const testEmail = useTestEmail();
   const testSms = useTestSms();
+  const testStorage = useTestStorage();
   const [testEmailTo, setTestEmailTo] = useState('');
   const [testSmsTo, setTestSmsTo] = useState('');
 
@@ -473,6 +491,13 @@ export default function AdminSettingsPage() {
       return { ok: false, message: testSms.error?.response?.data?.error?.message || 'Send failed' };
     }
     if (testSms.isSuccess) return { ok: true, message: testSms.data?.detail || 'Sent.' };
+    return null;
+  }
+  function storageResult() {
+    if (testStorage.isError) {
+      return { ok: false, message: testStorage.error?.response?.data?.error?.message || 'Test failed' };
+    }
+    if (testStorage.isSuccess) return { ok: true, message: testStorage.data?.detail || 'OK.' };
     return null;
   }
 
@@ -657,6 +682,34 @@ export default function AdminSettingsPage() {
                           </span>
                         </li>
                       </ul>
+                    </div>
+                  ) : cat === 'storage' ? (
+                    <div className="mt-6 rounded-xl border border-line-subtle bg-bg-sunken p-5">
+                      <CardHeader
+                        title="Test S3 connection"
+                        className="mb-4 border-none px-0 py-0"
+                        action={
+                          <Badge tone="info" size="sm">Test</Badge>
+                        }
+                      />
+                      <p className="mb-4 text-xs text-ink-secondary">
+                        Issues a head-bucket call using your saved S3 settings. Save changes
+                        first if you just edited them. Switching the backend affects new
+                        uploads only — existing image URLs are not rewritten.
+                      </p>
+                      <Button
+                        variant="outline"
+                        onClick={() => testStorage.mutate()}
+                        loading={testStorage.isPending}
+                      >
+                        <Send className="size-4" aria-hidden="true" />
+                        Test connection
+                      </Button>
+                      <TestSendBanner
+                        pending={testStorage.isPending}
+                        result={storageResult()}
+                        kind="S3 connection"
+                      />
                     </div>
                   ) : null
                 }

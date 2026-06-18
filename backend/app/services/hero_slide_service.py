@@ -13,7 +13,15 @@ class HeroSlideService:
     def __init__(self, db: Session):
         self.db = db
         self.repo = HeroSlideRepository(db)
-        self.storage = get_storage()
+        self._storage = None
+
+    @property
+    def storage(self):
+        # Built lazily so read-only paths never construct a storage backend;
+        # resolves admin-configured settings via self.db.
+        if self._storage is None:
+            self._storage = get_storage(self.db)
+        return self._storage
 
     def list_active(self) -> list[HeroSlide]:
         return self.repo.list_active()

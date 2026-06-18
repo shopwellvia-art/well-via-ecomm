@@ -2,7 +2,6 @@ import uuid
 
 import boto3
 
-from app.core.config import settings
 from app.core.exceptions import ValidationError
 from app.storage.base import CONTENT_TYPE_EXT, Storage
 
@@ -12,23 +11,28 @@ KEY_PREFIX = "products/"
 class S3Storage(Storage):
     """S3-compatible object storage — works with AWS S3 and DigitalOcean Spaces.
 
-    For AWS S3 leave S3_ENDPOINT_URL blank. For DO Spaces set it to e.g.
-    https://blr1.digitaloceanspaces.com.
+    Configured from a resolved ``cfg`` dict (built by ``app.storage.get_storage``
+    from admin settings with an env fallback), with keys: ``bucket``,
+    ``endpoint_url``, ``region``, ``access_key``, ``secret_key``,
+    ``public_base_url``. For AWS S3 leave ``endpoint_url`` blank; for DO Spaces
+    set it to e.g. https://blr1.digitaloceanspaces.com. Blank credentials fall
+    through to boto3's default chain (env vars / IAM instance role).
     """
 
-    def __init__(self) -> None:
-        self.bucket = settings.S3_BUCKET
+    def __init__(self, cfg: dict) -> None:
+        endpoint_url = (cfg.get("endpoint_url") or "").rstrip("/")
+        self.bucket = cfg.get("bucket") or ""
         self.client = boto3.client(
             "s3",
-            endpoint_url=settings.S3_ENDPOINT_URL or None,
-            region_name=settings.S3_REGION or None,
-            aws_access_key_id=settings.S3_ACCESS_KEY,
-            aws_secret_access_key=settings.S3_SECRET_KEY,
+            endpoint_url=endpoint_url or None,
+            region_name=cfg.get("region") or None,
+            aws_access_key_id=cfg.get("access_key") or None,
+            aws_secret_access_key=cfg.get("secret_key") or None,
         )
         # Public base for reading objects (a CDN domain, or the bucket URL).
         self.public_base = (
-            settings.S3_PUBLIC_BASE_URL.rstrip("/")
-            or f"{(settings.S3_ENDPOINT_URL or '').rstrip('/')}/{self.bucket}"
+            (cfg.get("public_base_url") or "").rstrip("/")
+            or f"{endpoint_url}/{self.bucket}"
         )
 
     def save(self, *, data: bytes, filename: str, content_type: str) -> str:

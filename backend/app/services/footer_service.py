@@ -60,6 +60,6 @@ class FooterService:
         max_bytes = settings.MAX_IMAGE_SIZE_MB * 1024 * 1024
         if len(file_bytes) > max_bytes:
             raise ValidationError(f"Logo must be under {settings.MAX_IMAGE_SIZE_MB} MB")
-        return get_storage().save(
+        return get_storage(self.db).save(
             data=file_bytes, filename=filename, content_type=content_type
         )
