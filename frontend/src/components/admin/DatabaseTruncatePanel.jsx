@@ -1,4 +1,4 @@
-import { useState } from 'react';
+  import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AlertOctagon, Database, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
@@ -68,7 +68,7 @@ export function DatabaseTruncatePanel() {
       variants={scaleIn}
       initial="hidden"
       animate="show"
-      className="rounded-xl border border-danger/40 bg-danger/4 p-5"
+      className="mt-8 rounded-xl border border-danger/40 bg-danger/4 p-5"
       aria-labelledby="db-danger-heading"
     >
       <div className="mb-3 flex items-center gap-2">
