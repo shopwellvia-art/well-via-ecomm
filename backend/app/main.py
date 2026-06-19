@@ -18,6 +18,7 @@ from app.core.observability import (
 )
 from app.db.session import SessionLocal, engine
 from app.services.rbac_seed import seed_rbac
+from app.services.settings_seed import seed_settings
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,9 @@ async def lifespan(app: FastAPI):
     try:
         with SessionLocal() as db:
             seed_rbac(db)
+            # Backfill any missing system_settings defaults (self-heals a DB
+            # whose settings rows were wiped, e.g. by the superadmin truncate).
+            seed_settings(db)
     except Exception as exc:
         logger.warning("RBAC seed skipped: %s", exc)
     # Start the observability flush thread (drains the in-process telemetry

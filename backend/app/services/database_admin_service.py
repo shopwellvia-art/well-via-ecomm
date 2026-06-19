@@ -22,6 +22,7 @@ from app.models.base import Base
 from app.models.customer import Customer
 from app.models.user import User
 from app.services.rbac_seed import seed_rbac
+from app.services.settings_seed import seed_settings
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,10 @@ def truncate_all_and_reseed(db: Session) -> dict:
     logger.warning("DATABASE TRUNCATE requested — wiping all application tables")
     count = _truncate_all(db)
     admin_email = _reseed_admin(db)
+    # The truncate also emptied system_settings; migrations won't re-run
+    # (alembic_version survives), so re-seed the shipped defaults here or the
+    # admin Settings page comes back blank.
+    seed_settings(db)
     logger.warning(
         "DATABASE TRUNCATE complete — %d tables emptied, admin %s re-seeded",
         count,

@@ -123,7 +123,10 @@
       "Bash(python -m py_compile app/integrations/payments/base.py app/integrations/payments/phonepe.py app/integrations/payments/razorpay.py app/integrations/payments/stripe.py app/integrations/payments/paystack.py app/integrations/payments/flutterwave.py app/integrations/payments/paypal.py)",
       "Bash(xargs grep -l \"refund\")",
       "Read(//d/ng/**)",
-      "Bash(grep -E \"\\\\.\\(jsx|tsx|ts|js\\)$\")"
+      "Bash(grep -E \"\\\\.\\(jsx|tsx|ts|js\\)$\")",
+      "Bash(python -c \"import ast; [ast.parse\\(open\\(f, encoding='utf-8'\\).read\\(\\)\\) for f in ['app/services/settings_seed.py','app/services/database_admin_service.py','app/main.py']]; print\\('syntax OK'\\)\")",
+      "Bash(python -m pytest tests/unit/test_settings_seed.py -v)",
+      "PowerShell(docker compose exec *)"
     ]
   }
 }
