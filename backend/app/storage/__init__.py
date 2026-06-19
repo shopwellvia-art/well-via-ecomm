@@ -31,6 +31,7 @@ def resolve_config(db: Optional[Session]) -> dict:
         "access_key": settings.S3_ACCESS_KEY,
         "secret_key": settings.S3_SECRET_KEY,
         "public_base_url": settings.S3_PUBLIC_BASE_URL,
+        "acl": settings.S3_ACL,
     }
     if db is not None:
         # Lazy import to keep the storage package importable without the
@@ -47,6 +48,7 @@ def resolve_config(db: Optional[Session]) -> dict:
         cfg["public_base_url"] = svc.get_raw(
             "storage.s3_public_base_url", cfg["public_base_url"]
         )
+        cfg["acl"] = svc.get_raw("storage.s3_acl", cfg["acl"])
     cfg["backend"] = backend
     return cfg
 
@@ -68,6 +70,7 @@ def get_storage(db: Optional[Session] = None) -> Storage:
             cfg["access_key"],
             cfg["secret_key"],
             cfg["public_base_url"],
+            cfg["acl"],
         )
     else:
         # Local config is env-driven (no admin settings), so the signature only

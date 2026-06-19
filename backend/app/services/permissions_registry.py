@@ -66,6 +66,12 @@ PERMISSIONS: tuple[PermissionDef, ...] = (
     PermissionDef("referrals.view", "View referral program activity", "Loyalty"),
     # Audit
     PermissionDef("audit.view", "View the admin action audit log", "Audit"),
+    # Observability / APM
+    PermissionDef(
+        "observability.view",
+        "View the backend observability / APM dashboard (latency, errors, slow queries)",
+        "Observability",
+    ),
     # Payments
     PermissionDef(
         "payments.manage",

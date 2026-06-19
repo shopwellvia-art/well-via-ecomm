@@ -57,6 +57,7 @@ const AdminOrderDetailPage = lazy(() => import('@/pages/admin/AdminOrderDetailPa
 const AdminReturnsPage = lazy(() => import('@/pages/admin/AdminReturnsPage.jsx'));
 const AdminSalesAnalyticsPage = lazy(() => import('@/pages/admin/AdminSalesAnalyticsPage.jsx'));
 const AdminProfitAnalyticsPage = lazy(() => import('@/pages/admin/AdminProfitAnalyticsPage.jsx'));
+const AdminObservabilityPage = lazy(() => import('@/pages/admin/AdminObservabilityPage.jsx'));
 const AdminDangerZonePage = lazy(() => import('@/pages/admin/AdminDangerZonePage.jsx'));
 
 export default function App() {
@@ -232,6 +233,14 @@ export default function App() {
               element={
                 <RequirePermission permission="dashboard.view">
                   <AdminProfitAnalyticsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="admin/observability"
+              element={
+                <RequirePermission permission="observability.view">
+                  <AdminObservabilityPage />
                 </RequirePermission>
               }
             />

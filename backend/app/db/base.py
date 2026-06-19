@@ -1,4 +1,5 @@
 from app.models.address import Address  # noqa: F401
+from app.models.observability import RequestLog, SlowQuery  # noqa: F401
 from app.models.audit import AuditEvent  # noqa: F401
 from app.models.base import Base  # noqa: F401
 from app.models.coupon import Coupon, CouponUsage  # noqa: F401

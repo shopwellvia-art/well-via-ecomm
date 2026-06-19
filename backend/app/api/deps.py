@@ -21,6 +21,7 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def get_current_user(
+    request: Request,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> User:
@@ -51,10 +52,14 @@ def get_current_user(
             except ValueError:
                 # Unparseable timestamps: don't lock the user out over a format quirk.
                 pass
+    # Tag the request for observability so the timing middleware can attribute
+    # the request to an actor (best-effort; the middleware reads it post-route).
+    request.state.obs_user_id = user.id
     return user
 
 
 def optional_current_user(
+    request: Request,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> User | None:
@@ -69,7 +74,10 @@ def optional_current_user(
         if payload.get("type") != "access":
             return None
         user = UserRepository(db).get(int(payload["sub"]))
-        return user if user and user.is_active else None
+        if user and user.is_active:
+            request.state.obs_user_id = user.id
+            return user
+        return None
     except Exception:  # noqa: BLE001 — anonymous fallback for any decode error
         return None
 

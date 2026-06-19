@@ -14,6 +14,7 @@ from app.api.v1.endpoints import (
     footer,
     hero_slides,
     loyalty,
+    observability,
     orders,
     payment_gateway,
     payment_instruments,
@@ -78,4 +79,5 @@ api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboar
 api_router.include_router(database.router, prefix="/admin/database", tags=["database"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(footer.router, prefix="/footer", tags=["footer"])
+api_router.include_router(observability.router, prefix="/observability", tags=["observability"])
 api_router.include_router(site_pages.router, prefix="/site-pages", tags=["site-pages"])

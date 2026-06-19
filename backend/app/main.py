@@ -11,7 +11,12 @@ from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestIDMiddleware, SecurityHeadersMiddleware
-from app.db.session import SessionLocal
+from app.core.observability import (
+    TimingMiddleware,
+    register_engine_instrumentation,
+    telemetry_buffer,
+)
+from app.db.session import SessionLocal, engine
 from app.services.rbac_seed import seed_rbac
 
 logger = logging.getLogger(__name__)
@@ -27,7 +32,15 @@ async def lifespan(app: FastAPI):
             seed_rbac(db)
     except Exception as exc:
         logger.warning("RBAC seed skipped: %s", exc)
-    yield
+    # Start the observability flush thread (drains the in-process telemetry
+    # buffer into MySQL off the request hot path).
+    if settings.OBS_ENABLED:
+        telemetry_buffer.start()
+    try:
+        yield
+    finally:
+        if settings.OBS_ENABLED:
+            telemetry_buffer.stop()
 
 
 def create_app() -> FastAPI:
@@ -56,6 +69,12 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(RequestIDMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
+
+    # Observability: instrument the engine for per-query timing and add the
+    # timing middleware last so it's outermost and measures the full request.
+    if settings.OBS_ENABLED:
+        register_engine_instrumentation(engine)
+        app.add_middleware(TimingMiddleware)
 
     register_exception_handlers(app)
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)

@@ -122,7 +122,8 @@
       "Bash(python -m py_compile app/integrations/payments/phonepe.py)",
       "Bash(python -m py_compile app/integrations/payments/base.py app/integrations/payments/phonepe.py app/integrations/payments/razorpay.py app/integrations/payments/stripe.py app/integrations/payments/paystack.py app/integrations/payments/flutterwave.py app/integrations/payments/paypal.py)",
       "Bash(xargs grep -l \"refund\")",
-      "Read(//d/ng/**)"
+      "Read(//d/ng/**)",
+      "Bash(grep -E \"\\\\.\\(jsx|tsx|ts|js\\)$\")"
     ]
   }
 }

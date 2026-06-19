@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     S3_ACCESS_KEY: str = ""
     S3_SECRET_KEY: str = ""
     S3_PUBLIC_BASE_URL: str = ""
+    # Object ACL on upload. Empty = send no ACL (required for buckets with ACLs
+    # disabled / "Bucket owner enforced"); set "public-read" only for legacy
+    # ACL-enabled buckets.
+    S3_ACL: str = ""
 
     # Email — "console" (dev: logs the message) or "smtp" (real delivery).
     EMAIL_BACKEND: str = "console"
@@ -97,6 +101,24 @@ class Settings(BaseSettings):
     #   PAYMENT_WEBHOOK_URL — the S2S callback URL handed to PhonePe.
     PAYMENT_RETURN_URL: str = "http://localhost:5173/payments/return"
     PAYMENT_WEBHOOK_URL: str = "http://localhost:8000/api/v1/payments/webhook/phonepe"
+
+    # Observability / APM. Per-request + slow-query timing is captured in-process
+    # and persisted off the hot path by a background flush thread (see
+    # app/core/observability/). Set OBS_ENABLED=false to disable instrumentation
+    # entirely (no middleware, no listeners, no flush thread).
+    OBS_ENABLED: bool = True
+    # Only queries at/over this many ms are persisted as slow queries (all
+    # queries still contribute to a request's db_ms regardless).
+    OBS_SLOW_QUERY_MS: int = 200
+    # Telemetry older than this is pruned by the flush thread's hourly sweep.
+    # 7 days — matches the dashboard's longest period (7d), so the UI never
+    # asks for data that has already been pruned.
+    OBS_RETENTION_DAYS: int = 7
+    # How long the flush thread waits to accumulate a batch before writing.
+    OBS_FLUSH_INTERVAL_SEC: float = 2.0
+    # Max buffered records; once full, new records are dropped (counted) rather
+    # than blocking the request.
+    OBS_BUFFER_MAX: int = 5000
 
     @model_validator(mode="after")
     def _validate_secret_key_in_production(self) -> "Settings":

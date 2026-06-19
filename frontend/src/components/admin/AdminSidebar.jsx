@@ -28,6 +28,7 @@ import {
   BarChart3,
   TrendingUp,
   PiggyBank,
+  Activity,
   AlertOctagon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
@@ -50,6 +51,7 @@ const NAV = [
   { to: '/admin/users', label: 'Users', icon: Users, end: false, permission: 'users.view' },
   { to: '/admin/roles', label: 'Roles', icon: ShieldCheck, end: false, permission: 'roles.view' },
   { to: '/admin/audit', label: 'Audit log', icon: History, end: false, permission: 'audit.view' },
+  { to: '/admin/observability', label: 'Observability', icon: Activity, end: false, permission: 'observability.view' },
   { to: '/admin/payment-methods', label: 'Payment Methods', icon: CreditCard, end: false, permission: 'payments.manage' },
   { to: '/admin/settings', label: 'Settings', icon: SettingsIcon, end: false, permission: 'settings.manage' },
 ];
