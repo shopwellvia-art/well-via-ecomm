@@ -4,7 +4,7 @@ import { useReducedMotion } from 'framer-motion';
 import { useCategories } from '@/features/categories/hooks.js';
 import { useProducts } from '@/features/products/hooks.js';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
-import { cn } from '@/lib/utils.js';
+import { cn, mediaUrl } from '@/lib/utils.js';
 
 /*
  * Flipkart-style category strip — white bar with circular icon + label tiles.
@@ -81,6 +81,8 @@ export default function CategoryMarquee() {
   // Finding 3: reduced page_size from 100 → 20 to cut initial-load payload.
   const { data: productsPage } = useProducts({ page: 1, page_size: 20 });
 
+  // Fallback image source: the first product seen per category. Used only when
+  // a category has no image of its own.
   const imageByCategoryId = useMemo(() => {
     const map = new Map();
     for (const p of productsPage?.items ?? []) {
@@ -173,7 +175,7 @@ export default function CategoryMarquee() {
                 >
                   <CategoryTile
                     category={c}
-                    imageUrl={imageByCategoryId.get(c.id)}
+                    imageUrl={mediaUrl(c.image_url) || mediaUrl(imageByCategoryId.get(c.id))}
                     isHidden={isDuplicate}
                   />
                 </li>

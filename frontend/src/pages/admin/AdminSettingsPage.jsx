@@ -179,23 +179,30 @@ const FIELD_META = {
   'storage.s3_secret_key':      { label: 'Secret access key', type: 'password' },
 };
 
-// Tabs that carry a danger-zone extra section (visual cue)
-const DANGER_ZONE_CATEGORIES = new Set(['security', 'cod']);
-
-const CATEGORY_ORDER = ['costs', 'payments', 'shipping', 'cod', 'login', 'email', 'sms', 'storage', 'notifications', 'security', 'general'];
-const TAB_META = {
-  costs:         { label: 'Costs',         icon: PiggyBank  },
-  payments:      { label: 'Payments',      icon: CreditCard },
-  shipping:      { label: 'Shipping',      icon: Truck      },
-  cod:           { label: 'Cash on Delivery', icon: Wallet  },
-  login:         { label: 'Login Page',    icon: LogIn      },
-  email:         { label: 'Email & SMTP',  icon: Mail       },
-  sms:           { label: 'SMS',           icon: MessageSquare },
-  storage:       { label: 'Storage',       icon: Cloud      },
-  notifications: { label: 'Notifications', icon: Bell       },
-  security:      { label: 'Security',      icon: ShieldCheck },
-  general:       { label: 'General',       icon: SettingsIcon },
+// Per-category metadata: sidebar label, icon, and a one-line blurb shown in the
+// content-panel header so the operator knows what each section governs.
+const CATEGORY_META = {
+  costs:         { label: 'Costs',            icon: PiggyBank,     blurb: 'Per-order cost inputs that feed profitability analytics.' },
+  payments:      { label: 'Payments',         icon: CreditCard,    blurb: 'Online payment instruments, discounts, and the suggested option.' },
+  shipping:      { label: 'Shipping',         icon: Truck,         blurb: 'Carrier integration, pickup warehouse, and free-shipping rules.' },
+  cod:           { label: 'Cash on Delivery', icon: Wallet,        blurb: 'COD eligibility, surcharges, and fraud guards.' },
+  login:         { label: 'Login Page',       icon: LogIn,         blurb: 'Trust badges shown on the customer sign-in screen.' },
+  email:         { label: 'Email & SMTP',     icon: Mail,          blurb: 'Outbound email backend and SMTP credentials.' },
+  sms:           { label: 'SMS',              icon: MessageSquare, blurb: 'SMS backend and Twilio credentials.' },
+  storage:       { label: 'Storage',          icon: Cloud,         blurb: 'Where uploaded media is stored — local disk or S3.' },
+  notifications: { label: 'Notifications',    icon: Bell,          blurb: 'Which order events email the customer.' },
+  security:      { label: 'Security',         icon: ShieldCheck,   blurb: 'Two-factor authentication policy.' },
+  general:       { label: 'General',          icon: SettingsIcon,  blurb: 'Miscellaneous runtime configuration.' },
 };
+
+// Categories grouped into navigable sections in the settings sub-sidebar.
+// Order within each group = display order; order of groups = top-to-bottom.
+const CATEGORY_GROUPS = [
+  { label: 'Commerce',      categories: ['payments', 'cod', 'shipping', 'costs'] },
+  { label: 'Communication', categories: ['email', 'sms', 'notifications'] },
+  { label: 'Storefront',    categories: ['login'] },
+  { label: 'System',        categories: ['storage', 'security', 'general'] },
+];
 
 function fieldType(key) {
   return FIELD_META[key]?.type || 'text';
@@ -501,23 +508,157 @@ export default function AdminSettingsPage() {
     return null;
   }
 
+  // Per-category supplementary panels (test senders, advisory notes) rendered
+  // beneath the editor for the active section.
+  function renderExtras(cat) {
+    if (cat === 'email') {
+      return (
+        <div className="mt-6 rounded-sm border border-line-subtle bg-bg-sunken p-5">
+          <CardHeader
+            title="Send a test email"
+            className="mb-4 border-none px-0 py-0"
+            action={<Badge tone="info" size="sm">Test</Badge>}
+          />
+          <p className="mb-4 text-xs text-ink-secondary">
+            Uses your saved SMTP credentials. Save changes first if you just edited them.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              type="email"
+              placeholder="you@example.com"
+              value={testEmailTo}
+              onChange={(e) => setTestEmailTo(e.target.value)}
+              aria-label="Test email recipient address"
+            />
+            <Button
+              variant="outline"
+              onClick={() => testEmail.mutate(testEmailTo)}
+              loading={testEmail.isPending}
+              disabled={!testEmailTo}
+            >
+              <Send className="size-4" aria-hidden="true" />
+              Send test
+            </Button>
+          </div>
+          <TestSendBanner pending={testEmail.isPending} result={emailResult()} kind="email" />
+        </div>
+      );
+    }
+    if (cat === 'sms') {
+      return (
+        <div className="mt-6 rounded-sm border border-line-subtle bg-bg-sunken p-5">
+          <CardHeader
+            title="Send a test SMS"
+            className="mb-4 border-none px-0 py-0"
+            action={<Badge tone="info" size="sm">Test</Badge>}
+          />
+          <p className="mb-4 text-xs text-ink-secondary">
+            Sends "Test SMS from your Lumen admin panel." via the active backend.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              placeholder="+14155551234"
+              value={testSmsTo}
+              onChange={(e) => setTestSmsTo(e.target.value)}
+              aria-label="Test SMS recipient phone number"
+            />
+            <Button
+              variant="outline"
+              onClick={() =>
+                testSms.mutate({
+                  to: testSmsTo,
+                  body: 'Test SMS from your Lumen admin panel.',
+                })
+              }
+              loading={testSms.isPending}
+              disabled={!testSmsTo}
+            >
+              <Send className="size-4" aria-hidden="true" />
+              Send test
+            </Button>
+          </div>
+          <TestSendBanner pending={testSms.isPending} result={smsResult()} kind="SMS" />
+        </div>
+      );
+    }
+    if (cat === 'security') {
+      return (
+        <div className="mt-6 rounded-sm border border-danger/30 bg-danger/4 p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <AlertOctagon className="size-4 text-danger" aria-hidden="true" />
+            <p className="text-sm font-semibold text-danger">Two-factor authentication notes</p>
+          </div>
+          <ul className="space-y-2 pl-1 text-xs text-ink-secondary">
+            <li className="flex items-start gap-2">
+              <span className="mt-1 size-1.5 shrink-0 rounded-full bg-ink-tertiary" />
+              <span>
+                <strong className="text-ink-primary">Off</strong>: 2FA is unavailable.
+                Existing enrolled users log in with just their password.
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="mt-1 size-1.5 shrink-0 rounded-full bg-ink-tertiary" />
+              <span>
+                <strong className="text-ink-primary">Optional</strong>: each user can
+                enable it on their Account → Security page.
+              </span>
+            </li>
+          </ul>
+        </div>
+      );
+    }
+    if (cat === 'storage') {
+      return (
+        <div className="mt-6 rounded-sm border border-line-subtle bg-bg-sunken p-5">
+          <CardHeader
+            title="Test S3 connection"
+            className="mb-4 border-none px-0 py-0"
+            action={<Badge tone="info" size="sm">Test</Badge>}
+          />
+          <p className="mb-4 text-xs text-ink-secondary">
+            Issues a head-bucket call using your saved S3 settings. Save changes
+            first if you just edited them. Switching the backend affects new
+            uploads only — existing image URLs are not rewritten.
+          </p>
+          <Button
+            variant="outline"
+            onClick={() => testStorage.mutate()}
+            loading={testStorage.isPending}
+          >
+            <Send className="size-4" aria-hidden="true" />
+            Test connection
+          </Button>
+          <TestSendBanner pending={testStorage.isPending} result={storageResult()} kind="S3 connection" />
+        </div>
+      );
+    }
+    return null;
+  }
+
   if (isLoading) {
     return (
       <AdminPage title="Settings" description="Loading…">
-        <div className="overflow-hidden rounded-xl border border-line-subtle bg-bg-elevated shadow-md">
-          <div className="flex flex-wrap gap-1 border-b border-line-subtle bg-bg-sunken/60 px-4 py-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-8 w-24 rounded-md" />
+        <div className="grid gap-6 lg:grid-cols-[248px_1fr]">
+          {/* Sidebar skeleton */}
+          <div className="hidden flex-col gap-2 rounded-sm border border-line-subtle bg-bg-elevated p-3 shadow-sm lg:flex">
+            {Array.from({ length: 9 }).map((_, i) => (
+              <Skeleton key={i} className="h-8 w-full rounded-sm" />
             ))}
           </div>
-          <div className="p-6">
-            <div className="grid gap-4 sm:grid-cols-2">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i}>
-                  <Skeleton variant="text" lines={1} className="mb-2 w-28" />
-                  <Skeleton className="h-10 rounded-lg" />
-                </div>
-              ))}
+          {/* Content skeleton */}
+          <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
+            <div className="border-b border-line-subtle px-6 py-4">
+              <Skeleton className="h-9 w-48 rounded-sm" />
+            </div>
+            <div className="p-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i}>
+                    <Skeleton variant="text" lines={1} className="mb-2 w-28" />
+                    <Skeleton className="h-10 rounded-sm" />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -525,199 +666,124 @@ export default function AdminSettingsPage() {
     );
   }
 
-  const tabs = CATEGORY_ORDER.filter((c) => itemsByCategory[c]?.length > 0);
+  // Build the navigable section list — only categories that actually have
+  // settings rows appear, preserving the group/order definitions above.
+  const groups = CATEGORY_GROUPS
+    .map((g) => ({
+      ...g,
+      categories: g.categories.filter((c) => itemsByCategory[c]?.length > 0),
+    }))
+    .filter((g) => g.categories.length > 0);
+
+  const allCats = groups.flatMap((g) => g.categories);
+  // Guard against an active tab that no longer has rows (e.g. after a reseed).
+  const currentCat = allCats.includes(activeTab) ? activeTab : allCats[0];
+  const activeMeta = CATEGORY_META[currentCat] || { label: currentCat, icon: SettingsIcon, blurb: '' };
+  const ActiveIcon = activeMeta.icon;
 
   return (
     <AdminPage
       title="Settings"
       description="Runtime configuration — changes take effect immediately. Sensitive values are masked once saved."
     >
-      {/* Tab bar + content card */}
-      <Card>
-        {/* Tab strip */}
-        <div
-          role="tablist"
-          className="flex flex-wrap gap-1 border-b border-line-subtle bg-bg-sunken/40 px-4 py-3"
-        >
-          {tabs.map((cat) => {
-            const meta = TAB_META[cat] || { label: cat, icon: SettingsIcon };
-            const Icon = meta.icon;
-            const isDirty = isCategoryDirty(cat);
-            return (
-              <button
-                key={cat}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === cat}
-                onClick={() => setActiveTab(cat)}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:focus-ring',
-                  activeTab === cat
-                    ? 'bg-accent/12 font-medium text-accent'
-                    : 'text-ink-secondary hover:bg-fill hover:text-ink-primary',
-                )}
-              >
-                <Icon className="size-4" aria-hidden="true" />
-                {meta.label}
-                {isDirty && activeTab !== cat && (
-                  <span className="size-1.5 rounded-full bg-warning" aria-label="unsaved changes" />
-                )}
-              </button>
-            );
-          })}
-        </div>
+      <div className="grid gap-6 lg:grid-cols-[248px_1fr]">
+        {/* ── Sub-sidebar: grouped section navigation ── */}
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          {/* Mobile / narrow — native grouped dropdown */}
+          <div className="lg:hidden">
+            <Select
+              label="Settings section"
+              value={currentCat}
+              onChange={(e) => setActiveTab(e.target.value)}
+            >
+              {groups.map((g) => (
+                <optgroup key={g.label} label={g.label}>
+                  {g.categories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {(CATEGORY_META[cat]?.label || cat) + (isCategoryDirty(cat) ? ' •' : '')}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </Select>
+          </div>
 
-        {/* Active tab content */}
-        <CardBody className="p-6">
-          {tabs.map((cat) =>
-            activeTab !== cat ? null : (
-              <CategoryEditor
-                key={cat}
-                category={cat}
-                items={itemsByCategory[cat] || []}
-                draft={draft}
-                dirty={isCategoryDirty(cat)}
-                onChange={setField}
-                onSave={() => saveCategory(cat)}
-                saving={update.isPending}
-                savedAt={savedAt}
-                extras={
-                  cat === 'email' ? (
-                    <div className="mt-6 rounded-xl border border-line-subtle bg-bg-sunken p-5">
-                      <CardHeader
-                        title="Send a test email"
-                        className="mb-4 border-none px-0 py-0"
-                        action={
-                          <Badge tone="info" size="sm">Test</Badge>
-                        }
-                      />
-                      <p className="mb-4 text-xs text-ink-secondary">
-                        Uses your saved SMTP credentials. Save changes first if you just edited them.
-                      </p>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <Input
-                          type="email"
-                          placeholder="you@example.com"
-                          value={testEmailTo}
-                          onChange={(e) => setTestEmailTo(e.target.value)}
-                          aria-label="Test email recipient address"
-                        />
-                        <Button
-                          variant="outline"
-                          onClick={() => testEmail.mutate(testEmailTo)}
-                          loading={testEmail.isPending}
-                          disabled={!testEmailTo}
+          {/* Desktop — vertical grouped nav rail */}
+          <Card flat className="hidden p-2 lg:block">
+            <nav className="flex flex-col gap-4">
+              {groups.map((g) => (
+                <div key={g.label}>
+                  <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-ink-tertiary">
+                    {g.label}
+                  </p>
+                  <div className="flex flex-col gap-0.5">
+                    {g.categories.map((cat) => {
+                      const meta = CATEGORY_META[cat] || { label: cat, icon: SettingsIcon };
+                      const Icon = meta.icon;
+                      const active = currentCat === cat;
+                      const isDirty = isCategoryDirty(cat);
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setActiveTab(cat)}
+                          aria-current={active ? 'page' : undefined}
+                          className={cn(
+                            'flex items-center gap-2.5 rounded-sm px-3 py-2 text-sm transition-colors focus-visible:focus-ring',
+                            active
+                              ? 'bg-accent/12 font-medium text-accent'
+                              : 'text-ink-secondary hover:bg-fill hover:text-ink-primary',
+                          )}
                         >
-                          <Send className="size-4" aria-hidden="true" />
-                          Send test
-                        </Button>
-                      </div>
-                      <TestSendBanner
-                        pending={testEmail.isPending}
-                        result={emailResult()}
-                        kind="email"
-                      />
-                    </div>
-                  ) : cat === 'sms' ? (
-                    <div className="mt-6 rounded-xl border border-line-subtle bg-bg-sunken p-5">
-                      <CardHeader
-                        title="Send a test SMS"
-                        className="mb-4 border-none px-0 py-0"
-                        action={
-                          <Badge tone="info" size="sm">Test</Badge>
-                        }
-                      />
-                      <p className="mb-4 text-xs text-ink-secondary">
-                        Sends "Test SMS from your Lumen admin panel." via the active backend.
-                      </p>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <Input
-                          placeholder="+14155551234"
-                          value={testSmsTo}
-                          onChange={(e) => setTestSmsTo(e.target.value)}
-                          aria-label="Test SMS recipient phone number"
-                        />
-                        <Button
-                          variant="outline"
-                          onClick={() =>
-                            testSms.mutate({
-                              to: testSmsTo,
-                              body: 'Test SMS from your Lumen admin panel.',
-                            })
-                          }
-                          loading={testSms.isPending}
-                          disabled={!testSmsTo}
-                        >
-                          <Send className="size-4" aria-hidden="true" />
-                          Send test
-                        </Button>
-                      </div>
-                      <TestSendBanner
-                        pending={testSms.isPending}
-                        result={smsResult()}
-                        kind="SMS"
-                      />
-                    </div>
-                  ) : cat === 'security' ? (
-                    <div className="mt-6 rounded-xl border border-danger/30 bg-danger/4 p-5">
-                      <div className="mb-3 flex items-center gap-2">
-                        <AlertOctagon className="size-4 text-danger" aria-hidden="true" />
-                        <p className="text-sm font-semibold text-danger">
-                          Two-factor authentication notes
-                        </p>
-                      </div>
-                      <ul className="space-y-2 pl-1 text-xs text-ink-secondary">
-                        <li className="flex items-start gap-2">
-                          <span className="mt-1 size-1.5 shrink-0 rounded-full bg-ink-tertiary" />
-                          <span>
-                            <strong className="text-ink-primary">Off</strong>: 2FA is unavailable.
-                            Existing enrolled users log in with just their password.
-                          </span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <span className="mt-1 size-1.5 shrink-0 rounded-full bg-ink-tertiary" />
-                          <span>
-                            <strong className="text-ink-primary">Optional</strong>: each user can
-                            enable it on their Account → Security page.
-                          </span>
-                        </li>
-                      </ul>
-                    </div>
-                  ) : cat === 'storage' ? (
-                    <div className="mt-6 rounded-xl border border-line-subtle bg-bg-sunken p-5">
-                      <CardHeader
-                        title="Test S3 connection"
-                        className="mb-4 border-none px-0 py-0"
-                        action={
-                          <Badge tone="info" size="sm">Test</Badge>
-                        }
-                      />
-                      <p className="mb-4 text-xs text-ink-secondary">
-                        Issues a head-bucket call using your saved S3 settings. Save changes
-                        first if you just edited them. Switching the backend affects new
-                        uploads only — existing image URLs are not rewritten.
-                      </p>
-                      <Button
-                        variant="outline"
-                        onClick={() => testStorage.mutate()}
-                        loading={testStorage.isPending}
-                      >
-                        <Send className="size-4" aria-hidden="true" />
-                        Test connection
-                      </Button>
-                      <TestSendBanner
-                        pending={testStorage.isPending}
-                        result={storageResult()}
-                        kind="S3 connection"
-                      />
-                    </div>
-                  ) : null
-                }
-              />
-            ),
-          )}
-        </CardBody>
-      </Card>
+                          <Icon className="size-4 shrink-0" aria-hidden="true" />
+                          <span className="flex-1 text-left">{meta.label}</span>
+                          {isDirty && (
+                            <span
+                              className="size-1.5 shrink-0 rounded-full bg-warning"
+                              aria-label="unsaved changes"
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </nav>
+          </Card>
+        </aside>
+
+        {/* ── Content panel: active section ── */}
+        <Card>
+          <CardHeader>
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-accent/12 text-accent">
+                <ActiveIcon className="size-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-ink-primary">{activeMeta.label}</p>
+                {activeMeta.blurb && (
+                  <p className="truncate text-xs text-ink-tertiary">{activeMeta.blurb}</p>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardBody className="p-6">
+            <CategoryEditor
+              key={currentCat}
+              category={currentCat}
+              items={itemsByCategory[currentCat] || []}
+              draft={draft}
+              dirty={isCategoryDirty(currentCat)}
+              onChange={setField}
+              onSave={() => saveCategory(currentCat)}
+              saving={update.isPending}
+              savedAt={savedAt}
+              extras={renderExtras(currentCat)}
+            />
+          </CardBody>
+        </Card>
+      </div>
     </AdminPage>
   );
 }

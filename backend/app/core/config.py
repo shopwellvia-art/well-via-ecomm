@@ -43,7 +43,12 @@ class Settings(BaseSettings):
     # Image storage. STORAGE_BACKEND: "local" (dev) or "s3" (AWS S3 / DO Spaces).
     STORAGE_BACKEND: str = "local"
     UPLOAD_DIR: str = "uploads"
-    MEDIA_BASE_URL: str = "http://localhost:8000"
+    # Base URL prefixed onto locally-stored upload URLs. Blank (the default)
+    # yields RELATIVE /media/... URLs, served same-origin through the Vite dev
+    # proxy and the nginx /media location — so images work in dev, in prod, and
+    # from any host. Set an absolute origin only when /media is served from a
+    # different host than the app (then the browser fetches it cross-origin).
+    MEDIA_BASE_URL: str = ""
     MAX_IMAGE_SIZE_MB: int = 15
     MAX_PRODUCT_IMAGES: int = 8
 

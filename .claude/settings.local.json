@@ -126,7 +126,17 @@
       "Bash(grep -E \"\\\\.\\(jsx|tsx|ts|js\\)$\")",
       "Bash(python -c \"import ast; [ast.parse\\(open\\(f, encoding='utf-8'\\).read\\(\\)\\) for f in ['app/services/settings_seed.py','app/services/database_admin_service.py','app/main.py']]; print\\('syntax OK'\\)\")",
       "Bash(python -m pytest tests/unit/test_settings_seed.py -v)",
-      "PowerShell(docker compose exec *)"
+      "PowerShell(docker compose exec *)",
+      "Bash(nslookup database.omvedha.com)",
+      "Bash(python -c \"import pymysql; print\\('pymysql', pymysql.__version__\\)\")",
+      "Bash(.venv/Scripts/python.exe scripts/test_db_connection.py)",
+      "Bash(python scripts/test_db_connection.py)",
+      "Bash(echo \"EXIT=$?\")",
+      "PowerShell($ErrorActionPreference='SilentlyContinue'; \"--- ping ---\"; \\(Test-Connection -ComputerName 13.126.82.71 -Count 2 | Select-Object -ExpandProperty ResponseTime\\) -join ', '; \"--- tcp 3306 ---\"; $t=Test-NetConnection -ComputerName 13.126.82.71 -Port 3306 -WarningAction SilentlyContinue; \"TcpTestSucceeded=$\\($t.TcpTestSucceeded\\) PingSucceeded=$\\($t.PingSucceeded\\)\"; \"--- tcp 3307 ---\"; $t2=Test-NetConnection -ComputerName 13.126.82.71 -Port 3307 -WarningAction SilentlyContinue; \"TcpTestSucceeded=$\\($t2.TcpTestSucceeded\\)\")",
+      "PowerShell(Invoke-RestMethod -Uri 'https://ifconfig.me/ip')",
+      "PowerShell(Invoke-RestMethod -Uri 'https://ipv4.icanhazip.com')",
+      "Bash(ls -la backend/.env)",
+      "Bash(grep -E \"STORAGE_BACKEND|MEDIA_BASE_URL|UPLOAD_DIR|S3_|MYSQL_HOST|FRONTEND_URL|ENVIRONMENT\" backend/.env)"
     ]
   }
 }
