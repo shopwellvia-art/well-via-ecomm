@@ -422,7 +422,15 @@ class TestObservabilityServiceOverview:
             db.close()
 
     def test_overview_slowest_routes_ordered_by_avg_desc(self) -> None:
-        """slowest_routes must come back ordered by avg_ms descending."""
+        """Route aggregation must come back ordered by avg_ms descending.
+
+        Isolated from shared dev-DB traffic: the assertions only ever look at
+        uniquely-named test routes, so real request-log volume can never crowd
+        them out. (``overview()['slowest_routes']`` is capped at the top-12
+        slowest routes globally, which a busy shared DB fills with real traffic;
+        ``routes()`` returns every route ungated, so filtering to ours is
+        deterministic.)
+        """
         req_ids: list[int] = []
         db = SessionLocal()
         try:
@@ -430,29 +438,42 @@ class TestObservabilityServiceOverview:
 
             uid = _uid()
             route_slow = f"/api/v1/obs-test-slow-{uid}"
+            route_mid = f"/api/v1/obs-test-mid-{uid}"
             route_fast = f"/api/v1/obs-test-fast-{uid}"
+            ours = (route_slow, route_mid, route_fast)
             ts_in = _now() - timedelta(hours=1)
 
-            # slow route: avg 1000ms
+            # slow route: avg 1000ms, mid: avg 500ms, fast: avg 10ms
             for _ in range(2):
                 req_ids.append(_req_log(db, ts=ts_in, route=route_slow, total_ms=1000).id)
-            # fast route: avg 10ms
+            for _ in range(2):
+                req_ids.append(_req_log(db, ts=ts_in, route=route_mid, total_ms=500).id)
             for _ in range(2):
                 req_ids.append(_req_log(db, ts=ts_in, route=route_fast, total_ms=10).id)
             db.commit()
-
             db.expire_all()
-            slowest = ObservabilityService(db).overview(period="24h")["slowest_routes"]
+
+            svc = ObservabilityService(db)
+
+            # 1) The service's global slowest_routes list is ordered by avg desc.
+            #    True regardless of which routes the shared DB contributes, so it
+            #    exercises the ORDER BY without depending on our rows ranking.
+            slowest = svc.overview(period="24h")["slowest_routes"]
             avgs = [r["avg_ms"] for r in slowest]
             assert avgs == sorted(avgs, reverse=True), (
                 f"slowest_routes not ordered desc by avg_ms: {avgs}"
             )
-            # Our slow route must appear before the fast one when we filter to ours
-            my_routes = [r for r in slowest if r["route"] in (route_slow, route_fast)]
-            assert len(my_routes) == 2
-            assert my_routes[0]["route"] == route_slow, (
-                f"Slow route should rank first, got {my_routes[0]['route']}"
+
+            # 2) Restricted to our uniquely-named routes (routes() applies no
+            #    top-N truncation), the three must come back ordered slow > mid >
+            #    fast — deterministic because the filter excludes all shared
+            #    traffic.
+            mine = [r for r in svc.routes(period="24h", sort="avg") if r["route"] in ours]
+            assert [r["route"] for r in mine] == [route_slow, route_mid, route_fast], (
+                "our routes not ordered desc by avg_ms: "
+                f"{[(r['route'], r['avg_ms']) for r in mine]}"
             )
+            assert [r["avg_ms"] for r in mine] == [1000.0, 500.0, 10.0]
         finally:
             _cleanup_request_logs(req_ids)
             db.close()
