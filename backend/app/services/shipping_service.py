@@ -252,9 +252,11 @@ class ShippingService:
             )
         return ShipmentAddress(
             name=name,
-            phone="0000000000",  # carrier-side contact; admin-edits later
+            phone=(self.settings.get_raw("shipping.warehouse.phone") or "0000000000").strip() or "0000000000",
             pincode=pin,
             address=addr,
+            city=(self.settings.get_raw("shipping.warehouse.city") or None),
+            state=(self.settings.get_raw("shipping.warehouse.state") or None),
         )
 
     # ---- pickup ----
@@ -469,6 +471,25 @@ class ShippingService:
         applied = self.apply_tracking_update(update)
         return applied or order
 
+    def cancel_shipment_for_order(self, order_id: int) -> Order:
+        """Cancel the carrier consignment for an order (carrier-side only; does
+        NOT change order.status — that's a separate admin refund/cancel flow)."""
+        order = self.orders.get(order_id)
+        if not order:
+            raise NotFoundError("Order not found")
+        if not order.shipping_awb:
+            raise ConflictError(f"Order #{order.id} has no shipment to cancel.")
+        cancel = getattr(self.provider, "cancel_shipment", None)
+        if not callable(cancel):
+            raise ConflictError(
+                f"The active carrier ({self.provider.name}) doesn't support shipment cancellation."
+            )
+        cancel(order.shipping_awb)
+        order_sync.set_shipment_status(order, ShipmentStatus.CANCELLED, when=datetime.now(timezone.utc))
+        self.db.flush()
+        logger.info("shipment cancelled order=%s awb=%s provider=%s", order.id, order.shipping_awb, self.provider.name)
+        return order
+
     @staticmethod
     def _is_forward_transition(current: OrderStatus, target: OrderStatus) -> bool:
         """Only allow PAID→SHIPPED, PAID→DELIVERED (rare but possible if the
@@ -512,19 +533,90 @@ class ShippingService:
         filename = f"label-order-{order.id}-{order.shipping_awb}.pdf"
         return pdf, filename
 
+    def local_label_pdf_for_order(self, order_id: int) -> tuple[bytes, str]:
+        """Render an in-house 4x6 shipping label from our own order data.
+
+        Unlike `label_pdf_for_order` (which fetches the carrier's official
+        label and needs a live AWB), this works for ANY order — useful as a
+        preview/fallback and with the mock provider. The barcode encodes the
+        AWB when present, otherwise the order number.
+        """
+        from app.services.shipping_label_pdf import LabelData, render_label_pdf
+
+        order = self.orders.get_with_items(order_id)
+        if not order:
+            raise NotFoundError("Order not found")
+
+        consignee = self._consignee_address(order)
+        store_name = (
+            self.settings.get_raw("store.name")
+            or self.settings.get_raw("branding.store_name")
+            or "Shipping Label"
+        )
+        from_address = ", ".join(
+            b
+            for b in (
+                self.settings.get_raw("shipping.warehouse.address"),
+                self.settings.get_raw("shipping.warehouse.city"),
+                self.settings.get_raw("shipping.warehouse.state"),
+            )
+            if b
+        ) or "-"
+
+        cod = Decimal(order.cod_balance or 0) > 0
+        currency = order.currency or "INR"
+        symbol = "Rs." if currency == "INR" else f"{currency} "
+        payment_label = (
+            f"COD {symbol}{Decimal(order.cod_balance or 0):,.2f}" if cod else "PREPAID"
+        )
+
+        pieces = 0
+        weight_grams = 0
+        for item in order.items:
+            pieces += item.quantity
+            product = getattr(item, "product", None)
+            grams = product.weight_grams if product and product.weight_grams else 200
+            weight_grams += grams * item.quantity
+
+        data = LabelData(
+            store_name=store_name,
+            order_number=order.order_number or f"ORD{order.id}",
+            awb=order.shipping_awb,
+            created_at=order.created_at,
+            payment_label=payment_label,
+            cod=cod,
+            pieces=pieces or 1,
+            weight_grams=weight_grams,
+            to_name=consignee.name,
+            to_address=consignee.address,
+            to_city=consignee.city,
+            to_state=consignee.state,
+            to_pincode=consignee.pincode,
+            to_phone=consignee.phone,
+            from_name=self.settings.get_raw("shipping.warehouse.name") or store_name,
+            from_address=from_address,
+            from_pincode=self.settings.get_raw("shipping.warehouse.pincode"),
+            from_phone=self.settings.get_raw("shipping.warehouse.phone"),
+        )
+        pdf = render_label_pdf(data)
+        return pdf, f"label-order-{order.id}.pdf"
+
     # ---- internals (continued) ----
 
     def _consignee_address(self, order: Order) -> ShipmentAddress:
+        snap = order.shipping_address_snapshot or {}
         user = order.user
-        # Fall back gracefully when older accounts don't have a name set.
-        contact_name = (user.full_name if user and user.full_name else "Customer").strip()
-        phone = (user.phone if user and user.phone else "").strip() or "0000000000"
+        name = (snap.get("full_name") or (user.full_name if user and user.full_name else None) or "Customer").strip()
+        phone = (snap.get("phone") or (user.phone if user and user.phone else None) or "0000000000").strip() or "0000000000"
+        addr = ", ".join(p for p in [snap.get("line1"), snap.get("line2"), snap.get("landmark")] if p) or (order.shipping_address or "")
         return ShipmentAddress(
-            name=contact_name,
+            name=name,
             phone=phone,
-            pincode=order.shipping_pincode or "",
-            address=order.shipping_address or "",
-            email=(user.email if user else None),
+            pincode=(snap.get("pincode") or order.shipping_pincode or ""),
+            address=addr,
+            city=(snap.get("city") or None),
+            state=(snap.get("state") or None),
+            email=(snap.get("email") or (user.email if user else None)),
         )
 
     # ---- cache helpers ----

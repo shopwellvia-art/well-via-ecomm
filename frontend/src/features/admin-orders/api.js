@@ -42,9 +42,18 @@ export const adminOrdersApi = {
     apiClient
       .get(`/orders/admin/${id}/shipping-label`, { responseType: 'blob' })
       .then((r) => r.data),
+  // In-house generated 4x6 label PDF (works for any order, no live carrier needed).
+  fetchLocalLabel: (id) =>
+    apiClient
+      .get(`/orders/admin/${id}/label-local`, { responseType: 'blob' })
+      .then((r) => r.data),
   syncTracking: (id) =>
     apiClient
       .post(`/orders/admin/${id}/sync-tracking`, {})
+      .then((r) => r.data),
+  cancelShipment: (id) =>
+    apiClient
+      .post(`/orders/admin/${id}/cancel-shipment`, {})
       .then((r) => r.data),
   // Dev-only: mock simulator. Only useful when shipping.provider=mock.
   mockSimulate: (awb, status, note = null) =>

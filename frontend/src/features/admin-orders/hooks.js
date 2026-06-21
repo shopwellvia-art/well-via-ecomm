@@ -94,6 +94,14 @@ export function useSyncTracking() {
   });
 }
 
+export function useCancelShipment() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id) => adminOrdersApi.cancelShipment(id),
+    onSuccess: (_d, id) => invalidate(id),
+  });
+}
+
 export function useMockSimulate() {
   const invalidate = useInvalidate();
   return useMutation({

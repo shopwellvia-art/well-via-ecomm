@@ -35,6 +35,7 @@ import { cn, formatPrice } from '@/lib/utils.js';
 import {
   useAdminOrder,
   useCancelOrder,
+  useCancelShipment,
   useDeliverOrder,
   useMockSimulate,
   usePushToCarrier,
@@ -284,9 +285,11 @@ function ShipmentPanel({ order }) {
   const push = usePushToCarrier();
   const schedule = useSchedulePickup();
   const sync = useSyncTracking();
+  const cancelShipment = useCancelShipment();
   const [error, setError] = useState(null);
   const [pickupDate, setPickupDate] = useState(defaultPickupDate);
   const [labelLoading, setLabelLoading] = useState(false);
+  const [localLabelLoading, setLocalLabelLoading] = useState(false);
 
   const hasAwb = !!order.shipping_awb;
   const hasPickup = !!order.pickup_id;
@@ -321,6 +324,16 @@ function ShipmentPanel({ order }) {
     }
   }
 
+  async function handleCancelShipment() {
+    if (!window.confirm('Cancel this shipment with the carrier? This cannot be undone.')) return;
+    setError(null);
+    try {
+      await cancelShipment.mutateAsync(order.id);
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Could not cancel the shipment.');
+    }
+  }
+
   async function handleLabel() {
     setError(null);
     setLabelLoading(true);
@@ -333,6 +346,21 @@ function ShipmentPanel({ order }) {
       setError(err.response?.data?.error?.message || 'Could not fetch the label.');
     } finally {
       setLabelLoading(false);
+    }
+  }
+
+  async function handleLocalLabel() {
+    setError(null);
+    setLocalLabelLoading(true);
+    try {
+      const blob = await adminOrdersApi.fetchLocalLabel(order.id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Could not generate the label.');
+    } finally {
+      setLocalLabelLoading(false);
     }
   }
 
@@ -358,6 +386,17 @@ function ShipmentPanel({ order }) {
 
             <Button size="sm" variant="secondary" block onClick={handleLabel} loading={labelLoading}>
               <Printer className="size-4" aria-hidden="true" /> Print label
+            </Button>
+
+            <Button
+              size="sm"
+              variant="ghost"
+              block
+              onClick={handleCancelShipment}
+              loading={cancelShipment.isPending}
+              className="text-danger hover:bg-danger/8 hover:text-danger"
+            >
+              <XCircle className="size-4" aria-hidden="true" /> Cancel shipment
             </Button>
 
             <div className="border-t border-line-subtle pt-4">
@@ -441,6 +480,22 @@ function ShipmentPanel({ order }) {
               : `Available once the order reaches PAID (currently ${order.status}).`}
           </p>
         )}
+
+        {/* In-house 4x6 label — always available (no live carrier/AWB needed). */}
+        <div className="mt-4 border-t border-line-subtle pt-4">
+          <Button
+            size="sm"
+            variant="outline"
+            block
+            onClick={handleLocalLabel}
+            loading={localLabelLoading}
+          >
+            <Printer className="size-4" aria-hidden="true" /> Download label (4x6)
+          </Button>
+          <p className="mt-1.5 text-[10px] text-ink-tertiary">
+            In-house label generated from this order. {hasAwb ? 'Use “Print label” above for the carrier’s official label.' : 'A waybill barcode appears here once the order is pushed to the carrier.'}
+          </p>
+        </div>
       </div>
     </Card>
   );

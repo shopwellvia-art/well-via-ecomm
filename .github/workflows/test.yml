@@ -64,6 +64,14 @@ jobs:
           done
           echo "alembic upgrade head failed"; docker compose logs backend; exit 1
 
+      # pytest is a dev/CI-only tool — it's intentionally absent from the
+      # production image (requirements.txt). Install the test deps into the
+      # already-built container as root (the image runs as the unprivileged
+      # `app` user whose ~/.local is root-owned, so a --user install would fail;
+      # a plain root install lands in the shared /usr/local site-packages).
+      - name: Install test dependencies
+        run: docker compose exec -T -u root backend pip install --no-cache-dir -r requirements-dev.txt
+
       - name: Run payment integration tests
         run: |
           docker compose exec -T backend python -m pytest \
@@ -74,6 +82,10 @@ jobs:
             tests/test_payment_robustness.py \
             tests/test_payment_methods.py \
             tests/unit/test_payment_provider_errors.py -v
+
+      # DTDC provider tests are pure unit / httpx-mocked (no DB needed).
+      - name: Run DTDC provider unit tests
+        run: docker compose exec -T backend python -m pytest tests/test_dtdc_provider.py -v
 
       - name: Dump backend logs on failure
         if: failure()

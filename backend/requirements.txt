@@ -22,3 +22,5 @@ httpx==0.28.1
 python-multipart==0.0.20
 boto3==1.43.12
 pyotp==2.9.0
+# Local shipping-label PDF generation (4x6 thermal label + Code128 barcode).
+reportlab==4.2.5

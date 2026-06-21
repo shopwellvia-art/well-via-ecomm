@@ -364,6 +364,30 @@ def admin_sync_tracking(
     return _detail(order)
 
 
+@router.post("/admin/{order_id}/cancel-shipment", response_model=AdminOrderRead)
+def admin_cancel_shipment(
+    order_id: int,
+    request: Request,
+    actor: User = Depends(require_permission("orders.update_status")),
+    db: Session = Depends(get_db),
+):
+    """Cancel the carrier-side shipment for this order (DTDC / any provider
+    that exposes cancel_shipment). Does NOT change order.status."""
+    from app.services.shipping_service import ShippingService
+
+    order = ShippingService(db).cancel_shipment_for_order(order_id)
+    _audit_order(
+        db,
+        actor,
+        request,
+        "order.shipment_cancel",
+        order,
+        summary=f"Cancelled carrier shipment for order #{order.id}",
+    )
+    db.commit()
+    return _detail(order)
+
+
 @router.get("/admin/{order_id}/shipping-label")
 def admin_shipping_label(
     order_id: int,
@@ -380,6 +404,25 @@ def admin_shipping_label(
     from app.services.shipping_service import ShippingService
 
     pdf, filename = ShippingService(db).label_pdf_for_order(order_id)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+@router.get("/admin/{order_id}/label-local")
+def admin_local_label(
+    order_id: int,
+    _actor: User = Depends(require_permission("orders.view_all")),
+    db: Session = Depends(get_db),
+):
+    """Streams an in-house generated 4x6 shipping-label PDF (DTDC-style) built
+    from our own order data. Works for any order (no live carrier/AWB needed)
+    — a preview/fallback alongside the carrier's official label."""
+    from app.services.shipping_service import ShippingService
+
+    pdf, filename = ShippingService(db).local_label_pdf_for_order(order_id)
     return Response(
         content=pdf,
         media_type="application/pdf",
