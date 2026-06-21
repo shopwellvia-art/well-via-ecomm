@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Package,
@@ -7,6 +7,7 @@ import {
   Truck,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Undo2,
   Banknote,
   MapPin,
@@ -93,7 +94,10 @@ function TrackingDisclosure({ order }) {
         type="button"
         aria-expanded={open}
         aria-label={open ? 'Collapse tracking' : 'Show tracking'}
-        onClick={() => setOpen((v) => !v)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
         className="flex w-full items-center justify-between gap-2 text-left focus-visible:focus-ring"
       >
         <span className="flex items-center gap-2 text-xs">
@@ -202,6 +206,7 @@ function ReturnsSummary() {
 
 export default function OrdersPage() {
   const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useMyOrders();
   const orders = data ?? [];
   const [returnOrder, setReturnOrder] = useState(null);
@@ -258,17 +263,26 @@ export default function OrdersPage() {
 
             return (
               <li key={o.id}>
-                {/* Flipkart-style order card: white block, left accent strip on delivered */}
-                <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
+                {/* Flipkart-style order card: the whole card opens the order */}
+                <div
+                  role="link"
+                  tabIndex={0}
+                  aria-label={`View ${o.order_number ?? `order #${o.id}`} details`}
+                  onClick={() => navigate(`/orders/${o.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      navigate(`/orders/${o.id}`);
+                    }
+                  }}
+                  className="group cursor-pointer overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm transition-colors hover:border-accent/50 focus-visible:focus-ring"
+                >
                   {/* Top meta row */}
                   <div className="flex flex-col gap-1 border-b border-line-subtle bg-bg-sunken px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        to={`/orders/${o.id}`}
-                        className="max-w-[8rem] truncate text-[11px] font-semibold uppercase tracking-wider text-ink-tertiary hover:text-accent sm:max-w-none focus-visible:focus-ring"
-                      >
+                      <span className="max-w-[8rem] truncate text-[11px] font-semibold uppercase tracking-wider text-ink-tertiary group-hover:text-accent sm:max-w-none">
                         {o.order_number ?? `#${o.id}`}
-                      </Link>
+                      </span>
                       <Badge tone={badgeTone} size="md" className="capitalize">
                         {o.status}
                       </Badge>
@@ -283,13 +297,19 @@ export default function OrdersPage() {
                           </span>
                         )}
                     </div>
-                    <span className="shrink-0 text-[11px] text-ink-tertiary">
-                      {new Date(o.created_at).toLocaleDateString(undefined, {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <span className="text-[11px] text-ink-tertiary">
+                        {new Date(o.created_at).toLocaleDateString(undefined, {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </span>
+                      <ChevronRight
+                        className="size-4 text-ink-tertiary transition-transform group-hover:translate-x-0.5 group-hover:text-accent"
+                        aria-hidden="true"
+                      />
+                    </div>
                   </div>
 
                   <div className="px-4 py-4">
@@ -405,7 +425,10 @@ export default function OrdersPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => setReturnOrder(o)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReturnOrder(o);
+                          }}
                         >
                           <Undo2 className="size-4" aria-hidden="true" />
                           Request return

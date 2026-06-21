@@ -57,6 +57,10 @@ DEFAULT_SETTINGS: list[tuple[str, str, str, str, bool]] = [
     ("notifications.order_delivered", "true", "notifications", "Email on order DELIVERED", False),
     ("notifications.order_cancelled", "true", "notifications", "Email on order CANCELLED", False),
     ("notifications.order_refunded", "true", "notifications", "Email on order REFUNDED", False),
+    ("notifications.return_refunded", "true", "notifications",
+     "Email the customer when a return refund is issued", False),
+    ("notifications.return_rejected", "true", "notifications",
+     "Email the customer when a return is rejected after inspection", False),
 
     # ---- Shipping (k6f7a8b9c0d1) ----
     ("shipping.provider", "none", "shipping", "Shipping carrier: none, mock, or delhivery", False),
@@ -84,6 +88,8 @@ DEFAULT_SETTINGS: list[tuple[str, str, str, str, bool]] = [
     # ---- Returns (p1k2l3m4n5o6) ----
     ("returns.window_days", "7", "returns",
      "Days after delivery a customer may request a return", False),
+    ("returns.refund_timeline_days", "7", "returns",
+     "Business days quoted to the customer for a refund to reflect in their account", False),
 
     # ---- COD (q2l3m4n5o6p7) ----
     ("cod.enabled", "true", "cod", "Allow Cash on Delivery as a checkout option", False),

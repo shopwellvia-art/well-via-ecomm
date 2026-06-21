@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.models.order import Order, OrderStatus
+from app.models.order import Order, OrderItem, OrderStatus
 from app.models.user import User
 from app.repositories.base import BaseRepository
 
@@ -15,7 +15,9 @@ class OrderRepository(BaseRepository[Order]):
         stmt = (
             select(Order)
             .options(
-                selectinload(Order.items),
+                # Eager-load the catalog product on each line so OrderItemRead
+                # can surface its name + image without an N+1 per line.
+                selectinload(Order.items).selectinload(OrderItem.product),
                 # Normalized children surfaced on the detail responses — eager
                 # loaded so serialization never lazy-loads on a closed session.
                 selectinload(Order.payments),
@@ -31,7 +33,7 @@ class OrderRepository(BaseRepository[Order]):
         stmt = (
             select(Order)
             .options(
-                selectinload(Order.items),
+                selectinload(Order.items).selectinload(OrderItem.product),
                 selectinload(Order.payments),
                 selectinload(Order.shipments),
                 selectinload(Order.addresses),

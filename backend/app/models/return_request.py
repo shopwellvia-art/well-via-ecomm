@@ -10,12 +10,20 @@ State machine:
        │                       │                       ▼
        │                       │                    received
        │                       │                       │
-       │                       │                       ▼
+       │                       │              inspect ─┤
+       │                       │             (passed)  ▼
        │                       │                    refunded   (terminal)
-       │                       │
-       ├──reject────────▶ rejected   (terminal)
+       │                       │                       ▲
+       │                       │              refund through original method
+       ├──reject────────▶ rejected   (terminal) ◀── inspect (failed)
        │
        └──cancel────────▶ cancelled  (terminal — customer-initiated only)
+
+Inspection: once `received`, the item is inspected against the customer's
+claim/return policy. A *passing* inspection unlocks the refund (which is then
+issued through the original payment method); a *failing* inspection rejects the
+return. The verdict + notes are recorded on the row (`inspection_passed`,
+`inspection_notes`, `inspected_at`) for audit.
 
 Each non-terminal transition stamps a *_at column so we have an audit trail
 without a separate state-log table.
@@ -82,6 +90,23 @@ class ReturnRequest(Base, IDMixin, TimestampMixin):
     # The amount we'll refund. Defaults to "all returned-item subtotals"
     # at approve time; admin can override.
     refund_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+
+    # ---- Inspection (on receipt) -------------------------------------------
+    # The verdict from inspecting the physically-received item against the
+    # customer's stated claim + return policy. NULL until inspected; True =
+    # matches claim / passes policy (unlocks the refund); False = rejected.
+    inspection_passed: Mapped[bool | None] = mapped_column()
+    inspection_notes: Mapped[str | None] = mapped_column(Text)
+    inspected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # ---- Refund execution --------------------------------------------------
+    # How the refund was routed back to the customer and its provider/internal
+    # reference, stamped when the refund is issued. `refund_method` is the
+    # original gateway code (e.g. "phonepe") for prepaid orders, or "manual"
+    # when there is no electronic source to reverse (e.g. COD). Both NULL until
+    # the refund is issued.
+    refund_method: Mapped[str | None] = mapped_column(String(40))
+    refund_reference: Mapped[str | None] = mapped_column(String(128))
 
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

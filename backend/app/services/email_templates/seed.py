@@ -248,6 +248,72 @@ _ORDER_REFUNDED_HTML = """\
 """
 
 # ---------------------------------------------------------------------------
+# Return: refund processed
+# ---------------------------------------------------------------------------
+_RETURN_REFUNDED_SUBJECT = "Your refund for order #{{ order_id }} has been processed"
+_RETURN_REFUNDED_HTML = """\
+<h2 style="margin:0 0 16px;font-size:22px;color:#16213e;">Hi {{ customer_name }},</h2>
+<p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#333333;">
+  Good news &#8212; we&#39;ve received and inspected the item(s) you returned from
+  order <strong>#{{ order_id }}</strong>, and your refund has been processed.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;background-color:#f0f9f4;border-left:4px solid #27ae60;border-radius:4px;">
+  <tr>
+    <td style="padding:14px 16px;font-size:14px;color:#555555;">
+      <p style="margin:0 0 6px;"><strong>Refund amount:</strong> {{ refund_currency }} {{ refund_amount }}</p>
+      <p style="margin:0 0 6px;"><strong>Refunded to:</strong> {{ refund_method }}</p>
+      {% if refund_reference %}
+      <p style="margin:0;"><strong>Reference:</strong> {{ refund_reference }}</p>
+      {% endif %}
+    </td>
+  </tr>
+</table>
+
+<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#333333;">
+  The amount should reflect in your account within
+  <strong>{{ refund_timeline_days }} business days</strong>, depending on your
+  bank or card provider.
+</p>
+<p style="margin:0;font-size:14px;color:#555555;">
+  Questions about your refund? Reply to this email or visit
+  <a href="{{ store_url }}" style="color:#0066cc;text-decoration:none;">{{ store_name }}</a>.
+</p>
+"""
+
+# ---------------------------------------------------------------------------
+# Return: rejected after inspection
+# ---------------------------------------------------------------------------
+_RETURN_REJECTED_SUBJECT = "Update on your return for order #{{ order_id }}"
+_RETURN_REJECTED_HTML = """\
+<h2 style="margin:0 0 16px;font-size:22px;color:#16213e;">Hi {{ customer_name }},</h2>
+<p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#333333;">
+  Thanks for sending back your item from order <strong>#{{ order_id }}</strong>.
+  After inspecting it against the reported issue, we&#39;re unable to approve a
+  refund for this return.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;background-color:#fff5f5;border-left:4px solid #e74c3c;border-radius:4px;">
+  <tr>
+    <td style="padding:14px 16px;font-size:14px;color:#555555;">
+      <p style="margin:0 0 6px;"><strong>Reason for return:</strong> {{ reason }}</p>
+      {% if admin_notes %}
+      <p style="margin:0;"><strong>Inspection notes:</strong> {{ admin_notes }}</p>
+      {% endif %}
+    </td>
+  </tr>
+</table>
+
+<p style="margin:0 0 16px;font-size:14px;color:#555555;">
+  If you believe this was a mistake or have questions, just reply to this email
+  and our team will be happy to help.
+</p>
+<p style="margin:0;font-size:14px;color:#555555;">
+  &mdash; The <a href="{{ store_url }}" style="color:#0066cc;text-decoration:none;">{{ store_name }}</a> team
+</p>
+"""
+
+# ---------------------------------------------------------------------------
 # Account: password reset
 # ---------------------------------------------------------------------------
 _PASSWORD_RESET_SUBJECT = "Your {{ store_name }} password reset code"
@@ -361,6 +427,28 @@ DEFAULT_TEMPLATES: list[dict] = [
         "group_name": "orders",
         "subject": _ORDER_REFUNDED_SUBJECT,
         "body_html": _ORDER_REFUNDED_HTML,
+        "body_design": None,
+        "is_enabled": True,
+    },
+    {
+        "key": "return_refunded",
+        "channel": "email",
+        "name": "Return Refund Processed",
+        "description": "Sent to the customer when a return refund is issued to their original payment method.",
+        "group_name": "returns",
+        "subject": _RETURN_REFUNDED_SUBJECT,
+        "body_html": _RETURN_REFUNDED_HTML,
+        "body_design": None,
+        "is_enabled": True,
+    },
+    {
+        "key": "return_rejected",
+        "channel": "email",
+        "name": "Return Rejected",
+        "description": "Sent to the customer when a return is rejected after inspection (no refund).",
+        "group_name": "returns",
+        "subject": _RETURN_REJECTED_SUBJECT,
+        "body_html": _RETURN_REJECTED_HTML,
         "body_design": None,
         "is_enabled": True,
     },

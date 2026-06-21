@@ -22,6 +22,7 @@ from app.models.user import User
 from app.schemas.return_request import (
     AdminReturnCustomerBrief,
     AdminReturnDecisionRequest,
+    AdminReturnInspectRequest,
     AdminReturnRead,
     ReturnCreateRequest,
     ReturnItemRead,
@@ -43,6 +44,10 @@ def _customer(req: ReturnRequest) -> ReturnRead:
         customer_notes=req.customer_notes,
         reverse_awb=req.reverse_awb,
         refund_amount=req.refund_amount,
+        inspection_passed=req.inspection_passed,
+        inspected_at=req.inspected_at,
+        refund_method=req.refund_method,
+        refund_reference=req.refund_reference,
         requested_at=req.requested_at,
         approved_at=req.approved_at,
         rejected_at=req.rejected_at,
@@ -62,9 +67,14 @@ def _admin(req: ReturnRequest) -> AdminReturnRead:
         reason=req.reason,
         customer_notes=req.customer_notes,
         admin_notes=req.admin_notes,
+        inspection_notes=req.inspection_notes,
         reverse_awb=req.reverse_awb,
         reverse_pickup_id=req.reverse_pickup_id,
         refund_amount=req.refund_amount,
+        inspection_passed=req.inspection_passed,
+        inspected_at=req.inspected_at,
+        refund_method=req.refund_method,
+        refund_reference=req.refund_reference,
         requested_at=req.requested_at,
         approved_at=req.approved_at,
         rejected_at=req.rejected_at,
@@ -250,6 +260,39 @@ def admin_mark_received(
     return _admin(req)
 
 
+@admin_router.post("/{return_id}/inspect", response_model=AdminReturnRead)
+def admin_inspect_return(
+    return_id: int,
+    payload: AdminReturnInspectRequest,
+    request: Request,
+    actor: User = Depends(require_permission("returns.manage")),
+    db: Session = Depends(get_db),
+):
+    """Record the post-receipt inspection. A passing verdict leaves the return
+    RECEIVED and eligible for the refund (POST .../mark-refunded); a failing
+    verdict rejects the return and notifies the customer."""
+    req = ReturnService(db).inspect(
+        return_id,
+        passed=payload.passed,
+        inspection_notes=payload.inspection_notes,
+        refund_amount=payload.refund_amount,
+    )
+    _audit_return(
+        db, actor, request, "return.inspect", req,
+        summary=(
+            f"Inspected return #{req.id}: "
+            + ("PASSED — eligible for refund" if payload.passed
+               else "FAILED — return rejected")
+        ),
+        extra={
+            "passed": payload.passed,
+            "inspection_notes": payload.inspection_notes,
+        },
+    )
+    db.commit()
+    return _admin(req)
+
+
 @admin_router.post("/{return_id}/mark-refunded", response_model=AdminReturnRead)
 def admin_mark_refunded(
     return_id: int,
@@ -257,14 +300,21 @@ def admin_mark_refunded(
     actor: User = Depends(require_permission("returns.manage")),
     db: Session = Depends(get_db),
 ):
-    req = ReturnService(db).mark_refunded(return_id)
+    """Issue the refund for an inspected, passing return back through the
+    customer's original payment method, then notify them with a timeline.
+    Requires a prior passing inspection."""
+    req = ReturnService(db).issue_refund(return_id)
     _audit_return(
         db, actor, request, "return.refunded", req,
         summary=(
             f"Refunded return #{req.id} for "
-            f"{float(req.refund_amount or 0):.2f}"
+            f"{float(req.refund_amount or 0):.2f} via {req.refund_method}"
         ),
-        extra={"refund_amount": float(req.refund_amount or 0)},
+        extra={
+            "refund_amount": float(req.refund_amount or 0),
+            "refund_method": req.refund_method,
+            "refund_reference": req.refund_reference,
+        },
     )
     db.commit()
     return _admin(req)

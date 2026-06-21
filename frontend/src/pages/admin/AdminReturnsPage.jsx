@@ -7,6 +7,7 @@ import {
   Truck,
   PackageCheck,
   RefreshCcw,
+  ClipboardCheck,
   AlertTriangle,
 } from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
@@ -21,6 +22,7 @@ import { cn, formatPrice } from '@/lib/utils.js';
 import {
   useAdminReturns,
   useApproveReturn,
+  useInspectReturn,
   useMarkReturnPickedUp,
   useMarkReturnReceived,
   useMarkReturnRefunded,
@@ -183,6 +185,129 @@ function RejectPanel({ ret, onClose }) {
   );
 }
 
+function InspectPanel({ ret, onClose }) {
+  const [passed, setPassed] = useState(true);
+  const [notes, setNotes] = useState('');
+  const [refund, setRefund] = useState('');
+  const [error, setError] = useState(null);
+  const inspect = useInspectReturn();
+
+  async function submit() {
+    setError(null);
+    if (!passed && notes.trim().length < 3) {
+      setError('Add a short reason for the customer — at least 3 characters.');
+      return;
+    }
+    try {
+      await inspect.mutateAsync({
+        id: ret.id,
+        passed,
+        inspection_notes: notes.trim() || null,
+        refund_amount: passed && refund !== '' ? Number(refund) : null,
+      });
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Could not record inspection.');
+    }
+  }
+
+  return (
+    <Card className="shadow-md">
+      <CardHeader title="Inspect returned item" />
+      <div className="p-5">
+        <p className="mb-4 text-xs text-ink-tertiary">
+          Confirm the item matches the customer&apos;s claim and meets the
+          return policy. A pass unlocks the refund; a fail rejects the return
+          and notifies the customer.
+        </p>
+
+        {/* Verdict toggle */}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setPassed(true)}
+            className={cn(
+              'flex-1 rounded-md border px-3 py-2 text-xs font-semibold transition-colors',
+              passed
+                ? 'border-success bg-success/10 text-success'
+                : 'border-line-subtle text-ink-secondary hover:border-line-strong',
+            )}
+          >
+            <CheckCircle2 className="mr-1 inline size-3.5" aria-hidden="true" />
+            Passes — matches claim
+          </button>
+          <button
+            type="button"
+            onClick={() => setPassed(false)}
+            className={cn(
+              'flex-1 rounded-md border px-3 py-2 text-xs font-semibold transition-colors',
+              !passed
+                ? 'border-danger bg-danger/10 text-danger'
+                : 'border-line-subtle text-ink-secondary hover:border-line-strong',
+            )}
+          >
+            <XCircle className="mr-1 inline size-3.5" aria-hidden="true" />
+            Fails — reject
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-4">
+          <Textarea
+            label={passed ? 'Inspection notes (optional)' : 'Why it failed (shown to the customer)'}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            placeholder={
+              passed
+                ? 'Damage matches the report; sealed accessories returned.'
+                : 'Item shows wear inconsistent with the reported defect.'
+            }
+          />
+          {passed && (
+            <Input
+              label="Refund amount override (optional)"
+              type="number"
+              step="0.01"
+              min="0"
+              value={refund}
+              onChange={(e) => setRefund(e.target.value)}
+              placeholder="keep computed amount"
+            />
+          )}
+        </div>
+
+        {error && (
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-danger">
+            <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+            {error}
+          </p>
+        )}
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={inspect.isPending}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            variant={passed ? undefined : 'destructive'}
+            onClick={submit}
+            loading={inspect.isPending}
+          >
+            {passed ? (
+              <>
+                <ClipboardCheck className="size-4" aria-hidden="true" /> Record pass
+              </>
+            ) : (
+              <>
+                <XCircle className="size-4" aria-hidden="true" /> Reject return
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function ReturnRow({ ret, onSelect, selected }) {
   return (
     <motion.button
@@ -215,7 +340,7 @@ function ReturnRow({ ret, onSelect, selected }) {
 }
 
 function ReturnDetailPane({ ret }) {
-  const [panel, setPanel] = useState(null); // 'approve' | 'reject' | null
+  const [panel, setPanel] = useState(null); // 'approve' | 'reject' | 'inspect' | null
   const pickedUp = useMarkReturnPickedUp();
   const received = useMarkReturnReceived();
   const refunded = useMarkReturnRefunded();
@@ -283,6 +408,35 @@ function ReturnDetailPane({ ret }) {
                 {ret.reverse_awb || '—'}
               </p>
             </div>
+            {ret.inspected_at && (
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-tertiary">Inspection</p>
+                <p
+                  className={cn(
+                    'mt-0.5 text-sm font-semibold',
+                    ret.inspection_passed ? 'text-success' : 'text-danger',
+                  )}
+                >
+                  {ret.inspection_passed ? 'Passed' : 'Failed'}
+                  <span className="ml-1 text-xs font-normal text-ink-tertiary">
+                    · {formatDateTime(ret.inspected_at)}
+                  </span>
+                </p>
+              </div>
+            )}
+            {ret.refund_method && (
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-tertiary">Refunded via</p>
+                <p className="mt-0.5 text-sm text-ink-primary capitalize">
+                  {ret.refund_method === 'manual' ? 'Manual transfer' : ret.refund_method}
+                </p>
+                {ret.refund_reference && (
+                  <p className="mt-0.5 break-all font-mono text-[10px] text-ink-tertiary">
+                    {ret.refund_reference}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Customer notes */}
@@ -304,6 +458,16 @@ function ReturnDetailPane({ ret }) {
                 Internal notes
               </p>
               <p className="mt-1.5 whitespace-pre-line text-ink-primary">{ret.admin_notes}</p>
+            </div>
+          )}
+
+          {/* Inspection notes (shown when distinct from the internal notes) */}
+          {ret.inspection_notes && ret.inspection_notes !== ret.admin_notes && (
+            <div className="mt-3 rounded-md border border-line-subtle bg-bg-sunken px-3 py-3 text-xs">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-tertiary">
+                Inspection notes
+              </p>
+              <p className="mt-1.5 whitespace-pre-line text-ink-primary">{ret.inspection_notes}</p>
             </div>
           )}
 
@@ -350,12 +514,25 @@ function ReturnDetailPane({ ret }) {
                 <PackageCheck className="size-4" aria-hidden="true" /> Mark received
               </Button>
             )}
-            {ret.status === 'received' && (
+            {ret.status === 'received' && ret.inspection_passed == null && (
+              <Button size="sm" onClick={() => setPanel('inspect')}>
+                <ClipboardCheck className="size-4" aria-hidden="true" /> Inspect item
+              </Button>
+            )}
+            {ret.status === 'received' && ret.inspection_passed === true && (
               <Button size="sm" onClick={() => fire(refunded)} loading={refunded.isPending}>
-                <RefreshCcw className="size-4" aria-hidden="true" /> Mark refunded
+                <RefreshCcw className="size-4" aria-hidden="true" /> Issue refund
               </Button>
             )}
           </div>
+
+          {ret.status === 'received' && ret.inspection_passed === true && (
+            <p className="mt-3 flex items-center gap-1.5 text-xs text-success">
+              <CheckCircle2 className="size-3.5 shrink-0" aria-hidden="true" />
+              Inspection passed — issue the refund to the customer&apos;s original
+              payment method.
+            </p>
+          )}
 
           {error && (
             <p className="mt-3 flex items-center gap-1.5 text-xs text-danger">
@@ -372,6 +549,9 @@ function ReturnDetailPane({ ret }) {
       {panel === 'reject' && (
         <RejectPanel ret={ret} onClose={() => setPanel(null)} />
       )}
+      {panel === 'inspect' && (
+        <InspectPanel ret={ret} onClose={() => setPanel(null)} />
+      )}
     </motion.div>
   );
 }
@@ -386,7 +566,7 @@ export default function AdminReturnsPage() {
   return (
     <AdminPage
       title="Returns"
-      description="Review customer return requests and walk them through pickup → received → refunded."
+      description="Review customer return requests and walk them through pickup → received → inspect → refund."
     >
       {/* Status filter chips */}
       <div className="mb-5 flex flex-wrap items-center gap-2">

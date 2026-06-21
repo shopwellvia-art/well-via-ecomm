@@ -10,6 +10,8 @@ import {
   ChevronDown,
   ChevronUp,
   Banknote,
+  Check,
+  XCircle,
 } from 'lucide-react';
 import { useState } from 'react';
 import { apiClient } from '@/services/apiClient.js';
@@ -120,6 +122,106 @@ function SectionLabel({ icon: Icon, children }) {
       {Icon && <Icon className="size-3.5 shrink-0" aria-hidden="true" />}
       {children}
     </p>
+  );
+}
+
+// ── Order status progress stepper (Flipkart-style) ───────────────────────────
+
+/** Linear fulfillment stages. `rank` is the order-status rank that marks the
+ *  step complete. Cancelled / refunded are off-path and handled separately. */
+const PROGRESS_STEPS = [
+  { key: 'placed', label: 'Order placed', rank: 0 },
+  { key: 'confirmed', label: 'Confirmed', rank: 1 },
+  { key: 'shipped', label: 'Shipped', rank: 2 },
+  { key: 'delivered', label: 'Delivered', rank: 3 },
+];
+
+const STATUS_RANK = { pending: 0, paid: 1, processing: 1, shipped: 2, delivered: 3 };
+
+function OrderProgress({ order }) {
+  const status = order.status;
+
+  // Off-path terminal states get a clear banner instead of the linear tracker.
+  if (status === 'cancelled' || status === 'refunded') {
+    const isRefund = status === 'refunded';
+    const at = isRefund ? order.refunded_at : order.cancelled_at;
+    return (
+      <div
+        className={`mb-5 flex items-start gap-3 rounded-sm border px-4 py-3 shadow-sm ${
+          isRefund ? 'border-line-subtle bg-bg-elevated' : 'border-danger/30 bg-danger/8'
+        }`}
+      >
+        <XCircle
+          className={`mt-0.5 size-5 shrink-0 ${isRefund ? 'text-ink-tertiary' : 'text-danger'}`}
+          aria-hidden="true"
+        />
+        <div>
+          <p className="text-sm font-semibold text-ink-primary">
+            {isRefund ? 'Order refunded' : 'Order cancelled'}
+          </p>
+          <p className="text-xs text-ink-tertiary">
+            {at ? formatDateTime(at) : 'This order is no longer active.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentRank = STATUS_RANK[status] ?? 0;
+  const stepAt = {
+    placed: order.created_at,
+    confirmed: order.paid_at,
+    shipped: order.shipped_at,
+    delivered: order.delivered_at,
+  };
+
+  return (
+    <div className="mb-5 overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated p-5 shadow-sm">
+      <ol className="flex items-start">
+        {PROGRESS_STEPS.map((step, i) => {
+          const done = currentRank >= step.rank;
+          const isCurrent = currentRank === step.rank;
+          const at = stepAt[step.key];
+          return (
+            <li
+              key={step.key}
+              className="relative flex flex-1 flex-col items-center text-center"
+            >
+              {/* Connector from the previous dot — filled once this step is reached */}
+              {i > 0 && (
+                <span
+                  className={`absolute right-1/2 top-3 h-0.5 w-full ${
+                    done ? 'bg-success' : 'bg-line-subtle'
+                  }`}
+                  aria-hidden="true"
+                />
+              )}
+              <span
+                className={`relative z-10 grid size-6 place-items-center rounded-full border-2 ${
+                  done
+                    ? 'border-success bg-success text-white'
+                    : 'border-line-strong bg-bg-elevated text-ink-tertiary'
+                }`}
+              >
+                {done ? (
+                  <Check className="size-3.5" aria-hidden="true" />
+                ) : (
+                  <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+                )}
+              </span>
+              <span
+                className={`mt-2 text-[11px] ${
+                  isCurrent ? 'font-semibold text-ink-primary' : done ? 'font-medium text-ink-primary' : 'text-ink-tertiary'
+                }`}
+              >
+                {step.label}
+              </span>
+              {at && <span className="mt-0.5 text-[10px] text-ink-tertiary">{formatDate(at)}</span>}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 
@@ -358,6 +460,9 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
+      {/* ── Status progress tracker ───────────────────────────────────────── */}
+      <OrderProgress order={order} />
+
       <div className="flex flex-col gap-5">
 
         {/* ── b) Payment status ──────────────────────────────────────────── */}
@@ -520,51 +625,56 @@ export default function OrderDetailPage() {
             {(!order.items || order.items.length === 0) ? (
               <p className="text-sm text-ink-tertiary">No items found.</p>
             ) : (
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-line-subtle text-left">
-                    <th className="pb-2.5 text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
-                      Product
-                    </th>
-                    <th className="pb-2.5 text-center text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
-                      Qty
-                    </th>
-                    <th className="pb-2.5 text-right text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
-                      Unit
-                    </th>
-                    <th className="pb-2.5 text-right text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
-                      Total
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {order.items.map((it, idx) => (
-                    <tr key={it.id ?? it.product_id ?? idx} className="border-t border-line-subtle">
-                      <td className="py-3 text-sm text-ink-primary">
-                        {it.name ? (
-                          <span>{it.name}</span>
-                        ) : (
-                          <Link
-                            to={`/products/${it.product_id}`}
-                            className="text-accent hover:underline focus-visible:focus-ring"
-                          >
-                            Product #{it.product_id}
-                          </Link>
-                        )}
-                      </td>
-                      <td className="py-3 text-center nums text-sm text-ink-secondary">
-                        ×{it.quantity}
-                      </td>
-                      <td className="py-3 text-right nums text-sm text-ink-secondary">
-                        {formatPrice(it.unit_price, order.currency)}
-                      </td>
-                      <td className="py-3 text-right nums text-sm font-semibold text-ink-primary">
-                        {formatPrice(Number(it.unit_price) * it.quantity, order.currency)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <ul className="flex flex-col divide-y divide-line-subtle">
+                {order.items.map((it, idx) => (
+                  <li
+                    key={it.id ?? it.product_id ?? idx}
+                    className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+                  >
+                    {/* Thumbnail */}
+                    <Link
+                      to={`/products/${it.product_id}`}
+                      className="grid size-16 shrink-0 place-items-center overflow-hidden rounded-sm border border-line-subtle bg-bg-sunken focus-visible:focus-ring"
+                    >
+                      {it.image_url ? (
+                        <>
+                          <img
+                            src={it.image_url}
+                            alt={it.name || 'Product'}
+                            loading="lazy"
+                            className="size-full object-contain"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextElementSibling?.removeAttribute('hidden');
+                            }}
+                          />
+                          <Package hidden className="size-6 text-ink-tertiary" aria-hidden="true" />
+                        </>
+                      ) : (
+                        <Package className="size-6 text-ink-tertiary" aria-hidden="true" />
+                      )}
+                    </Link>
+
+                    {/* Name + per-unit detail */}
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        to={`/products/${it.product_id}`}
+                        className="line-clamp-2 text-sm font-medium text-ink-primary hover:text-accent focus-visible:focus-ring"
+                      >
+                        {it.name || `Product #${it.product_id}`}
+                      </Link>
+                      <p className="nums mt-0.5 text-xs text-ink-tertiary">
+                        Qty: {it.quantity} · {formatPrice(it.unit_price, order.currency)} each
+                      </p>
+                    </div>
+
+                    {/* Line total */}
+                    <p className="nums shrink-0 text-sm font-semibold text-ink-primary">
+                      {formatPrice(Number(it.unit_price) * it.quantity, order.currency)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
             )}
 
             {/* Totals summary */}

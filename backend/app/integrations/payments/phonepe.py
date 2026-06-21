@@ -27,6 +27,8 @@ from app.integrations.payments.base import (
     InitiateResponse,
     PaymentGatewayError,
     PaymentStatus,
+    RefundRequest,
+    RefundResult,
     StatusResponse,
     provider_rejection,
 )
@@ -122,6 +124,46 @@ class PhonePeProvider:
             },
         )
         return self._to_status(merchant_transaction_id, resp)
+
+    def refund(self, req: RefundRequest) -> RefundResult:
+        """Reverse a captured payment to the customer's original instrument via
+        PhonePe's refund API. PhonePe settles refunds asynchronously, so a
+        successful call commonly returns PAYMENT_PENDING — the funds land back
+        on the source over the next few days (confirmed by a later webhook)."""
+        endpoint = "/pg/v1/refund"
+        payload = {
+            "merchantId": self.merchant_id,
+            # The original capture we're reversing. PhonePe keys the refund off
+            # our merchantTransactionId; the captured transactionId is sent too
+            # when we have it for tighter correlation.
+            "originalTransactionId": (
+                req.original_transaction_id or req.merchant_transaction_id
+            ),
+            "merchantTransactionId": req.refund_reference,
+            "amount": req.amount_minor,
+            "callbackUrl": self.callback_url,
+        }
+        body_b64 = base64.b64encode(json.dumps(payload).encode()).decode()
+        signature = self._sign(body_b64 + endpoint)
+        resp = self._post(
+            endpoint,
+            json_body={"request": body_b64},
+            extra_headers={"X-VERIFY": signature},
+        )
+        data = resp.get("data") or {}
+        code = (resp.get("code") or data.get("state") or "").upper()
+        if code in _SUCCESS_CODES or data.get("state", "").upper() == "COMPLETED":
+            status_ = PaymentStatus.SUCCESS
+        elif code in _FAILED_CODES:
+            status_ = PaymentStatus.FAILED
+        else:
+            # PAYMENT_PENDING etc. — accepted, settling asynchronously.
+            status_ = PaymentStatus.PENDING
+        return RefundResult(
+            refund_id=data.get("transactionId") or req.refund_reference,
+            status=status_,
+            raw=resp,
+        )
 
     def verify_webhook(self, body: bytes, signature: str | None) -> bool:
         # PhonePe S2S callback body is {"response": "<base64>"}; X-VERIFY covers

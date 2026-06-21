@@ -103,7 +103,7 @@ class TestSeedEmailTemplates:
         assert inserted == len(DEFAULT_TEMPLATES)
         assert _count(db) == len(DEFAULT_TEMPLATES)
 
-    def test_seeds_all_nine_known_keys(self, db: Session) -> None:
+    def test_seeds_all_known_keys(self, db: Session) -> None:
         seed_email_templates(db)
         keys = {t.key for t in db.execute(select(EmailTemplate)).scalars()}
         expected = {
@@ -113,6 +113,8 @@ class TestSeedEmailTemplates:
             "order_delivered",
             "order_cancelled",
             "order_refunded",
+            "return_refunded",
+            "return_rejected",
             "password_reset",
             "sms_order_paid",
             "sms_order_shipped",

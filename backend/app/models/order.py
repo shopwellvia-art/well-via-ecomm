@@ -212,3 +212,21 @@ class OrderItem(Base, IDMixin, TimestampMixin):
     unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
 
     order: Mapped[Order] = relationship(back_populates="items")
+    # Read-only link to the catalog product so order responses can surface the
+    # product's display name + image (OrderItem doesn't snapshot them). viewonly
+    # because an order line is an immutable historical record — we never write
+    # the product back through here. product_id has ondelete=RESTRICT, so the
+    # product is guaranteed to still exist for any order line.
+    product: Mapped["Product"] = relationship(  # noqa: F821
+        "Product", viewonly=True, lazy="select"
+    )
+
+    @property
+    def name(self) -> str | None:
+        """Current catalog name of the purchased product (for display)."""
+        return self.product.name if self.product else None
+
+    @property
+    def image_url(self) -> str | None:
+        """Primary image of the purchased product (for display thumbnails)."""
+        return self.product.image_url if self.product else None

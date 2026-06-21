@@ -21,6 +21,10 @@ class OrderItemRead(BaseModel):
     product_id: int
     quantity: int
     unit_price: Decimal
+    # Display fields resolved from the linked catalog product (the order line
+    # itself doesn't snapshot them). Optional so edge rows still validate.
+    name: str | None = None
+    image_url: str | None = None
 
 
 # ---- Normalized children (order-table normalization, 2026-06-21) ----
@@ -139,6 +143,14 @@ class OrderRead(BaseModel):
     shipping_awb: str | None = None
     tracking_events: list[dict] | None = None
     last_tracking_at: datetime | None = None
+    # Status timestamps — exposed so the storefront can render a dated
+    # "placed → confirmed → shipped → delivered" progress timeline. Each is
+    # null until the order reaches that hop.
+    paid_at: datetime | None = None
+    shipped_at: datetime | None = None
+    delivered_at: datetime | None = None
+    cancelled_at: datetime | None = None
+    refunded_at: datetime | None = None
     items: list[OrderItemRead]
     # Normalized children (preferred over the flat fields above).
     payments: list[OrderPaymentRead] = []

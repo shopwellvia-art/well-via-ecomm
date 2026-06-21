@@ -20,6 +20,8 @@ from app.integrations.payments.base import (
     InitiateRequest,
     InitiateResponse,
     PaymentStatus,
+    RefundRequest,
+    RefundResult,
     StatusResponse,
 )
 
@@ -81,6 +83,24 @@ class MockProvider:
             status=PaymentStatus(record["status"]),
             amount_minor=record.get("amount_minor"),
             raw=record,
+        )
+
+    def refund(self, req: RefundRequest) -> RefundResult:
+        # No real money to move — echo a deterministic refund id so the return
+        # flow is fully exercisable end-to-end against the mock gateway.
+        logger.info(
+            "mock refund order=%s mtid=%s amount_minor=%s ref=%s",
+            req.order_id, req.merchant_transaction_id, req.amount_minor,
+            req.refund_reference,
+        )
+        return RefundResult(
+            refund_id=f"MOCKRFND-{req.refund_reference}",
+            status=PaymentStatus.SUCCESS,
+            raw={
+                "provider": "mock",
+                "merchant_transaction_id": req.merchant_transaction_id,
+                "amount_minor": req.amount_minor,
+            },
         )
 
     def verify_webhook(self, body: bytes, signature: str | None) -> bool:

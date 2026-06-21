@@ -84,6 +84,14 @@ export function useMarkReturnReceived() {
   });
 }
 
+export function useInspectReturn() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, ...body }) => returnsApi.adminInspect(id, body),
+    onSuccess: (_d, vars) => invalidate(vars.id),
+  });
+}
+
 export function useMarkReturnRefunded() {
   const invalidate = useInvalidate();
   return useMutation({

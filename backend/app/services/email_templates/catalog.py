@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.order import Order
+    from app.models.return_request import ReturnRequest
     from sqlalchemy.orm import Session
 
 # ---------------------------------------------------------------------------
@@ -43,6 +44,22 @@ _ORDER_VARS = [
     {"token": "order_url", "label": "Order detail URL", "sample": "https://shopwellvia.in/orders/1042"},
 ]
 
+_RETURN_VARS = [
+    {"token": "customer_name", "label": "Customer first name", "sample": "Asha"},
+    {"token": "order_id", "label": "Order ID", "sample": "1042"},
+    {"token": "return_id", "label": "Return ID", "sample": "57"},
+    {"token": "refund_currency", "label": "Currency code", "sample": "INR"},
+    {"token": "refund_amount", "label": "Refund amount", "sample": "698.00"},
+    {"token": "refund_method", "label": "Where the refund was routed", "sample": "your original payment method (PhonePe)"},
+    {"token": "refund_reference", "label": "Refund reference id", "sample": "T2606211108350210407761"},
+    {"token": "refund_timeline_days", "label": "Business days to reflect", "sample": "7"},
+    {"token": "reason", "label": "Return reason", "sample": "Arrived damaged"},
+    {"token": "admin_notes", "label": "Inspection / rejection notes", "sample": "Item matched the reported damage."},
+    {"token": "store_name", "label": "Store name", "sample": "ShopWellvia"},
+    {"token": "store_url", "label": "Store URL", "sample": "https://shopwellvia.in"},
+    {"token": "order_url", "label": "Order detail URL", "sample": "https://shopwellvia.in/orders/1042"},
+]
+
 VARIABLES: dict[str, list[dict]] = {
     "_layout": [
         {"token": "content", "label": "Rendered body HTML (injected by the layout engine)", "sample": "<p>Email body here</p>"},
@@ -58,6 +75,8 @@ VARIABLES: dict[str, list[dict]] = {
     "order_delivered": _ORDER_VARS,
     "order_cancelled": _ORDER_VARS,
     "order_refunded": _ORDER_VARS,
+    "return_refunded": _RETURN_VARS,
+    "return_rejected": _RETURN_VARS,
     "password_reset": [
         {"token": "customer_name", "label": "Customer first name", "sample": "Asha"},
         {"token": "otp_code", "label": "6-digit OTP", "sample": "482910"},
@@ -107,6 +126,23 @@ def sample_context(key: str) -> dict:
 
     if key in ("order_paid", "order_shipped", "order_delivered", "order_cancelled", "order_refunded"):
         return base_order
+
+    if key in ("return_refunded", "return_rejected"):
+        return {
+            "customer_name": "Asha",
+            "order_id": "1042",
+            "return_id": "57",
+            "refund_currency": "INR",
+            "refund_amount": "698.00",
+            "refund_method": "your original payment method (PhonePe)",
+            "refund_reference": "T2606211108350210407761",
+            "refund_timeline_days": "7",
+            "reason": "Arrived damaged",
+            "admin_notes": "Item matched the reported damage.",
+            "store_name": "ShopWellvia",
+            "store_url": "https://shopwellvia.in",
+            "order_url": "https://shopwellvia.in/orders/1042",
+        }
 
     if key == "password_reset":
         return {
@@ -184,6 +220,62 @@ def order_context(order: "Order") -> dict:
         "store_name": "ShopWellvia",
         "store_url": "https://shopwellvia.in",
         "order_url": f"https://shopwellvia.in/orders/{order.id}",
+    }
+
+
+_REASON_LABELS = {
+    "defective": "Defective",
+    "wrong_item": "Wrong item",
+    "not_as_described": "Not as described",
+    "arrived_damaged": "Arrived damaged",
+    "no_longer_needed": "No longer needed",
+    "other": "Other",
+}
+
+# Friendly names for the gateway a refund is routed back through.
+_GATEWAY_LABELS = {
+    "phonepe": "PhonePe",
+    "razorpay": "Razorpay",
+    "stripe": "Stripe",
+    "paypal": "PayPal",
+    "paystack": "Paystack",
+    "flutterwave": "Flutterwave",
+    "mock": "the payment gateway",
+}
+
+
+def _refund_method_label(method: str | None) -> str:
+    """Human phrasing for where the refund lands, used in the email body."""
+    if not method or method == "manual":
+        return "a manual bank transfer to your account"
+    pretty = _GATEWAY_LABELS.get(method, method)
+    return f"your original payment method ({pretty})"
+
+
+def return_context(req: "ReturnRequest", *, timeline_days: int) -> dict:
+    """Build the live context for the return refund / rejection emails."""
+    order = getattr(req, "order", None)
+    user = getattr(req, "user", None)
+    currency = (getattr(order, "currency", None) or "INR")
+    if user and user.full_name:
+        name = user.full_name.split(" ")[0]
+    else:
+        name = "there"
+    reason = req.reason or ""
+    return {
+        "customer_name": name,
+        "order_id": str(req.order_id),
+        "return_id": str(req.id),
+        "refund_currency": currency,
+        "refund_amount": f"{float(req.refund_amount or 0):.2f}",
+        "refund_method": _refund_method_label(req.refund_method),
+        "refund_reference": req.refund_reference or "",
+        "refund_timeline_days": str(timeline_days),
+        "reason": _REASON_LABELS.get(reason, reason.replace("_", " ").title() or "—"),
+        "admin_notes": (req.admin_notes or "").strip(),
+        "store_name": "ShopWellvia",
+        "store_url": "https://shopwellvia.in",
+        "order_url": f"https://shopwellvia.in/orders/{req.order_id}",
     }
 
 

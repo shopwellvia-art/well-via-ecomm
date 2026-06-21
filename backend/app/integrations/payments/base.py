@@ -88,6 +88,37 @@ class StatusResponse:
     raw: dict | None = None
 
 
+@dataclass
+class RefundRequest:
+    """Ask a gateway to reverse (part of) a captured payment back to the
+    customer's original instrument."""
+
+    order_id: int
+    amount_minor: int  # smallest unit; may be < the original capture (partial)
+    currency: str
+    # Our original merchant transaction id (orders.payment_intent_id) — the
+    # charge being reversed.
+    merchant_transaction_id: str
+    # A NEW unique id for THIS refund, sent to the gateway as the merchant-side
+    # refund reference (idempotency key on the provider).
+    refund_reference: str
+    # The gateway's own captured-payment id (order_payments.gateway_payment_id),
+    # when we have it — some providers key the refund off it.
+    original_transaction_id: str | None = None
+    reason: str | None = None
+
+
+@dataclass
+class RefundResult:
+    """Outcome of a refund call. ``refund_id`` is the provider's reference for
+    the reversal; ``status`` mirrors PaymentStatus values (a gateway may settle
+    a refund asynchronously, hence "pending")."""
+
+    refund_id: str
+    status: PaymentStatus = PaymentStatus.SUCCESS
+    raw: dict | None = None
+
+
 class PaymentProvider(Protocol):
     """Minimal surface area; concrete classes may add provider-specific helpers."""
 
@@ -104,6 +135,18 @@ class PaymentProvider(Protocol):
 
     def parse_webhook(self, body: bytes) -> StatusResponse:
         """Extract the resolved status from a (verified) webhook body."""
+
+
+class SupportsRefund(Protocol):
+    """Optional capability — a provider that can reverse a captured payment to
+    the original instrument. Not every gateway implements this yet, so callers
+    feature-detect with ``isinstance(provider, SupportsRefund)`` /
+    ``hasattr(provider, "refund")`` and fall back to a manual refund otherwise.
+    """
+
+    name: str
+
+    def refund(self, req: RefundRequest) -> RefundResult: ...
 
 
 # ----------------------------------------------------------------------

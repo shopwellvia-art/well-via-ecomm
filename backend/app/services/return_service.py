@@ -20,6 +20,7 @@ through the existing order-refund flow.
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -34,12 +35,16 @@ from app.integrations.shipping import (
     ShippingProviderError,
 )
 from app.models.order import Order, OrderItem, OrderStatus
+from app.models.order_payment import OrderPayment, PaymentTxnStatus
+from app.models.payment_event import PaymentEventType
 from app.models.return_request import (
     ReturnItem,
     ReturnReason,
     ReturnRequest,
     ReturnStatus,
 )
+from app.services.notifications import NotificationEvent, NotificationService
+from app.services.payment_audit import record_payment_event
 from app.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
@@ -242,18 +247,210 @@ class ReturnService:
         self.db.flush()
         return req
 
-    def mark_refunded(self, return_id: int) -> ReturnRequest:
+    def inspect(
+        self,
+        return_id: int,
+        *,
+        passed: bool,
+        inspection_notes: str | None = None,
+        refund_amount: Decimal | None = None,
+    ) -> ReturnRequest:
+        """Record the post-receipt inspection verdict.
+
+        The physically-received item is inspected against the customer's stated
+        claim and the return policy. The verdict gates the refund:
+
+          * ``passed=False`` → the return is REJECTED (terminal); the customer
+            is notified and no money moves.
+          * ``passed=True``  → the verdict is recorded, the return stays
+            RECEIVED and becomes eligible for :meth:`issue_refund`. An optional
+            ``refund_amount`` overrides the amount computed at approval.
+        """
         req = self.admin_get(return_id)
         if req.status != ReturnStatus.RECEIVED:
             raise ConflictError(
-                "Mark the return as received first."
+                "Inspect a return only after it has been marked received "
+                f"(current state: {req.status.value})."
             )
-        req.status = ReturnStatus.REFUNDED
-        req.refunded_at = datetime.now(timezone.utc)
+        req.inspection_passed = passed
+        req.inspection_notes = (inspection_notes or None)
+        req.inspected_at = datetime.now(timezone.utc)
+
+        if not passed:
+            req.status = ReturnStatus.REJECTED
+            req.rejected_at = datetime.now(timezone.utc)
+            if inspection_notes:
+                req.admin_notes = inspection_notes
+            self.db.flush()
+            self._notify_return(req, NotificationEvent.RETURN_REJECTED)
+            logger.info("return %s rejected after failed inspection", req.id)
+            return req
+
+        if refund_amount is not None:
+            req.refund_amount = refund_amount
         self.db.flush()
+        logger.info("return %s passed inspection; eligible for refund", req.id)
+        return req
+
+    def issue_refund(
+        self,
+        return_id: int,
+        *,
+        refund_amount: Decimal | None = None,
+    ) -> ReturnRequest:
+        """Issue the refund for an inspected, passing return back through the
+        customer's original payment method, then notify them with an expected
+        timeline.
+
+        Guard: the item must have been received AND have a passing inspection —
+        we never refund an item we haven't confirmed matches the claim.
+        """
+        req = self.admin_get(return_id)
+        if req.status != ReturnStatus.RECEIVED:
+            raise ConflictError(
+                "A refund can only be issued on a received return "
+                f"(current state: {req.status.value})."
+            )
+        if req.inspection_passed is not True:
+            raise ConflictError(
+                "Inspect the item and record a passing result before issuing "
+                "a refund."
+            )
+        if refund_amount is not None:
+            req.refund_amount = refund_amount
+        amount = Decimal(req.refund_amount or 0)
+        if amount <= 0:
+            raise ValidationError("Refund amount must be greater than zero.")
+
+        self._issue_refund(req, amount)
         return req
 
     # ---- internals ---------------------------------------------------------
+
+    def _gateway_leg(self, order: Order) -> OrderPayment | None:
+        """The original prepaid/gateway payment leg to reverse. COD legs are
+        skipped — there is no electronic source to refund to (the cash refund
+        is handled manually)."""
+        for p in order.payments:
+            if (p.payment_method or "").lower() == "cod":
+                continue
+            return p
+        return None
+
+    def _issue_refund(self, req: ReturnRequest, amount: Decimal) -> None:
+        """Route ``amount`` back to the customer's original payment method,
+        record the money movement on the original leg + the payment audit log,
+        flip the return to REFUNDED, and notify the customer with a timeline.
+
+        Prepaid orders refund to the original gateway (via ``provider.refund``
+        when the gateway supports it, else recorded for manual gateway action).
+        COD / sourceless orders fall back to ``refund_method='manual'`` (an
+        offline bank transfer the operator completes)."""
+        # Lazy imports: the payments factory has a known import cycle with the
+        # service layer, so it is resolved at call time.
+        from app.integrations.payments.base import RefundRequest
+        from app.integrations.payments.factory import get_provider_for_order
+
+        order = req.order
+        currency = (order.currency if order else None) or "INR"
+        amount_minor = int((amount * 100).to_integral_value())
+        # A fresh, unique merchant-side reference for THIS refund (idempotency
+        # key on the gateway). Replaced by the provider's own id when returned.
+        refund_ref = f"RFND{req.id}-{uuid.uuid4().hex[:10]}".upper()
+
+        gateway_leg = self._gateway_leg(order) if order else None
+        refund_method = "manual"
+        refund_reference = refund_ref
+        raw: dict | None = None
+
+        if gateway_leg is not None and order and order.gateway_code:
+            provider = None
+            try:
+                provider = get_provider_for_order(self.db, order)
+            except Exception as exc:  # noqa: BLE001 — gateway no longer configured
+                logger.warning(
+                    "return %s: could not build provider for order %s: %s — "
+                    "recording a manual refund instead",
+                    req.id, order.id, exc,
+                )
+            if provider is not None and hasattr(provider, "refund"):
+                result = provider.refund(
+                    RefundRequest(
+                        order_id=order.id,
+                        amount_minor=amount_minor,
+                        currency=currency,
+                        merchant_transaction_id=order.payment_intent_id or "",
+                        refund_reference=refund_ref,
+                        original_transaction_id=(
+                            gateway_leg.gateway_payment_id
+                            or order.payment_provider_ref
+                        ),
+                        reason=f"Return #{req.id}: {req.reason}",
+                    )
+                )
+                refund_method = order.gateway_code
+                refund_reference = result.refund_id or refund_ref
+                raw = result.raw
+            else:
+                # Gateway integrated for charging but not yet for refunds — route
+                # to the original method on the books; an operator completes the
+                # gateway-side reversal. Honest about the current capability.
+                refund_method = order.gateway_code
+                logger.warning(
+                    "return %s: gateway %s has no automated refund API; recorded "
+                    "for manual gateway processing (ref=%s)",
+                    req.id, order.gateway_code, refund_ref,
+                )
+
+            # Reflect the reversal on the original payment leg so the order's
+            # money state stays truthful (full vs partial return).
+            if Decimal(gateway_leg.amount) <= amount:
+                gateway_leg.payment_status = PaymentTxnStatus.REFUNDED
+            else:
+                gateway_leg.payment_status = PaymentTxnStatus.PARTIALLY_REFUNDED
+
+        # Audit the refund — own-session write, durable regardless of caller txn.
+        record_payment_event(
+            event_type=PaymentEventType.REFUND_ATTEMPT,
+            order_id=order.id if order else None,
+            merchant_transaction_id=order.payment_intent_id if order else None,
+            gateway_code=(order.gateway_code if order else None),
+            provider_ref=refund_reference,
+            amount_reported_minor=amount_minor,
+            message=f"return #{req.id} refund of {amount} via {refund_method}",
+            raw_payload=raw,
+        )
+
+        req.status = ReturnStatus.REFUNDED
+        req.refunded_at = datetime.now(timezone.utc)
+        req.refund_method = refund_method
+        req.refund_reference = refund_reference[:128]
+        self.db.flush()
+
+        timeline = self.settings.get_int("returns.refund_timeline_days", default=7)
+        self._notify_return(
+            req, NotificationEvent.RETURN_REFUNDED, timeline_days=timeline
+        )
+        logger.info(
+            "return %s refunded amount=%s method=%s ref=%s",
+            req.id, amount, refund_method, refund_reference,
+        )
+
+    def _notify_return(
+        self,
+        req: ReturnRequest,
+        event: NotificationEvent,
+        *,
+        timeline_days: int = 7,
+    ) -> None:
+        """Best-effort customer notification — a failure never breaks the
+        admin's return action (mirrors OrderService notifications)."""
+        try:
+            NotificationService(self.db).notify_return(
+                req, event, timeline_days=timeline_days
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("return notification failed for %s: %s", req.id, exc)
 
     def _owned(self, user_id: int, return_id: int) -> ReturnRequest:
         req = self.db.get(ReturnRequest, return_id)
