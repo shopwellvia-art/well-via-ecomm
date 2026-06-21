@@ -8,7 +8,7 @@ from app.models.product import Category
 from app.repositories.category_repository import CategoryRepository
 from app.schemas.category import CategoryCreate, CategoryUpdate
 from app.storage import get_storage
-from app.storage.base import CONTENT_TYPE_EXT
+from app.storage.base import CONTENT_TYPE_EXT, MediaFolder
 
 
 def slugify(value: str) -> str:
@@ -102,7 +102,12 @@ class CategoryService:
             except Exception:
                 pass
 
-        url = self.storage.save(data=file_bytes, filename=filename, content_type=content_type)
+        url = self.storage.save(
+            data=file_bytes,
+            filename=filename,
+            content_type=content_type,
+            folder=MediaFolder.CATEGORIES,
+        )
         category.image_url = url
         self.db.commit()
         self.db.refresh(category)

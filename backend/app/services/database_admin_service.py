@@ -24,6 +24,7 @@ from app.models.base import Base
 from app.models.customer import Customer
 from app.models.user import User
 from app.services import sample_data
+from app.services.email_templates.seed import seed_email_templates
 from app.services.rbac_seed import seed_rbac
 from app.services.settings_seed import seed_settings
 
@@ -105,6 +106,8 @@ def truncate_all_and_reseed(db: Session) -> dict:
     # (alembic_version survives), so re-seed the shipped defaults here or the
     # admin Settings page comes back blank.
     seed_settings(db)
+    # Re-seed email/SMS template defaults so the template editor doesn't go blank.
+    seed_email_templates(db)
     logger.warning(
         "DATABASE TRUNCATE complete — %d tables emptied, admin %s re-seeded",
         count,

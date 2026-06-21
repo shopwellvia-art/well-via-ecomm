@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { LogOut, LayoutDashboard, UserRound, Package, Heart, Coins, Shield, MapPin, ChevronDown, ShoppingCart } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
@@ -16,6 +16,7 @@ export default function AccountMenu({ onAccent = false }) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
+  const location = useLocation();
   const reduce = useReducedMotion();
 
   const [open, setOpen] = useState(false);
@@ -30,6 +31,16 @@ export default function AccountMenu({ onAccent = false }) {
     if (!menuRef.current) return [];
     return Array.from(menuRef.current.querySelectorAll('[role="menuitem"]'));
   }, []);
+
+  // Close the menu whenever the route changes. This is the authoritative
+  // close-on-navigate: a menu item's own onClick can be missed (the click
+  // landing on the SVG icon, a touch tap, or a programmatic navigate), and
+  // because the header stays mounted across routes the dropdown would
+  // otherwise linger on the new page. Keyed on pathname so it only fires on
+  // an actual page change.
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
 
   // Focus the first menuitem when the menu opens.
   useEffect(() => {
@@ -54,10 +65,13 @@ export default function AccountMenu({ onAccent = false }) {
         triggerRef.current?.focus();
       }
     };
-    document.addEventListener('mousedown', onPointer);
+    // pointerdown covers mouse, touch, and pen in one listener; plain
+    // mousedown doesn't fire reliably for touch taps, which left the menu
+    // stuck open on mobile.
+    document.addEventListener('pointerdown', onPointer);
     document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('pointerdown', onPointer);
       document.removeEventListener('keydown', onKey);
     };
   }, [open]);

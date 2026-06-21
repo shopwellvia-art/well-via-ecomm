@@ -17,11 +17,14 @@ from app.schemas.order import (
     AdminOrderRead,
     AdminOrderRow,
     NotesRequest,
+    OrderAddressRead,
     OrderCreate,
     OrderItemRead,
+    OrderPaymentRead,
     OrderRead,
     RefundOrCancelRequest,
     SchedulePickupRequest,
+    ShipmentRead,
     ShipRequest,
 )
 from app.services.audit_service import AuditService
@@ -45,6 +48,7 @@ def _row(order: Order) -> AdminOrderRow:
 def _detail(order: Order) -> AdminOrderRead:
     return AdminOrderRead(
         id=order.id,
+        order_number=order.order_number,
         status=order.status,
         subtotal=order.subtotal,
         tax_amount=order.tax_amount,
@@ -66,6 +70,9 @@ def _detail(order: Order) -> AdminOrderRead:
         cod_balance=order.cod_balance,
         payment_intent_id=order.payment_intent_id,
         items=[OrderItemRead.model_validate(i) for i in order.items],
+        payments=[OrderPaymentRead.model_validate(p) for p in order.payments],
+        shipments=[ShipmentRead.model_validate(s) for s in order.shipments],
+        addresses=[OrderAddressRead.model_validate(a) for a in order.addresses],
         customer=AdminCustomerBrief.model_validate(order.user),
         tracking_number=order.tracking_number,
         carrier=order.carrier,

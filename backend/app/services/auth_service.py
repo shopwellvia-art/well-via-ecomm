@@ -324,15 +324,38 @@ class AuthService:
             settings.OTP_TTL_MINUTES * 60,
             f"{_hash_otp(otp)}:0",
         )
-        send_email(
-            to=email,
-            subject="Your password reset code",
-            body=(
-                f"Your one-time password reset code is: {otp}\n\n"
-                f"It expires in {settings.OTP_TTL_MINUTES} minutes. "
-                "If you didn't request this, you can ignore this email."
-            ),
+        # Render the password_reset template via the email_templates engine.
+        # Falls back to a plain-text body if the template render fails so the
+        # OTP is always delivered even when the template engine has a bug.
+        _plain_body = (
+            f"Your one-time password reset code is: {otp}\n\n"
+            f"It expires in {settings.OTP_TTL_MINUTES} minutes. "
+            "If you didn't request this, you can ignore this email."
         )
+        try:
+            from app.services.email_templates.catalog import password_reset_context
+            from app.services.email_templates.renderer import render_email
+
+            first_name = "there"
+            if user.full_name:
+                first_name = user.full_name.split(" ")[0]
+            _ctx = password_reset_context(first_name, otp, settings.OTP_TTL_MINUTES)
+            _subject, _html, _text = render_email(self.db, "password_reset", _ctx)
+            send_email(
+                to=email,
+                subject=_subject or "Your password reset code",
+                body=_text or _plain_body,
+                html=_html or None,
+                db=self.db,
+            )
+        except Exception as _exc:  # noqa: BLE001
+            logger.warning("password_reset template render failed (%s); using plain text", _exc)
+            send_email(
+                to=email,
+                subject="Your password reset code",
+                body=_plain_body,
+                db=self.db,
+            )
 
     def reset_password(self, email: str, otp: str, new_password: str) -> None:
         raw = self.redis.get(_otp_key(email))

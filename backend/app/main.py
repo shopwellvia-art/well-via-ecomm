@@ -17,6 +17,7 @@ from app.core.observability import (
     telemetry_buffer,
 )
 from app.db.session import SessionLocal, engine
+from app.services.email_templates.seed import seed_email_templates
 from app.services.rbac_seed import seed_rbac
 from app.services.settings_seed import seed_settings
 
@@ -34,6 +35,8 @@ async def lifespan(app: FastAPI):
             # Backfill any missing system_settings defaults (self-heals a DB
             # whose settings rows were wiped, e.g. by the superadmin truncate).
             seed_settings(db)
+            # Backfill any missing email/SMS template defaults.
+            seed_email_templates(db)
     except Exception as exc:
         logger.warning("RBAC seed skipped: %s", exc)
     # Start the observability flush thread (drains the in-process telemetry

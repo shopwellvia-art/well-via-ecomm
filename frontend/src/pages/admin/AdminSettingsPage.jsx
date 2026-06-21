@@ -18,6 +18,7 @@ import {
   PiggyBank,
   AlertOctagon,
   Cloud,
+  FolderTree,
 } from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Button } from '@/components/ui/Button.jsx';
@@ -35,6 +36,7 @@ import {
   useTestSms,
   useTestStorage,
 } from '@/features/settings/hooks.js';
+import { TemplatesTab } from '@/features/emailTemplates/TemplatesTab.jsx';
 
 const REDACTED = '***';
 
@@ -171,12 +173,18 @@ const FIELD_META = {
   ]},
   'storage.s3_region':          { label: 'S3 region', type: 'text', placeholder: 'ap-south-1' },
   'storage.s3_bucket':          { label: 'S3 bucket name', type: 'text', placeholder: 'my-shop-media' },
+  'storage.s3_root_prefix':     { label: 'Root folder (bucket prefix)', type: 'text',
+    placeholder: 'wellvia' },
   'storage.s3_endpoint_url':    { label: 'S3 endpoint URL', type: 'text',
     placeholder: 'Blank for AWS; https://blr1.digitaloceanspaces.com for Spaces' },
   'storage.s3_public_base_url': { label: 'Public base URL / CDN', type: 'text',
     placeholder: 'Blank = bucket URL; e.g. https://cdn.example.com' },
   'storage.s3_access_key':      { label: 'Access key ID', type: 'text', placeholder: 'AKIA…' },
   'storage.s3_secret_key':      { label: 'Secret access key', type: 'password' },
+  'storage.s3_acl':             { label: 'Object ACL', type: 'select', options: [
+    { value: '',            label: 'None — modern bucket (ACLs disabled)' },
+    { value: 'public-read', label: 'public-read (legacy ACL-enabled buckets)' },
+  ]},
 };
 
 // Per-category metadata: sidebar label, icon, and a one-line blurb shown in the
@@ -415,6 +423,8 @@ export default function AdminSettingsPage() {
   const [activeTab, setActiveTab] = useState('email');
   const [draft, setDraft] = useState({});
   const [savedAt, setSavedAt] = useState(null);
+  // Sub-tab inside the Email & SMTP category: 'settings' | 'templates'
+  const [emailSubTab, setEmailSubTab] = useState('settings');
 
   useEffect(() => {
     if (!data) return;
@@ -608,28 +618,61 @@ export default function AdminSettingsPage() {
       );
     }
     if (cat === 'storage') {
+      const root = (draft['storage.s3_root_prefix'] || '').trim() || 'wellvia';
+      const now = new Date();
+      const ym = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`;
       return (
-        <div className="mt-6 rounded-sm border border-line-subtle bg-bg-sunken p-5">
-          <CardHeader
-            title="Test S3 connection"
-            className="mb-4 border-none px-0 py-0"
-            action={<Badge tone="info" size="sm">Test</Badge>}
-          />
-          <p className="mb-4 text-xs text-ink-secondary">
-            Issues a head-bucket call using your saved S3 settings. Save changes
-            first if you just edited them. Switching the backend affects new
-            uploads only — existing image URLs are not rewritten.
-          </p>
-          <Button
-            variant="outline"
-            onClick={() => testStorage.mutate()}
-            loading={testStorage.isPending}
-          >
-            <Send className="size-4" aria-hidden="true" />
-            Test connection
-          </Button>
-          <TestSendBanner pending={testStorage.isPending} result={storageResult()} kind="S3 connection" />
-        </div>
+        <>
+          <div className="mt-6 rounded-sm border border-line-subtle bg-bg-sunken p-5">
+            <CardHeader
+              title="Folder hierarchy"
+              className="mb-4 border-none px-0 py-0"
+              action={<Badge tone="neutral" size="sm">Layout</Badge>}
+            />
+            <p className="mb-4 text-xs text-ink-secondary">
+              Uploads are organised under the root folder by what they are, so the
+              bucket stays browsable. Products are sharded by upload month
+              (year/month) because they are the only high-volume class; the rest
+              stay flat. Filenames are random IDs — the original upload name is
+              never used in the path.
+            </p>
+            <pre className="overflow-x-auto rounded-sm border border-line-subtle bg-bg-elevated p-4 font-mono text-[11px] leading-relaxed text-ink-secondary">
+{`${root}/
+├─ products/${ym}/3f2a1c….jpg   ← product gallery images
+├─ categories/7f3c9e….jpg        ← category thumbnails
+├─ hero/9b1a4d….jpg              ← homepage hero slides
+└─ brand/4d2e8a….png             ← brand logo / footer assets`}
+            </pre>
+            <p className="mt-3 flex items-start gap-1.5 text-[11px] text-ink-tertiary">
+              <FolderTree className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+              The root folder is the bucket prefix above. Local-disk storage uses
+              the same tree under <code className="font-mono">/media</code> (no
+              root prefix — the uploads dir is already the namespace).
+            </p>
+          </div>
+
+          <div className="mt-4 rounded-sm border border-line-subtle bg-bg-sunken p-5">
+            <CardHeader
+              title="Test S3 connection"
+              className="mb-4 border-none px-0 py-0"
+              action={<Badge tone="info" size="sm">Test</Badge>}
+            />
+            <p className="mb-4 text-xs text-ink-secondary">
+              Issues a head-bucket call using your saved S3 settings. Save changes
+              first if you just edited them. Switching the backend affects new
+              uploads only — existing image URLs are not rewritten.
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => testStorage.mutate()}
+              loading={testStorage.isPending}
+            >
+              <Send className="size-4" aria-hidden="true" />
+              Test connection
+            </Button>
+            <TestSendBanner pending={testStorage.isPending} result={storageResult()} kind="S3 connection" />
+          </div>
+        </>
       );
     }
     return null;
@@ -769,18 +812,67 @@ export default function AdminSettingsPage() {
             </div>
           </CardHeader>
           <CardBody className="p-6">
-            <CategoryEditor
-              key={currentCat}
-              category={currentCat}
-              items={itemsByCategory[currentCat] || []}
-              draft={draft}
-              dirty={isCategoryDirty(currentCat)}
-              onChange={setField}
-              onSave={() => saveCategory(currentCat)}
-              saving={update.isPending}
-              savedAt={savedAt}
-              extras={renderExtras(currentCat)}
-            />
+            {currentCat === 'email' ? (
+              <>
+                {/* Sub-tab switcher — Settings & SMTP vs Templates */}
+                <div
+                  className="mb-6 flex gap-1 rounded-sm border border-line-subtle bg-bg-sunken p-1"
+                  role="tablist"
+                  aria-label="Email settings sections"
+                >
+                  {[
+                    { id: 'settings', label: 'Settings & SMTP' },
+                    { id: 'templates', label: 'Templates' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      role="tab"
+                      type="button"
+                      aria-selected={emailSubTab === tab.id}
+                      onClick={() => setEmailSubTab(tab.id)}
+                      className={cn(
+                        'flex-1 rounded-xs px-4 py-2 text-sm font-medium transition-colors focus-visible:focus-ring',
+                        emailSubTab === tab.id
+                          ? 'bg-bg-elevated text-ink-primary shadow-sm'
+                          : 'text-ink-secondary hover:text-ink-primary',
+                      )}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {emailSubTab === 'settings' ? (
+                  <CategoryEditor
+                    key={currentCat}
+                    category={currentCat}
+                    items={itemsByCategory[currentCat] || []}
+                    draft={draft}
+                    dirty={isCategoryDirty(currentCat)}
+                    onChange={setField}
+                    onSave={() => saveCategory(currentCat)}
+                    saving={update.isPending}
+                    savedAt={savedAt}
+                    extras={renderExtras(currentCat)}
+                  />
+                ) : (
+                  <TemplatesTab />
+                )}
+              </>
+            ) : (
+              <CategoryEditor
+                key={currentCat}
+                category={currentCat}
+                items={itemsByCategory[currentCat] || []}
+                draft={draft}
+                dirty={isCategoryDirty(currentCat)}
+                onChange={setField}
+                onSave={() => saveCategory(currentCat)}
+                saving={update.isPending}
+                savedAt={savedAt}
+                extras={renderExtras(currentCat)}
+              />
+            )}
           </CardBody>
         </Card>
       </div>

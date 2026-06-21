@@ -6,7 +6,7 @@ from app.models.hero_slide import HeroSlide
 from app.repositories.hero_slide_repository import HeroSlideRepository
 from app.schemas.hero_slide import HeroSlideUpdate
 from app.storage import get_storage
-from app.storage.base import CONTENT_TYPE_EXT
+from app.storage.base import CONTENT_TYPE_EXT, MediaFolder
 
 
 class HeroSlideService:
@@ -43,7 +43,12 @@ class HeroSlideService:
             raise ValidationError(f"Image must be under {settings.MAX_IMAGE_SIZE_MB} MB")
 
         sort_order = self.repo.max_sort_order() + 1
-        url = self.storage.save(data=file_bytes, filename=filename, content_type=content_type)
+        url = self.storage.save(
+            data=file_bytes,
+            filename=filename,
+            content_type=content_type,
+            folder=MediaFolder.HERO,
+        )
         # `fields` is a pre-validated dict of optional content columns supplied
         # by the create endpoint (heading, eyebrow, perks, …). Columns absent
         # from the dict fall back to their model/server defaults.

@@ -1,11 +1,16 @@
 """Dispatcher that fans out a single domain event to email + SMS.
 
-`notify(order, event)` is the only entry point. Callers don't decide which
+``notify(order, event)`` is the only entry point. Callers don't decide which
 channels fire — that's a function of (event, settings, customer profile):
 
   - The per-event setting must be ON (admin toggle in /admin/settings).
   - Email always fires when the event is enabled (transactional).
-  - SMS fires only if the event has an SMS template AND the user has a phone.
+  - SMS fires only if the event has an SMS template key AND the user has a phone.
+
+Template rendering goes through the ``email_templates`` engine so admins can
+customise every message without a redeploy. The hardcoded wording in
+``notifications/templates.py`` has been retired; context builders live in
+``services/email_templates/catalog.py``.
 
 Failures are logged and swallowed. Order actions never fail on notification.
 """
@@ -13,13 +18,18 @@ from __future__ import annotations
 
 import enum
 import logging
-from typing import Callable
+from typing import NamedTuple
 
 from sqlalchemy.orm import Session
 
 from app.email import send_email
 from app.models.order import Order
-from app.services.notifications import templates as t
+from app.services.email_templates.catalog import (
+    order_context,
+    sms_order_paid_context,
+    sms_order_shipped_context,
+)
+from app.services.email_templates.renderer import render_email, render_sms
 from app.services.settings_service import SettingsService
 from app.sms import send_sms
 
@@ -34,34 +44,39 @@ class NotificationEvent(str, enum.Enum):
     ORDER_REFUNDED = "order_refunded"
 
 
-# (settings_key, email_fn, sms_fn). sms_fn=None means email-only.
-_EVENT_TABLE: dict[NotificationEvent, tuple[str, Callable, Callable | None]] = {
-    NotificationEvent.ORDER_PAID: (
-        "notifications.order_paid",
-        t.email_order_paid,
-        t.sms_order_paid,
+class _EventEntry(NamedTuple):
+    settings_key: str          # e.g. "notifications.order_paid"
+    email_template_key: str    # e.g. "order_paid"
+    sms_template_key: str | None  # e.g. "sms_order_paid", or None for email-only
+
+
+_EVENT_TABLE: dict[NotificationEvent, _EventEntry] = {
+    NotificationEvent.ORDER_PAID: _EventEntry(
+        "notifications.order_paid", "order_paid", "sms_order_paid"
     ),
-    NotificationEvent.ORDER_SHIPPED: (
-        "notifications.order_shipped",
-        t.email_order_shipped,
-        t.sms_order_shipped,
+    NotificationEvent.ORDER_SHIPPED: _EventEntry(
+        "notifications.order_shipped", "order_shipped", "sms_order_shipped"
     ),
-    NotificationEvent.ORDER_DELIVERED: (
-        "notifications.order_delivered",
-        t.email_order_delivered,
-        None,
+    NotificationEvent.ORDER_DELIVERED: _EventEntry(
+        "notifications.order_delivered", "order_delivered", None
     ),
-    NotificationEvent.ORDER_CANCELLED: (
-        "notifications.order_cancelled",
-        t.email_order_cancelled,
-        None,
+    NotificationEvent.ORDER_CANCELLED: _EventEntry(
+        "notifications.order_cancelled", "order_cancelled", None
     ),
-    NotificationEvent.ORDER_REFUNDED: (
-        "notifications.order_refunded",
-        t.email_order_refunded,
-        None,
+    NotificationEvent.ORDER_REFUNDED: _EventEntry(
+        "notifications.order_refunded", "order_refunded", None
     ),
 }
+
+
+def _sms_context(event: NotificationEvent, order: Order) -> dict:
+    """Return the appropriate SMS context dict for an event."""
+    if event == NotificationEvent.ORDER_PAID:
+        return sms_order_paid_context(order)
+    if event == NotificationEvent.ORDER_SHIPPED:
+        return sms_order_shipped_context(order)
+    # No other events currently have SMS templates.
+    return {}
 
 
 class NotificationService:
@@ -73,9 +88,8 @@ class NotificationService:
         if entry is None:
             logger.warning("unknown notification event: %s", event)
             return
-        settings_key, email_fn, sms_fn = entry
 
-        if not SettingsService(self.db).get_bool(settings_key, default=True):
+        if not SettingsService(self.db).get_bool(entry.settings_key, default=True):
             return
 
         user = order.user
@@ -87,19 +101,30 @@ class NotificationService:
             )
             return
 
-        # Email — always fires when the event is on.
+        # ---- Email ----
         try:
-            subject, body = email_fn(order)
-            send_email(to=user.email, subject=subject, body=body, db=self.db)
+            ctx = order_context(order)
+            subject, html, text = render_email(self.db, entry.email_template_key, ctx)
+            if subject or html or text:
+                send_email(
+                    to=user.email,
+                    subject=subject or f"Update for order #{order.id}",
+                    body=text,
+                    html=html or None,
+                    db=self.db,
+                )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "notify %s email failed for order %s: %s", event.value, order.id, exc
             )
 
-        # SMS — only when the user opted in (phone set) and the event has one.
-        if sms_fn is not None and (user.phone or "").strip():
+        # ---- SMS ----
+        if entry.sms_template_key is not None and (user.phone or "").strip():
             try:
-                send_sms(to=user.phone.strip(), body=sms_fn(order), db=self.db)
+                sms_ctx = _sms_context(event, order)
+                body_text = render_sms(self.db, entry.sms_template_key, sms_ctx)
+                if body_text:
+                    send_sms(to=user.phone.strip(), body=body_text, db=self.db)
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "notify %s sms failed for order %s: %s",

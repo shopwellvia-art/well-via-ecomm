@@ -14,7 +14,15 @@ class OrderRepository(BaseRepository[Order]):
     def get_with_items(self, id_: int) -> Order | None:
         stmt = (
             select(Order)
-            .options(selectinload(Order.items), joinedload(Order.user))
+            .options(
+                selectinload(Order.items),
+                # Normalized children surfaced on the detail responses — eager
+                # loaded so serialization never lazy-loads on a closed session.
+                selectinload(Order.payments),
+                selectinload(Order.shipments),
+                selectinload(Order.addresses),
+                joinedload(Order.user),
+            )
             .where(Order.id == id_)
         )
         return self.db.execute(stmt).scalar_one_or_none()
@@ -22,7 +30,12 @@ class OrderRepository(BaseRepository[Order]):
     def list_for_user(self, user_id: int, *, offset: int = 0, limit: int = 20) -> list[Order]:
         stmt = (
             select(Order)
-            .options(selectinload(Order.items))
+            .options(
+                selectinload(Order.items),
+                selectinload(Order.payments),
+                selectinload(Order.shipments),
+                selectinload(Order.addresses),
+            )
             .where(Order.user_id == user_id)
             .order_by(Order.created_at.desc())
             .offset(offset)

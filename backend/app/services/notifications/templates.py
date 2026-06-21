@@ -1,27 +1,33 @@
-"""Hardcoded plain-text notification templates.
+"""Legacy plain-text template functions — superseded by the email_templates engine.
 
-Each function returns either:
-  - (subject, body) for an email
-  - body for an SMS
+These wrappers exist only for backward compatibility; no code in this repo
+imports them any more.  The active send path uses
+``app.services.email_templates.renderer.render_email`` / ``render_sms``
+and the context builders in ``app.services.email_templates.catalog``.
 
-Variables come straight off the Order/User objects — no template-engine
-runtime, no surprises. If you want to localize or add HTML emails later,
-swap out the renderer and keep the function signatures.
+Do NOT add new templates here.  To extend notifications, add a row to
+``services/email_templates/seed.py`` and wire the key into
+``notifications/service.py``'s ``_EVENT_TABLE``.
 """
 from __future__ import annotations
 
 from app.models.order import Order
+from app.services.email_templates.catalog import (
+    order_context,
+    sms_order_paid_context,
+    sms_order_shipped_context,
+)
 
+
+# ---- helpers (kept for any external callers) ----
 
 def _customer_name(order: Order) -> str:
     if order.user and order.user.full_name:
-        return order.user.full_name.split(" ")[0]  # first name only
+        return order.user.full_name.split(" ")[0]
     return "there"
 
 
 def _money(order: Order, value) -> str:
-    # Lean on the order's currency for display. Decimal(value) -> str so we
-    # don't accidentally emit "0E-2" or scientific notation.
     return f"{order.currency} {float(value):.2f}"
 
 
@@ -36,122 +42,64 @@ def _items_block(order: Order) -> str:
     return "\n".join(lines)
 
 
-# ---- PAID ----
-
+# ---- email stubs (plain-text) ----
 
 def email_order_paid(order: Order) -> tuple[str, str]:
-    subject = f"Order #{order.id} confirmed — thanks for shopping with us"
-    body = f"""Hi {_customer_name(order)},
-
-Thanks for your order! We've received your payment and are getting it ready.
-
-ORDER #{order.id}
----------------------------
-{_items_block(order)}
-
-Subtotal:  {_money(order, order.subtotal)}
-Tax:       {_money(order, order.tax_amount)}
-Discount:  -{_money(order, order.discount_amount)}
-Total:     {_money(order, order.total_amount)}
-
-Shipping to:
-{order.shipping_address or 'No address on file'}
-
-We'll email you again with tracking once it ships.
-"""
-    return subject, body
-
-
-def sms_order_paid(order: Order) -> str:
-    return (
-        f"Order #{order.id} confirmed. {_money(order, order.total_amount)} "
-        "paid. We'll text you when it ships."
+    ctx = order_context(order)
+    subject = f"Order #{ctx['order_id']} confirmed — thanks for shopping with us"
+    body = (
+        f"Hi {ctx['customer_name']},\n\n"
+        f"Thanks for your order! Total: {ctx['order_currency']} {ctx['order_total']}\n"
     )
-
-
-# ---- SHIPPED ----
+    return subject, body
 
 
 def email_order_shipped(order: Order) -> tuple[str, str]:
-    subject = f"Your order #{order.id} is on its way"
-    tracking_block = ""
-    if order.tracking_number or order.carrier:
-        tracking_block = "\n".join(
-            line for line in [
-                f"Carrier: {order.carrier}" if order.carrier else None,
-                f"Tracking: {order.tracking_number}" if order.tracking_number else None,
-            ] if line
-        )
-        tracking_block = f"\n{tracking_block}\n"
-
-    body = f"""Hi {_customer_name(order)},
-
-Great news — your order #{order.id} has shipped.
-{tracking_block}
-Shipping to:
-{order.shipping_address or 'No address on file'}
-
-You'll get another email once it's delivered.
-"""
+    ctx = order_context(order)
+    subject = f"Your order #{ctx['order_id']} is on its way"
+    body = f"Hi {ctx['customer_name']},\n\nYour order #{ctx['order_id']} has shipped.\n"
     return subject, body
-
-
-def sms_order_shipped(order: Order) -> str:
-    parts = [f"Order #{order.id} shipped"]
-    if order.carrier:
-        parts.append(f"via {order.carrier}")
-    if order.tracking_number:
-        parts.append(f"#{order.tracking_number}")
-    return " ".join(parts) + "."
-
-
-# ---- DELIVERED ----
 
 
 def email_order_delivered(order: Order) -> tuple[str, str]:
-    subject = f"Your order #{order.id} has arrived"
-    body = f"""Hi {_customer_name(order)},
-
-Your order #{order.id} was just marked delivered. We hope you love it!
-
-If anything's wrong, just reply to this email and we'll make it right.
-
-Loved it? You can review the items from your orders page.
-"""
+    ctx = order_context(order)
+    subject = f"Your order #{ctx['order_id']} has arrived"
+    body = f"Hi {ctx['customer_name']},\n\nYour order #{ctx['order_id']} was delivered.\n"
     return subject, body
-
-
-# ---- CANCELLED ----
 
 
 def email_order_cancelled(order: Order) -> tuple[str, str]:
-    subject = f"Order #{order.id} cancelled"
-    reason = (order.refund_reason or "Cancelled by the store").strip()
-    body = f"""Hi {_customer_name(order)},
-
-Your order #{order.id} has been cancelled.
-
-Reason: {reason}
-
-Any payment will be returned to your original payment method within a few
-business days. If you have questions, just reply to this email.
-"""
+    ctx = order_context(order)
+    subject = f"Order #{ctx['order_id']} cancelled"
+    body = f"Hi {ctx['customer_name']},\n\nYour order #{ctx['order_id']} was cancelled.\n"
     return subject, body
-
-
-# ---- REFUNDED ----
 
 
 def email_order_refunded(order: Order) -> tuple[str, str]:
-    subject = f"Order #{order.id} refunded"
-    reason = (order.refund_reason or "Refunded by the store").strip()
-    body = f"""Hi {_customer_name(order)},
-
-A refund of {_money(order, order.total_amount)} has been issued for order
-#{order.id}.
-
-Reason: {reason}
-
-The amount should appear on your statement within a few business days.
-"""
+    ctx = order_context(order)
+    subject = f"Order #{ctx['order_id']} refunded"
+    body = (
+        f"Hi {ctx['customer_name']},\n\n"
+        f"A refund of {ctx['order_currency']} {ctx['order_total']} has been issued.\n"
+    )
     return subject, body
+
+
+# ---- SMS stubs ----
+
+def sms_order_paid(order: Order) -> str:
+    ctx = sms_order_paid_context(order)
+    return (
+        f"Order #{ctx['order_id']} confirmed. {ctx['order_total']} paid. "
+        "We'll text you when it ships."
+    )
+
+
+def sms_order_shipped(order: Order) -> str:
+    ctx = sms_order_shipped_context(order)
+    parts = [f"Order #{ctx['order_id']} shipped"]
+    if ctx.get("carrier"):
+        parts.append(f"via {ctx['carrier']}")
+    if ctx.get("tracking_number"):
+        parts.append(f"#{ctx['tracking_number']}")
+    return " ".join(parts) + "."

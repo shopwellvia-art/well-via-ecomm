@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Activity,
   FlaskConical,
+  MapPin,
 } from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Button } from '@/components/ui/Button.jsx';
@@ -573,6 +574,329 @@ function NotesPanel({ order }) {
   );
 }
 
+// ── Payment status tone map ───────────────────────────────────────────────────
+const PAYMENT_STATUS_TONE = {
+  paid: 'success',
+  authorized: 'info',
+  initiated: 'warning',
+  pending: 'warning',
+  failed: 'danger',
+  cancelled: 'danger',
+  refunded: 'neutral',
+  partially_refunded: 'neutral',
+};
+
+// ── Shipment status tone map ──────────────────────────────────────────────────
+const SHIPMENT_STATUS_TONE = {
+  pending: 'neutral',
+  ready_to_ship: 'info',
+  pickup_scheduled: 'info',
+  shipped: 'info',
+  in_transit: 'info',
+  out_for_delivery: 'accent',
+  delivered: 'success',
+  delivery_failed: 'danger',
+  rto_initiated: 'warning',
+  rto_delivered: 'warning',
+  cancelled: 'danger',
+};
+
+/** Render one address object (normalized addresses[] or legacy snapshot shape) */
+function AddressBlock({ addr }) {
+  if (!addr) return <p className="text-sm text-ink-tertiary">No address on record.</p>;
+  // addresses[] uses address_line1/address_line2; snapshots use line1/line2
+  const name = addr.full_name || addr.name || null;
+  const line1 = addr.address_line1 || addr.line1 || null;
+  const line2 = addr.address_line2 || addr.line2 || null;
+  const city = addr.city || null;
+  const state = addr.state || null;
+  const pincode = addr.pincode || null;
+  const country = addr.country || null;
+  const phone = addr.phone || null;
+  const landmark = addr.landmark || null;
+  const email = addr.email || null;
+  const gst = addr.gst_number || null;
+
+  const lines = [
+    name,
+    line1,
+    line2,
+    landmark,
+    [city, state, pincode].filter(Boolean).join(', '),
+    country,
+    phone ? `Phone: ${phone}` : null,
+    email ? `Email: ${email}` : null,
+    gst ? `GST: ${gst}` : null,
+  ].filter(Boolean);
+
+  return (
+    <address className="not-italic space-y-0.5">
+      {lines.map((l, i) => (
+        <p
+          key={i}
+          className={
+            i === 0
+              ? 'text-sm font-semibold text-ink-primary'
+              : 'text-sm text-ink-secondary'
+          }
+        >
+          {l}
+        </p>
+      ))}
+    </address>
+  );
+}
+
+/**
+ * Payment details panel — shows normalized payments[] rows.
+ * Falls back to the legacy payment_intent_id field when the array is empty.
+ */
+function PaymentDetailsPanel({ order }) {
+  const payments = order.payments ?? [];
+
+  return (
+    <Card>
+      <CardHeader
+        title={<SectionLabel icon={CreditCard}>Payment details</SectionLabel>}
+      />
+      <div className="p-5">
+        {/* Always show legacy intent ID if present */}
+        {order.payment_intent_id && (
+          <div className="mb-4 rounded-sm border border-line-subtle bg-bg-sunken px-3 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-tertiary">
+              Payment intent
+            </p>
+            <p className="nums mt-0.5 break-all font-mono text-xs text-ink-primary">
+              {order.payment_intent_id}
+            </p>
+          </div>
+        )}
+
+        {payments.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-xs">
+              <thead>
+                <tr className="border-b border-line-subtle text-left">
+                  <th className="pb-2 font-semibold uppercase tracking-wide text-ink-tertiary">Gateway</th>
+                  <th className="pb-2 font-semibold uppercase tracking-wide text-ink-tertiary">Method</th>
+                  <th className="pb-2 font-semibold uppercase tracking-wide text-ink-tertiary">Status</th>
+                  <th className="pb-2 text-right font-semibold uppercase tracking-wide text-ink-tertiary">Amount</th>
+                  <th className="pb-2 font-semibold uppercase tracking-wide text-ink-tertiary">Reference</th>
+                  <th className="pb-2 font-semibold uppercase tracking-wide text-ink-tertiary">Paid at</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payments.map((p) => (
+                  <tr key={p.id} className="border-t border-line-subtle">
+                    <td className="py-2.5 pr-3 capitalize text-ink-secondary">
+                      {p.gateway || '—'}
+                    </td>
+                    <td className="py-2.5 pr-3 capitalize text-ink-secondary">
+                      {(p.payment_method || '—').replace(/_/g, ' ')}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <Badge
+                        tone={PAYMENT_STATUS_TONE[p.payment_status] ?? 'neutral'}
+                        size="sm"
+                        className="capitalize"
+                      >
+                        {(p.payment_status || '').replace(/_/g, ' ')}
+                      </Badge>
+                    </td>
+                    <td className="py-2.5 pr-3 text-right nums font-semibold text-ink-primary">
+                      {formatPrice(p.amount, p.currency || order.currency)}
+                    </td>
+                    <td className="py-2.5 pr-3 font-mono text-ink-tertiary">
+                      {p.transaction_reference || '—'}
+                    </td>
+                    <td className="py-2.5 text-ink-tertiary whitespace-nowrap">
+                      {p.paid_at ? formatDateTime(p.paid_at) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-ink-tertiary">
+            {order.payment_intent_id
+              ? 'No normalized payment rows yet.'
+              : 'No payment details recorded.'}
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Shipment details panel — shows normalized shipments[] rows.
+ * Complements the existing ShipmentPanel (carrier operations) which stays above it.
+ */
+function ShipmentDetailsPanel({ order }) {
+  const shipments = order.shipments ?? [];
+
+  if (shipments.length === 0) {
+    return null; // no-op if backend returns nothing yet
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        title={<SectionLabel icon={Truck}>Shipment details</SectionLabel>}
+      />
+      <div className="p-5 space-y-4">
+        {shipments.map((s, idx) => {
+          const awb = s.awb_number || s.tracking_number || null;
+          return (
+            <div
+              key={s.id ?? idx}
+              className={cn(
+                'rounded-sm border border-line-subtle bg-bg-sunken p-4',
+                idx > 0 && 'mt-4',
+              )}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-ink-primary capitalize">
+                    {s.courier_partner || 'Courier'}
+                  </span>
+                  {s.courier_service && (
+                    <span className="text-[11px] text-ink-tertiary">{s.courier_service}</span>
+                  )}
+                  <Badge
+                    tone={SHIPMENT_STATUS_TONE[s.shipment_status] ?? 'neutral'}
+                    size="sm"
+                    className="capitalize"
+                  >
+                    {(s.shipment_status || '').replace(/_/g, ' ')}
+                  </Badge>
+                </div>
+                {awb && (
+                  <code className="font-mono text-xs text-ink-secondary">{awb}</code>
+                )}
+              </div>
+
+              {/* Per-leg timestamps */}
+              <div className="mt-3 grid gap-1.5 text-[11px] text-ink-tertiary sm:grid-cols-2">
+                {s.pickup_scheduled_at && (
+                  <span>Pickup scheduled: {formatDateTime(s.pickup_scheduled_at)}</span>
+                )}
+                {s.shipped_at && (
+                  <span>Shipped: {formatDateTime(s.shipped_at)}</span>
+                )}
+                {s.in_transit_at && (
+                  <span>In transit: {formatDateTime(s.in_transit_at)}</span>
+                )}
+                {s.out_for_delivery_at && (
+                  <span>Out for delivery: {formatDateTime(s.out_for_delivery_at)}</span>
+                )}
+                {s.delivered_at && (
+                  <span>Delivered: {formatDateTime(s.delivered_at)}</span>
+                )}
+                {s.failed_delivery_at && (
+                  <span>Delivery failed: {formatDateTime(s.failed_delivery_at)}</span>
+                )}
+                {s.returned_at && (
+                  <span>Returned: {formatDateTime(s.returned_at)}</span>
+                )}
+              </div>
+
+              {s.tracking_url && (
+                <a
+                  href={s.tracking_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-flex items-center gap-1 text-xs text-accent hover:underline focus-visible:focus-ring"
+                >
+                  Track on courier site
+                </a>
+              )}
+
+              <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-tertiary">
+                {s.shipment_cost != null && (
+                  <div className="flex gap-1">
+                    <dt>Cost:</dt>
+                    <dd className="nums">{formatPrice(s.shipment_cost, order.currency)}</dd>
+                  </div>
+                )}
+                {s.package_weight_grams != null && (
+                  <div className="flex gap-1">
+                    <dt>Weight:</dt>
+                    <dd className="nums">{s.package_weight_grams}g</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Address snapshot panel — renders shipping + billing from normalized addresses[].
+ * When the array is empty, falls back to the legacy snapshot objects and
+ * the order.shipping_address string, exactly as the original code did.
+ */
+function AddressSnapshotPanel({ order }) {
+  const addresses = order.addresses ?? [];
+  const shippingNorm = addresses.find((a) => a.address_type === 'shipping') ?? null;
+  const billingNorm = addresses.find((a) => a.address_type === 'billing') ?? null;
+
+  // Legacy snapshot fallback
+  const shippingSnap = order.shipping_address_snapshot ?? null;
+  const billingSnap = order.billing_address_snapshot ?? null;
+
+  const shippingSource = shippingNorm || shippingSnap;
+  const billingSource = billingNorm || billingSnap;
+
+  // Determine if billing differs from shipping (for "same as shipping" label)
+  const billingDiffers = billingSource
+    ? order.billing_address_id != null &&
+      order.billing_address_id !== order.shipping_address_id
+      ? true
+      : JSON.stringify(shippingSnap) !== JSON.stringify(billingSnap)
+    : false;
+
+  return (
+    <>
+      {/* Shipping address */}
+      <Card>
+        <CardHeader title={<SectionLabel icon={MapPin}>Shipping address</SectionLabel>} />
+        <div className="p-5">
+          {shippingSource ? (
+            <AddressBlock addr={shippingSource} />
+          ) : order.shipping_address ? (
+            <p className="whitespace-pre-line text-sm text-ink-primary">
+              {order.shipping_address}
+            </p>
+          ) : (
+            <p className="text-sm text-ink-tertiary">No address on record.</p>
+          )}
+        </div>
+      </Card>
+
+      {/* Billing address — shown only when there's something to show */}
+      {(billingSource || order.billing_address_id != null) && (
+        <Card>
+          <CardHeader title={<SectionLabel icon={MapPin}>Billing address</SectionLabel>} />
+          <div className="p-5">
+            {!billingDiffers ? (
+              <p className="text-sm italic text-ink-tertiary">Same as delivery address.</p>
+            ) : billingSource ? (
+              <AddressBlock addr={billingSource} />
+            ) : (
+              <p className="text-sm text-ink-tertiary">No billing address on record.</p>
+            )}
+          </div>
+        </Card>
+      )}
+    </>
+  );
+}
+
 export default function AdminOrderDetailPage() {
   const { id } = useParams();
   const orderId = Number(id);
@@ -633,7 +957,7 @@ export default function AdminOrderDetailPage() {
 
   return (
     <AdminPage
-      title={`Order #${order.id}`}
+      title={order.order_number ? `${order.order_number} · #${order.id}` : `Order #${order.id}`}
       description={`Placed ${formatDateTime(order.created_at)} by ${order.customer.email}`}
     >
       <Link
@@ -825,72 +1149,14 @@ export default function AdminOrderDetailPage() {
             </div>
           </Card>
 
-          {/* Shipping address */}
-          <Card>
-            <CardHeader title={<SectionLabel icon={Package}>Shipping address</SectionLabel>} />
-            <div className="p-5">
-              <p className="whitespace-pre-line text-sm text-ink-primary">
-                {order.shipping_address || (
-                  <span className="text-ink-tertiary">No address on record.</span>
-                )}
-              </p>
-            </div>
-          </Card>
+          {/* Address snapshot — normalized addresses[] with snapshot fallbacks */}
+          <AddressSnapshotPanel order={order} />
 
-          {/* Billing address — show block only when present; indicate same/different */}
-          {(() => {
-            const bill = order.billing_address_snapshot;
-            const ship = order.shipping_address_snapshot;
-            if (!bill && order.billing_address_id == null) return null;
-            const differs = bill
-              ? order.billing_address_id != null &&
-                order.billing_address_id !== order.shipping_address_id
-                ? true
-                : JSON.stringify(ship) !== JSON.stringify(bill)
-              : false;
-            const parts = bill
-              ? [
-                  bill.full_name,
-                  bill.line1,
-                  bill.line2,
-                  bill.landmark,
-                  bill.city,
-                  bill.state,
-                  bill.pincode,
-                  bill.country,
-                ]
-                  .filter(Boolean)
-                  .join('\n')
-              : null;
-            return (
-              <Card>
-                <CardHeader
-                  title={<SectionLabel icon={Package}>Billing address</SectionLabel>}
-                />
-                <div className="p-5">
-                  {!differs ? (
-                    <p className="text-sm text-ink-tertiary italic">
-                      Same as delivery address.
-                    </p>
-                  ) : parts ? (
-                    <p className="whitespace-pre-line text-sm text-ink-primary">{parts}</p>
-                  ) : (
-                    <p className="text-sm text-ink-tertiary">No billing address on record.</p>
-                  )}
-                </div>
-              </Card>
-            );
-          })()}
+          {/* Payment details — normalized payments[] with intent-id fallback */}
+          <PaymentDetailsPanel order={order} />
 
-          {/* Payment */}
-          <Card>
-            <CardHeader title={<SectionLabel icon={CreditCard}>Payment</SectionLabel>} />
-            <div className="p-5">
-              <p className="nums font-mono text-xs text-ink-secondary">
-                {order.payment_intent_id || '—'}
-              </p>
-            </div>
-          </Card>
+          {/* Shipment details — normalized shipments[] */}
+          <ShipmentDetailsPanel order={order} />
 
           {/* Carrier shipment */}
           <ShipmentPanel order={order} />

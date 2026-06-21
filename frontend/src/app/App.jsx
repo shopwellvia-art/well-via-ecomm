@@ -19,6 +19,7 @@ const CheckoutPage = lazy(() => import('@/pages/CheckoutPage.jsx'));
 const PaymentMockPage = lazy(() => import('@/pages/PaymentMockPage.jsx'));
 const PaymentReturnPage = lazy(() => import('@/pages/PaymentReturnPage.jsx'));
 const OrdersPage = lazy(() => import('@/pages/OrdersPage.jsx'));
+const OrderDetailPage = lazy(() => import('@/pages/OrderDetailPage.jsx'));
 const WishlistPage = lazy(() => import('@/pages/WishlistPage.jsx'));
 const RewardsPage = lazy(() => import('@/pages/RewardsPage.jsx'));
 const AccountSecurityPage = lazy(() => import('@/pages/AccountSecurityPage.jsx'));
@@ -79,6 +80,7 @@ export default function App() {
             <Route path="account/addresses" element={<AddressesPage />} />
             <Route path="checkout" element={<CheckoutPage />} />
             <Route path="orders" element={<OrdersPage />} />
+            <Route path="orders/:id" element={<OrderDetailPage />} />
             <Route path="payments/mock/:txnId" element={<PaymentMockPage />} />
             <Route path="payments/return" element={<PaymentReturnPage />} />
             <Route path="login" element={<LoginPage />} />

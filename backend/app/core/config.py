@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     # disabled / "Bucket owner enforced"); set "public-read" only for legacy
     # ACL-enabled buckets.
     S3_ACL: str = ""
+    # Top-level folder every uploaded object lives under in the bucket, so a
+    # shared bucket can namespace this project's media (e.g.
+    # wellvia/products/2026/06/<uuid>.jpg). Overridable per-deploy and via the
+    # admin Settings → Storage tab (storage.s3_root_prefix).
+    S3_ROOT_PREFIX: str = "wellvia"
 
     # Email — "console" (dev: logs the message) or "smtp" (real delivery).
     EMAIL_BACKEND: str = "console"

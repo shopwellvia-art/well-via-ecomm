@@ -49,10 +49,21 @@ class MockProvider:
                 }
             ),
         )
+        # Return a RELATIVE redirect (no scheme/host) so the browser stays on
+        # whatever origin the shopper is already using. In dev the storefront is
+        # reachable on two origins — the Vite dev server (:5173) and the
+        # dockerised nginx build (:5174) — and an absolute FRONTEND_URL here
+        # would bounce the user across origins mid-checkout. The auth token
+        # lives in per-origin localStorage, so after that cross-origin hop the
+        # return page polls /payments/{mtid}/status as a *different* (or logged
+        # out) user and gets 404 forever even though the order is PAID. The mock
+        # simulator is our own SPA route, so a relative path is correct; real
+        # gateways still return their own absolute hosted URL.
         # The frontend route reads `return` and posts to /payments/webhook/mock,
-        # then sends the user back to ?return=...
+        # then sends the user back to ?return=...  (PaymentMockPage already
+        # coerces an absolute return_url to a same-origin relative path.)
         params = urlencode({"return": req.return_url, "amount": req.amount_minor})
-        redirect = f"{self.frontend_url}/payments/mock/{req.merchant_transaction_id}?{params}"
+        redirect = f"/payments/mock/{req.merchant_transaction_id}?{params}"
         return InitiateResponse(redirect_url=redirect, provider_transaction_id=None)
 
     def fetch_status(

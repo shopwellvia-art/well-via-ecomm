@@ -4,6 +4,9 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.order import OrderStatus
+from app.models.order_address import OrderAddressType
+from app.models.order_payment import PaymentTxnStatus
+from app.models.shipment import ShipmentStatus
 
 
 class OrderItemCreate(BaseModel):
@@ -20,6 +23,79 @@ class OrderItemRead(BaseModel):
     unit_price: Decimal
 
 
+# ---- Normalized children (order-table normalization, 2026-06-21) ----
+# These mirror the order_payments / shipments / order_addresses tables and are
+# returned as nested arrays on the order detail responses. The flat
+# payment/shipping/address fields on OrderRead/AdminOrderRead are kept for
+# backward compatibility; new clients should prefer these.
+
+
+class OrderPaymentRead(BaseModel):
+    """One payment attempt / money movement against the order."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    gateway: str | None = None
+    gateway_order_id: str | None = None
+    gateway_payment_id: str | None = None
+    payment_method: str | None = None
+    payment_status: PaymentTxnStatus
+    amount: Decimal
+    currency: str
+    transaction_reference: str | None = None
+    paid_at: datetime | None = None
+    failed_at: datetime | None = None
+    created_at: datetime
+
+
+class ShipmentRead(BaseModel):
+    """One carrier shipment for the order."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    courier_partner: str | None = None
+    courier_service: str | None = None
+    awb_number: str | None = None
+    tracking_number: str | None = None
+    tracking_url: str | None = None
+    shipment_status: ShipmentStatus
+    shipment_cost: Decimal | None = None
+    package_weight_grams: int | None = None
+    package_length_cm: Decimal | None = None
+    package_width_cm: Decimal | None = None
+    package_height_cm: Decimal | None = None
+    pickup_scheduled_at: datetime | None = None
+    shipped_at: datetime | None = None
+    in_transit_at: datetime | None = None
+    out_for_delivery_at: datetime | None = None
+    delivered_at: datetime | None = None
+    failed_delivery_at: datetime | None = None
+    returned_at: datetime | None = None
+    created_at: datetime
+
+
+class OrderAddressRead(BaseModel):
+    """A frozen SHIPPING or BILLING address snapshot for the order."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    address_type: OrderAddressType
+    full_name: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    address_line1: str | None = None
+    address_line2: str | None = None
+    city: str | None = None
+    state: str | None = None
+    country: str | None = None
+    pincode: str | None = None
+    landmark: str | None = None
+    gst_number: str | None = None
+
+
 class OrderCreate(BaseModel):
     items: list[OrderItemCreate] = Field(min_length=1)
     shipping_address: str | None = None
@@ -29,6 +105,7 @@ class OrderRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    order_number: str | None = None
     user_id: int
     status: OrderStatus
     subtotal: Decimal = Decimal("0")
@@ -63,6 +140,10 @@ class OrderRead(BaseModel):
     tracking_events: list[dict] | None = None
     last_tracking_at: datetime | None = None
     items: list[OrderItemRead]
+    # Normalized children (preferred over the flat fields above).
+    payments: list[OrderPaymentRead] = []
+    shipments: list[ShipmentRead] = []
+    addresses: list[OrderAddressRead] = []
     created_at: datetime
 
 
@@ -106,6 +187,7 @@ class AdminOrderRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    order_number: str | None = None
     status: OrderStatus
     subtotal: Decimal
     tax_amount: Decimal
@@ -132,6 +214,10 @@ class AdminOrderRead(BaseModel):
     cod_balance: Decimal = Decimal("0")
     payment_intent_id: str | None
     items: list[OrderItemRead]
+    # Normalized children (preferred over the flat fields below).
+    payments: list[OrderPaymentRead] = []
+    shipments: list[ShipmentRead] = []
+    addresses: list[OrderAddressRead] = []
     customer: AdminCustomerBrief
     tracking_number: str | None
     carrier: str | None

@@ -11,6 +11,7 @@ from app.api.v1.endpoints import (
     coupons,
     dashboard,
     database,
+    email_templates,
     footer,
     hero_slides,
     loyalty,
@@ -81,3 +82,6 @@ api_router.include_router(analytics.router, prefix="/analytics", tags=["analytic
 api_router.include_router(footer.router, prefix="/footer", tags=["footer"])
 api_router.include_router(observability.router, prefix="/observability", tags=["observability"])
 api_router.include_router(site_pages.router, prefix="/site-pages", tags=["site-pages"])
+api_router.include_router(
+    email_templates.router, prefix="/email-templates", tags=["email-templates"]
+)

@@ -38,6 +38,7 @@ from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
 from app.schemas.payment import CheckoutRequest
 from app.services.address_service import AddressService, render_address_text, snapshot_of
+from app.services import order_sync
 from app.services.cart_service import CartService
 from app.services.cod_service import CodService
 from app.services.coupon_service import CouponService
@@ -98,10 +99,19 @@ class PaymentService:
         )
         mtid = _new_mtid()
         order.payment_intent_id = mtid
+        # Normalized dual-write (order normalization 2026-06-21): create the
+        # money-movement payment rows + the frozen address snapshot rows. These
+        # are attached via relationships and persist on the flush below; the
+        # gateway identity is stamped onto the prepaid leg after initiate().
+        order_sync.init_order_payments(order)
+        order_sync.sync_order_addresses(order, email=user.email)
         self.orders.add(order)
         # flush so the order has an id we can pass to the provider, but don't
         # commit until we know we'll keep this row.
         self.db.flush()
+        # order_number embeds the now-allocated id (WV-<year>-<id>).
+        if not order.order_number:
+            order.order_number = order_sync.make_order_number(order.id)
 
         currency = (data.currency or order.currency or "INR").upper()
         order.currency = currency
@@ -166,6 +176,11 @@ class PaymentService:
                     )
                 )
                 order.payment_provider_ref = initiate.provider_transaction_id
+                order_sync.attach_gateway_to_prepaid_leg(
+                    order,
+                    gateway=provider.name,
+                    gateway_order_id=initiate.provider_transaction_id,
+                )
             except Exception:
                 self.db.rollback()
                 raise
@@ -194,6 +209,11 @@ class PaymentService:
                 )
             )
             order.payment_provider_ref = initiate.provider_transaction_id
+            order_sync.attach_gateway_to_prepaid_leg(
+                order,
+                gateway=provider.name,
+                gateway_order_id=initiate.provider_transaction_id,
+            )
         except Exception:
             # The provider failed *before* we committed. Roll back the
             # reserved stock so the customer can retry without losing units.
@@ -277,9 +297,16 @@ class PaymentService:
             signature_valid=True,
             merchant_transaction_id=result.merchant_transaction_id,
             payment_status=result.status.value if result.status else None,
+            provider_ref=result.provider_transaction_id,
         )
         order = self._order_for_mtid(result.merchant_transaction_id)
-        self._apply_status(order, result.status, gateway_amount_minor=result.amount_minor)
+        self._apply_status(
+            order,
+            result.status,
+            gateway_amount_minor=result.amount_minor,
+            provider_ref=result.provider_transaction_id,
+            raw=result.raw,
+        )
         return order
 
     def get_status(self, user_id: int, merchant_transaction_id: str) -> Order:
@@ -306,6 +333,8 @@ class PaymentService:
                     self._apply_status(
                         order, result.status,
                         gateway_amount_minor=result.amount_minor,
+                        provider_ref=result.provider_transaction_id,
+                        raw=result.raw,
                     )
             except Exception as exc:  # don't fail the poll on a flaky provider
                 logger.warning("status check failed for %s: %s", merchant_transaction_id, exc)
@@ -396,6 +425,8 @@ class PaymentService:
                     self._apply_status(
                         order, result.status,
                         gateway_amount_minor=result.amount_minor,
+                        provider_ref=result.provider_transaction_id,
+                        raw=result.raw,
                     )
                     if result.status == PaymentStatus.SUCCESS:
                         settled_paid += 1
@@ -578,6 +609,10 @@ class PaymentService:
                     product_id=product.id,
                     quantity=line.quantity,
                     unit_price=product.price,
+                    # Freeze the cost basis at sale time so margin/profit
+                    # reporting stays accurate if the product's cost changes
+                    # later (mirrors the unit_price snapshot).
+                    unit_cost=product.cost,
                 )
             )
             subtotal += quantize_money(product.price * line.quantity)
@@ -722,10 +757,18 @@ class PaymentService:
         payment_status: PaymentStatus,
         *,
         gateway_amount_minor: int | None = None,
+        provider_ref: str | None = None,
+        raw: dict | None = None,
     ) -> None:
         # Idempotent: only PENDING orders move. Webhooks can fire twice.
         if order.status != OrderStatus.PENDING:
             return
+        # Stamp the gateway's own transaction id onto the order. PhonePe (and
+        # several others) only return it at settlement, not at initiation, so
+        # this is our first chance to record it. Write-once: a replayed
+        # callback never clobbers an existing ref.
+        if provider_ref and not order.payment_provider_ref:
+            order.payment_provider_ref = provider_ref
         notify_paid = False
         if payment_status == PaymentStatus.SUCCESS:
             # Verify the gateway-reported amount matches what we expected to
@@ -754,10 +797,11 @@ class PaymentService:
                     )
                     self.db.commit()
                     return
-            self._mark_paid(order)
+            self._mark_paid(order, gateway_payment_id=provider_ref, raw=raw)
             notify_paid = True
         elif payment_status == PaymentStatus.FAILED:
             order.status = OrderStatus.CANCELLED
+            order_sync.mark_prepaid_failed(order)
             self._restore_stock(order)
         # PENDING -> no change.
         self.db.commit()
@@ -779,7 +823,13 @@ class PaymentService:
             self._send_notification(order, "order_paid")
             self._maybe_auto_push_shipment(order)
 
-    def _mark_paid(self, order: Order) -> None:
+    def _mark_paid(
+        self,
+        order: Order,
+        *,
+        gateway_payment_id: str | None = None,
+        raw: dict | None = None,
+    ) -> None:
         """Common 'order is now committed' side effects — runs for both the
         gateway SUCCESS branch and the COD-checkout path. Sets paid_at,
         records coupon usage, awards loyalty, completes referrals, clears
@@ -789,6 +839,16 @@ class PaymentService:
 
         order.status = OrderStatus.PAID
         order.paid_at = datetime.now(timezone.utc)
+        # Settle the gateway/prepaid payment leg. No-op for pure-COD orders
+        # (their COD leg is collected on delivery, not now). When the caller
+        # has the gateway's captured-payment id + raw response (status poll or
+        # webhook), they're stamped onto the prepaid leg for reconciliation.
+        order_sync.mark_prepaid_paid(
+            order,
+            when=order.paid_at,
+            gateway_payment_id=gateway_payment_id,
+            raw=raw,
+        )
         self._record_coupon_usage(order)
         self._award_loyalty_points(order)
         self._complete_referral(order)

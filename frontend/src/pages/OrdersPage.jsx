@@ -263,9 +263,12 @@ export default function OrdersPage() {
                   {/* Top meta row */}
                   <div className="flex flex-col gap-1 border-b border-line-subtle bg-bg-sunken px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="max-w-[8rem] truncate text-[11px] font-semibold uppercase tracking-wider text-ink-tertiary sm:max-w-none">
-                        Order #{o.id}
-                      </span>
+                      <Link
+                        to={`/orders/${o.id}`}
+                        className="max-w-[8rem] truncate text-[11px] font-semibold uppercase tracking-wider text-ink-tertiary hover:text-accent sm:max-w-none focus-visible:focus-ring"
+                      >
+                        {o.order_number ?? `#${o.id}`}
+                      </Link>
                       <Badge tone={badgeTone} size="md" className="capitalize">
                         {o.status}
                       </Badge>

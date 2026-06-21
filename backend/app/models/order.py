@@ -20,6 +20,13 @@ class OrderStatus(str, enum.Enum):
 class Order(Base, IDMixin, TimestampMixin):
     __tablename__ = "orders"
 
+    # Human-friendly order reference, e.g. "WV-2026-000123". Assigned right
+    # after the row is flushed (so it can embed the numeric id) — see
+    # PaymentService. Nullable + UNIQUE: nullable so the flush that allocates
+    # the id doesn't trip a NOT NULL, and so legacy/edge rows tolerate NULL;
+    # callers fall back to f"ORD{id}" when it is absent.
+    order_number: Mapped[str | None] = mapped_column(String(32), unique=True, index=True)
+
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     status: Mapped[OrderStatus] = mapped_column(
         Enum(OrderStatus), default=OrderStatus.PENDING, nullable=False, index=True
@@ -44,6 +51,9 @@ class Order(Base, IDMixin, TimestampMixin):
     # Payment method. 'prepaid' goes through the gateway; 'cod' bypasses it
     # and the carrier collects on delivery; 'split_cod' (Phase 9) collects a
     # prepaid slice via the gateway + the balance on delivery.
+    # NOTE: payment_method stays here (it's order-level intent). The gateway
+    # transaction identity below is DEPRECATED in favor of the order_payments
+    # table (Order.payments) — kept + dual-written for backward compatibility.
     payment_method: Mapped[str] = mapped_column(
         String(32), default="prepaid", nullable=False, index=True
     )
@@ -69,6 +79,11 @@ class Order(Base, IDMixin, TimestampMixin):
         Numeric(12, 2), nullable=False, default=0
     )
 
+    # DEPRECATED (order normalization 2026-06-21): the shipping/billing address
+    # block below (free-text + JSON snapshots) is superseded by the
+    # order_addresses table (Order.addresses). Kept + dual-written for
+    # backward compatibility — the storefront/admin still read these JSON
+    # snapshots, so they remain authoritative for now.
     shipping_address: Mapped[str | None] = mapped_column(String(512))
     # Destination pin extracted from `shipping_address`. Stored separately so
     # the shipment/tracking phases don't re-parse the free-text address.
@@ -99,6 +114,8 @@ class Order(Base, IDMixin, TimestampMixin):
         index=True,
     )
     billing_address_snapshot: Mapped[dict | None] = mapped_column(JSON)
+    # DEPRECATED (order normalization 2026-06-21): superseded by
+    # order_payments (Order.payments). Kept + dual-written for back-compat.
     payment_intent_id: Mapped[str | None] = mapped_column(String(255), unique=True)
     # Which payment gateway routed this order (matches payment_methods.gateway_code).
     # Null for legacy orders and COD orders that bypass the gateway entirely.
@@ -109,6 +126,10 @@ class Order(Base, IDMixin, TimestampMixin):
     # correlate provider callbacks back to this order row.
     payment_provider_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
+    # DEPRECATED (order normalization 2026-06-21): the carrier/AWB/tracking
+    # block below is superseded by the shipments table (Order.shipments).
+    # Kept + dual-written for backward compatibility.
+    #
     # Fulfillment metadata. Admin writes these when transitioning the status.
     # `tracking_number` + `carrier` are presentational — the storefront can
     # show "Shipped via UPS, tracking 1Z..." on the order page.
@@ -157,6 +178,25 @@ class Order(Base, IDMixin, TimestampMixin):
         back_populates="order", cascade="all, delete-orphan"
     )
     user: Mapped["User"] = relationship(lazy="joined")  # noqa: F821
+
+    # Normalized children (order-table normalization, 2026-06-21). These are
+    # the new source of truth; the flat payment/shipping/address columns above
+    # are kept + dual-written for backward compatibility (see DEPRECATED notes).
+    payments: Mapped[list["OrderPayment"]] = relationship(  # noqa: F821
+        back_populates="order",
+        cascade="all, delete-orphan",
+        order_by="OrderPayment.id",
+    )
+    shipments: Mapped[list["Shipment"]] = relationship(  # noqa: F821
+        back_populates="order",
+        cascade="all, delete-orphan",
+        order_by="Shipment.id",
+    )
+    addresses: Mapped[list["OrderAddress"]] = relationship(  # noqa: F821
+        back_populates="order",
+        cascade="all, delete-orphan",
+        order_by="OrderAddress.id",
+    )
 
 
 class OrderItem(Base, IDMixin, TimestampMixin):

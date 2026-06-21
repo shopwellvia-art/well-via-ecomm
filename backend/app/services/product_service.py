@@ -6,7 +6,7 @@ from app.models.product import Product, ProductImage
 from app.repositories.product_repository import ProductRepository
 from app.schemas.product import ProductCreate, ProductUpdate
 from app.storage import get_storage
-from app.storage.base import CONTENT_TYPE_EXT
+from app.storage.base import CONTENT_TYPE_EXT, MediaFolder
 
 
 class ProductService:
@@ -162,7 +162,12 @@ class ProductService:
 
         next_position = max((img.position for img in product.images), default=-1) + 1
         for data, filename, content_type in files:
-            url = self.storage.save(data=data, filename=filename, content_type=content_type)
+            url = self.storage.save(
+                data=data,
+                filename=filename,
+                content_type=content_type,
+                folder=MediaFolder.PRODUCTS,
+            )
             product.images.append(
                 ProductImage(url=url, position=next_position, is_primary=False)
             )

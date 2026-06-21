@@ -9,6 +9,7 @@ from app.models.order import Order, OrderItem, OrderStatus
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
 from app.schemas.order import OrderCreate
+from app.services import order_sync
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,15 @@ class OrderService:
 
         order.total_amount = total
         order.status = OrderStatus.PENDING
+        # Normalized dual-write: a prepaid payment leg + the (legacy free-text)
+        # shipping address snapshot. Children persist via cascade on flush;
+        # order_number embeds the allocated id.
+        order_sync.init_order_payments(order)
+        order_sync.sync_order_addresses(order)
         self.orders.add(order)
+        self.db.flush()
+        if not order.order_number:
+            order.order_number = order_sync.make_order_number(order.id)
         self.db.commit()
         return self.orders.get_with_items(order.id)  # type: ignore[return-value]
 
@@ -111,6 +120,7 @@ class OrderService:
         order.tracking_number = (tracking_number or "").strip() or None
         order.carrier = (carrier or "").strip() or None
         order.shipped_at = datetime.now(timezone.utc)
+        order_sync.sync_shipment_from_order(order)
         self.db.flush()
         self._notify(order, "order_shipped")
         return order
@@ -120,6 +130,10 @@ class OrderService:
         self._assert_transition(order, OrderStatus.DELIVERED)
         order.status = OrderStatus.DELIVERED
         order.delivered_at = datetime.now(timezone.utc)
+        order_sync.sync_shipment_from_order(order)
+        # COD balance is collected by the courier on delivery — settle the COD
+        # payment leg now (no-op for prepaid orders).
+        order_sync.mark_cod_collected(order, when=order.delivered_at)
         self.db.flush()
         self._notify(order, "order_delivered")
         return order
@@ -135,6 +149,8 @@ class OrderService:
         order.status = OrderStatus.CANCELLED
         order.cancelled_at = datetime.now(timezone.utc)
         order.refund_reason = reason.strip()[:255]
+        order_sync.mark_payments_cancelled(order)
+        order_sync.cancel_shipments(order)
         self._restore_stock(order)
         self._reverse_loyalty(order)
         self.db.flush()
@@ -152,6 +168,7 @@ class OrderService:
         order.status = OrderStatus.REFUNDED
         order.refunded_at = datetime.now(timezone.utc)
         order.refund_reason = reason.strip()[:255]
+        order_sync.mark_payments_refunded(order)
         self._restore_stock(order)
         self._reverse_loyalty(order)
         self.db.flush()

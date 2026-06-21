@@ -40,9 +40,24 @@ from app.integrations.shipping import (
 )
 from app.models.order import Order, OrderStatus
 from app.models.product import Product
+from app.models.shipment import ShipmentStatus
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
+from app.services import order_sync
 from app.services.settings_service import SettingsService
+
+# Maps the carrier-agnostic TrackingStatus onto the normalized ShipmentStatus
+# so the shipments table keeps the finer granularity the order status collapses
+# away (order.status only has SHIPPED for in-transit / out-for-delivery).
+_SHIPMENT_STATUS_FOR_TRACKING: dict[TrackingStatus, ShipmentStatus] = {
+    TrackingStatus.PICKED_UP: ShipmentStatus.SHIPPED,
+    TrackingStatus.IN_TRANSIT: ShipmentStatus.IN_TRANSIT,
+    TrackingStatus.OUT_FOR_DELIVERY: ShipmentStatus.OUT_FOR_DELIVERY,
+    TrackingStatus.DELIVERED: ShipmentStatus.DELIVERED,
+    TrackingStatus.FAILED: ShipmentStatus.DELIVERY_FAILED,
+    TrackingStatus.RETURNED: ShipmentStatus.RTO_DELIVERED,
+    TrackingStatus.CANCELLED: ShipmentStatus.CANCELLED,
+}
 
 logger = logging.getLogger(__name__)
 
@@ -210,6 +225,15 @@ class ShippingService:
         order.shipping_awb = result.awb_number
         order.shipping_label_url = result.label_url
         order.shipment_created_at = datetime.now(timezone.utc)
+        # Mirror into the normalized shipments table.
+        order_sync.sync_shipment_from_order(
+            order,
+            raw={
+                "provider": result.provider,
+                "awb_number": result.awb_number,
+                "label_url": result.label_url,
+            },
+        )
         self.db.flush()
         logger.info(
             "shipment created order=%s provider=%s awb=%s",
@@ -284,6 +308,9 @@ class ShippingService:
         )
         order.pickup_id = result.pickup_id
         order.pickup_scheduled_for = result.scheduled_for
+        order_sync.set_shipment_status(
+            order, ShipmentStatus.PICKUP_SCHEDULED, when=result.scheduled_for
+        )
         self.db.flush()
         logger.info(
             "pickup scheduled order=%s pickup_id=%s for=%s",
@@ -391,6 +418,17 @@ class ShippingService:
                 if not order.delivered_at:
                     order.delivered_at = update.occurred_at
                 notify_event = "order_delivered"
+
+        # Mirror into the normalized shipments table with the finer carrier
+        # status, and settle the COD leg once the parcel is delivered.
+        shipment_status = _SHIPMENT_STATUS_FOR_TRACKING.get(update.status)
+        if shipment_status is not None:
+            order_sync.sync_shipment_from_order(order)
+            order_sync.set_shipment_status(
+                order, shipment_status, when=update.occurred_at
+            )
+            if shipment_status == ShipmentStatus.DELIVERED:
+                order_sync.mark_cod_collected(order, when=update.occurred_at)
 
         self.db.flush()
         logger.info(

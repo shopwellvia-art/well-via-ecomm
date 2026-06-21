@@ -136,7 +136,8 @@
       "PowerShell(Invoke-RestMethod -Uri 'https://ifconfig.me/ip')",
       "PowerShell(Invoke-RestMethod -Uri 'https://ipv4.icanhazip.com')",
       "Bash(ls -la backend/.env)",
-      "Bash(grep -E \"STORAGE_BACKEND|MEDIA_BASE_URL|UPLOAD_DIR|S3_|MYSQL_HOST|FRONTEND_URL|ENVIRONMENT\" backend/.env)"
+      "Bash(grep -E \"STORAGE_BACKEND|MEDIA_BASE_URL|UPLOAD_DIR|S3_|MYSQL_HOST|FRONTEND_URL|ENVIRONMENT\" backend/.env)",
+      "Bash(xargs grep -l \"useQuery.*order\")"
     ]
   }
 }

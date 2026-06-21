@@ -149,7 +149,11 @@ DEFAULT_SETTINGS: list[tuple[str, str, str, str, bool]] = [
     ("costs.monthly_ad_spend", "0", "costs",
      "Total monthly advertising / marketing spend (₹). Pro-rated to the analytics window for C3.", False),
 
-    # ---- Storage (l3m4n5o6p7q8) — all blank so the env fallback stays in effect ----
+    # ---- Storage (l3m4n5o6p7q8, n5o6p7q8r9s0) ----
+    # Credentials/endpoint rows are blank so the env fallback stays in effect.
+    # Two rows ship with a concrete default on purpose: s3_root_prefix is
+    # seeded "wellvia" so the operator can see the bucket folder the project
+    # writes under, and s3_acl is "" (no ACL — correct for modern buckets).
     ("storage.backend", "", "storage",
      "Image storage backend: 'local' or 's3' (blank = use the env default)", False),
     ("storage.s3_region", "", "storage", "AWS region, e.g. ap-south-1", False),
@@ -160,6 +164,13 @@ DEFAULT_SETTINGS: list[tuple[str, str, str, str, bool]] = [
      "Public base URL / CDN used to serve objects; blank = the bucket URL", False),
     ("storage.s3_access_key", "", "storage", "AWS access key ID", False),
     ("storage.s3_secret_key", "", "storage", "AWS secret access key", True),
+    ("storage.s3_root_prefix", "wellvia", "storage",
+     "Top-level bucket folder all uploads are organised under, e.g. "
+     "wellvia/products/2026/06/<id>.jpg. Blank = the env default (wellvia).", False),
+    ("storage.s3_acl", "", "storage",
+     "Object ACL on upload — blank for modern buckets (Object Ownership = "
+     "Bucket owner enforced / ACLs disabled); 'public-read' only for legacy "
+     "ACL-enabled buckets.", False),
 ]
 
 

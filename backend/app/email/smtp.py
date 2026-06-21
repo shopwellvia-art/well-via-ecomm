@@ -15,10 +15,18 @@ def _setting(svc, key, env_value, default=None):
     return v
 
 
-def send_smtp(*, to: str, subject: str, body: str, db: Session | None = None) -> None:
+def send_smtp(
+    *, to: str, subject: str, body: str, db: Session | None = None, html: str | None = None
+) -> None:
     """SMTP email backend. Reads creds from the runtime settings table when a
     session is available; falls back to env vars otherwise so the system
-    keeps working with no DB rows yet."""
+    keeps working with no DB rows yet.
+
+    When ``html`` is supplied the message is sent as multipart/alternative
+    (plain ``body`` as the text/plain part + ``html`` as the preferred
+    text/html alternative). Clients that understand HTML will render the HTML;
+    older clients fall back to the plain text.
+    """
     svc = None
     if db is not None:
         from app.services.settings_service import SettingsService
@@ -40,14 +48,18 @@ def send_smtp(*, to: str, subject: str, body: str, db: Session | None = None) ->
         # fallback rather than throwing into the request flow.
         from app.email.console import send_console
 
-        send_console(to=to, subject=subject, body=body)
+        send_console(to=to, subject=subject, body=body, html=html)
         return
 
     message = EmailMessage()
     message["From"] = sender
     message["To"] = to
     message["Subject"] = subject
+
+    # Set the plain-text body first; then add HTML as an alternative part.
     message.set_content(body)
+    if html:
+        message.add_alternative(html, subtype="html")
 
     with smtplib.SMTP(host, port, timeout=15) as server:
         if use_tls:

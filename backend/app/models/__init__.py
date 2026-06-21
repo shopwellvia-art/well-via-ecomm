@@ -1,5 +1,6 @@
 from app.models.address import Address, AddressLabel
 from app.models.audit import AuditEvent
+from app.models.email_template import EmailTemplate
 from app.models.base import Base
 from app.models.coupon import Coupon, CouponUsage, DiscountType
 from app.models.customer import AccountStatus, Customer
@@ -13,6 +14,8 @@ from app.models.loyalty import (
     VipTier,
 )
 from app.models.order import Order, OrderItem, OrderStatus
+from app.models.order_address import OrderAddress, OrderAddressType
+from app.models.order_payment import OrderPayment, PaymentTxnStatus
 from app.models.payment_event import PaymentEvent, PaymentEventType
 from app.models.payment_gateway import PaymentGatewayConfig
 from app.models.payment_method import PaymentMethod
@@ -26,6 +29,7 @@ from app.models.return_request import (
     ReturnStatus,
 )
 from app.models.review import Review
+from app.models.shipment import Shipment, ShipmentStatus
 from app.models.site_pages import SitePages
 from app.models.system_setting import SystemSetting
 from app.models.tax import Tax, product_taxes
@@ -45,15 +49,20 @@ __all__ = [
     "Customer",
     "DiscountType",
     "EarnRule",
+    "EmailTemplate",
     "FooterConfig",
     "HeroSlide",
     "Order",
+    "OrderAddress",
+    "OrderAddressType",
     "OrderItem",
+    "OrderPayment",
     "OrderStatus",
     "PaymentEvent",
     "PaymentEventType",
     "PaymentGatewayConfig",
     "PaymentMethod",
+    "PaymentTxnStatus",
     "Permission",
     "PointsReason",
     "PointsTransaction",
@@ -68,6 +77,8 @@ __all__ = [
     "ReturnStatus",
     "Review",
     "Role",
+    "Shipment",
+    "ShipmentStatus",
     "SitePages",
     "SystemSetting",
     "Tax",
