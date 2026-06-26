@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  margin: 0;
+  background: #ded7c9;
+}
+
+body {
+  font-family: 'Jost', system-ui, sans-serif;
+  color: #1e1e1a;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: #183a2e;
+  color: #fff;
+}
+
+/* Warm textured paper. paper-texture.png lives in /public.
+   If you remove the image, the bg color still reads correctly. */
+.paper {
+  background-color: #ece8de;
+  background-image: url('/paper-texture.png');
+  background-size: 500px 500px;
+  background-repeat: repeat;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9b9588;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: #183a2e;
+}
+
+@keyframes spin360 {
+  to {
+    transform: rotate(360deg);
+  }
+}
