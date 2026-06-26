@@ -11,6 +11,19 @@ import '@fontsource/roboto/400.css';
 import '@fontsource/roboto/500.css';
 import '@fontsource/roboto/700.css';
 import '@fontsource/roboto/900.css';
+// Self-hosted Wellvia storefront fonts (CSP-safe, no Google Fonts exception).
+// Jost = body, Cormorant Garamond = editorial headings, Cinzel = wordmark.
+import '@fontsource/jost/300.css';
+import '@fontsource/jost/400.css';
+import '@fontsource/jost/500.css';
+import '@fontsource/jost/600.css';
+import '@fontsource/cormorant-garamond/400.css';
+import '@fontsource/cormorant-garamond/500.css';
+import '@fontsource/cormorant-garamond/600.css';
+import '@fontsource/cormorant-garamond/700.css';
+import '@fontsource/cinzel/400.css';
+import '@fontsource/cinzel/500.css';
+import '@fontsource/cinzel/600.css';
 import './styles/global.css';
 
 const queryClient = new QueryClient({

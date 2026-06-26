@@ -1,22 +1,6 @@
 import { useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Mail,
-  Lock,
-  User,
-  ShieldCheck,
-  ArrowLeft,
-  Star,
-  Shield,
-  Truck,
-  Package,
-  BadgeCheck,
-  Sparkles,
-  Gift,
-} from 'lucide-react';
-import { Input } from '@/components/ui/Input.jsx';
-import { Button, buttonVariants } from '@/components/ui/Button.jsx';
 import { authApi } from '@/features/auth/api.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import {
@@ -26,14 +10,22 @@ import {
 import { cn } from '@/lib/utils.js';
 import { env } from '@/config/env.js';
 import { usePublicSettings } from '@/features/settings/public.js';
+import { LeafMark } from '@/components/storefront/Logo.jsx';
+import {
+  ShieldIcon,
+  UserIcon,
+  MailIcon,
+  LeafIcon,
+  TruckIcon,
+} from '@/components/storefront/Icons.jsx';
 
-// Allowlisted icon keys for trust badges.
+// Trust icon map using the storefront inline icon set
 const TRUST_ICONS = {
-  star: Star,
-  shield: Shield,
-  truck: Truck,
-  package: Package,
-  badge: BadgeCheck,
+  star: LeafIcon,
+  shield: ShieldIcon,
+  truck: TruckIcon,
+  package: LeafIcon,
+  badge: ShieldIcon,
 };
 
 function TrustBadges() {
@@ -49,13 +41,13 @@ function TrustBadges() {
   return (
     <div className="mt-6 grid grid-cols-2 gap-2">
       {badges.map((b, i) => {
-        const Icon = TRUST_ICONS[b.iconKey] || BadgeCheck;
+        const Icon = TRUST_ICONS[b.iconKey] || ShieldIcon;
         return (
           <div
             key={i}
-            className="flex items-center gap-2 rounded-sm border border-line-subtle bg-bg-sunken px-2.5 py-1.5 text-[11px] text-ink-secondary"
+            className="flex items-center gap-2 rounded-xl border border-wline bg-wcard px-2.5 py-1.5 text-[11px] text-wmuted"
           >
-            <Icon className="size-3.5 shrink-0 text-accent" aria-hidden="true" />
+            <Icon size={14} stroke="#B49A63" />
             <span className="truncate">{b.label}</span>
           </div>
         );
@@ -69,13 +61,13 @@ const TEST_ACCOUNTS = [
     label: 'Admin',
     email: 'vinay@gmail.com',
     password: 'vinay@123',
-    icon: ShieldCheck,
+    icon: ShieldIcon,
   },
   {
     label: 'Customer',
     email: 'customer@lumen.store',
     password: 'Customer123!',
-    icon: User,
+    icon: UserIcon,
   },
 ];
 
@@ -102,24 +94,10 @@ function GoogleIcon() {
   );
 }
 
-// Yellow check SVG matching the design mock.
-function YellowCheck() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="18"
-      height="18"
-      fill="none"
-      stroke="#FFE11B"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
+// Shared input style — wellness skin, no @/components/ui dependency
+const inputCls =
+  'w-full bg-wcard border border-wline rounded-xl px-[17px] py-[15px] text-[14px] text-wink ' +
+  'placeholder:text-wmuted outline-none transition-colors focus:border-wgreen font-wsans';
 
 export default function LoginPage() {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
@@ -241,245 +219,64 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-[calc(100vh-200px)] place-items-center px-4 py-10">
-      <div className="grid w-full max-w-3xl grid-cols-1 overflow-hidden rounded-xl bg-bg-elevated shadow-lg sm:grid-cols-[40%_1fr]">
+    <main className="paper grid md:grid-cols-2 min-h-screen bg-wcanvas">
 
-        {/* ── LEFT brand panel ── */}
-        <div
-          className="flex flex-col justify-between gap-8 p-8"
-          style={{ background: 'linear-gradient(160deg,#1f63d6,#2874F0)' }}
-        >
-          <div>
-            {/* Brand mark */}
-            <div className="mb-6 flex items-center gap-2">
-              <span className="grid size-8 place-items-center rounded-sm bg-white/20">
-                <Sparkles className="size-4 text-white" aria-hidden="true" />
-              </span>
-              <span className="text-base font-bold text-white">ShopWell</span>
-            </div>
+      {/* ── LEFT: form column ── */}
+      <div className="flex items-center justify-center px-6 sm:px-10 lg:px-14 py-9 lg:py-[68px]">
+        <div className="w-full max-w-[380px] animate-rise">
 
-            <h2 className="text-2xl font-bold leading-tight text-white">
-              {isRegister ? 'Join ShopWell' : 'Login'}
-            </h2>
-            <p className="mt-3 text-sm leading-relaxed text-white/85">
-              {isRegister
-                ? 'Create your account to start shopping with exclusive member benefits.'
-                : 'Get access to your orders, wishlist and personalised recommendations.'}
-            </p>
-          </div>
+          {/* Wordmark */}
+          <Link to="/" className="inline-flex items-center gap-2 no-underline mb-8">
+            <LeafMark size={30} dot={false} />
+            <span className="font-display text-[18px] tracking-[0.2em] font-medium text-wgreen pl-[0.2em]">
+              WELLVIA
+            </span>
+          </Link>
 
-          <ul className="space-y-3 text-sm text-white/90">
-            <li className="flex items-center gap-2.5">
-              <YellowCheck />
-              Faster checkout
-            </li>
-            <li className="flex items-center gap-2.5">
-              <YellowCheck />
-              Order tracking
-            </li>
-            <li className="flex items-center gap-2.5">
-              <YellowCheck />
-              Exclusive member deals
-            </li>
-          </ul>
-
-          {/* Toggle hint at the bottom of the panel */}
-          <p className="text-[11px] text-white/50">
-            {isRegister ? 'Already have an account?' : 'New to ShopWell?'}{' '}
-            <button
-              type="button"
-              onClick={() => { setMode(isRegister ? 'login' : 'register'); setError(null); }}
-              className="font-semibold text-white/80 underline underline-offset-2 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-            >
-              {isRegister ? 'Sign in' : 'Create a free account'}
-            </button>
-          </p>
-        </div>
-
-        {/* ── RIGHT form panel ── */}
-        <div className="p-8">
-
-          {/* TOTP step */}
+          {/* ── TOTP step ── */}
           {pendingTotp ? (
             <div>
-              <h1 className="text-xl font-semibold text-ink-primary">Two-factor verification</h1>
-              <p className="mt-1 text-sm text-ink-secondary">
+              <div className="text-[11px] tracking-[0.24em] uppercase text-wgold mb-3.5">
+                Two-factor verification
+              </div>
+              <h1 className="font-wserif font-medium text-[clamp(32px,3.5vw,42px)] leading-[1.05] text-wink mb-2">
+                Confirm your identity
+              </h1>
+              <p className="text-[14px] text-wmuted font-light mb-6">
                 Enter the 6-digit code for{' '}
-                <span className="font-medium text-ink-primary">{pendingTotp.email}</span>.
+                <span className="font-medium text-wink">{pendingTotp.email}</span>.
               </p>
 
-              <div className="mt-5 rounded-sm border border-accent/20 bg-accent/12 px-4 py-3 text-xs text-ink-secondary">
-                <p className="flex items-center gap-2 font-semibold text-ink-primary">
-                  <ShieldCheck className="size-4 text-accent" aria-hidden="true" />
+              <div className="rounded-xl border border-wline bg-wcard px-4 py-3.5 mb-5 text-xs text-wmuted">
+                <p className="flex items-center gap-2 font-semibold text-wink mb-1">
+                  <ShieldIcon size={15} stroke="#183A2E" />
                   Open your authenticator app
                 </p>
-                <p className="mt-1 leading-relaxed">No device? Use a backup code instead.</p>
+                <p className="leading-relaxed">No device? Use a backup code instead.</p>
               </div>
 
-              <form onSubmit={handleTotpSubmit} className="mt-5">
-                <Input
-                  label="6-digit code"
-                  value={totpCode}
-                  onChange={(e) => setTotpCode(e.target.value)}
-                  placeholder="123456"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  autoComplete="one-time-code"
-                  error={error}
-                  autoFocus
-                  required
-                />
-                <Button type="submit" block size="lg" loading={busy} className="mt-2">
-                  Verify and sign in
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPendingTotp(null);
-                    setTotpCode('');
-                    setError(null);
-                  }}
-                  className="mt-3 inline-flex items-center gap-1 text-xs text-ink-tertiary hover:text-ink-secondary focus-visible:focus-ring"
-                >
-                  <ArrowLeft className="size-3" aria-hidden="true" /> Use a different account
-                </button>
-              </form>
-            </div>
-          ) : (
-            <>
-              {/* Mode toggle tabs */}
-              <div
-                role="tablist"
-                aria-label="Authentication mode"
-                className="mb-6 flex overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated"
-                onKeyDown={(e) => {
-                  const tabs = ['login', 'register'];
-                  const idx = tabs.indexOf(mode);
-                  if (e.key === 'ArrowRight') {
-                    const next = tabs[(idx + 1) % tabs.length];
-                    setMode(next);
-                    setError(null);
-                  } else if (e.key === 'ArrowLeft') {
-                    const prev = tabs[(idx - 1 + tabs.length) % tabs.length];
-                    setMode(prev);
-                    setError(null);
-                  }
-                }}
-              >
-                {['login', 'register'].map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    role="tab"
-                    aria-selected={mode === m}
-                    onClick={() => {
-                      setMode(m);
-                      setError(null);
-                    }}
-                    className={cn(
-                      'flex-1 py-3 text-sm font-medium transition-colors duration-150 focus-visible:focus-ring',
-                      mode === m
-                        ? 'bg-accent text-white'
-                        : 'text-ink-secondary hover:bg-bg-sunken hover:text-ink-primary',
-                    )}
-                  >
-                    {m === 'login' ? 'Login' : 'New Customer? Sign up'}
-                  </button>
-                ))}
-              </div>
-
-              {/* Referral banner */}
-              {pendingReferral && (
-                <div className="mb-4 flex items-start gap-2.5 rounded-sm border border-accent/20 bg-accent/12 px-3 py-2.5 text-xs text-ink-primary">
-                  <Gift className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden="true" />
-                  <span>
-                    You were invited by a friend. Sign up to claim your{' '}
-                    <strong>welcome reward</strong>.
-                    <span className="ml-1 font-mono text-[10px] text-ink-tertiary">
-                      {pendingReferral}
-                    </span>
-                  </span>
-                </div>
-              )}
-
-              {/* Main form */}
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                {isRegister && (
-                  <label className="block">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
-                      Full name
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="Jane Doe"
-                      autoComplete="name"
-                      value={form.full_name}
-                      onChange={set('full_name')}
-                      className="mt-1.5 h-11 w-full rounded-lg border border-line-strong bg-bg-sunken px-3.5 text-sm outline-none transition-colors focus:border-accent"
-                    />
+              <form onSubmit={handleTotpSubmit} className="flex flex-col gap-4">
+                <div>
+                  <label className="text-[11px] tracking-[0.18em] uppercase text-wmuted font-medium block mb-1.5">
+                    6-digit code
                   </label>
-                )}
-
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
-                    Email
-                  </span>
                   <input
-                    type="email"
-                    placeholder="you@example.com"
-                    autoComplete="email"
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value)}
+                    placeholder="123456"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    autoComplete="one-time-code"
+                    autoFocus
                     required
-                    value={form.email}
-                    onChange={set('email')}
-                    className="mt-1.5 h-11 w-full rounded-lg border border-line-strong bg-bg-sunken px-3.5 text-sm outline-none transition-colors focus:border-accent"
+                    className={inputCls}
                   />
-                </label>
-
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
-                    Password
-                  </span>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    autoComplete={isRegister ? 'new-password' : 'current-password'}
-                    required
-                    value={form.password}
-                    onChange={set('password')}
-                    className="mt-1.5 h-11 w-full rounded-lg border border-line-strong bg-bg-sunken px-3.5 text-sm outline-none transition-colors focus:border-accent"
-                  />
-                  {isRegister && (
-                    <p className="mt-1 text-[11px] text-ink-tertiary">At least 8 characters.</p>
-                  )}
-                </label>
-
-                {!isRegister && (
-                  <div className="-mt-2 text-right">
-                    <Link
-                      to="/forgot-password"
-                      className="rounded-xs text-xs text-accent transition-colors hover:text-accent-hover focus-visible:focus-ring"
-                    >
-                      Forgot password?
-                    </Link>
-                  </div>
-                )}
-
-                <p className="text-[11px] leading-relaxed text-ink-tertiary">
-                  By continuing, you agree to ShopWell&apos;s{' '}
-                  <a href="#" className="text-accent hover:underline">
-                    Terms of Use
-                  </a>{' '}
-                  and{' '}
-                  <a href="#" className="text-accent hover:underline">
-                    Privacy Policy
-                  </a>
-                  .
-                </p>
+                </div>
 
                 {error && (
                   <div
                     role="alert"
-                    className="rounded-sm border border-danger/25 bg-danger/12 px-3 py-2 text-xs text-danger"
+                    className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-600"
                   >
                     {error}
                   </div>
@@ -489,38 +286,220 @@ export default function LoginPage() {
                   type="submit"
                   disabled={busy}
                   aria-busy={busy}
-                  className={cn(
-                    'flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-cta text-sm font-bold uppercase tracking-wide text-white shadow-sm',
-                    'transition-transform hover:-translate-y-0.5 active:translate-y-0',
-                    'focus-visible:focus-ring disabled:opacity-50 disabled:pointer-events-none',
-                  )}
+                  className="w-full bg-wgreen text-white rounded-full py-4 text-[14.5px] tracking-wide cursor-pointer hover:bg-wgreen-dark transition-colors disabled:opacity-60 disabled:pointer-events-none flex items-center justify-center gap-2"
                 >
                   {busy ? (
-                    <svg className="size-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <svg className="size-4 animate-spin360" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    'Verify and sign in'
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingTotp(null);
+                    setTotpCode('');
+                    setError(null);
+                  }}
+                  className="text-xs text-wmuted hover:text-wink transition-colors focus:outline-none text-center"
+                >
+                  ← Use a different account
+                </button>
+              </form>
+            </div>
+          ) : (
+            <>
+              {/* Mode tabs — Login / Create Account */}
+              <div
+                role="tablist"
+                aria-label="Authentication mode"
+                className="mb-7 flex overflow-hidden rounded-full border border-wline bg-wcard p-0.5"
+                onKeyDown={(e) => {
+                  const tabs = ['login', 'register'];
+                  const idx = tabs.indexOf(mode);
+                  if (e.key === 'ArrowRight') {
+                    setMode(tabs[(idx + 1) % tabs.length]);
+                    setError(null);
+                  } else if (e.key === 'ArrowLeft') {
+                    setMode(tabs[(idx - 1 + tabs.length) % tabs.length]);
+                    setError(null);
+                  }
+                }}
+              >
+                {[
+                  { key: 'login', label: 'Sign In' },
+                  { key: 'register', label: 'Create Account' },
+                ].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={mode === key}
+                    onClick={() => {
+                      setMode(key);
+                      setError(null);
+                    }}
+                    className={cn(
+                      'flex-1 py-2.5 text-[13px] font-medium transition-all duration-200 focus:outline-none rounded-full',
+                      mode === key
+                        ? 'bg-wgreen text-white shadow-sm'
+                        : 'text-wmuted hover:text-wink',
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Eyebrow + editorial heading */}
+              <div className="text-[11px] tracking-[0.24em] uppercase text-wgold mb-3.5">
+                {isRegister ? 'New member' : 'Welcome back'}
+              </div>
+              <h1 className="font-wserif font-medium text-[clamp(34px,4vw,46px)] leading-[1.05] text-wink m-0 mb-2">
+                {isRegister ? 'Begin your ritual' : 'Sign in to your ritual'}
+              </h1>
+              <p className="text-[14px] text-wmuted m-0 mb-7 font-light">
+                {isRegister
+                  ? 'Create your account to unlock exclusive wellness rewards.'
+                  : 'Track orders, manage subscriptions and earn rewards.'}
+              </p>
+
+              {/* Referral banner — only in register mode when a code is pending */}
+              {pendingReferral && (
+                <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-wgold/30 bg-wcard px-3 py-2.5 text-xs text-wink">
+                  <LeafIcon size={14} stroke="#B49A63" className="mt-0.5 shrink-0" />
+                  <span>
+                    You were invited by a friend. Sign up to claim your{' '}
+                    <strong>welcome reward</strong>.
+                    <span className="ml-1 font-mono text-[10px] text-wmuted">
+                      {pendingReferral}
+                    </span>
+                  </span>
+                </div>
+              )}
+
+              {/* Main auth form */}
+              <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+                {isRegister && (
+                  <div>
+                    <label className="text-[11px] tracking-[0.18em] uppercase text-wmuted font-medium block mb-1.5">
+                      Full name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Jane Doe"
+                      autoComplete="name"
+                      value={form.full_name}
+                      onChange={set('full_name')}
+                      className={inputCls}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-[11px] tracking-[0.18em] uppercase text-wmuted font-medium block mb-1.5">
+                    Email address
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    required
+                    value={form.email}
+                    onChange={set('email')}
+                    className={inputCls}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] tracking-[0.18em] uppercase text-wmuted font-medium block mb-1.5">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    autoComplete={isRegister ? 'new-password' : 'current-password'}
+                    required
+                    value={form.password}
+                    onChange={set('password')}
+                    className={inputCls}
+                  />
+                  {isRegister && (
+                    <p className="mt-1 text-[11px] text-wmuted">At least 8 characters.</p>
+                  )}
+                </div>
+
+                {/* Remember me + forgot password row */}
+                <div className="flex justify-between items-center text-[12.5px] text-wmuted -mt-1">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" className="accent-wgreen" />
+                    Remember me
+                  </label>
+                  {!isRegister && (
+                    <Link
+                      to="/forgot-password"
+                      className="text-wgreen no-underline hover:underline hover:underline-offset-2 transition-colors"
+                    >
+                      Forgot password?
+                    </Link>
+                  )}
+                </div>
+
+                <p className="text-[11px] leading-relaxed text-wmuted">
+                  By continuing, you agree to Wellvia&apos;s{' '}
+                  <a href="#" className="text-wgreen hover:underline">
+                    Terms of Use
+                  </a>{' '}
+                  and{' '}
+                  <a href="#" className="text-wgreen hover:underline">
+                    Privacy Policy
+                  </a>
+                  .
+                </p>
+
+                {error && (
+                  <div
+                    role="alert"
+                    className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-600"
+                  >
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={busy}
+                  aria-busy={busy}
+                  className="w-full bg-wgreen text-white border-0 rounded-full py-4 text-[14.5px] tracking-wide cursor-pointer hover:bg-wgreen-dark transition-colors disabled:opacity-60 disabled:pointer-events-none flex items-center justify-center gap-2 mt-1"
+                >
+                  {busy ? (
+                    <svg className="size-4 animate-spin360" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
                   ) : isRegister ? (
                     'Create account'
                   ) : (
-                    'Login'
+                    'Sign In'
                   )}
                 </button>
               </form>
 
-              {/* Google OAuth */}
+              {/* Google OAuth — only when backend reports it as enabled */}
               {googleEnabled && (
                 <div>
-                  <div className="my-4 flex items-center gap-3 text-xs text-ink-tertiary">
-                    <span className="h-px flex-1 bg-line-subtle" />
-                    OR
-                    <span className="h-px flex-1 bg-line-subtle" />
+                  <div className="flex items-center gap-3.5 my-[22px] text-wmuted text-[12px]">
+                    <span className="flex-1 h-px bg-wline" />
+                    or continue with
+                    <span className="flex-1 h-px bg-wline" />
                   </div>
                   <a
                     href={`${env.apiBaseUrl}/auth/google/login`}
-                    className={cn(
-                      buttonVariants({ variant: 'outline', size: 'md', block: true }),
-                    )}
+                    className="flex w-full items-center justify-center gap-2 rounded-full border border-wline bg-wcard py-3.5 text-[13px] text-wink hover:border-wgreen transition-colors no-underline"
                   >
                     <GoogleIcon />
                     Continue with Google
@@ -528,57 +507,60 @@ export default function LoginPage() {
                 </div>
               )}
 
-              {/* OTP button */}
-              <div className="mt-3">
-                <div className="flex items-center gap-3 text-xs text-ink-tertiary">
-                  <span className="h-px flex-1 bg-line-subtle" />
-                  OR
-                  <span className="h-px flex-1 bg-line-subtle" />
+              {/* OTP email button — placeholder, no handler yet */}
+              <div className="mt-4">
+                <div className="flex items-center gap-3.5 mb-4 text-wmuted text-[12px]">
+                  <span className="flex-1 h-px bg-wline" />
+                  or
+                  <span className="flex-1 h-px bg-wline" />
                 </div>
                 <button
                   type="button"
-                  className="mt-3 h-11 w-full rounded-lg border border-line-strong bg-bg-elevated text-sm font-semibold text-ink-primary transition-colors hover:border-accent hover:text-accent focus-visible:focus-ring"
+                  className="w-full flex items-center justify-center gap-2 rounded-full border border-wline bg-wcard py-3.5 text-[13px] text-wink hover:border-wgreen transition-colors"
                 >
+                  <MailIcon size={15} />
                   Request OTP on email
                 </button>
               </div>
 
-              {/* Dev/test quick logins */}
+              {/* Dev / test quick-login buttons */}
               {showTestLogins && (
                 <div>
-                  <div className="my-4 flex items-center gap-3 text-xs text-ink-tertiary">
-                    <span className="h-px flex-1 bg-line-subtle" />
+                  <div className="my-4 flex items-center gap-3 text-[11px] text-wmuted">
+                    <span className="h-px flex-1 bg-wline" />
                     testing only
-                    <span className="h-px flex-1 bg-line-subtle" />
+                    <span className="h-px flex-1 bg-wline" />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {TEST_ACCOUNTS.map((account) => (
-                      <Button
+                      <button
                         key={account.email}
                         type="button"
-                        variant="outline"
-                        size="sm"
                         disabled={busy}
                         onClick={() => quickLogin(account)}
+                        className="flex items-center justify-center gap-1.5 rounded-xl border border-wline bg-wcard px-3 py-2.5 text-[12px] text-wink hover:border-wgreen transition-colors disabled:opacity-50"
                       >
-                        <account.icon className="size-4" aria-hidden="true" />
+                        <account.icon size={14} />
                         {account.label}
-                      </Button>
+                      </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Trust badges from CMS */}
+              {/* Trust badges sourced from CMS / public settings */}
               <TrustBadges />
 
-              {/* Create account link */}
-              <p className="mt-5 text-center text-sm text-ink-secondary">
-                {isRegister ? 'Already have an account? ' : 'New to ShopWell? '}
+              {/* Mode toggle — bottom link */}
+              <p className="text-center text-[13px] text-wmuted mt-6">
+                {isRegister ? 'Already have an account? ' : 'New to Wellvia? '}
                 <button
                   type="button"
-                  onClick={() => { setMode(isRegister ? 'login' : 'register'); setError(null); }}
-                  className="font-semibold text-accent hover:underline focus-visible:focus-ring"
+                  onClick={() => {
+                    setMode(isRegister ? 'login' : 'register');
+                    setError(null);
+                  }}
+                  className="text-wgreen underline underline-offset-[3px] hover:text-wgreen-dark focus:outline-none transition-colors"
                 >
                   {isRegister ? 'Sign in' : 'Create an account'}
                 </button>
@@ -586,17 +568,52 @@ export default function LoginPage() {
             </>
           )}
 
-          {/* Footer link */}
-          <p className="mt-5 text-center text-xs text-ink-tertiary">
+          {/* Skip sign-in */}
+          <p className="mt-5 text-center text-[12px] text-wmuted">
             <Link
               to="/products"
-              className="rounded-xs transition-colors hover:text-ink-secondary focus-visible:focus-ring"
+              className="hover:text-wink transition-colors no-underline"
             >
               Continue browsing without signing in
             </Link>
           </p>
         </div>
       </div>
+
+      {/* ── RIGHT: decorative wellness column (hidden on mobile) ── */}
+      <div
+        className="relative hidden md:block"
+        style={{ background: 'linear-gradient(160deg,#e7e0d3,#d9cfbd)' }}
+      >
+        {/* Tonal earth-tone gradient fills the column */}
+        <div
+          className="absolute inset-0 w-full h-full min-h-screen"
+          style={{
+            background:
+              'linear-gradient(145deg,#dbd3c4 0%,#c9bfad 35%,#b5a790 65%,#9f9180 100%)',
+          }}
+        />
+
+        {/* Subtle botanical dot pattern */}
+        <div
+          className="absolute inset-0 opacity-[0.05]"
+          style={{
+            backgroundImage: 'radial-gradient(circle,#183A2E 1px,transparent 1px)',
+            backgroundSize: '32px 32px',
+          }}
+        />
+
+        {/* Bottom gradient + editorial quote */}
+        <div
+          className="absolute inset-x-0 bottom-0 p-9 text-[#f3efe6]"
+          style={{ background: 'linear-gradient(180deg,transparent,rgba(24,58,46,0.55))' }}
+        >
+          <p className="font-wserif italic text-[24px] leading-[1.4] m-0 max-w-[340px]">
+            &ldquo;A few minutes each morning — the calmest part of my day.&rdquo;
+          </p>
+        </div>
+      </div>
+
     </main>
   );
 }

@@ -52,7 +52,7 @@ export function LuxuryGallery({ product }) {
   if (images.length === 0) {
     return (
       <div className="flex gap-3">
-        <div className="aspect-square w-full overflow-hidden rounded-lg border border-line-subtle bg-bg-elevated p-4">
+        <div className="aspect-square w-full overflow-hidden rounded-lg border border-wline bg-wcard p-4">
           <ProductMedia product={product} className="object-contain" eager />
         </div>
       </div>
@@ -114,10 +114,10 @@ export function LuxuryGallery({ product }) {
               aria-label={`View ${vid ? 'video' : 'image'} ${i + 1}`}
               aria-selected={i === active}
               className={cn(
-                'relative size-14 shrink-0 overflow-hidden rounded-lg border bg-bg-elevated transition-all duration-200 focus-visible:focus-ring',
+                'relative size-14 shrink-0 overflow-hidden rounded-lg border bg-wcard transition-all duration-200',
                 i === active
-                  ? 'border-accent ring-1 ring-accent/40'
-                  : 'border-line-subtle opacity-90 hover:opacity-100 hover:border-line-strong',
+                  ? 'border-wgreen ring-1 ring-wgreen/40'
+                  : 'border-wline opacity-90 hover:opacity-100 hover:border-wline',
               )}
             >
               {vid ? (
@@ -155,7 +155,7 @@ export function LuxuryGallery({ product }) {
           onKeyDown={onKeyDown}
           tabIndex={0}
           aria-label={`Product image ${active + 1} of ${images.length}`}
-          className="group relative aspect-square w-full select-none overflow-hidden rounded-lg border border-line-subtle bg-bg-elevated p-4"
+          className="group relative aspect-square w-full select-none overflow-hidden rounded-lg border border-wline bg-wcard p-4"
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -192,7 +192,7 @@ export function LuxuryGallery({ product }) {
           {/* Lens — tracks the cursor over the source image */}
           {lens && !currentIsVideo && (
             <div
-              className="pointer-events-none absolute z-[2] rounded-sm border border-line-subtle bg-ink-inverse/10 shadow-[0_0_0_2000px_rgba(0,0,0,0.18)]"
+              className="pointer-events-none absolute z-[2] rounded-sm border border-wline bg-white/10 shadow-[0_0_0_2000px_rgba(0,0,0,0.18)]"
               /* intentional vignette — no token equivalent */
               style={{ left: lens.x, top: lens.y, width: lens.w, height: lens.h }}
             />
@@ -205,7 +205,7 @@ export function LuxuryGallery({ product }) {
 
           {/* Zoom hint */}
           {!currentIsVideo && (
-            <div className="pointer-events-none absolute bottom-3 left-3 z-10 inline-flex items-center gap-1.5 rounded-xs bg-ink-primary/75 px-2.5 py-1 text-xs text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+            <div className="pointer-events-none absolute bottom-3 left-3 z-10 inline-flex items-center gap-1.5 rounded-xs bg-wink/75 px-2.5 py-1 text-xs text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
               <ZoomIn className="size-3.5" aria-hidden="true" /> Hover to zoom
             </div>
           )}
@@ -215,7 +215,7 @@ export function LuxuryGallery({ product }) {
         {lens && !currentIsVideo && (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute left-[calc(100%+1.25rem)] top-0 z-40 hidden aspect-square overflow-hidden rounded-sm border border-line-strong bg-bg-elevated shadow-lg xl:block xl:w-[360px] 2xl:w-[460px]"
+            className="pointer-events-none absolute left-[calc(100%+1.25rem)] top-0 z-40 hidden aspect-square overflow-hidden rounded-sm border border-wline bg-wcard shadow-lg xl:block xl:w-[360px] 2xl:w-[460px]"
             style={{
               backgroundImage: `url(${current.url})`,
               backgroundRepeat: 'no-repeat',
@@ -236,8 +236,8 @@ export function LuxuryGallery({ product }) {
               aria-label={`Go to image ${i + 1}`}
               onClick={() => setActive(i)}
               className={cn(
-                'h-1.5 rounded-full transition-all focus-visible:focus-ring',
-                i === active ? 'w-5 bg-accent' : 'w-1.5 bg-line-strong',
+                'h-1.5 rounded-full transition-all',
+                i === active ? 'w-5 bg-wgreen' : 'w-1.5 bg-wline',
               )}
             />
           ))}

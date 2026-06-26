@@ -1,39 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  Search,
-  PackageX,
-  AlertTriangle,
   ChevronLeft,
   ChevronRight,
   X,
+  Search,
   SlidersHorizontal,
 } from 'lucide-react';
 import { Page } from '@/components/layout/Page.jsx';
-import { Breadcrumbs } from '@/components/layout/Breadcrumbs.jsx';
-import { Input } from '@/components/ui/Input.jsx';
-import { Button } from '@/components/ui/Button.jsx';
-import { ProductGrid } from '@/features/products/components/ProductGrid.jsx';
-import { EmptyState } from '@/components/feedback/EmptyState.jsx';
+import ProductGrid from '@/components/storefront/ProductGrid.jsx';
 import { useProducts } from '@/features/products/hooks.js';
 import { useCategories } from '@/features/categories/hooks.js';
-import { useAddToCart } from '@/features/cart/hooks.js';
 import { cn } from '@/lib/utils.js';
 
 const PAGE_SIZE = 12;
 
 const SORT_OPTIONS = [
-  { value: 'relevance', label: 'Relevance' },
-  { value: 'price_asc', label: 'Price — Low to High' },
+  { value: 'relevance',  label: 'Relevance' },
+  { value: 'price_asc',  label: 'Price — Low to High' },
   { value: 'price_desc', label: 'Price — High to Low' },
-  { value: 'newest', label: 'Newest First' },
+  { value: 'newest',     label: 'Newest First' },
 ];
 
 export default function ProductListPage() {
   const [searchParams] = useSearchParams();
   const categoryIdParam = searchParams.get('category_id');
-  const categorySlug = searchParams.get('category');
-  const queryParam = searchParams.get('q') ?? '';
+  const categorySlug    = searchParams.get('category');
+  const queryParam      = searchParams.get('q') ?? '';
 
   const { data: categories = [] } = useCategories();
 
@@ -50,358 +43,339 @@ export default function ProductListPage() {
 
   const categoryId = activeCategory?.id;
 
-  const [search, setSearch] = useState(queryParam);
-  const [query, setQuery] = useState(queryParam);
-  const [page, setPage] = useState(1);
-  const [sortBy, setSortBy] = useState('relevance');
+  const [search,     setSearch]     = useState(queryParam);
+  const [query,      setQuery]      = useState(queryParam);
+  const [page,       setPage]       = useState(1);
+  const [sortBy,     setSortBy]     = useState('relevance');
   const [filterOpen, setFilterOpen] = useState(false);
 
   // Refs for drawer focus management
   const filterTriggerRef = useRef(null);
   const drawerHeadingRef = useRef(null);
 
-  useEffect(() => {
-    setSearch(queryParam);
-  }, [queryParam]);
+  useEffect(() => { setSearch(queryParam); }, [queryParam]);
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      setQuery(search.trim());
-      setPage(1);
-    }, 300);
+    const t = setTimeout(() => { setQuery(search.trim()); setPage(1); }, 300);
     return () => clearTimeout(t);
   }, [search]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [categoryId, categorySlug]);
+  useEffect(() => { setPage(1); }, [categoryId, categorySlug]);
 
   // Focus drawer heading when it opens; restore focus to trigger when it closes
   useEffect(() => {
-    if (filterOpen) {
-      drawerHeadingRef.current?.focus();
-    } else {
-      filterTriggerRef.current?.focus();
-    }
+    if (filterOpen) drawerHeadingRef.current?.focus();
+    else            filterTriggerRef.current?.focus();
   }, [filterOpen]);
 
   const { data, isLoading, isError, refetch } = useProducts({
-    q: query || undefined,
+    q:           query || undefined,
     category_id: categoryId,
     page,
-    page_size: PAGE_SIZE,
-    sort_by: sortBy,
+    page_size:   PAGE_SIZE,
+    sort_by:     sortBy,
   });
-  const addToCart = useAddToCart();
 
-  const products = data?.items ?? [];
-  const total = data?.total ?? 0;
+  const products   = data?.items ?? [];
+  const total      = data?.total  ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const isFiltered = !!(categoryIdParam || categorySlug);
-  const heading = activeCategory?.name || (isFiltered ? 'Category' : 'All Products');
+  const heading    = activeCategory?.name || (isFiltered ? 'Category' : 'All Products');
 
-  // Page numbers to display (Flipkart style: show up to 5 pages around current)
+  // Page numbers: up to 5 pages around current + ellipsis sentinels
   const pageNumbers = useMemo(() => {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
     const start = Math.max(1, Math.min(page - 2, totalPages - 4));
-    const end = Math.min(totalPages, start + 4);
-    const nums = Array.from({ length: end - start + 1 }, (_, i) => start + i);
-    if (nums[0] > 1) nums.unshift(-1); // -1 = ellipsis
-    if (nums[nums.length - 1] < totalPages) nums.push(-2); // -2 = ellipsis end
+    const end   = Math.min(totalPages, start + 4);
+    const nums  = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+    if (nums[0] > 1)                            nums.unshift(-1);  // -1 = ellipsis
+    if (nums[nums.length - 1] < totalPages) nums.push(-2);         // -2 = ellipsis end
     return nums;
   }, [page, totalPages]);
 
   return (
-    <Page>
-      <Breadcrumbs
-        items={isFiltered ? [{ label: 'Home', to: '/' }, { label: 'Shop', to: '/products' }] : [{ label: 'Home', to: '/' }]}
-        current={heading}
-        className="mb-4"
-      />
+    <Page bleed>
+      <div className="max-w-[1320px] mx-auto px-5 sm:px-10 lg:px-16 py-7 lg:py-[52px]">
 
-      {/* Main two-pane layout */}
-      <div className="flex gap-0 lg:gap-5">
-        {/* ── FILTER SIDEBAR (desktop) ── */}
-        <aside className="hidden lg:block w-60 xl:w-64 shrink-0">
-          <div className="sticky top-[120px] rounded-lg border border-line-subtle bg-bg-elevated shadow-sm overflow-hidden">
-            {/* Sidebar header */}
-            <div className="flex items-center justify-between border-b border-line-subtle px-4 py-3">
-              <span className="text-sm font-semibold text-ink-primary">Filters</span>
-              {isFiltered && (
+        {/* ── BREADCRUMB ── */}
+        <nav aria-label="Breadcrumb" className="mb-3.5">
+          <span className="text-[11.5px] text-wmuted tracking-wide">
+            <Link
+              to="/"
+              className="text-wmuted hover:text-wgreen transition-colors no-underline"
+            >
+              Home
+            </Link>
+            {' '}&nbsp;/&nbsp;{' '}
+            {isFiltered && (
+              <>
                 <Link
                   to="/products"
-                  className="text-xs font-medium text-accent hover:underline focus-visible:outline-none focus-visible:underline"
+                  className="text-wmuted hover:text-wgreen transition-colors no-underline"
                 >
-                  Clear All
+                  Shop
                 </Link>
-              )}
-            </div>
-
-            {/* Search in sidebar */}
-            <div className="border-b border-line-subtle px-4 py-3">
-              <Input
-                type="search"
-                label="Search"
-                icon={Search}
-                placeholder="Search products…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-
-            {/* Categories */}
-            {categories.length > 0 && (
-              <div className="px-0 py-3">
-                <p className="px-4 pb-2 text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
-                  Category
-                </p>
-                <ul>
-                  <li>
-                    <Link
-                      to="/products"
-                      aria-current={!isFiltered ? 'page' : undefined}
-                      className={cn(
-                        'flex items-center gap-2.5 px-4 py-2 text-sm transition-colors',
-                        !isFiltered
-                          ? 'border-l-2 border-accent bg-accent/12 font-semibold text-accent'
-                          : 'text-ink-secondary hover:bg-bg-sunken hover:text-ink-primary',
-                      )}
-                    >
-                      All Categories
-                    </Link>
-                  </li>
-                  {categories.map((cat) => {
-                    const active = activeCategory?.id === cat.id;
-                    return (
-                      <li key={cat.id}>
-                        <Link
-                          to={`/products?category_id=${cat.id}`}
-                          aria-current={active ? 'page' : undefined}
-                          className={cn(
-                            'flex items-center gap-2.5 px-4 py-2 text-sm transition-colors',
-                            active
-                              ? 'border-l-2 border-accent bg-accent/12 font-semibold text-accent'
-                              : 'text-ink-secondary hover:bg-bg-sunken hover:text-ink-primary',
-                          )}
-                        >
-                          {cat.name}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
+                {' '}&nbsp;/&nbsp;{' '}
+              </>
             )}
-          </div>
-        </aside>
+            <span className="text-wink">{heading}</span>
+          </span>
+        </nav>
 
-        {/* ── RIGHT COLUMN ── */}
-        <div className="min-w-0 flex-1">
-          {/* SORT BAR */}
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line-subtle bg-bg-elevated px-4 py-3 shadow-sm">
-            {/* Left: count + mobile filter button */}
-            <div className="flex items-center gap-3">
-              {/* Mobile filter trigger */}
-              <button
-                ref={filterTriggerRef}
-                type="button"
-                onClick={() => setFilterOpen(true)}
-                aria-expanded={filterOpen}
-                aria-controls="filter-drawer"
-                className="inline-flex items-center gap-1.5 rounded-sm border border-line-subtle px-3 py-1.5 text-xs font-medium text-ink-secondary transition-colors hover:border-line-strong hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
+        {/* ── TITLE + COUNT + SORT ── */}
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-6 lg:mb-9">
+          <div>
+            <h1 className="font-wserif font-medium text-[clamp(30px,4.4vw,52px)] text-wink m-0 mb-1.5 leading-none">
+              {isFiltered && activeCategory?.name ? activeCategory.name : 'Shop All Rituals'}
+            </h1>
+            <p className="text-[14px] text-wmuted m-0 font-light">
+              {isLoading ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block size-1.5 animate-pulse rounded-full bg-wgold" />
+                  Loading…
+                </span>
+              ) : (
+                `${total.toLocaleString('en-IN')} product${total === 1 ? '' : 's'}`
+              )}
+            </p>
+          </div>
+
+          {/* Sort select + mobile filter trigger */}
+          <div className="flex items-center gap-2.5 text-[13px] text-wmuted">
+            {/* Mobile filter button (hidden on lg+) */}
+            <button
+              ref={filterTriggerRef}
+              type="button"
+              onClick={() => setFilterOpen(true)}
+              aria-expanded={filterOpen}
+              aria-controls="filter-drawer"
+              className="inline-flex items-center gap-1.5 rounded-full border border-wline px-4 py-2.5 text-[12.5px] text-wink cursor-pointer transition-colors hover:border-wgreen hover:text-wgreen lg:hidden"
+            >
+              <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+              Filters
+            </button>
+
+            <span className="hidden sm:inline">Sort</span>
+            <select
+              value={sortBy}
+              onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
+              className="bg-wcard border border-wline rounded-full px-4 py-2.5 text-[13px] text-wink cursor-pointer focus:outline-none focus:border-wgreen transition-colors"
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* ── SEARCH BAR ── */}
+        <div className="mb-5">
+          <div className="relative max-w-md">
+            <Search
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-wmuted pointer-events-none"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              placeholder="Search products…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-wcard border border-wline rounded-full pl-10 pr-4 py-2.5 text-[13px] text-wink placeholder:text-wmuted focus:outline-none focus:border-wgreen transition-colors"
+            />
+          </div>
+        </div>
+
+        {/* ── CATEGORY PILLS ── */}
+        {categories.length > 0 && (
+          <div className="flex flex-wrap gap-2.5 mb-6 lg:mb-9">
+            <Link
+              to="/products"
+              aria-current={!isFiltered ? 'page' : undefined}
+              className={cn(
+                'rounded-full px-5 py-[9px] text-[12.5px] tracking-wide transition-all border no-underline',
+                !isFiltered
+                  ? 'bg-wgreen text-white border-wgreen'
+                  : 'bg-transparent text-wink border-wline hover:border-wgreen hover:text-wgreen',
+              )}
+            >
+              All
+            </Link>
+            {categories.map((cat) => {
+              const active = activeCategory?.id === cat.id;
+              return (
+                <Link
+                  key={cat.id}
+                  to={`/products?category_id=${cat.id}`}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'rounded-full px-5 py-[9px] text-[12.5px] tracking-wide transition-all border no-underline',
+                    active
+                      ? 'bg-wgreen text-white border-wgreen'
+                      : 'bg-transparent text-wink border-wline hover:border-wgreen hover:text-wgreen',
+                  )}
+                >
+                  {cat.name}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── ACTIVE FILTER CLEAR CHIP ── */}
+        {isFiltered && activeCategory?.name && (
+          <div className="mb-4 flex items-center gap-2">
+            <span className="rounded-full border border-wgold/40 bg-wgold/10 px-3 py-1 text-[12px] font-medium text-wgold">
+              {activeCategory.name}
+            </span>
+            <Link
+              to="/products"
+              className="inline-flex items-center gap-1 text-[12px] text-wmuted hover:text-wink transition-colors no-underline"
+            >
+              <X className="size-3" aria-hidden="true" />
+              Clear
+            </Link>
+          </div>
+        )}
+
+        {/* ── PRODUCT GRID / STATES ── */}
+        {isError ? (
+          <div className="py-20 text-center">
+            <p className="font-wserif text-[28px] text-wink mb-2">Something went wrong</p>
+            <p className="text-wmuted text-[14px] mb-6">
+              We couldn't load products. Please try again.
+            </p>
+            <button
+              onClick={() => refetch()}
+              className="bg-wgreen text-white rounded-full px-7 py-3 text-[13px] tracking-wide hover:bg-wgreen-dark transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        ) : isLoading ? (
+          /* Skeleton grid */
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 lg:gap-[22px]">
+            {Array.from({ length: PAGE_SIZE }).map((_, i) => (
+              <div
+                key={i}
+                className="bg-wcard border border-wline rounded-xl2 overflow-hidden animate-pulse"
               >
-                <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-                Filters
-              </button>
-              <span className="text-sm text-ink-secondary">
-                {isLoading ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-block size-1.5 animate-pulse rounded-full bg-accent" />
-                    Loading…
-                  </span>
-                ) : total === 0 ? (
-                  <span className="font-semibold text-ink-primary nums">0 products</span>
-                ) : (
-                  <>
-                    Showing{' '}
-                    <span className="font-semibold text-ink-primary nums">
-                      {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–{Math.min(page * PAGE_SIZE, total).toLocaleString()}
-                    </span>{' '}
-                    of{' '}
-                    <span className="font-semibold text-ink-primary nums">{total.toLocaleString()}</span>{' '}
-                    product{total === 1 ? '' : 's'}
-                    {activeCategory?.name ? ` in ${activeCategory.name}` : ''}
-                  </>
-                )}
-              </span>
-            </div>
-
-            {/* Sort options */}
-            <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none]">
-              <span className="shrink-0 text-xs font-medium text-ink-tertiary">Sort By</span>
-              <div className="flex min-h-[2.75rem] items-center gap-1">
-                {SORT_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => { setSortBy(opt.value); setPage(1); }}
-                    className={cn(
-                      'shrink-0 rounded-sm px-3 py-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                      sortBy === opt.value
-                        ? 'bg-accent text-white'
-                        : 'text-ink-secondary hover:text-accent',
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+                <div className="bg-wcanvas h-[200px]" />
+                <div className="p-[18px] pb-5 space-y-3">
+                  <div className="h-3 bg-wcanvas rounded-full w-3/4" />
+                  <div className="h-5 bg-wcanvas rounded-full" />
+                  <div className="h-3 bg-wcanvas rounded-full w-1/2" />
+                  <div className="h-10 bg-wcanvas rounded-full mt-2" />
+                </div>
               </div>
-            </div>
+            ))}
           </div>
-
-          {/* Active category badge */}
-          {isFiltered && activeCategory?.name && (
-            <div className="mb-3 flex items-center gap-2">
-              <span className="rounded-sm border border-accent/30 bg-accent/12 px-2.5 py-1 text-xs font-medium text-accent">
-                {activeCategory.name}
-              </span>
+        ) : products.length === 0 ? (
+          <div className="py-20 text-center">
+            <p className="font-wserif text-[28px] text-wink mb-2">No products found</p>
+            <p className="text-wmuted text-[14px] mb-6">
+              {query
+                ? `Nothing matched "${query}". Try a different search.`
+                : activeCategory?.name
+                  ? `No products in ${activeCategory.name} yet.`
+                  : 'The catalog is being stocked. Check back shortly.'}
+            </p>
+            {isFiltered && (
               <Link
                 to="/products"
-                className="inline-flex items-center gap-1 text-xs text-ink-tertiary hover:text-ink-primary"
+                className="inline-block bg-wgreen text-white no-underline rounded-full px-7 py-3 text-[13px] tracking-wide hover:bg-wgreen-dark transition-colors"
               >
-                <X className="size-3" aria-hidden="true" />
-                Clear
+                View all products
               </Link>
-            </div>
-          )}
+            )}
+          </div>
+        ) : (
+          <ProductGrid products={products} />
+        )}
 
-          {/* Product grid / states */}
-          {isError ? (
-            <EmptyState
-              iconTone="danger"
-              icon={AlertTriangle}
-              title="We couldn't load products"
-              description="Something went wrong on our end. Please try again."
-              action={
-                <Button size="sm" onClick={() => refetch()}>
-                  Retry
-                </Button>
-              }
-            />
-          ) : !isLoading && products.length === 0 ? (
-            <EmptyState
-              icon={PackageX}
-              title="No products found"
-              description={
-                query
-                  ? `Nothing matched "${query}". Try a different search.`
-                  : activeCategory?.name
-                    ? `No products in ${activeCategory.name} yet.`
-                    : 'The catalog is being stocked. Check back shortly.'
-              }
-              action={
-                isFiltered ? (
-                  <Link to="/products">
-                    <Button size="sm" variant="secondary">View all products</Button>
-                  </Link>
-                ) : undefined
-              }
-            />
-          ) : (
-            <ProductGrid
-              products={products}
-              loading={isLoading}
-              skeletonCount={PAGE_SIZE}
-              onQuickAdd={(p) => addToCart.mutate({ productId: p.id })}
-            />
-          )}
-
-          {/* ── PAGINATION (Flipkart style) ── */}
-          {!isLoading && !isError && totalPages > 1 && (
-            <nav
-              className="mt-8 flex items-center justify-center gap-1"
-              aria-label="Pagination"
+        {/* ── PAGINATION ── */}
+        {!isLoading && !isError && totalPages > 1 && (
+          <nav className="mt-10 flex items-center justify-center gap-1.5" aria-label="Pagination">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              aria-label="Previous page"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-wline bg-wcard text-wmuted transition-colors hover:border-wgreen hover:text-wgreen disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                aria-label="Previous page"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-sm border border-line-subtle bg-bg-elevated text-ink-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              >
-                <ChevronLeft className="size-4" aria-hidden="true" />
-              </button>
+              <ChevronLeft className="size-4" aria-hidden="true" />
+            </button>
 
-              {pageNumbers.map((pg, i) => {
-                if (pg < 0) {
-                  return (
-                    <span
-                      key={`ellipsis-${i}`}
-                      className="inline-flex h-9 w-9 items-center justify-center text-sm text-ink-tertiary"
-                    >
-                      …
-                    </span>
-                  );
-                }
+            {pageNumbers.map((pg, i) => {
+              if (pg < 0) {
                 return (
-                  <button
-                    key={pg}
-                    type="button"
-                    onClick={() => setPage(pg)}
-                    aria-label={`Go to page ${pg}`}
-                    aria-current={pg === page ? 'page' : undefined}
-                    className={cn(
-                      'nums inline-flex h-9 w-9 items-center justify-center rounded-sm border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                      pg === page
-                        ? 'border-accent bg-accent text-white shadow-sm'
-                        : 'border-line-subtle bg-bg-elevated text-ink-secondary hover:border-accent hover:text-accent',
-                    )}
+                  <span
+                    key={`ellipsis-${i}`}
+                    className="inline-flex h-9 w-9 items-center justify-center text-[13px] text-wmuted"
                   >
-                    {pg}
-                  </button>
+                    …
+                  </span>
                 );
-              })}
+              }
+              return (
+                <button
+                  key={pg}
+                  type="button"
+                  onClick={() => setPage(pg)}
+                  aria-label={`Go to page ${pg}`}
+                  aria-current={pg === page ? 'page' : undefined}
+                  className={cn(
+                    'inline-flex h-9 w-9 items-center justify-center rounded-full border text-[13px] font-medium transition-colors',
+                    pg === page
+                      ? 'bg-wgreen border-wgreen text-white shadow-sm'
+                      : 'bg-wcard border-wline text-wmuted hover:border-wgreen hover:text-wgreen',
+                  )}
+                >
+                  {pg}
+                </button>
+              );
+            })}
 
-              <button
-                type="button"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                aria-label="Next page"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-sm border border-line-subtle bg-bg-elevated text-ink-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              >
-                <ChevronRight className="size-4" aria-hidden="true" />
-              </button>
-            </nav>
-          )}
-        </div>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              aria-label="Next page"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-wline bg-wcard text-wmuted transition-colors hover:border-wgreen hover:text-wgreen disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </button>
+          </nav>
+        )}
       </div>
 
       {/* ── MOBILE FILTER DRAWER ── */}
       {filterOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          {/* Backdrop — keyboard-operable button */}
+          {/* Backdrop */}
           <button
             type="button"
             aria-label="Close filters"
-            className="absolute inset-0 cursor-default bg-black/50"
+            className="absolute inset-0 cursor-default bg-wink/40 animate-dim"
             onClick={() => setFilterOpen(false)}
           />
-          {/* Drawer */}
+
+          {/* Drawer panel */}
           <div
             id="filter-drawer"
             role="dialog"
             aria-modal="true"
             aria-labelledby="filter-drawer-title"
             onKeyDown={(e) => { if (e.key === 'Escape') setFilterOpen(false); }}
-            className="absolute inset-y-0 left-0 flex w-72 max-w-[calc(100vw-2.5rem)] flex-col bg-bg-elevated shadow-xl"
+            className="absolute inset-y-0 left-0 flex w-72 max-w-[calc(100vw-2.5rem)] flex-col bg-wcard shadow-xl animate-slidein"
           >
-            <div className="flex items-center justify-between border-b border-line-subtle px-4 py-4">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-wline px-4 py-4">
               <span
                 id="filter-drawer-title"
                 ref={drawerHeadingRef}
                 tabIndex={-1}
-                className="text-base font-semibold text-ink-primary outline-none"
+                className="text-base font-wserif font-semibold text-wink outline-none"
               >
                 Filters
               </span>
@@ -409,29 +383,35 @@ export default function ProductListPage() {
                 type="button"
                 onClick={() => setFilterOpen(false)}
                 aria-label="Close filters"
-                className="grid size-11 place-items-center rounded-sm text-ink-secondary hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="grid size-11 place-items-center rounded-full text-wmuted hover:text-wink transition-colors"
               >
                 <X className="size-5" aria-hidden="true" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto py-2">
+            {/* Scrollable body */}
+            <div className="flex-1 overflow-y-auto py-3">
               {/* Search */}
-              <div className="border-b border-line-subtle px-4 pb-4 pt-2">
-                <Input
-                  type="search"
-                  label="Search"
-                  icon={Search}
-                  placeholder="Search products…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
+              <div className="border-b border-wline px-4 pb-4 pt-2">
+                <div className="relative">
+                  <Search
+                    className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-wmuted pointer-events-none"
+                    aria-hidden="true"
+                  />
+                  <input
+                    type="search"
+                    placeholder="Search products…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full bg-wpaper border border-wline rounded-full pl-9 pr-4 py-2 text-[13px] text-wink placeholder:text-wmuted focus:outline-none focus:border-wgreen transition-colors"
+                  />
+                </div>
               </div>
 
               {/* Categories */}
               {categories.length > 0 && (
                 <div className="py-2">
-                  <p className="px-4 pb-2 pt-2 text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
+                  <p className="px-4 pb-2 pt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-wmuted">
                     Category
                   </p>
                   <ul>
@@ -441,10 +421,10 @@ export default function ProductListPage() {
                         onClick={() => setFilterOpen(false)}
                         aria-current={!isFiltered ? 'page' : undefined}
                         className={cn(
-                          'flex items-center gap-2.5 px-4 py-2.5 text-sm',
+                          'flex items-center px-4 py-2.5 text-[13px] no-underline transition-colors',
                           !isFiltered
-                            ? 'border-l-2 border-accent bg-accent/12 font-semibold text-accent'
-                            : 'text-ink-secondary',
+                            ? 'border-l-2 border-wgreen bg-wgreen/10 font-semibold text-wgreen'
+                            : 'text-wmuted hover:text-wink',
                         )}
                       >
                         All Categories
@@ -459,10 +439,10 @@ export default function ProductListPage() {
                             onClick={() => setFilterOpen(false)}
                             aria-current={active ? 'page' : undefined}
                             className={cn(
-                              'flex items-center gap-2.5 px-4 py-2.5 text-sm',
+                              'flex items-center px-4 py-2.5 text-[13px] no-underline transition-colors',
                               active
-                                ? 'border-l-2 border-accent bg-accent/12 font-semibold text-accent'
-                                : 'text-ink-secondary',
+                                ? 'border-l-2 border-wgreen bg-wgreen/10 font-semibold text-wgreen'
+                                : 'text-wmuted hover:text-wink',
                             )}
                           >
                             {cat.name}
@@ -475,25 +455,25 @@ export default function ProductListPage() {
               )}
             </div>
 
-            <div className="border-t border-line-subtle px-4 py-4">
+            {/* Footer actions */}
+            <div className="border-t border-wline px-4 py-4">
               {isFiltered && (
                 <Link
                   to="/products"
                   onClick={() => setFilterOpen(false)}
-                  className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-sm border border-line-subtle py-2 text-sm font-medium text-ink-secondary"
+                  className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-full border border-wline py-2.5 text-[13px] font-medium text-wmuted hover:text-wink transition-colors no-underline"
                 >
                   <X className="size-4" aria-hidden="true" />
                   Clear All Filters
                 </Link>
               )}
-              <Button
-                variant="primary"
-                size="sm"
-                className="w-full"
+              <button
+                type="button"
+                className="w-full bg-wgreen text-white rounded-full py-3 text-[13px] tracking-wide hover:bg-wgreen-dark transition-colors"
                 onClick={() => setFilterOpen(false)}
               >
                 Apply
-              </Button>
+              </button>
             </div>
           </div>
         </div>

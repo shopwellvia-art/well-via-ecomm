@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Smartphone, AlertTriangle, Check, Loader2 } from 'lucide-react';
-import { Card } from '@/components/ui/Card.jsx';
-import { Button } from '@/components/ui/Button.jsx';
-import { Input } from '@/components/ui/Input.jsx';
+import { Card } from '@/components/storefront/ui/Card.jsx';
+import { Button } from '@/components/storefront/ui/Button.jsx';
+import { Input } from '@/components/storefront/ui/Input.jsx';
 import { useSendCodOtp, useVerifyCodOtp } from '@/features/cod/hooks.js';
 
 /**
@@ -115,22 +115,22 @@ export default function CodOtpModal({ phone, onVerified, onClose }) {
       aria-labelledby="cod-otp-title"
       className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
     >
-      <Card className="w-full max-w-md p-6 max-h-[90dvh] overflow-y-auto">
+      <Card className="w-full max-w-md bg-wcard p-6 max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center gap-2">
-          <Smartphone className="size-5 text-accent" aria-hidden="true" />
-          <h2 id="cod-otp-title" className="text-h3 text-ink-primary">Verify your phone</h2>
+          <Smartphone className="size-5 text-wgreen" aria-hidden="true" />
+          <h2 id="cod-otp-title" className="font-wserif text-h3 text-wink">Verify your phone</h2>
         </div>
-        <p className="mt-1 text-xs text-ink-tertiary">
+        <p className="mt-1 text-xs text-wmuted">
           Cash on Delivery orders need a phone verification. We sent a
           6-digit code to{' '}
-          <span className="font-mono text-ink-primary">
+          <span className="font-mono text-wink">
             {maskedPhone || phone}
           </span>
           .
         </p>
 
         {send.isPending && !maskedPhone && (
-          <p className="mt-3 flex items-center gap-1.5 text-sm text-ink-secondary">
+          <p className="mt-3 flex items-center gap-1.5 text-sm text-wmuted">
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             Sending code…
           </p>
@@ -147,7 +147,7 @@ export default function CodOtpModal({ phone, onVerified, onClose }) {
             autoFocus
           />
           {error && (
-            <div className="mt-3 flex items-start gap-2 rounded-sm border border-danger/25 bg-danger/12 p-2.5 text-xs text-danger">
+            <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-2.5 text-xs text-red-600">
               <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               <span>{error}</span>
             </div>
@@ -157,7 +157,7 @@ export default function CodOtpModal({ phone, onVerified, onClose }) {
               type="button"
               onClick={fire}
               disabled={coolingDown > 0 || send.isPending}
-              className="min-h-[44px] px-2 text-xs text-accent hover:underline disabled:opacity-50 focus-visible:focus-ring rounded-xs"
+              className="min-h-[44px] px-2 text-xs text-wgreen hover:underline disabled:opacity-50 rounded-xs"
             >
               {coolingDown > 0 ? `Resend in ${coolingDown}s` : 'Resend code'}
             </button>

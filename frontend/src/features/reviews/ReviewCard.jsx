@@ -30,26 +30,26 @@ export function ReviewCard({ review }) {
   return (
     <motion.article
       variants={fadeUp}
-      className="border-t border-line-subtle py-5 first:border-t-0 first:pt-0"
+      className="border-t border-wline py-5 first:border-t-0 first:pt-0"
     >
       {/* Author row */}
       <div className="flex items-center gap-2.5">
         <span
-          className="grid size-8 shrink-0 place-items-center rounded-full bg-accent/10 text-xs font-semibold text-accent"
+          className="grid size-8 shrink-0 place-items-center rounded-full bg-wgreen/10 text-xs font-semibold text-wgreen"
           aria-hidden="true"
         >
           {initials}
         </span>
         <div>
-          <p className="text-sm font-semibold text-ink-primary leading-none">
+          <p className="text-sm font-semibold text-wink leading-none">
             {review.author_display}
           </p>
-          <p className="mt-0.5 text-xs text-ink-tertiary">
+          <p className="mt-0.5 text-xs text-wmuted">
             {formatDate(review.created_at)}
             {review.is_verified_purchase && (
               <>
-                <span className="mx-1.5 text-ink-tertiary" aria-hidden="true">·</span>
-                <span className="inline-flex items-center gap-1 text-success">
+                <span className="mx-1.5 text-wmuted" aria-hidden="true">·</span>
+                <span className="inline-flex items-center gap-1 text-wgreen">
                   <CheckCircle2 className="size-3" aria-hidden="true" />
                   Verified purchase
                 </span>
@@ -63,12 +63,12 @@ export function ReviewCard({ review }) {
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <StarRating value={review.rating} size="sm" />
         {review.title && (
-          <h3 className="text-sm font-semibold text-ink-primary">{review.title}</h3>
+          <h3 className="text-sm font-semibold text-wink">{review.title}</h3>
         )}
       </div>
 
       {review.body && (
-        <p className="mt-2.5 whitespace-pre-line text-sm leading-relaxed text-ink-secondary">
+        <p className="mt-2.5 whitespace-pre-line text-sm leading-relaxed text-wmuted">
           {review.body}
         </p>
       )}

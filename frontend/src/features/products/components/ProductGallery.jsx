@@ -5,7 +5,7 @@ import { fadeIn } from '@/lib/motion.js';
 import { ProductMedia } from './ProductMedia.jsx';
 
 /**
- * Product detail image gallery — flat Flipkart style. Large main image
+ * Product detail image gallery — wellness palette. Large main image
  * with cross-fade, thumbnail strip below. Falls back to single ProductMedia
  * when no uploaded images exist.
  */
@@ -17,7 +17,7 @@ export function ProductGallery({ product }) {
 
   if (images.length === 0) {
     return (
-      <div className="aspect-square overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated">
+      <div className="aspect-square overflow-hidden rounded-xl2 border border-wline bg-wcard">
         <ProductMedia product={product} eager />
       </div>
     );
@@ -28,7 +28,7 @@ export function ProductGallery({ product }) {
   return (
     <div className="flex flex-col gap-2.5">
       {/* Main image */}
-      <div className="relative aspect-square overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
+      <div className="relative aspect-square overflow-hidden rounded-xl2 border border-wline bg-wcard shadow-sm">
         <AnimatePresence mode="wait" initial={false}>
           <motion.img
             key={current.id}
@@ -58,10 +58,10 @@ export function ProductGallery({ product }) {
               aria-label={`View image ${i + 1}`}
               aria-current={i === active}
               className={cn(
-                'aspect-square overflow-hidden rounded-sm border-2 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                'aspect-square overflow-hidden rounded-sm border-2 transition-all duration-150',
                 i === active
-                  ? 'border-accent'
-                  : 'border-line-subtle opacity-60 hover:border-line-strong hover:opacity-100',
+                  ? 'border-wgreen'
+                  : 'border-wline opacity-60 hover:border-wline hover:opacity-100',
               )}
             >
               <img src={img.url} alt="" loading="lazy" className="size-full object-cover" />

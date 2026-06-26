@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
-import { Button } from '@/components/ui/Button.jsx';
-import { Input } from '@/components/ui/Input.jsx';
-import { Textarea } from '@/components/ui/Textarea.jsx';
+import { Button } from '@/components/storefront/ui/Button.jsx';
+import { Input } from '@/components/storefront/ui/Input.jsx';
+import { Textarea } from '@/components/storefront/ui/Textarea.jsx';
 import { scaleIn } from '@/lib/motion.js';
 import { StarRating } from './StarRating.jsx';
 import { useCreateReview } from './hooks.js';
@@ -39,15 +39,15 @@ export function WriteReviewForm({ productId, onCancel, onSubmitted }) {
       variants={scaleIn}
       initial="hidden"
       animate="show"
-      className="mb-6 rounded-sm border border-line-subtle bg-bg-elevated p-5 shadow-sm"
+      className="mb-6 rounded-xl2 border border-wline bg-wcard p-5 shadow-sm"
     >
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-h3 tracking-tight text-ink-primary">Write your review</h3>
+        <h3 className="font-wserif text-h3 tracking-tight text-wink">Write your review</h3>
         <button
           type="button"
           aria-label="Cancel review"
           onClick={onCancel}
-          className="grid size-8 place-items-center rounded-sm text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+          className="grid size-8 place-items-center rounded-sm text-wmuted transition-colors hover:bg-wcanvas hover:text-wink"
         >
           <X className="size-4" />
         </button>
@@ -55,9 +55,9 @@ export function WriteReviewForm({ productId, onCancel, onSubmitted }) {
 
       {/* Star rating */}
       <div>
-        <p className="mb-2 text-sm font-medium text-ink-secondary" id="rating-label">
+        <p className="mb-2 text-sm font-medium text-wmuted" id="rating-label">
           Overall rating
-          <span className="ml-1 text-danger" aria-hidden="true">*</span>
+          <span className="ml-1 text-red-600" aria-hidden="true">*</span>
         </p>
         <StarRating
           value={rating}
@@ -91,12 +91,12 @@ export function WriteReviewForm({ productId, onCancel, onSubmitted }) {
       </div>
 
       {error && (
-        <p role="alert" className="mt-2.5 text-xs text-danger">
+        <p role="alert" className="mt-2.5 text-xs text-red-600">
           {error}
         </p>
       )}
 
-      <div className="mt-5 flex items-center justify-end gap-2.5 border-t border-line-subtle pt-4">
+      <div className="mt-5 flex items-center justify-end gap-2.5 border-t border-wline pt-4">
         <Button type="button" variant="ghost" onClick={onCancel} disabled={create.isPending}>
           Cancel
         </Button>

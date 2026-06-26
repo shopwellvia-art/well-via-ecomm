@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Home, Briefcase, MapPin, LocateFixed, Loader2, MapPinned } from 'lucide-react';
-import { Input } from '@/components/ui/Input.jsx';
-import { Button } from '@/components/ui/Button.jsx';
+import { Input } from '@/components/storefront/ui/Input.jsx';
+import { Button } from '@/components/storefront/ui/Button.jsx';
 import { cn } from '@/lib/utils.js';
 import { usePincodeLookup, useCurrentLocation, friendlyGeoError } from '../hooks.js';
 
@@ -206,7 +206,7 @@ export default function AddressForm({
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
       {/* ── Address type segmented control ── */}
       <div className="flex flex-col gap-2">
-        <span className="text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
+        <span className="text-xs font-semibold uppercase tracking-widest text-wmuted">
           Address type
         </span>
         <div role="group" aria-label="Address type" className="flex gap-2">
@@ -220,10 +220,10 @@ export default function AddressForm({
                 aria-pressed={values.label === l}
                 onClick={() => set('label', l)}
                 className={cn(
-                  'flex flex-1 items-center justify-center gap-1.5 rounded-xs border py-2.5 text-xs font-semibold transition-colors duration-150 focus-visible:focus-ring',
+                  'flex flex-1 items-center justify-center gap-1.5 rounded-xl border py-2.5 text-xs font-semibold transition-colors duration-150',
                   values.label === l
-                    ? 'border-accent bg-accent/8 text-accent'
-                    : 'border-line-subtle bg-bg-elevated text-ink-secondary hover:border-line-strong hover:text-ink-primary',
+                    ? 'border-wgreen bg-wgreen/10 text-wgreen'
+                    : 'border-wline bg-wcard text-wmuted hover:border-wline hover:text-wink',
                 )}
               >
                 <LabelIcon className="size-3.5" aria-hidden="true" />
@@ -236,7 +236,7 @@ export default function AddressForm({
 
       {/* ── Section: Contact ── */}
       <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-wmuted">
           Contact
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -265,7 +265,7 @@ export default function AddressForm({
 
       {/* ── Section: Address lines ── */}
       <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-wmuted">
           Address
         </p>
         <div className="flex flex-col gap-4">
@@ -299,14 +299,14 @@ export default function AddressForm({
       {/* ── Section: Location ── */}
       <div>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 gap-y-2">
-          <p className="text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
+          <p className="text-xs font-semibold uppercase tracking-widest text-wmuted">
             Location
           </p>
           <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
             <button
               type="button"
               onClick={() => setMapOpen(true)}
-              className="inline-flex min-h-[44px] shrink-0 items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent/80 focus-visible:focus-ring"
+              className="inline-flex min-h-[44px] shrink-0 items-center gap-1 text-xs font-medium text-wgreen transition-colors hover:text-wgreen/80"
             >
               <MapPinned className="size-3.5" aria-hidden="true" />
               Pick on map
@@ -315,7 +315,7 @@ export default function AddressForm({
               type="button"
               disabled={currentLocation.isPending}
               onClick={handleUseLocation}
-              className="inline-flex min-h-[44px] shrink-0 items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent/80 focus-visible:focus-ring disabled:opacity-50"
+              className="inline-flex min-h-[44px] shrink-0 items-center gap-1 text-xs font-medium text-wgreen transition-colors hover:text-wgreen/80 disabled:opacity-50"
             >
               {currentLocation.isPending ? (
                 <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
@@ -327,7 +327,7 @@ export default function AddressForm({
           </div>
         </div>
         {geoError && (
-          <p className="mb-2 text-xs text-danger">{geoError}</p>
+          <p className="mb-2 text-xs text-red-600">{geoError}</p>
         )}
         <div className="grid gap-4 min-[480px]:grid-cols-3">
           <Input
@@ -364,19 +364,19 @@ export default function AddressForm({
 
       {/* ── Set as default checkbox ── */}
       {showSetDefault && (
-        <label className="flex cursor-pointer items-center gap-2.5 rounded-sm border border-line-subtle bg-bg-sunken px-4 py-3 text-sm transition-colors hover:border-line-strong">
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-wline bg-wpaper px-4 py-3 text-sm transition-colors hover:border-wline">
           <input
             type="checkbox"
             checked={values.is_default}
             onChange={(e) => set('is_default', e.target.checked)}
-            className="size-4 rounded-xs border-line-subtle bg-bg-elevated text-accent"
+            className="size-4 rounded-xs border-wline bg-wcard text-wgreen"
           />
-          <span className="font-medium text-ink-primary">Set as default delivery address</span>
+          <span className="font-medium text-wink">Set as default delivery address</span>
         </label>
       )}
 
       {/* ── Footer actions ── */}
-      <div className="flex justify-end gap-2 border-t border-line-subtle pt-4">
+      <div className="flex justify-end gap-2 border-t border-wline pt-4">
         {onCancel && (
           <Button type="button" variant="ghost" onClick={onCancel} disabled={busy}>
             Cancel
@@ -389,7 +389,7 @@ export default function AddressForm({
 
       {/* ── Map picker — lazy-loaded, only mounts when opened ── */}
       {mapOpen && (
-        <Suspense fallback={<div className="flex h-64 items-center justify-center"><Loader2 className="size-6 animate-spin text-accent" /></div>}>
+        <Suspense fallback={<div className="flex h-64 items-center justify-center"><Loader2 className="size-6 animate-spin text-wgreen" /></div>}>
           <MapAddressPicker
             open={mapOpen}
             onClose={() => setMapOpen(false)}

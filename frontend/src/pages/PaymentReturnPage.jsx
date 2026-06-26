@@ -1,18 +1,17 @@
 import { Link, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, XCircle, Loader2, ShoppingBag, ListOrdered, ArrowRight } from 'lucide-react';
-import { Page } from '@/components/layout/Page.jsx';
-import { Button } from '@/components/ui/Button.jsx';
-import { Card } from '@/components/ui/Card.jsx';
 import { usePaymentStatus } from '@/features/payments/hooks.js';
-import { formatPrice } from '@/lib/utils.js';
-import { cn } from '@/lib/utils.js';
-
-const TERMINAL_STATES = new Set(['paid', 'cancelled', 'refunded']);
+import { formatPrice, cn } from '@/lib/utils.js';
+import { Check, CloseIcon } from '@/components/storefront/Icons.jsx';
+import Logo from '@/components/storefront/Logo.jsx';
 
 /**
+ * Bare full-screen route — no Layout header/footer.
  * Lands here from the provider redirect. We don't trust the URL — we poll
  * /payments/{mtid}/status so the server tells us what actually happened.
  */
+
+const TERMINAL_STATES = new Set(['paid', 'cancelled', 'refunded']);
+
 export default function PaymentReturnPage() {
   const [params] = useSearchParams();
   const mtid = params.get('mtid');
@@ -27,9 +26,9 @@ export default function PaymentReturnPage() {
 
   if (!mtid) {
     return (
-      <Page>
-        <BadParams />
-      </Page>
+      <FullScreenWrap>
+        <BadParamsCard />
+      </FullScreenWrap>
     );
   }
 
@@ -39,160 +38,233 @@ export default function PaymentReturnPage() {
   const isPending = !status || status === 'pending';
 
   return (
-    <Page>
-      <div className="flex min-h-[60vh] items-center justify-center py-12">
-        <div className="w-full max-w-md">
-          {(isLoading || isPending) && !isError && (
-            <Card className="p-8 text-center">
-              <PendingState />
-            </Card>
-          )}
-
-          {isPaid && (
-            <Card className="p-8 text-center">
-              <IconRing tone="success">
-                <CheckCircle2 className="size-8" aria-hidden="true" />
-              </IconRing>
-              <h1 className="mt-5 text-xl font-semibold text-ink-primary">
-                Payment confirmed
-              </h1>
-              <p className="mt-2 text-sm text-ink-secondary">
-                Order{' '}
-                <code className="font-mono text-xs text-ink-primary">
-                  #{data.order_id}
-                </code>{' '}
-                for{' '}
-                <strong className="nums">{formatPrice(data.total_amount, data.currency)}</strong>{' '}
-                is confirmed. We&apos;ll email you when it ships.
-              </p>
-              <div className="mt-7 grid gap-2.5 sm:grid-cols-2">
-                <Link to="/orders">
-                  <Button block variant="primary" size="md">
-                    <ListOrdered className="size-4" aria-hidden="true" />
-                    View my orders
-                  </Button>
-                </Link>
-                <Link to="/products">
-                  <Button block variant="outline" size="md">
-                    <ShoppingBag className="size-4" aria-hidden="true" />
-                    Keep shopping
-                  </Button>
-                </Link>
-              </div>
-            </Card>
-          )}
-
-          {isFailed && (
-            <Card className="p-8 text-center">
-              <IconRing tone="danger">
-                <XCircle className="size-8" aria-hidden="true" />
-              </IconRing>
-              <h1 className="mt-5 text-xl font-semibold text-ink-primary">
-                Payment didn&apos;t go through
-              </h1>
-              <p className="mt-2 text-sm text-ink-secondary">
-                Your order wasn&apos;t placed. Stock has been returned to the catalog —
-                feel free to try again.
-              </p>
-              <div className="mt-7 grid gap-2.5 sm:grid-cols-2">
-                <Link to="/cart">
-                  <Button block variant="primary" size="md">
-                    <ArrowRight className="size-4" aria-hidden="true" />
-                    Back to cart
-                  </Button>
-                </Link>
-                <Link to="/products">
-                  <Button block variant="outline" size="md">
-                    <ShoppingBag className="size-4" aria-hidden="true" />
-                    Browse products
-                  </Button>
-                </Link>
-              </div>
-            </Card>
-          )}
-
-          {isError && (
-            <Card className="p-8 text-center">
-              <IconRing tone="warning">
-                <XCircle className="size-8" aria-hidden="true" />
-              </IconRing>
-              <h1 className="mt-5 text-xl font-semibold text-ink-primary">
-                Couldn&apos;t confirm
-              </h1>
-              <p className="mt-2 text-sm text-ink-secondary">
-                We had trouble checking the payment status. Check your orders in a
-                moment to see if it went through.
-              </p>
-              <Link to="/orders" className="mt-7 inline-block">
-                <Button variant="primary" size="md">
-                  <ListOrdered className="size-4" aria-hidden="true" />
-                  View my orders
-                </Button>
-              </Link>
-            </Card>
-          )}
-        </div>
-      </div>
-    </Page>
+    <FullScreenWrap>
+      {(isLoading || isPending) && !isError && <PendingCard />}
+      {isPaid && <SuccessCard data={data} />}
+      {isFailed && <FailedCard />}
+      {isError && <ErrorCard />}
+    </FullScreenWrap>
   );
 }
 
-function PendingState() {
+/* ── Layout wrapper ──────────────────────────────────────────────────────── */
+
+function FullScreenWrap({ children }) {
   return (
-    <>
-      <span className="mx-auto grid size-14 place-items-center rounded-full bg-accent/12 text-accent">
-        <Loader2 className="size-7 animate-spin" aria-hidden="true" />
+    <main className="paper min-h-screen flex flex-col items-center justify-center px-6 py-16">
+      <div className="mb-10">
+        <Logo size="md" stacked={false} to="/" />
+      </div>
+      <div className="w-full max-w-[480px]">{children}</div>
+    </main>
+  );
+}
+
+/* ── Shared card shell ───────────────────────────────────────────────────── */
+
+function WCard({ children }) {
+  return (
+    <div className="bg-wcard border border-wline rounded-xl3 p-9 lg:p-14 text-center animate-rise shadow-md">
+      {children}
+    </div>
+  );
+}
+
+/* ── States ──────────────────────────────────────────────────────────────── */
+
+/**
+ * PENDING — polls until the server returns a terminal status.
+ * Shows a spinning ring + animated dots; warns user not to close the tab.
+ */
+function PendingCard() {
+  return (
+    <WCard>
+      {/* Spinner ring using animate-spin360 */}
+      <span className="mx-auto flex size-[78px] items-center justify-center rounded-full bg-wgreen/10">
+        <span
+          className="block size-10 rounded-full border-4 border-wgreen/20 border-t-wgreen animate-spin360"
+          role="status"
+          aria-label="Checking payment status"
+        />
       </span>
-      <h1 className="mt-5 text-xl font-semibold text-ink-primary">
+
+      <h1 className="mt-5 font-wserif text-[clamp(24px,4vw,34px)] font-medium text-wink leading-tight">
         Confirming your payment
       </h1>
-      <p className="mt-2 text-sm text-ink-secondary">
+      <p className="mt-3 text-[14.5px] text-wmuted leading-relaxed font-light">
         This usually takes only a moment — please don&apos;t close this tab.
       </p>
-      <div className="mt-6 flex justify-center gap-1.5">
+
+      {/* Pulsing dots */}
+      <div className="mt-6 flex justify-center gap-2">
         {[0, 1, 2].map((i) => (
           <span
             key={i}
-            className="inline-block size-2 rounded-full bg-accent/40 animate-pulseRing"
-            style={{ animationDelay: `${i * 0.2}s` }}
+            className="inline-block size-2 rounded-full bg-wgreen/40 animate-pulseRing"
+            style={{ animationDelay: `${i * 0.25}s` }}
             aria-hidden="true"
           />
         ))}
       </div>
-    </>
+    </WCard>
   );
 }
 
-function IconRing({ tone, children }) {
-  const cls = cn(
-    'mx-auto grid size-16 place-items-center rounded-full',
-    tone === 'success' && 'bg-success/12 text-success',
-    tone === 'danger' && 'bg-danger/12 text-danger',
-    tone === 'warning' && 'bg-warning/12 text-warning',
-  );
-  return <span className={cls}>{children}</span>;
-}
+/**
+ * SUCCESS (status === 'paid') — green circle, serif headline, amount summary,
+ * Track Order → /orders/:id and Continue Shopping → /products.
+ */
+function SuccessCard({ data }) {
+  const trackTo = data?.order_id ? `/orders/${data.order_id}` : '/orders';
 
-function BadParams() {
   return (
-    <div className="flex min-h-[50vh] items-center justify-center py-12">
-      <Card className="mx-auto max-w-sm p-8 text-center">
-        <IconRing tone="warning">
-          <XCircle className="size-8" aria-hidden="true" />
-        </IconRing>
-        <h1 className="mt-5 text-xl font-semibold text-ink-primary">
-          Missing transaction reference
-        </h1>
-        <p className="mt-2 text-sm text-ink-secondary">
-          It looks like you landed here without a transaction ID.
-        </p>
-        <Link to="/orders" className="mt-6 inline-block">
-          <Button variant="primary" size="md">
-            <ListOrdered className="size-4" aria-hidden="true" />
-            View my orders
-          </Button>
+    <WCard>
+      {/* Solid green circle with white check — matches reference */}
+      <span className="mx-auto flex size-[78px] items-center justify-center rounded-full bg-wgreen">
+        <Check size={38} stroke="#fff" strokeWidth={1.6} />
+      </span>
+
+      <h1 className="mt-5 font-wserif text-[clamp(28px,4vw,40px)] font-medium text-wink leading-tight">
+        Payment Successful
+      </h1>
+      <p className="mt-2.5 text-[14.5px] text-wmuted leading-relaxed font-light">
+        Your order{' '}
+        <strong className="text-wink font-medium">#{data?.order_id}</strong>{' '}
+        is confirmed. We&apos;ll email you when it ships.
+      </p>
+
+      {/* Amount + method summary box */}
+      <div className="mt-6 bg-wpaper border border-wline rounded-xl2 p-[18px] flex justify-between items-center text-left">
+        <div>
+          <div className="text-[11px] text-wmuted uppercase tracking-widest">
+            Amount Paid
+          </div>
+          <div className="font-wserif text-[22px] text-wink mt-1 leading-none">
+            {formatPrice(data?.total_amount)}
+          </div>
+        </div>
+        {data?.payment_method && (
+          <div className="text-right">
+            <div className="text-[11px] text-wmuted uppercase tracking-widest">
+              Method
+            </div>
+            <div className="text-[14px] text-wink mt-1">{data.payment_method}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="mt-7 flex gap-3 justify-center flex-wrap">
+        <Link
+          to={trackTo}
+          className="bg-wgreen text-white rounded-full px-7 py-3.5 text-[13.5px] font-medium no-underline hover:bg-wgreen-dark transition-colors"
+        >
+          Track Order
         </Link>
-      </Card>
-    </div>
+        <Link
+          to="/products"
+          className="bg-transparent border border-wline rounded-full px-7 py-3.5 text-[13.5px] text-wink no-underline hover:border-wgreen hover:text-wgreen transition-colors"
+        >
+          Continue Shopping
+        </Link>
+      </div>
+    </WCard>
+  );
+}
+
+/**
+ * FAILED (status === 'cancelled' | 'refunded') — red circle with X, explains
+ * stock was returned, Back to Cart + Browse Products.
+ */
+function FailedCard() {
+  return (
+    <WCard>
+      <span className="mx-auto flex size-[78px] items-center justify-center rounded-full bg-danger/10">
+        <CloseIcon size={36} stroke="#EF4444" strokeWidth={1.8} />
+      </span>
+
+      <h1 className="mt-5 font-wserif text-[clamp(24px,4vw,34px)] font-medium text-wink leading-tight">
+        Payment Unsuccessful
+      </h1>
+      <p className="mt-3 text-[14.5px] text-wmuted leading-relaxed font-light">
+        Your order wasn&apos;t placed. Stock has been returned to the catalog —
+        feel free to try again.
+      </p>
+
+      <div className="mt-7 flex gap-3 justify-center flex-wrap">
+        <Link
+          to="/cart"
+          className="bg-wgreen text-white rounded-full px-7 py-3.5 text-[13.5px] font-medium no-underline hover:bg-wgreen-dark transition-colors"
+        >
+          Back to Cart
+        </Link>
+        <Link
+          to="/products"
+          className="bg-transparent border border-wline rounded-full px-7 py-3.5 text-[13.5px] text-wink no-underline hover:border-wgreen hover:text-wgreen transition-colors"
+        >
+          Browse Products
+        </Link>
+      </div>
+    </WCard>
+  );
+}
+
+/**
+ * API ERROR — could not fetch status; directs user to check their orders.
+ */
+function ErrorCard() {
+  return (
+    <WCard>
+      <span className="mx-auto flex size-[78px] items-center justify-center rounded-full bg-wgold/10">
+        <CloseIcon size={36} stroke="#B49A63" strokeWidth={1.8} />
+      </span>
+
+      <h1 className="mt-5 font-wserif text-[clamp(24px,4vw,34px)] font-medium text-wink leading-tight">
+        Couldn&apos;t Confirm
+      </h1>
+      <p className="mt-3 text-[14.5px] text-wmuted leading-relaxed font-light">
+        We had trouble checking the payment status. Check your orders in a
+        moment to see if it went through.
+      </p>
+
+      <div className="mt-7 flex justify-center">
+        <Link
+          to="/orders"
+          className="bg-wgreen text-white rounded-full px-7 py-3.5 text-[13.5px] font-medium no-underline hover:bg-wgreen-dark transition-colors"
+        >
+          View My Orders
+        </Link>
+      </div>
+    </WCard>
+  );
+}
+
+/**
+ * BAD PARAMS — no ?mtid= in the URL; user navigated here directly.
+ */
+function BadParamsCard() {
+  return (
+    <WCard>
+      <span className="mx-auto flex size-[78px] items-center justify-center rounded-full bg-wgold/10">
+        <CloseIcon size={36} stroke="#B49A63" strokeWidth={1.8} />
+      </span>
+
+      <h1 className="mt-5 font-wserif text-[clamp(24px,4vw,34px)] font-medium text-wink leading-tight">
+        Missing Transaction
+      </h1>
+      <p className="mt-3 text-[14.5px] text-wmuted leading-relaxed font-light">
+        It looks like you landed here without a transaction ID. If you just paid,
+        please check your orders below.
+      </p>
+
+      <div className="mt-7 flex justify-center">
+        <Link
+          to="/orders"
+          className="bg-wgreen text-white rounded-full px-7 py-3.5 text-[13.5px] font-medium no-underline hover:bg-wgreen-dark transition-colors"
+        >
+          View My Orders
+        </Link>
+      </div>
+    </WCard>
   );
 }

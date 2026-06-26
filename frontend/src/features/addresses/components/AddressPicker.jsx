@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Plus, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
-import { Button } from '@/components/ui/Button.jsx';
-import { Skeleton } from '@/components/ui/Skeleton.jsx';
+import { Button } from '@/components/storefront/ui/Button.jsx';
+import { Skeleton } from '@/components/storefront/ui/Skeleton.jsx';
 import { cn } from '@/lib/utils.js';
 import { scaleIn, listStagger, fadeUp } from '@/lib/motion.js';
 import { useAddresses, useCreateAddress } from '../hooks.js';
@@ -111,15 +111,15 @@ export default function AddressPicker({ onChange }) {
   if (isLoading) {
     return (
       <div className="flex flex-col gap-3">
-        <Skeleton className="h-24 rounded-sm" />
-        <Skeleton className="h-24 rounded-sm" />
+        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-24 rounded-xl" />
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex flex-col gap-2 rounded-sm border border-danger/30 bg-danger/12 p-3.5 text-sm text-danger">
+      <div className="flex flex-col gap-2 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm text-red-600">
         <div className="flex items-start gap-2.5">
           <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           Could not load your addresses. Please refresh and try again.
@@ -156,10 +156,10 @@ export default function AddressPicker({ onChange }) {
                 variants={fadeUp}
                 onClick={() => handleSelectSaved(addr.id)}
                 className={cn(
-                  'w-full rounded-sm border text-left transition-colors duration-150',
+                  'w-full rounded-xl border text-left transition-colors duration-150',
                   isSelected
-                    ? 'border-accent bg-accent/8'
-                    : 'border-line-subtle bg-bg-elevated hover:border-line-strong hover:shadow-sm',
+                    ? 'border-wgreen bg-wgreen/10'
+                    : 'border-wline bg-wcard hover:border-wline hover:shadow-sm',
                 )}
               >
                 <div className="flex items-start gap-3 p-3.5">
@@ -168,8 +168,8 @@ export default function AddressPicker({ onChange }) {
                     className={cn(
                       'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
                       isSelected
-                        ? 'border-accent bg-accent'
-                        : 'border-line-strong bg-transparent',
+                        ? 'border-wgreen bg-wgreen'
+                        : 'border-wline bg-transparent',
                     )}
                     aria-hidden="true"
                   >
@@ -182,7 +182,7 @@ export default function AddressPicker({ onChange }) {
                   </div>
                   {isSelected && (
                     <CheckCircle2
-                      className="mt-0.5 size-4 shrink-0 text-accent"
+                      className="mt-0.5 size-4 shrink-0 text-wgreen"
                       aria-hidden="true"
                     />
                   )}
@@ -196,8 +196,8 @@ export default function AddressPicker({ onChange }) {
       {/* Add new address expander */}
       <div
         className={cn(
-          'overflow-hidden rounded-sm border transition-colors duration-150',
-          addOpen ? 'border-accent/40 bg-bg-elevated' : 'border-line-subtle bg-bg-elevated',
+          'overflow-hidden rounded-xl border transition-colors duration-150',
+          addOpen ? 'border-wgreen/40 bg-wcard' : 'border-wline bg-wcard',
         )}
       >
         <button
@@ -205,12 +205,12 @@ export default function AddressPicker({ onChange }) {
           onClick={handleAddToggle}
           aria-expanded={addOpen}
           aria-controls="add-address-form"
-          className="flex w-full items-center gap-2.5 px-4 py-3 text-sm font-medium text-ink-secondary transition-colors hover:text-ink-primary focus-visible:focus-ring"
+          className="flex w-full items-center gap-2.5 px-4 py-3 text-sm font-medium text-wmuted transition-colors hover:text-wink"
         >
           <span
             className={cn(
               'grid size-6 shrink-0 place-items-center rounded-md transition-colors',
-              addOpen ? 'bg-accent/12 text-accent' : 'bg-fill text-ink-tertiary',
+              addOpen ? 'bg-wgreen/10 text-wgreen' : 'bg-wpaper text-wmuted',
             )}
           >
             {addOpen ? (
@@ -219,8 +219,8 @@ export default function AddressPicker({ onChange }) {
               <Plus className="size-3.5" aria-hidden="true" />
             )}
           </span>
-          <MapPin className="size-4 text-ink-tertiary" aria-hidden="true" />
-          <span className={addOpen ? 'text-accent' : ''}>
+          <MapPin className="size-4 text-wmuted" aria-hidden="true" />
+          <span className={addOpen ? 'text-wgreen' : ''}>
             {addOpen ? 'Hide new address form' : 'Add a new address'}
           </span>
         </button>
@@ -236,7 +236,7 @@ export default function AddressPicker({ onChange }) {
               transition={{ duration: 0.2, ease: 'easeInOut' }}
               className="overflow-hidden"
             >
-              <div className="border-t border-line-subtle px-4 pb-5 pt-4">
+              <div className="border-t border-wline px-4 pb-5 pt-4">
                 <motion.div variants={scaleIn} initial="hidden" animate="show">
                   <AddressForm
                     onSubmit={handleNewSubmit}
@@ -248,19 +248,19 @@ export default function AddressPicker({ onChange }) {
                 </motion.div>
 
                 {/* "Save to my addresses" checkbox */}
-                <label className="mt-4 flex cursor-pointer items-center gap-2.5 rounded-sm border border-line-subtle bg-bg-sunken px-4 py-3 text-sm transition-colors hover:border-line-strong">
+                <label className="mt-4 flex cursor-pointer items-center gap-2.5 rounded-xl border border-wline bg-wpaper px-4 py-3 text-sm transition-colors hover:border-wline">
                   <input
                     type="checkbox"
                     checked={saveNew}
                     onChange={(e) => setSaveNew(e.target.checked)}
-                    className="size-4 rounded-xs border-line-subtle bg-bg-elevated text-accent"
+                    className="size-4 rounded-xs border-wline bg-wcard text-wgreen"
                   />
-                  <span className="font-medium text-ink-primary">Save to my addresses</span>
-                  <span className="ml-auto text-xs text-ink-tertiary">For faster checkout next time</span>
+                  <span className="font-medium text-wink">Save to my addresses</span>
+                  <span className="ml-auto text-xs text-wmuted">For faster checkout next time</span>
                 </label>
 
                 {createAddress.isError && (
-                  <p className="mt-2 text-xs text-danger">
+                  <p className="mt-2 text-xs text-red-600">
                     Could not save the address — it will still be used for this order.
                   </p>
                 )}

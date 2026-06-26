@@ -2,29 +2,27 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  ArrowLeft,
-  Lock,
-  ShoppingBag,
-  Wallet,
   AlertTriangle,
-  TicketPercent,
   Banknote,
-  CheckCircle2,
-  XCircle,
   Split,
   Smartphone,
   Building2,
   CreditCard,
   WalletCards,
-  ChevronDown,
+  Wallet,
+  TicketPercent,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { Page } from '@/components/layout/Page.jsx';
-import { Breadcrumbs } from '@/components/layout/Breadcrumbs.jsx';
-import { Button } from '@/components/ui/Button.jsx';
-import { Card } from '@/components/ui/Card.jsx';
-import { Input } from '@/components/ui/Input.jsx';
-import { Skeleton } from '@/components/ui/Skeleton.jsx';
-import { EmptyState } from '@/components/feedback/EmptyState.jsx';
+import StepIndicator from '@/components/storefront/StepIndicator.jsx';
+import WImage from '@/components/storefront/WImage.jsx';
+import {
+  LockIcon,
+  TruckIcon,
+  ShieldIcon,
+  SupportIcon,
+} from '@/components/storefront/Icons.jsx';
 import AddressPicker from '@/features/addresses/components/AddressPicker.jsx';
 import { useCart } from '@/features/cart/hooks.js';
 import { useProduct } from '@/features/products/hooks.js';
@@ -39,12 +37,27 @@ import { useActivePaymentMethods } from '@/features/paymentMethods/hooks.js';
 import { usePublicSettings } from '@/features/settings/public.js';
 import { cn, formatPrice } from '@/lib/utils.js';
 
+/* ─── Instrument icon map (from real instrument codes) ─── */
 const INSTRUMENT_ICONS = {
   upi: Smartphone,
   netbanking: Building2,
   card: CreditCard,
   wallet: WalletCards,
 };
+
+/* ─── Trust badge definitions (right rail footer) ─── */
+const TRUST_ITEMS = [
+  { Icon: TruckIcon, label: 'Free Delivery' },
+  { Icon: ShieldIcon, label: 'Secured Checkout' },
+  { Icon: SupportIcon, label: 'Customer Support' },
+];
+
+/* ─── Step name → numeric mapping (for StepIndicator) ─── */
+const STEP_NUM = { address: 1, payment: 2, review: 3 };
+
+/* ─── Shared input style (wellness) ─── */
+const inputCls =
+  'w-full bg-wpaper border border-wline rounded-xl px-[17px] py-[15px] text-[14px] text-wink placeholder:text-wmuted focus:outline-none focus:ring-1 focus:ring-wgreen/40 focus:border-wgreen/60 transition-colors';
 
 // Mirrors backend compute_line_tax — active rates sum, applied to (price × qty).
 function computeBuyNowTax(product, qty) {
@@ -60,6 +73,7 @@ export default function CheckoutPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
 
+  /* ── buyNow vs cart mode ── */
   const buyNowId = params.get('buyNow');
   const buyNowQty = Math.max(1, Number(params.get('qty') || 1));
   const buyNowMode = !!buyNowId;
@@ -78,6 +92,7 @@ export default function CheckoutPage() {
   } = useCart();
   const checkout = useCheckout();
 
+  /* ── Form state ── */
   const [addressPayload, setAddressPayload] = useState({});
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
   const [billingPayload, setBillingPayload] = useState({});
@@ -92,11 +107,12 @@ export default function CheckoutPage() {
   const [otpVerified, setOtpVerified] = useState(false);
   // Gateway selector — only shown when >1 active gateway and method is prepaid/split_cod.
   const [selectedGateway, setSelectedGateway] = useState(null);
-  // Step expansion: 'address' | 'payment' — null means both collapsed (shouldn't happen in normal flow)
+  // Wellness 3-step flow: 'address' | 'payment' | 'review'
   const [activeStep, setActiveStep] = useState('address');
 
   const pincode = addressPayload.pincode || '';
 
+  /* Sync phone from address picker unless user has manually edited it */
   useEffect(() => {
     if (phoneUserEdited) return;
     const addrPhone = addressPayload.phone || '';
@@ -109,6 +125,7 @@ export default function CheckoutPage() {
   const isError = buyNowMode ? buyNowError : cartError;
   const refetch = buyNowMode ? refetchBuyNow : refetchCart;
 
+  /* ── Derive items + totals ── */
   const { items, subtotal, taxAmount, discountAmount, total, couponCode, checkoutItems } =
     useMemo(() => {
       if (buyNowMode) {
@@ -130,6 +147,8 @@ export default function CheckoutPage() {
             {
               product_id: buyNowProduct.id,
               name: buyNowProduct.name,
+              brand: buyNowProduct.brand,
+              image_url: buyNowProduct.image_url,
               quantity: buyNowQty,
               unit_price: buyNowProduct.price,
               line_total: lineSubtotal + lineTax,
@@ -155,30 +174,36 @@ export default function CheckoutPage() {
       };
     }, [buyNowMode, buyNowProduct, buyNowQty, cart]);
 
+  /* ── Shipping rate ── */
   const { data: quote } = useRateQuote(pincode, checkoutItems);
   const shippingAmount = quote ? Number(quote.amount) : 0;
 
+  /* ── COD availability ── */
   const { data: codCheck } = useCodCheck(pincode, checkoutItems);
   const codAvailable = !!codCheck?.available;
   const codSurcharge = codCheck ? Number(codCheck.surcharge_amount) : 0;
   const splitAvailable = !!codCheck?.split_available;
   const splitPrepaid = codCheck ? Number(codCheck.split_prepaid_amount) : 0;
 
+  /* ── Payment instruments (admin-configured: upi/card/netbanking/wallet) ── */
   const { data: instrumentsData } = usePaymentInstruments();
   const enabledInstruments = (instrumentsData?.items || []).filter((i) => i.enabled);
   const suggestedInstrument = enabledInstruments.find((i) => i.suggested);
 
+  // Auto-select suggested (or first) instrument when list arrives.
   useEffect(() => {
     if (paymentInstrument || enabledInstruments.length === 0) return;
     setPaymentInstrument((suggestedInstrument || enabledInstruments[0]).code);
   }, [paymentInstrument, enabledInstruments, suggestedInstrument]);
 
+  // Guard: if COD availability changes, revert to prepaid when needed.
   useEffect(() => {
     if (!codCheck) return;
     if (paymentMethod === 'cod' && !codAvailable) setPaymentMethod('prepaid');
     if (paymentMethod === 'split_cod' && !splitAvailable) setPaymentMethod('prepaid');
   }, [paymentMethod, codCheck, codAvailable, splitAvailable]);
 
+  // Guard: if instruments list changes, keep selection valid.
   useEffect(() => {
     if (!instrumentsData) return;
     if (paymentInstrument && !enabledInstruments.some((i) => i.code === paymentInstrument)) {
@@ -188,6 +213,7 @@ export default function CheckoutPage() {
     }
   }, [instrumentsData, paymentInstrument, enabledInstruments, suggestedInstrument]);
 
+  /* ── Instrument discount ── */
   const activeInstrument = enabledInstruments.find((i) => i.code === paymentInstrument);
   const instrumentDiscountPct = activeInstrument
     ? Number(activeInstrument.discount_percent || 0)
@@ -197,30 +223,31 @@ export default function CheckoutPage() {
     ? Math.round(((subtotal + taxAmount) * instrumentDiscountPct) / 100 * 100) / 100
     : 0;
 
+  /* ── Final totals ── */
   const codSurchargeApplied =
     paymentMethod === 'cod' || paymentMethod === 'split_cod' ? codSurcharge : 0;
-
   const displayedTotal = Math.max(
     0,
     total + shippingAmount + codSurchargeApplied - instrumentDiscount,
   );
   const splitBalance = Math.max(0, displayedTotal - splitPrepaid);
 
+  /* ── COD OTP setting ── */
   const { data: publicSettings } = usePublicSettings();
   const codOtpRequired =
     paymentMethod === 'cod' &&
     String(publicSettings?.['cod.require_otp'] || 'true').toLowerCase() === 'true';
 
-  // Active payment gateways — used only when method is prepaid or split_cod.
+  /* ── Active payment gateways (admin-configured providers) ── */
   const { data: activeMethodsData } = useActivePaymentMethods();
   const activeGateways = activeMethodsData?.items ?? [];
-  // Gateway selector is only shown when >1 gateway is available for online payment.
+  // Gateway selector only when >1 gateway available for online payment.
   const showGatewaySelector = instrumentApplies && activeGateways.length > 1;
-  // Auto-select the first gateway when the list arrives and nothing is chosen yet.
+  // Auto-select first gateway when list arrives and nothing chosen.
   const resolvedGateway =
-    selectedGateway ??
-    (activeGateways.length > 0 ? activeGateways[0].code : null);
+    selectedGateway ?? (activeGateways.length > 0 ? activeGateways[0].code : null);
 
+  /* ── Validation ── */
   const hasValidAddress =
     addressPayload.address_id != null ||
     (addressPayload.address != null && addressPayload.pincode);
@@ -230,77 +257,122 @@ export default function CheckoutPage() {
     billingPayload.address != null;
   const canSubmit = items.length > 0 && hasValidAddress && hasValidBilling && !submitting;
 
-  const addressDone = hasValidAddress && activeStep !== 'address';
+  /* ── Step mapping for StepIndicator ── */
+  const numericStep = STEP_NUM[activeStep] || 1;
 
+  function handleIndicatorStep(n) {
+    if (n === 1) setActiveStep('address');
+    else if (n === 2 && hasValidAddress) setActiveStep('payment');
+    // Step 3 (review) is only reachable via "Review Order" button, not indicator click.
+  }
+
+  /* ── Payment method label for review summary ── */
+  const paymentMethodLabel =
+    paymentMethod === 'cod'
+      ? 'Cash on Delivery'
+      : paymentMethod === 'split_cod'
+      ? 'Split COD'
+      : activeInstrument?.label || 'Online Payment';
+
+  /* ── Auth guard ── */
   if (!user) return <Navigate to="/login" replace />;
 
-  // Finding 1 & 16: fetch error guard — show retry banner instead of misleading empty state.
+  /* ── Fetch error ── */
   if (!isLoading && isError) {
     return (
       <Page>
-        <h1 className="text-xl font-semibold text-ink-primary">Checkout</h1>
-        <div className="mt-8">
-          <EmptyState
-            icon={AlertTriangle}
-            title="Could not load checkout"
-            description="There was a problem loading your items. Please try again."
-            action={
-              <Button size="sm" onClick={() => refetch()}>
-                Try again
-              </Button>
-            }
-          />
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-16 h-16 rounded-full bg-wcanvas border border-wline flex items-center justify-center mb-5">
+            <AlertTriangle className="size-8 text-wmuted" aria-hidden="true" />
+          </div>
+          <h1 className="font-wserif text-[26px] font-medium text-wink mb-2">
+            Could not load checkout
+          </h1>
+          <p className="text-wmuted text-[14px] mb-6 max-w-[360px]">
+            There was a problem loading your items. Please try again.
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="bg-wgreen text-white rounded-full px-9 py-3.5 text-[14px] hover:bg-wgreen-dark transition-colors cursor-pointer border-0"
+          >
+            Try again
+          </button>
         </div>
       </Page>
     );
   }
 
-  // Finding 16: buy-now product not found guard.
+  /* ── Buy-now product not found ── */
   if (buyNowMode && !buyNowLoading && !buyNowError && buyNowProduct == null) {
     return (
       <Page>
-        <h1 className="text-xl font-semibold text-ink-primary">Checkout</h1>
-        <div className="mt-8">
-          <EmptyState
-            icon={AlertTriangle}
-            title="Product not found"
-            description="This product could not be found. Please browse and try again."
-            action={
-              <Link to="/products">
-                <Button size="sm">Browse products</Button>
-              </Link>
-            }
-          />
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-16 h-16 rounded-full bg-wcanvas border border-wline flex items-center justify-center mb-5">
+            <AlertTriangle className="size-8 text-wmuted" aria-hidden="true" />
+          </div>
+          <h1 className="font-wserif text-[26px] font-medium text-wink mb-2">
+            Product not found
+          </h1>
+          <p className="text-wmuted text-[14px] mb-6">
+            This product could not be found. Please browse and try again.
+          </p>
+          <Link
+            to="/products"
+            className="bg-wgreen text-white rounded-full px-9 py-3.5 text-[14px] hover:bg-wgreen-dark transition-colors"
+          >
+            Browse products
+          </Link>
         </div>
       </Page>
     );
   }
 
+  /* ── Empty cart ── */
   if (!isLoading && items.length === 0) {
     return (
       <Page>
-        <h1 className="text-xl font-semibold text-ink-primary">Checkout</h1>
-        <div className="mt-8">
-          <EmptyState
-            icon={ShoppingBag}
-            title="Your cart is empty"
-            description="Add a product before heading to checkout."
-            action={
-              <Link to="/products">
-                <Button size="sm">Browse products</Button>
-              </Link>
-            }
-          />
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-16 h-16 rounded-full bg-wcanvas border border-wline flex items-center justify-center mb-5 text-wmuted">
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M6 8h12l-1 12H7L6 8Z" />
+              <path d="M9 8a3 3 0 0 1 6 0" />
+            </svg>
+          </div>
+          <h1 className="font-wserif text-[26px] font-medium text-wink mb-2">
+            Your cart is empty
+          </h1>
+          <p className="text-wmuted text-[14px] mb-6">
+            Add a product before heading to checkout.
+          </p>
+          <Link
+            to="/products"
+            className="bg-wgreen text-white rounded-full px-9 py-3.5 text-[14px] hover:bg-wgreen-dark transition-colors"
+          >
+            Browse products
+          </Link>
         </div>
       </Page>
     );
   }
 
+  /* ── COD OTP + submit handlers ── */
   function startPay() {
     if (codOtpRequired && !otpVerified) {
       setError(null);
       if (!customerPhone || customerPhone.trim().length < 8) {
         setPhoneError('Enter a valid phone number to receive the OTP.');
+        // Redirect to address step where the phone field lives.
+        setActiveStep('address');
         return;
       }
       setOtpOpen(true);
@@ -356,656 +428,641 @@ export default function CheckoutPage() {
     }
   }
 
+  /* ════════════════════════════════════════════════════════
+     MAIN RENDER
+  ════════════════════════════════════════════════════════ */
   return (
     <Page>
-      <Breadcrumbs
-        items={[{ label: 'Cart', to: '/cart' }]}
-        current="Checkout"
-        className="mb-4"
-      />
+      {/* ── Page heading ── */}
+      <div className="text-center mb-7">
+        <p className="text-[10.5px] tracking-[0.18em] uppercase text-wgold font-medium mb-2">
+          Safe &amp; Secure
+        </p>
+        <h1 className="font-wserif font-medium text-[clamp(32px,4vw,48px)] text-wink m-0">
+          Secure Checkout
+        </h1>
+      </div>
 
-      {/* Finding 3: visually-hidden h1 so heading hierarchy is h1 → h2 */}
-      <h1 className="sr-only">Checkout</h1>
+      {/* ── Step progress indicator ── */}
+      <StepIndicator step={numericStep} onStep={handleIndicatorStep} />
 
-      <Link
-        to="/cart"
-        className="inline-flex items-center gap-1.5 text-sm text-ink-secondary hover:text-ink-primary transition-colors focus-visible:focus-ring"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        Back to cart
-      </Link>
-
+      {/* ── Loading skeleton ── */}
       {isLoading ? (
-        <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_360px]">
-          <div className="flex flex-col gap-3">
-            <Skeleton className="h-48 rounded-sm" />
-            <Skeleton className="h-64 rounded-sm" />
+        <div className="grid lg:grid-cols-[1.4fr_0.9fr] gap-6 lg:gap-10 items-start mt-2">
+          <div className="bg-wcard border border-wline rounded-xl3 p-6 lg:p-9 flex flex-col gap-3 animate-pulse">
+            <div className="h-8 w-1/3 bg-wcanvas rounded-xl" />
+            <div className="h-4 w-1/2 bg-wcanvas rounded-xl" />
+            <div className="h-12 bg-wcanvas rounded-xl" />
+            <div className="h-12 bg-wcanvas rounded-xl" />
+            <div className="h-12 bg-wcanvas rounded-xl" />
+            <div className="h-12 bg-wcanvas rounded-xl mt-2" />
           </div>
-          <Skeleton className="h-72 rounded-sm" />
+          <div className="bg-wcard border border-wline rounded-xl3 p-6 flex flex-col gap-3 animate-pulse">
+            <div className="h-6 w-1/2 bg-wcanvas rounded-xl" />
+            <div className="h-20 bg-wcanvas rounded-xl" />
+            <div className="h-4 w-full bg-wcanvas rounded-xl" />
+            <div className="h-4 w-2/3 bg-wcanvas rounded-xl" />
+            <div className="h-4 w-3/4 bg-wcanvas rounded-xl" />
+          </div>
         </div>
       ) : (
-        <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_360px]">
-          {/* ── Left column: stepped cards ── */}
-          <div className="flex flex-col gap-3">
+        <div className="grid lg:grid-cols-[1.4fr_0.9fr] gap-6 lg:gap-10 items-start mt-2">
 
-            {/* ══ STEP 1 — Delivery Address ══ */}
-            <Card className="overflow-hidden p-0">
-              <div
-                role="button"
-                aria-label="Delivery Address step"
-                aria-expanded={activeStep === 'address'}
-                tabIndex={0}
-                className={cn(
-                  'flex cursor-pointer select-none items-center px-5 py-4',
-                  activeStep === 'address' ? 'bg-accent text-white' : 'bg-bg-elevated',
-                )}
-                onClick={() => activeStep !== 'address' && setActiveStep('address')}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    if (activeStep !== 'address') setActiveStep('address');
-                  }
-                }}
-              >
-                <span
-                  className={cn(
-                    'mr-3 grid size-6 shrink-0 place-items-center rounded-full text-[11px] font-bold',
-                    activeStep === 'address'
-                      ? 'bg-white/20 text-white'
-                      : addressDone
-                      ? 'bg-accent text-white'
-                      : 'bg-accent/12 text-accent',
-                  )}
+          {/* ══════════════════════════════════════
+              LEFT — multi-step form card
+          ══════════════════════════════════════ */}
+          <div className="bg-wcard border border-wline rounded-xl3 p-6 lg:p-9">
+            <AnimatePresence mode="wait">
+
+              {/* ─── STEP 1 — Shipping Details ─── */}
+              {activeStep === 'address' && (
+                <motion.div
+                  key="step-address"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
                 >
-                  {addressDone && activeStep !== 'address' ? (
-                    <CheckCircle2 className="size-3.5" aria-hidden="true" />
-                  ) : (
-                    '1'
-                  )}
-                </span>
-                <span
-                  className={cn(
-                    'flex-1 text-sm font-bold uppercase tracking-wide',
-                    activeStep === 'address' ? 'text-white' : 'text-ink-primary',
-                  )}
-                >
-                  Delivery Address
-                </span>
-                {addressDone && activeStep !== 'address' && (
+                  <h2 className="font-wserif font-semibold text-[24px] text-wink mb-1">
+                    Shipping Details
+                  </h2>
+                  <p className="text-[13px] text-wmuted mb-[22px] font-light">
+                    Where should we send your order?
+                  </p>
+
+                  {/* Address picker — saved addresses + inline new-address form */}
+                  <AddressPicker onChange={(payload) => setAddressPayload(payload)} />
+
+                  {/* Billing address same as shipping */}
+                  <div className="mt-4">
+                    <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-wline bg-wpaper px-4 py-3 text-sm transition-colors hover:border-wgreen/40">
+                      <input
+                        type="checkbox"
+                        checked={billingSameAsShipping}
+                        onChange={(e) => {
+                          setBillingSameAsShipping(e.target.checked);
+                          if (e.target.checked) setBillingPayload({});
+                        }}
+                        className="size-4 rounded accent-wgreen"
+                      />
+                      <span className="font-medium text-wink">
+                        Billing address same as delivery address
+                      </span>
+                    </label>
+
+                    <AnimatePresence initial={false}>
+                      {!billingSameAsShipping && (
+                        <motion.div
+                          key="billing-form"
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2, ease: 'easeInOut' }}
+                          className="overflow-hidden"
+                        >
+                          <div className="mt-3 rounded-xl border border-wline bg-wpaper p-4">
+                            <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-wmuted">
+                              Billing address
+                            </p>
+                            <AddressPicker onChange={(payload) => setBillingPayload(payload)} />
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Phone number (used for delivery updates + COD OTP) */}
+                  <div className="mt-4 border-t border-wline pt-4">
+                    <label htmlFor="ship-phone" className="block mb-1.5 text-[13px] text-wmuted">
+                      Phone number
+                      {codOtpRequired && (
+                        <span className="ml-2 text-[11px] text-wgold">
+                          (OTP required for COD)
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      id="ship-phone"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      value={customerPhone}
+                      placeholder="+91 98765 43210"
+                      onChange={(e) => {
+                        setCustomerPhone(e.target.value);
+                        setPhoneUserEdited(true);
+                        setOtpVerified(false);
+                        if (phoneError) setPhoneError(null);
+                      }}
+                      className={cn(
+                        inputCls,
+                        phoneError && 'border-red-400 focus:ring-red-300/40 focus:border-red-400',
+                      )}
+                    />
+                    {phoneError ? (
+                      <p className="mt-1 text-xs text-red-500">{phoneError}</p>
+                    ) : (
+                      <p className="mt-1 text-xs text-wmuted">
+                        {codOtpRequired
+                          ? 'We use this for delivery updates and the COD verification SMS.'
+                          : 'We use this for delivery updates.'}
+                      </p>
+                    )}
+                  </div>
+
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); setActiveStep('address'); }}
-                    className="text-xs font-semibold text-accent hover:underline focus-visible:focus-ring"
+                    onClick={() => hasValidAddress && setActiveStep('payment')}
+                    disabled={!hasValidAddress}
+                    className="w-full bg-wgreen text-white border-0 rounded-full py-4 text-[14.5px] tracking-wide cursor-pointer mt-[22px] hover:bg-wgreen-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    CHANGE
+                    Continue to Payment →
                   </button>
-                )}
-                {activeStep !== 'address' && !addressDone && (
-                  <ChevronDown className="size-4 text-ink-tertiary" aria-hidden="true" />
-                )}
-              </div>
-
-              <AnimatePresence initial={false}>
-                {activeStep === 'address' && (
-                  <motion.div
-                    key="address-body"
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2, ease: 'easeInOut' }}
-                    className="overflow-hidden"
-                  >
-                    <div className="px-5 pb-5 pt-4">
-                      <AddressPicker
-                        onChange={(payload) => setAddressPayload(payload)}
-                      />
-
-                      {/* Billing address same as shipping checkbox */}
-                      <div className="mt-4">
-                        <label className="flex cursor-pointer items-center gap-2.5 rounded-sm border border-line-subtle bg-bg-sunken px-4 py-3 text-sm transition-colors hover:border-line-strong">
-                          <input
-                            type="checkbox"
-                            checked={billingSameAsShipping}
-                            onChange={(e) => {
-                              setBillingSameAsShipping(e.target.checked);
-                              if (e.target.checked) setBillingPayload({});
-                            }}
-                            className="size-4 rounded-xs border-line-subtle bg-bg-elevated text-accent"
-                          />
-                          <span className="font-medium text-ink-primary">
-                            Billing address same as delivery address
-                          </span>
-                        </label>
-
-                        <AnimatePresence initial={false}>
-                          {!billingSameAsShipping && (
-                            <motion.div
-                              key="billing-form"
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.2, ease: 'easeInOut' }}
-                              className="overflow-hidden"
-                            >
-                              <div className="mt-3 rounded-sm border border-line-subtle bg-bg-elevated p-4">
-                                <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-ink-tertiary">
-                                  Billing address
-                                </p>
-                                <AddressPicker
-                                  onChange={(payload) => setBillingPayload(payload)}
-                                />
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-
-                      <div className="mt-4 border-t border-line-subtle pt-4">
-                        <Input
-                          id="ship-phone"
-                          label={
-                            codOtpRequired ? (
-                              <span>
-                                Phone number{' '}
-                                <span className="ml-1 text-xs text-warning font-normal">
-                                  (OTP required for COD)
-                                </span>
-                              </span>
-                            ) : (
-                              'Phone number'
-                            )
-                          }
-                          type="tel"
-                          inputMode="tel"
-                          autoComplete="tel"
-                          value={customerPhone}
-                          placeholder="+91 98765 43210"
-                          error={phoneError || undefined}
-                          helper={
-                            phoneError
-                              ? undefined
-                              : codOtpRequired
-                              ? 'We use this for delivery updates and the COD verification SMS.'
-                              : 'We use this for delivery updates.'
-                          }
-                          onChange={(e) => {
-                            setCustomerPhone(e.target.value);
-                            setPhoneUserEdited(true);
-                            setOtpVerified(false);
-                            if (phoneError) setPhoneError(null);
-                          }}
-                        />
-                      </div>
-
-                      <div className="mt-5">
-                        <Button
-                          variant="primary"
-                          size="md"
-                          disabled={!hasValidAddress}
-                          onClick={() => hasValidAddress && setActiveStep('payment')}
-                        >
-                          Deliver here
-                        </Button>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Collapsed summary of address step */}
-              {addressDone && activeStep !== 'address' && (
-                <div className="border-t border-line-subtle px-5 py-3 text-xs text-ink-secondary">
-                  Delivering to pincode{' '}
-                  <span className="font-semibold text-ink-primary nums">{pincode}</span>
-                </div>
+                </motion.div>
               )}
-            </Card>
 
-            {/* ══ STEP 2 — Payment Method ══ */}
-            <Card className="overflow-hidden p-0">
-              <div
-                role="button"
-                aria-label="Payment step"
-                aria-expanded={activeStep === 'payment'}
-                tabIndex={addressDone ? 0 : -1}
-                aria-disabled={!addressDone}
-                className={cn(
-                  'flex select-none items-center px-5 py-4',
-                  activeStep === 'payment'
-                    ? 'bg-accent text-white cursor-default'
-                    : addressDone
-                    ? 'cursor-pointer bg-bg-elevated'
-                    : 'cursor-not-allowed bg-bg-sunken opacity-70',
-                )}
-                onClick={() => addressDone && activeStep !== 'payment' && setActiveStep('payment')}
-                onKeyDown={(e) => {
-                  if ((e.key === 'Enter' || e.key === ' ') && addressDone) {
-                    e.preventDefault();
-                    if (activeStep !== 'payment') setActiveStep('payment');
-                  }
-                }}
-              >
-                <span
-                  className={cn(
-                    'mr-3 grid size-6 shrink-0 place-items-center rounded-full text-[11px] font-bold',
-                    activeStep === 'payment'
-                      ? 'bg-white/20 text-white'
-                      : 'bg-accent/12 text-accent',
-                  )}
+              {/* ─── STEP 2 — Payment ─── */}
+              {activeStep === 'payment' && (
+                <motion.div
+                  key="step-payment"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
                 >
-                  2
-                </span>
-                <span
-                  className={cn(
-                    'flex-1 text-sm font-bold uppercase tracking-wide',
-                    activeStep === 'payment' ? 'text-white' : 'text-ink-primary',
-                  )}
-                >
-                  Payment
-                </span>
-              </div>
+                  <h2 className="font-wserif font-semibold text-[24px] text-wink mb-1">
+                    Payment
+                  </h2>
+                  <p className="text-[13px] text-wmuted mb-[18px] font-light">
+                    Choose how you'd like to pay. All transactions are encrypted &amp; secure.
+                  </p>
 
-              <AnimatePresence initial={false}>
-                {activeStep === 'payment' && (
-                  <motion.div
-                    key="payment-body"
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2, ease: 'easeInOut' }}
-                    className="overflow-hidden"
-                  >
-                    <div className="px-5 pb-5 pt-4">
-                      <div className="flex flex-col gap-2">
-                        {enabledInstruments.length > 0 && (
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-ink-tertiary px-0.5">
-                            {suggestedInstrument ? 'Suggested' : 'Pay online'}
-                          </p>
-                        )}
+                  <div className="flex flex-col gap-2.5">
+                    {enabledInstruments.length > 0 && (
+                      <p className="text-[10.5px] tracking-[0.14em] uppercase text-wmuted font-medium px-0.5">
+                        {suggestedInstrument ? 'Suggested' : 'Pay Online'}
+                      </p>
+                    )}
 
-                        {enabledInstruments.map((inst) => {
-                          const Icon = INSTRUMENT_ICONS[inst.code] || Wallet;
-                          const selected =
-                            paymentMethod === 'prepaid' && paymentInstrument === inst.code;
-                          const discount = Number(inst.discount_percent || 0);
-                          return (
-                            <button
-                              key={inst.code}
-                              type="button"
-                              onClick={() => {
-                                setPaymentMethod('prepaid');
-                                setPaymentInstrument(inst.code);
-                              }}
-                              className={cn(
-                                'flex w-full items-start gap-3 rounded-sm border p-4 text-left transition-colors duration-150',
-                                selected
-                                  ? 'border-accent bg-accent/12'
-                                  : 'border-line-subtle bg-bg-elevated hover:border-line-strong hover:shadow-sm',
-                              )}
-                            >
-                              <span
-                                className={cn(
-                                  'grid size-9 shrink-0 place-items-center rounded-sm transition-colors',
-                                  selected ? 'bg-accent/12 text-accent' : 'bg-accent/12 text-accent',
-                                )}
-                              >
-                                <Icon className="size-5" aria-hidden="true" />
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <p className="text-sm font-semibold text-ink-primary">
-                                    {inst.label}
-                                  </p>
-                                  {inst.suggested && (
-                                    <span className="rounded-xs bg-success/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-success">
-                                      Suggested
-                                    </span>
-                                  )}
-                                  {discount > 0 && (
-                                    <span className="rounded-xs bg-accent/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent">
-                                      {discount}% off
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="mt-0.5 text-xs text-ink-secondary">
-                                  {inst.description}
-                                </p>
-                              </div>
-                              {selected && (
-                                <CheckCircle2 className="size-5 shrink-0 text-accent mt-0.5" aria-hidden="true" />
-                              )}
-                            </button>
-                          );
-                        })}
-
-                        {/* COD */}
+                    {/* Online payment instruments — driven by usePaymentInstruments (real data) */}
+                    {enabledInstruments.map((inst) => {
+                      const Icon = INSTRUMENT_ICONS[inst.code] || Wallet;
+                      const selected =
+                        paymentMethod === 'prepaid' && paymentInstrument === inst.code;
+                      const discount = Number(inst.discount_percent || 0);
+                      return (
                         <button
+                          key={inst.code}
                           type="button"
-                          onClick={() => codAvailable && setPaymentMethod('cod')}
-                          disabled={!codAvailable}
+                          onClick={() => {
+                            setPaymentMethod('prepaid');
+                            setPaymentInstrument(inst.code);
+                          }}
                           className={cn(
-                            'flex w-full items-start gap-3 rounded-sm border p-4 text-left transition-colors duration-150',
-                            !codAvailable && 'cursor-not-allowed opacity-50',
-                            codAvailable && paymentMethod === 'cod'
-                              ? 'border-accent bg-accent/12'
-                              : codAvailable
-                              ? 'border-line-subtle bg-bg-elevated hover:border-line-strong hover:shadow-sm'
-                              : 'border-line-subtle bg-bg-elevated',
+                            'flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-colors duration-150 cursor-pointer',
+                            selected
+                              ? 'border-wgreen bg-wgreen/8'
+                              : 'border-wline bg-wpaper hover:border-wgreen/40 hover:shadow-sm',
                           )}
                         >
-                          <span
-                            className={cn(
-                              'grid size-9 shrink-0 place-items-center rounded-sm',
-                              codAvailable && paymentMethod === 'cod'
-                                ? 'bg-warning/12 text-warning'
-                                : 'bg-warning/12 text-warning',
-                            )}
-                          >
-                            <Banknote className="size-5" aria-hidden="true" />
+                          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-wgreen/10 text-wgreen">
+                            <Icon className="size-5" aria-hidden="true" />
                           </span>
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-sm font-semibold text-ink-primary">
-                                Cash on Delivery
-                              </p>
-                              {codCheck && codAvailable && codSurcharge > 0 && (
-                                <span className="rounded-xs bg-warning/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-warning">
-                                  +{formatPrice(codSurcharge)} fee
+                              <p className="text-sm font-semibold text-wink">{inst.label}</p>
+                              {inst.suggested && (
+                                <span className="rounded-full bg-wgreen/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-wgreen">
+                                  Suggested
+                                </span>
+                              )}
+                              {discount > 0 && (
+                                <span className="rounded-full bg-wgold/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-wgold">
+                                  {discount}% off
                                 </span>
                               )}
                             </div>
-                            {codAvailable ? (
-                              <p className="mt-0.5 text-xs text-ink-secondary">
-                                Pay {formatPrice(displayedTotal)} on delivery.
-                              </p>
-                            ) : codCheck?.reasons?.length ? (
-                              <ul className="mt-1 list-disc pl-4 text-xs text-ink-tertiary">
-                                {codCheck.reasons.slice(0, 3).map((r, i) => (
-                                  <li key={i}>{r}</li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="mt-0.5 text-xs text-ink-tertiary">
-                                Checking availability…
-                              </p>
+                            <p className="mt-0.5 text-xs text-wmuted">{inst.description}</p>
+                          </div>
+                          {selected && (
+                            <CheckCircle2 className="size-5 shrink-0 text-wgreen mt-0.5" aria-hidden="true" />
+                          )}
+                        </button>
+                      );
+                    })}
+
+                    {/* Cash on Delivery */}
+                    <button
+                      type="button"
+                      onClick={() => codAvailable && setPaymentMethod('cod')}
+                      disabled={!codAvailable}
+                      className={cn(
+                        'flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-colors duration-150',
+                        !codAvailable && 'cursor-not-allowed opacity-50',
+                        codAvailable && paymentMethod === 'cod'
+                          ? 'border-wgold bg-wgold/8 cursor-pointer'
+                          : codAvailable
+                          ? 'border-wline bg-wpaper hover:border-wgold/40 hover:shadow-sm cursor-pointer'
+                          : 'border-wline bg-wpaper',
+                      )}
+                    >
+                      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-wgold/10 text-wgold">
+                        <Banknote className="size-5" aria-hidden="true" />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-wink">Cash on Delivery</p>
+                          {codCheck && codAvailable && codSurcharge > 0 && (
+                            <span className="rounded-full bg-wgold/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-wgold">
+                              +{formatPrice(codSurcharge)} fee
+                            </span>
+                          )}
+                        </div>
+                        {codAvailable ? (
+                          <p className="mt-0.5 text-xs text-wmuted">
+                            Pay {formatPrice(displayedTotal)} on delivery.
+                          </p>
+                        ) : codCheck?.reasons?.length ? (
+                          <ul className="mt-1 list-disc pl-4 text-xs text-wmuted">
+                            {codCheck.reasons.slice(0, 3).map((r, i) => (
+                              <li key={i}>{r}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-0.5 text-xs text-wmuted">Checking availability…</p>
+                        )}
+                      </div>
+                      {codAvailable && paymentMethod === 'cod' ? (
+                        <CheckCircle2 className="size-5 shrink-0 text-wgold mt-0.5" aria-hidden="true" />
+                      ) : !codAvailable && codCheck ? (
+                        <XCircle className="size-5 shrink-0 text-wmuted mt-0.5" aria-hidden="true" />
+                      ) : null}
+                    </button>
+
+                    {/* Split COD */}
+                    {splitAvailable && (
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('split_cod')}
+                        className={cn(
+                          'flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-colors duration-150 cursor-pointer',
+                          paymentMethod === 'split_cod'
+                            ? 'border-wgreen bg-wgreen/8'
+                            : 'border-wline bg-wpaper hover:border-wgreen/40 hover:shadow-sm',
+                        )}
+                      >
+                        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-wgreen/10 text-wgreen">
+                          <Split className="size-5" aria-hidden="true" />
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold text-wink">Split COD</p>
+                            {codSurcharge > 0 && (
+                              <span className="rounded-full bg-wgold/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-wgold">
+                                +{formatPrice(codSurcharge)} fee
+                              </span>
                             )}
                           </div>
-                          {codAvailable && paymentMethod === 'cod' ? (
-                            <CheckCircle2 className="size-5 shrink-0 text-accent mt-0.5" aria-hidden="true" />
-                          ) : !codAvailable && codCheck ? (
-                            <XCircle className="size-5 shrink-0 text-ink-tertiary mt-0.5" aria-hidden="true" />
-                          ) : null}
-                        </button>
+                          <p className="mt-0.5 text-xs text-wmuted">
+                            Pay{' '}
+                            <span className="font-semibold text-wink">{formatPrice(splitPrepaid)}</span>{' '}
+                            now,{' '}
+                            <span className="font-semibold text-wink">{formatPrice(splitBalance)}</span>{' '}
+                            on delivery.
+                          </p>
+                        </div>
+                        {paymentMethod === 'split_cod' && (
+                          <CheckCircle2 className="size-5 shrink-0 text-wgreen mt-0.5" aria-hidden="true" />
+                        )}
+                      </button>
+                    )}
+                  </div>
 
-                        {/* Split COD */}
-                        {splitAvailable && (
-                          <button
-                            type="button"
-                            onClick={() => setPaymentMethod('split_cod')}
-                            className={cn(
-                              'flex w-full items-start gap-3 rounded-sm border p-4 text-left transition-colors duration-150',
-                              paymentMethod === 'split_cod'
-                                ? 'border-accent bg-accent/12'
-                                : 'border-line-subtle bg-bg-elevated hover:border-line-strong hover:shadow-sm',
-                            )}
-                          >
-                            <span
+                  {/* Gateway selector — only when >1 admin-configured gateway and online payment */}
+                  {showGatewaySelector && (
+                    <div className="mt-4">
+                      <p className="text-[10.5px] tracking-[0.14em] uppercase text-wmuted mb-2">
+                        Pay via
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {activeGateways.map((gw) => {
+                          const active = resolvedGateway === gw.code;
+                          return (
+                            <button
+                              key={gw.code}
+                              type="button"
+                              onClick={() => setSelectedGateway(gw.code)}
                               className={cn(
-                                'grid size-9 shrink-0 place-items-center rounded-sm',
-                                paymentMethod === 'split_cod'
-                                  ? 'bg-info/12 text-info'
-                                  : 'bg-info/12 text-info',
+                                'rounded-full border px-4 py-1.5 min-h-[36px] text-[12.5px] font-medium transition-colors cursor-pointer',
+                                active
+                                  ? 'border-wgreen bg-wgreen text-white'
+                                  : 'border-wline bg-wpaper text-wmuted hover:border-wgreen/40 hover:text-wink',
                               )}
                             >
-                              <Split className="size-5" aria-hidden="true" />
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-sm font-semibold text-ink-primary">
-                                  Split COD
-                                </p>
-                                {codSurcharge > 0 && (
-                                  <span className="rounded-xs bg-warning/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-warning">
-                                    +{formatPrice(codSurcharge)} fee
-                                  </span>
-                                )}
-                              </div>
-                              <p className="mt-0.5 text-xs text-ink-secondary">
-                                Pay{' '}
-                                <span className="font-semibold text-ink-primary nums">
-                                  {formatPrice(splitPrepaid)}
-                                </span>{' '}
-                                now,{' '}
-                                <span className="font-semibold text-ink-primary nums">
-                                  {formatPrice(splitBalance)}
-                                </span>{' '}
-                                on delivery.
-                              </p>
-                            </div>
-                            {paymentMethod === 'split_cod' && (
-                              <CheckCircle2 className="size-5 shrink-0 text-accent mt-0.5" aria-hidden="true" />
-                            )}
-                          </button>
+                              {gw.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step navigation */}
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={() => setActiveStep('address')}
+                      className="shrink-0 bg-transparent border border-wline text-wink rounded-full px-6 py-4 text-[14px] cursor-pointer hover:border-wgreen/40 transition-colors"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveStep('review')}
+                      className="flex-1 bg-wgreen text-white border-0 rounded-full py-4 text-[14.5px] cursor-pointer hover:bg-wgreen-dark transition-colors"
+                    >
+                      Review Order →
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* ─── STEP 3 — Review & Confirm ─── */}
+              {activeStep === 'review' && (
+                <motion.div
+                  key="step-review"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
+                >
+                  <h2 className="font-wserif font-semibold text-[24px] text-wink mb-[22px]">
+                    Review &amp; Confirm
+                  </h2>
+
+                  <div className="flex flex-col gap-4">
+                    {/* Address summary */}
+                    <div className="bg-wpaper border border-wline rounded-xl2 p-[18px]">
+                      <div className="text-[11px] tracking-[0.14em] uppercase text-wgold mb-2 font-medium">
+                        Shipping To
+                      </div>
+                      <div className="text-[14px] leading-[1.6] text-wink">
+                        {pincode ? (
+                          <>Pincode: <span className="font-semibold">{pincode}</span></>
+                        ) : (
+                          'Address selected'
                         )}
                       </div>
-
-                      {/* Gateway selector — only when >1 active gateway and online payment */}
-                      {showGatewaySelector && (
-                        <div className="mt-4">
-                          <p className="px-0.5 text-[10px] font-bold uppercase tracking-wide text-ink-tertiary">
-                            Pay via
-                          </p>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {activeGateways.map((gw) => {
-                              const active = resolvedGateway === gw.code;
-                              return (
-                                <button
-                                  key={gw.code}
-                                  type="button"
-                                  onClick={() => setSelectedGateway(gw.code)}
-                                  className={cn(
-                                    'rounded-xs border px-3 py-1.5 min-h-[44px] text-xs font-medium transition-colors',
-                                    active
-                                      ? 'border-accent bg-accent/12 text-accent'
-                                      : 'border-line-subtle bg-bg-elevated text-ink-secondary hover:border-line-strong hover:text-ink-primary',
-                                  )}
-                                >
-                                  {gw.name}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {error && (
-                        <div className="mt-4 flex items-start gap-2.5 rounded-sm border border-danger/35 bg-danger/8 p-3.5 text-sm text-danger">
-                          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                          <span>{error}</span>
-                        </div>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setActiveStep('address')}
+                        className="mt-2 text-[12px] text-wgreen hover:text-wgreen-dark font-medium transition-colors bg-transparent border-0 cursor-pointer p-0"
+                      >
+                        Change address
+                      </button>
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </Card>
+
+                    {/* Payment method summary */}
+                    <div className="bg-wpaper border border-wline rounded-xl2 p-[18px]">
+                      <div className="text-[11px] tracking-[0.14em] uppercase text-wgold mb-2 font-medium">
+                        Payment
+                      </div>
+                      <div className="text-[14px] text-wink">{paymentMethodLabel}</div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveStep('payment')}
+                        className="mt-2 text-[12px] text-wgreen hover:text-wgreen-dark font-medium transition-colors bg-transparent border-0 cursor-pointer p-0"
+                      >
+                        Change payment
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Error from submit attempt */}
+                  {error && (
+                    <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm text-red-600">
+                      <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  {/* Step navigation + place order */}
+                  <div className="flex gap-3 mt-[22px]">
+                    <button
+                      type="button"
+                      onClick={() => setActiveStep('payment')}
+                      className="shrink-0 bg-transparent border border-wline text-wink rounded-full px-6 py-4 text-[14px] cursor-pointer hover:border-wgreen/40 transition-colors"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={startPay}
+                      disabled={!canSubmit || submitting}
+                      className="flex-1 bg-wgreen text-white border-0 rounded-full py-4 text-[14.5px] cursor-pointer hover:bg-wgreen-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {submitting
+                        ? 'Processing…'
+                        : paymentMethod === 'cod'
+                        ? `Place Order · ${formatPrice(displayedTotal)} COD`
+                        : paymentMethod === 'split_cod'
+                        ? `Pay ${formatPrice(splitPrepaid)} Now`
+                        : `Place Order · ${formatPrice(displayedTotal)}`}
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+            </AnimatePresence>
           </div>
 
-          {/* ── Right rail: sticky price summary + place-order CTA ── */}
-          <div className="lg:sticky lg:top-24 lg:self-start">
-            <Card className="overflow-hidden p-0">
-              <h2 className="border-b border-line-subtle px-5 py-3 text-[11px] font-bold uppercase tracking-widest text-ink-tertiary">
-                Price Details
-              </h2>
+          {/* ══════════════════════════════════════
+              RIGHT — sticky order summary
+          ══════════════════════════════════════ */}
+          <div className="bg-wcard border border-wline rounded-xl3 p-6 lg:sticky lg:top-[90px]">
+            <h3 className="font-wserif font-semibold text-[20px] text-wink mb-4">
+              Order Summary
+            </h3>
 
-              <div className="px-5 py-4">
-                <FreeShippingNudge subtotal={subtotal} />
-
-                {/* Item list */}
-                <ul className="mt-3 flex flex-col gap-1.5">
-                  {items.map((i) => (
-                    <li
-                      key={i.product_id}
-                      className="flex items-baseline justify-between gap-3 text-sm text-ink-secondary"
-                    >
-                      <span className="truncate">
-                        {i.name}{' '}
-                        <span className="text-ink-tertiary nums">× {i.quantity}</span>
-                      </span>
-                      <span className="shrink-0 font-medium text-ink-primary nums">
-                        {formatPrice(i.line_total)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-
-                {/* Totals */}
-                <dl className="mt-4 flex flex-col gap-2 border-t border-line-subtle pt-4 text-sm">
-                  <div className="flex justify-between text-ink-secondary">
-                    <dt>Subtotal</dt>
-                    <dd className="font-medium text-ink-primary nums">{formatPrice(subtotal)}</dd>
+            {/* Item list with thumbnails */}
+            <div className="flex flex-col gap-3.5 mb-4">
+              {items.map((i) => (
+                <div key={i.product_id} className="flex gap-3 items-center">
+                  <WImage
+                    src={i.image_url}
+                    alt={i.name}
+                    shape="rounded"
+                    className="w-[54px] h-[62px] shrink-0 border border-wline"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[14px] leading-tight text-wink truncate">{i.name}</div>
+                    <div className="text-[11.5px] text-wmuted">
+                      {i.brand ? `${i.brand} · ` : ''}Qty {i.quantity}
+                    </div>
                   </div>
-                  {taxAmount > 0 && (
-                    <div className="flex justify-between text-ink-secondary">
-                      <dt>Tax</dt>
-                      <dd className="font-medium text-ink-primary nums">{formatPrice(taxAmount)}</dd>
-                    </div>
-                  )}
-                  {discountAmount > 0 && (
-                    <div className="flex justify-between">
-                      <dt className="flex items-center gap-1 text-success">
-                        <TicketPercent className="size-3.5" aria-hidden="true" />
-                        Discount
-                        {couponCode && (
-                          <span className="font-mono text-[10px] text-ink-tertiary">
-                            ({couponCode})
-                          </span>
-                        )}
-                      </dt>
-                      <dd className="font-semibold text-success nums">−{formatPrice(discountAmount)}</dd>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-ink-secondary">
-                    <dt>Delivery</dt>
-                    {quote ? (
-                      shippingAmount === 0 ? (
-                        <dd className="font-semibold text-success">Free</dd>
-                      ) : (
-                        <dd className="font-medium text-ink-primary nums">{formatPrice(shippingAmount)}</dd>
-                      )
-                    ) : pincode ? (
-                      <dd className="text-xs text-ink-tertiary">Calculating…</dd>
-                    ) : (
-                      <dd className="text-xs text-ink-tertiary">Add address</dd>
-                    )}
+                  <div className="font-wserif text-[16px] text-wink shrink-0">
+                    {formatPrice(i.line_total)}
                   </div>
-                  {(paymentMethod === 'cod' || paymentMethod === 'split_cod') &&
-                    codSurcharge > 0 && (
-                      <div className="flex justify-between text-ink-secondary">
-                        <dt>COD fee</dt>
-                        <dd className="font-medium text-ink-primary nums">{formatPrice(codSurcharge)}</dd>
-                      </div>
-                    )}
-                  {instrumentApplies && instrumentDiscount > 0 && activeInstrument && (
-                    <div className="flex justify-between">
-                      <dt className="flex items-center gap-1 text-success">
-                        <span className="capitalize">{activeInstrument.label}</span>
-                        <span className="font-mono text-[10px] text-ink-tertiary nums">
-                          ({instrumentDiscountPct}% off)
-                        </span>
-                      </dt>
-                      <dd className="font-semibold text-success nums">−{formatPrice(instrumentDiscount)}</dd>
-                    </div>
-                  )}
-                  {paymentMethod === 'split_cod' && (
-                    <div className="rounded-xs border border-line-subtle bg-bg-sunken px-3 py-2 text-[11px] text-ink-tertiary mt-1">
-                      Now:{' '}
-                      <span className="font-semibold text-ink-primary nums">{formatPrice(splitPrepaid)}</span>
-                      {' · '}
-                      On delivery:{' '}
-                      <span className="font-semibold text-ink-primary nums">{formatPrice(splitBalance)}</span>
-                    </div>
-                  )}
-                </dl>
-
-                <div className="mt-4 flex items-baseline justify-between border-t border-dashed border-line-strong pt-4">
-                  <span className="text-sm font-bold text-ink-primary">Total Amount</span>
-                  <span className="text-lg font-bold text-ink-primary nums">
-                    {formatPrice(displayedTotal)}
-                  </span>
                 </div>
+              ))}
+            </div>
+
+            {/* Free shipping nudge */}
+            <FreeShippingNudge subtotal={subtotal} />
+
+            {/* Totals */}
+            <dl className="border-t border-wline pt-4 mt-3 flex flex-col gap-2.5 text-[13.5px] text-wmuted">
+              <div className="flex justify-between">
+                <dt>Subtotal</dt>
+                <dd className="text-wink font-medium">{formatPrice(subtotal)}</dd>
               </div>
-
-              <div className="border-t border-line-subtle px-5 pb-5 pt-4">
-                <Button
-                  variant="cta"
-                  block
-                  size="lg"
-                  onClick={startPay}
-                  disabled={!canSubmit || activeStep !== 'payment'}
-                  loading={submitting}
-                >
-                  {paymentMethod === 'cod'
-                    ? `PLACE ORDER · ${formatPrice(displayedTotal)} COD`
-                    : paymentMethod === 'split_cod'
-                    ? `PAY ${formatPrice(splitPrepaid)} NOW`
-                    : 'PLACE ORDER'}
-                </Button>
-
-                <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-ink-tertiary">
-                  <Lock className="size-3" aria-hidden="true" />
-                  {paymentMethod === 'cod'
-                    ? 'Carrier collects on delivery'
-                    : paymentMethod === 'split_cod'
-                    ? `${formatPrice(splitBalance)} collected on delivery`
-                    : 'Secure encrypted payment'}
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() => navigate('/cart')}
-                  className="mt-3 w-full text-center text-xs text-ink-tertiary hover:text-ink-secondary transition-colors focus-visible:focus-ring"
-                >
-                  Cancel and go back to cart
-                </button>
+              {taxAmount > 0 && (
+                <div className="flex justify-between">
+                  <dt>Tax</dt>
+                  <dd className="text-wink font-medium">{formatPrice(taxAmount)}</dd>
+                </div>
+              )}
+              {discountAmount > 0 && (
+                <div className="flex justify-between">
+                  <dt className="flex items-center gap-1 text-wgreen">
+                    <TicketPercent className="size-3.5" aria-hidden="true" />
+                    Discount
+                    {couponCode && (
+                      <span className="font-mono text-[10px] text-wmuted">
+                        ({couponCode})
+                      </span>
+                    )}
+                  </dt>
+                  <dd className="font-semibold text-wgreen">−{formatPrice(discountAmount)}</dd>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <dt>Delivery</dt>
+                {quote ? (
+                  shippingAmount === 0 ? (
+                    <dd className="font-semibold text-wgreen">Free</dd>
+                  ) : (
+                    <dd className="font-medium text-wink">{formatPrice(shippingAmount)}</dd>
+                  )
+                ) : pincode ? (
+                  <dd className="text-xs text-wmuted">Calculating…</dd>
+                ) : (
+                  <dd className="text-xs text-wmuted">Add address</dd>
+                )}
               </div>
-            </Card>
+              {(paymentMethod === 'cod' || paymentMethod === 'split_cod') &&
+                codSurcharge > 0 && (
+                  <div className="flex justify-between">
+                    <dt>COD fee</dt>
+                    <dd className="font-medium text-wink">{formatPrice(codSurcharge)}</dd>
+                  </div>
+                )}
+              {instrumentApplies && instrumentDiscount > 0 && activeInstrument && (
+                <div className="flex justify-between">
+                  <dt className="flex items-center gap-1 text-wgreen">
+                    <span className="capitalize">{activeInstrument.label}</span>
+                    <span className="font-mono text-[10px] text-wmuted">
+                      ({instrumentDiscountPct}% off)
+                    </span>
+                  </dt>
+                  <dd className="font-semibold text-wgreen">−{formatPrice(instrumentDiscount)}</dd>
+                </div>
+              )}
+              {paymentMethod === 'split_cod' && (
+                <div className="rounded-xl border border-wline bg-wpaper px-3 py-2 text-[11px] text-wmuted mt-1">
+                  Now:{' '}
+                  <span className="font-semibold text-wink">{formatPrice(splitPrepaid)}</span>
+                  {' · '}
+                  On delivery:{' '}
+                  <span className="font-semibold text-wink">{formatPrice(splitBalance)}</span>
+                </div>
+              )}
+            </dl>
+
+            {/* Grand total */}
+            <div className="flex justify-between items-center border-t border-wline pt-3 mt-1">
+              <span className="text-[15px] text-wink">Total</span>
+              <span className="font-wserif text-[24px] text-wink">{formatPrice(displayedTotal)}</span>
+            </div>
+
+            {/* Trust badges */}
+            <div className="flex flex-wrap gap-3 justify-center mt-5 pt-[18px] border-t border-wline">
+              {TRUST_ITEMS.map(({ Icon, label }) => (
+                <div key={label} className="flex items-center gap-1.5 text-[11px] text-wmuted">
+                  <span className="text-wgreen">
+                    <Icon size={13} />
+                  </span>
+                  {label}
+                </div>
+              ))}
+            </div>
+
+            {/* Security note */}
+            <p className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-wmuted">
+              <LockIcon size={11} />
+              {paymentMethod === 'cod'
+                ? 'Carrier collects on delivery'
+                : paymentMethod === 'split_cod'
+                ? `${formatPrice(splitBalance)} collected on delivery`
+                : 'Secure encrypted payment'}
+            </p>
+
+            {/* Cancel link */}
+            <button
+              type="button"
+              onClick={() => navigate('/cart')}
+              className="mt-3 w-full text-center text-[12px] text-wmuted hover:text-wink transition-colors bg-transparent border-0 cursor-pointer"
+            >
+              Cancel and go back to cart
+            </button>
           </div>
         </div>
       )}
 
-      {/* Findings 4 & 10: mobile/tablet sticky bottom CTA bar — hidden on lg+ where the rail CTA is already visible */}
+      {/* ── Mobile sticky CTA bar (hidden on lg+ where the right rail is visible) ── */}
       {!isLoading && items.length > 0 && (
         <>
           {/* Spacer so content isn't hidden behind the fixed bar */}
           <div className="h-20 lg:hidden" aria-hidden="true" />
-          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line-subtle bg-bg-surface px-4 pb-4 pt-3 shadow-lg lg:hidden">
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-wline bg-wcard px-4 pb-4 pt-3 shadow-lg lg:hidden">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs text-ink-tertiary">Total</p>
-                <p className="text-base font-bold text-ink-primary nums">
-                  {formatPrice(displayedTotal)}
-                </p>
+                <p className="text-xs text-wmuted">Total</p>
+                <p className="text-base font-bold text-wink">{formatPrice(displayedTotal)}</p>
               </div>
-              <Button
-                variant="cta"
-                size="md"
-                onClick={startPay}
-                disabled={!canSubmit || activeStep !== 'payment'}
-                loading={submitting}
-                className="shrink-0"
+              <button
+                type="button"
+                onClick={
+                  activeStep === 'address'
+                    ? () => hasValidAddress && setActiveStep('payment')
+                    : activeStep === 'payment'
+                    ? () => setActiveStep('review')
+                    : startPay
+                }
+                disabled={
+                  (activeStep === 'address' && !hasValidAddress) ||
+                  (activeStep === 'review' && (!canSubmit || submitting))
+                }
+                className="shrink-0 bg-wgreen text-white border-0 rounded-full px-6 py-3 text-[13.5px] font-medium hover:bg-wgreen-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
-                {paymentMethod === 'cod'
-                  ? 'PLACE ORDER (COD)'
+                {activeStep === 'address'
+                  ? 'Continue →'
+                  : activeStep === 'payment'
+                  ? 'Review →'
+                  : submitting
+                  ? 'Processing…'
+                  : paymentMethod === 'cod'
+                  ? 'Place Order (COD)'
                   : paymentMethod === 'split_cod'
-                  ? `PAY ${formatPrice(splitPrepaid)} NOW`
-                  : 'PLACE ORDER'}
-              </Button>
+                  ? `Pay ${formatPrice(splitPrepaid)} Now`
+                  : 'Place Order'}
+              </button>
             </div>
           </div>
         </>
       )}
 
+      {/* ── COD OTP Modal ── */}
       {otpOpen && (
         <CodOtpModal
           phone={customerPhone.trim()}

@@ -5,6 +5,20 @@ export default {
   theme: {
     extend: {
       colors: {
+        // ── Wellvia wellness palette (storefront re-skin) ─────────────────
+        // Additive, w-prefixed so they never collide with the Flipkart tokens
+        // below (which the admin UI depends on). Ported reference classes map
+        // bg-page→bg-wcanvas, bg-bg→bg-wpaper, bg-card→bg-wcard, green→wgreen,
+        // greenh→wgreen-dark, ink→wink, muted→wmuted, line→wline, gold→wgold.
+        wcanvas: '#DED7C9', // outer canvas
+        wpaper: '#ECE8DE', // paper background
+        wcard: '#FFFDF8', // cards / surfaces
+        wgreen: { DEFAULT: '#183A2E', dark: '#10291F' }, // primary + hover
+        wink: '#1E1E1A', // main text
+        wmuted: '#6F6A60', // secondary text
+        wline: '#D8D0C4', // borders
+        wgold: '#B49A63', // accent
+
         // Surface + ink are theme-driven — see :root/.light blocks in global.css.
         // RGB-triplet vars keep Tailwind opacity modifiers (e.g. bg-bg-base/50) working.
         bg: {
@@ -115,6 +129,10 @@ export default {
       },
       fontFamily: {
         sans: ['Roboto', 'system-ui', '-apple-system', 'Segoe UI', 'Arial', 'sans-serif'],
+        // Wellvia storefront type — self-hosted via @fontsource (CSP-safe).
+        display: ['Cinzel', 'serif'], // wordmark / display headings
+        wserif: ['"Cormorant Garamond"', 'Georgia', 'serif'], // editorial headings
+        wsans: ['Jost', 'system-ui', 'sans-serif'], // storefront body
       },
       fontSize: {
         display: ['clamp(2.5rem, 6vw, 3.5rem)', { lineHeight: '1.07', letterSpacing: '-0.02em', fontWeight: '600' }],
@@ -132,6 +150,9 @@ export default {
         md: '9px',
         lg: '12px',
         xl: '16px',
+        // Wellvia storefront radii (ported reference rounded-xl2 / rounded-xl3).
+        xl2: '18px',
+        xl3: '22px',
       },
       boxShadow: {
         sm: 'var(--shadow-sm)',
@@ -172,6 +193,11 @@ export default {
           '0%': { transform: 'scale(1)', opacity: '0.6' },
           '100%': { transform: 'scale(1.6)', opacity: '0' },
         },
+        // ── Wellvia storefront motion (ported from the reference) ──────────
+        rise: { '0%': { opacity: '0', transform: 'translateY(14px)' }, '100%': { opacity: '1', transform: 'none' } },
+        slidein: { '0%': { transform: 'translateX(40px)', opacity: '0' }, '100%': { transform: 'translateX(0)', opacity: '1' } },
+        dim: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+        spin360: { to: { transform: 'rotate(360deg)' } },
       },
       animation: {
         shimmer: 'shimmer 1.6s ease-in-out infinite',
@@ -179,6 +205,11 @@ export default {
         fadeUp: 'fadeUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both',
         scaleIn: 'scaleIn 0.2s cubic-bezier(0.22, 1, 0.36, 1) both',
         pulseRing: 'pulseRing 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        // Wellvia storefront animations.
+        rise: 'rise .5s ease both',
+        slidein: 'slidein .3s ease both',
+        dim: 'dim .25s ease both',
+        spin360: 'spin360 1s linear infinite',
       },
       // Transitioned properties used for performant hover-lift
       transitionProperty: {

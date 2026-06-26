@@ -15,7 +15,7 @@ export function KeyFeatures({ product }) {
     <section aria-labelledby="highlights-heading" className="mt-10">
       <h2
         id="highlights-heading"
-        className="mb-4 text-base font-semibold text-ink-primary"
+        className="mb-4 text-base font-semibold text-wink"
       >
         Product highlights
       </h2>
@@ -26,15 +26,15 @@ export function KeyFeatures({ product }) {
           return (
             <li
               key={text.slice(0, 40)}
-              className="flex items-start gap-3 rounded-sm border border-line-subtle bg-bg-elevated p-4 transition-shadow hover:shadow-md"
+              className="flex items-start gap-3 rounded-sm border border-wline bg-wcard p-4 transition-shadow hover:shadow-md"
             >
               <span
-                className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-sm bg-accent/10 text-accent"
+                className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-sm bg-wgreen/10 text-wgreen"
                 aria-hidden="true"
               >
                 <Icon className="size-4" />
               </span>
-              <p className="text-xs leading-relaxed text-ink-secondary">{text}</p>
+              <p className="text-xs leading-relaxed text-wmuted">{text}</p>
             </li>
           );
         })}

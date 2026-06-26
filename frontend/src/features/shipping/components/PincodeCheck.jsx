@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Check, AlertTriangle, Loader2 } from 'lucide-react';
-import { Input } from '@/components/ui/Input.jsx';
-import { Button } from '@/components/ui/Button.jsx';
+import { Input } from '@/components/storefront/ui/Input.jsx';
+import { Button } from '@/components/storefront/ui/Button.jsx';
 import { useServiceability } from '@/features/shipping/hooks.js';
 import { readSavedPincode, saveSavedPincode } from '@/features/shipping/storage.js';
 import { fadeUp } from '@/lib/motion.js';
@@ -48,9 +48,9 @@ export default function PincodeCheck({ onResult }) {
     'Could not check that pincode right now.';
 
   return (
-    <div className="mt-5 overflow-hidden rounded-md border border-line-subtle bg-bg-sunken">
+    <div className="mt-5 overflow-hidden rounded-xl border border-wline bg-wpaper">
       {/* Header */}
-      <div className="flex items-center gap-1.5 border-b border-line-subtle px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
+      <div className="flex items-center gap-1.5 border-b border-wline px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-wmuted">
         <MapPin className="size-3.5" aria-hidden="true" />
         Check delivery
       </div>
@@ -88,7 +88,7 @@ export default function PincodeCheck({ onResult }) {
             initial="hidden"
             animate="show"
             exit="hidden"
-            className="flex items-center gap-1.5 px-3 pb-3 text-xs text-ink-tertiary"
+            className="flex items-center gap-1.5 px-3 pb-3 text-xs text-wmuted"
           >
             <Loader2 className="size-3 animate-spin" aria-hidden="true" />
             Checking…
@@ -102,7 +102,7 @@ export default function PincodeCheck({ onResult }) {
             initial="hidden"
             animate="show"
             exit="hidden"
-            className="flex items-start gap-1.5 px-3 pb-3 text-xs text-danger"
+            className="flex items-start gap-1.5 px-3 pb-3 text-xs text-red-600"
           >
             <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
             {serverMessage}
@@ -118,9 +118,9 @@ export default function PincodeCheck({ onResult }) {
             exit="hidden"
             className="flex items-start gap-1.5 px-3 pb-3 text-xs"
           >
-            <Check className="mt-0.5 size-3.5 shrink-0 text-success" aria-hidden="true" />
-            <span className="text-ink-secondary">
-              <span className="font-medium text-success">Delivers to {result.pincode}.</span>
+            <Check className="mt-0.5 size-3.5 shrink-0 text-wgreen" aria-hidden="true" />
+            <span className="text-wmuted">
+              <span className="font-medium text-wgreen">Delivers to {result.pincode}.</span>
               {result.eta_days_min && (
                 <>
                   {' '}Arrives in{' '}
@@ -132,7 +132,7 @@ export default function PincodeCheck({ onResult }) {
                 </>
               )}
               {result.cod_available && (
-                <span className="ml-1 rounded-sm bg-success/12 px-1.5 py-0.5 font-mono text-[10px] font-medium text-success">
+                <span className="ml-1 rounded-md bg-wgreen/10 px-1.5 py-0.5 font-mono text-[10px] font-medium text-wgreen">
                   COD
                 </span>
               )}
@@ -147,7 +147,7 @@ export default function PincodeCheck({ onResult }) {
             initial="hidden"
             animate="show"
             exit="hidden"
-            className="flex items-start gap-1.5 px-3 pb-3 text-xs text-danger"
+            className="flex items-start gap-1.5 px-3 pb-3 text-xs text-red-600"
           >
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
             <span>

@@ -442,3 +442,34 @@
     transform: none !important;
   }
 }
+
+/* ─── Wellvia storefront (additive; scoped to .wellvia-root) ───────────────────
+   The customer/public re-skin sits on a warm "paper" canvas with Jost / Cormorant
+   Garamond / Cinzel type. Everything below is scoped under .wellvia-root (applied
+   on the storefront Layout wrapper) so the admin UI and its Flipkart tokens stay
+   exactly as they were. .paper is a shared surface utility (panels/forms). */
+.paper {
+  background-color: #ece8de;
+  background-image: url('/paper-texture.png');
+  background-size: 500px 500px;
+  background-repeat: repeat;
+}
+
+.wellvia-root {
+  font-family: 'Jost', system-ui, sans-serif;
+  color: #1e1e1a;
+}
+.wellvia-root ::selection {
+  background: #183a2e;
+  color: #fff;
+}
+.wellvia-root input::placeholder,
+.wellvia-root textarea::placeholder {
+  color: #9b9588;
+}
+.wellvia-root input:focus,
+.wellvia-root select:focus,
+.wellvia-root textarea:focus {
+  outline: none;
+  border-color: #183a2e;
+}

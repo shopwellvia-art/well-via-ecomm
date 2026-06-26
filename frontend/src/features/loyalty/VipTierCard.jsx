@@ -1,6 +1,6 @@
 import { Award, TrendingUp, Sparkles, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { Card } from '@/components/ui/Card.jsx';
+import { Card } from '@/components/storefront/ui/Card.jsx';
 import { cn } from '@/lib/utils.js';
 import { fadeUp } from '@/lib/motion.js';
 
@@ -40,7 +40,7 @@ export function VipTierCard({ progress }) {
       >
         {/* Left: current tier identity */}
         <div className="min-w-0">
-          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-ink-tertiary">
+          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-wmuted">
             <Award className="size-3.5 shrink-0" aria-hidden="true" />
             Your VIP tier
           </p>
@@ -54,11 +54,11 @@ export function VipTierCard({ progress }) {
               <Award className="size-6" />
             </span>
             <div className="min-w-0">
-              <p className="text-h2 font-semibold text-ink-primary leading-tight">
+              <p className="font-wserif text-h2 font-semibold text-wink leading-tight">
                 {current?.name || 'Explorer'}
               </p>
               {current && Number(current.earn_multiplier) > 1 && (
-                <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-success/12 px-2 py-0.5 text-[11px] font-semibold text-success">
+                <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-wgreen/10 px-2 py-0.5 text-[11px] font-semibold text-wgreen">
                   <TrendingUp className="size-3 shrink-0" aria-hidden="true" />
                   {Number(current.earn_multiplier).toFixed(2)}
                   <span className="nums">×</span> points multiplier
@@ -68,13 +68,13 @@ export function VipTierCard({ progress }) {
           </div>
 
           {current?.benefits && (
-            <p className="mt-3.5 text-sm leading-relaxed text-ink-secondary">
+            <p className="mt-3.5 text-sm leading-relaxed text-wmuted">
               {current.benefits}
             </p>
           )}
 
           {isTopTier && (
-            <p className="mt-3.5 inline-flex items-center gap-1.5 text-sm font-medium text-accent">
+            <p className="mt-3.5 inline-flex items-center gap-1.5 text-sm font-medium text-wgreen">
               <Sparkles className="size-4 shrink-0" aria-hidden="true" />
               You&apos;ve reached the highest tier
             </p>
@@ -86,7 +86,7 @@ export function VipTierCard({ progress }) {
           {next ? (
             <div>
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
+                <p className="text-xs font-semibold uppercase tracking-widest text-wmuted">
                   Progress to {next.name}
                 </p>
                 <span
@@ -98,7 +98,7 @@ export function VipTierCard({ progress }) {
                 </span>
               </div>
 
-              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-fill">
+              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-wcanvas">
                 <div
                   className={cn('h-full rounded-full transition-[width] duration-700')}
                   style={{
@@ -114,15 +114,15 @@ export function VipTierCard({ progress }) {
               </div>
 
               <div className="mt-2.5 flex items-center justify-between gap-2">
-                <p className="text-xs text-ink-tertiary">
-                  <span className="nums font-semibold text-ink-primary">
+                <p className="text-xs text-wmuted">
+                  <span className="nums font-semibold text-wink">
                     {progressPct}%
                   </span>{' '}
                   of the way there
                 </p>
                 {points_to_next != null && points_to_next > 0 && (
-                  <p className="flex items-center gap-0.5 text-xs text-ink-secondary">
-                    <span className="nums font-semibold text-ink-primary">
+                  <p className="flex items-center gap-0.5 text-xs text-wmuted">
+                    <span className="nums font-semibold text-wink">
                       {points_to_next.toLocaleString()}
                     </span>{' '}
                     pts needed
@@ -130,11 +130,11 @@ export function VipTierCard({ progress }) {
                 )}
               </div>
 
-              <div className="mt-4 rounded-lg border border-line-subtle bg-bg-sunken p-3.5">
+              <div className="mt-4 rounded-lg border border-wline bg-wpaper p-3.5">
                 {points_to_next != null && points_to_next > 0 ? (
-                  <p className="text-sm text-ink-secondary leading-snug">
+                  <p className="text-sm text-wmuted leading-snug">
                     Earn{' '}
-                    <strong className="text-ink-primary nums">
+                    <strong className="text-wink nums">
                       {points_to_next.toLocaleString()} more pts
                     </strong>{' '}
                     to unlock{' '}
@@ -142,28 +142,28 @@ export function VipTierCard({ progress }) {
                       {next.name}
                     </span>{' '}
                     with{' '}
-                    <span className="font-semibold text-ink-primary nums">
+                    <span className="font-semibold text-wink nums">
                       {Number(next.earn_multiplier).toFixed(2)}×
                     </span>{' '}
                     multiplier.
                   </p>
                 ) : (
-                  <p className="flex items-center gap-1.5 text-sm font-medium text-success">
+                  <p className="flex items-center gap-1.5 text-sm font-medium text-wgreen">
                     <Sparkles className="size-4 shrink-0" aria-hidden="true" />
                     You&apos;ve reached {next.name}!
                   </p>
                 )}
 
                 {next.benefits && (
-                  <p className="mt-2 flex items-start gap-1.5 text-xs text-ink-tertiary">
-                    <ChevronRight className="mt-px size-3.5 shrink-0 text-accent" aria-hidden="true" />
+                  <p className="mt-2 flex items-start gap-1.5 text-xs text-wmuted">
+                    <ChevronRight className="mt-px size-3.5 shrink-0 text-wgreen" aria-hidden="true" />
                     {next.benefits}
                   </p>
                 )}
               </div>
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center rounded-xl border border-line-subtle bg-bg-sunken px-5 py-6 text-center">
+            <div className="flex h-full items-center justify-center rounded-xl border border-wline bg-wpaper px-5 py-6 text-center">
               <div>
                 <span
                   className="mx-auto grid size-10 place-items-center rounded-full text-white shadow-md"
@@ -172,10 +172,10 @@ export function VipTierCard({ progress }) {
                 >
                   <Sparkles className="size-5" />
                 </span>
-                <p className="mt-3 text-sm font-semibold text-ink-primary">
+                <p className="mt-3 text-sm font-semibold text-wink">
                   Top tier achieved
                 </p>
-                <p className="mt-1 text-xs text-ink-tertiary">
+                <p className="mt-1 text-xs text-wmuted">
                   You&apos;re already at the highest level.
                 </p>
               </div>

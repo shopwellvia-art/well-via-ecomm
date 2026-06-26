@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Loader2, AlertTriangle } from 'lucide-react';
-import { buttonVariants } from '@/components/ui/Button.jsx';
-import { cn } from '@/lib/utils.js';
 import { authApi } from '@/features/auth/api.js';
 import { useAuthStore } from '@/features/auth/store.js';
+import Logo from '@/components/storefront/Logo.jsx';
+import { CloseIcon } from '@/components/storefront/Icons.jsx';
 
 const ERROR_MESSAGES = {
   state: 'Security check failed. Please try signing in again.',
@@ -64,43 +63,53 @@ export default function AuthCallbackPage() {
   }, [navigate, setSession, setUser]);
 
   return (
-    <main className="flex min-h-[calc(100vh-4rem)] w-full items-center justify-center bg-bg-base px-4">
-      <div className="w-full max-w-sm" aria-live="polite" aria-atomic="true">
+    <main className="paper bg-wcanvas min-h-screen flex items-start justify-center pt-[clamp(48px,12vh,140px)] px-6 text-center">
+      <div className="w-full max-w-xs animate-rise" aria-live="polite" aria-atomic="true">
+
+        {/* Brand mark */}
+        <div className="flex justify-center mb-10">
+          <Logo size="lg" stacked to="/" />
+        </div>
+
         {errorMsg ? (
-          /* Error card */
-          <div className="rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
-            <div className="rounded-t-sm bg-danger px-6 py-4">
-              <h1 className="text-base font-semibold text-white">Sign-in failed</h1>
-            </div>
-            <div className="flex flex-col items-center px-6 py-8 text-center">
-              <span className="grid size-14 place-items-center rounded-full bg-danger/12 text-danger">
-                <AlertTriangle className="size-6" aria-hidden="true" />
-              </span>
-              <p className="mt-4 text-sm text-ink-secondary">{errorMsg}</p>
-              <Link
-                to="/login"
-                className={cn(buttonVariants({ size: 'lg', block: true }), 'mt-6')}
-              >
-                Back to login
-              </Link>
-            </div>
+          /* ---- Error state ---- */
+          <div className="flex flex-col items-center">
+            <span className="grid size-14 place-items-center rounded-full bg-wgreen/10 mb-5">
+              <CloseIcon size={22} stroke="#183A2E" strokeWidth={2} />
+            </span>
+
+            <h1 className="font-wserif font-medium text-[clamp(22px,2.8vw,28px)] text-wink mb-2">
+              Sign-in failed
+            </h1>
+
+            <p className="text-[14px] text-wmuted font-light leading-relaxed mb-8">
+              {errorMsg}
+            </p>
+
+            <Link
+              to="/login"
+              className="inline-block w-full rounded-full bg-wgreen py-3 text-center text-sm font-medium tracking-wide text-white hover:bg-wgreen-dark transition-colors"
+            >
+              Back to login
+            </Link>
           </div>
         ) : (
-          /* Loading card */
-          <div className="rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
-            <div className="rounded-t-sm bg-accent px-6 py-4">
-              <h1 className="text-base font-semibold text-white">Signing you in</h1>
-            </div>
-            <div className="flex flex-col items-center px-6 py-8 text-center">
-              <span className="grid size-12 place-items-center rounded-full bg-accent/12">
-                <Loader2 className="size-6 animate-spin text-accent" aria-hidden="true" />
-              </span>
-              <p className="mt-4 text-sm text-ink-secondary">
-                Please wait while we complete your sign-in&hellip;
-              </p>
-            </div>
+          /* ---- Loading state ---- */
+          <div className="flex flex-col items-center">
+            <div
+              className="w-[46px] h-[46px] border-[3px] border-wline border-t-wgreen rounded-full mx-auto mb-6 animate-spin360"
+            />
+
+            <h1 className="font-wserif font-medium text-[clamp(26px,3vw,34px)] text-wink mb-2">
+              Signing you in…
+            </h1>
+
+            <p className="text-[14px] text-wmuted font-light">
+              Verifying your secure session. This only takes a moment.
+            </p>
           </div>
         )}
+
       </div>
     </main>
   );

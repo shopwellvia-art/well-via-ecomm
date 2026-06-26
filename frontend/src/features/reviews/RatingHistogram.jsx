@@ -29,24 +29,24 @@ export function RatingHistogram({ distribution, total, onRowClick, className }) 
                 onClick: () => onRowClick(star),
               })}
               className={cn(
-                'flex w-full items-center gap-3 text-sm text-ink-secondary',
+                'flex w-full items-center gap-3 text-sm text-wmuted',
                 onRowClick &&
-                  'rounded-sm hover:text-ink-primary focus-visible:focus-ring text-left transition-colors',
+                  'rounded-sm hover:text-wink text-left transition-colors',
               )}
             >
-              <span className="nums w-14 shrink-0 text-xs text-ink-tertiary">
+              <span className="nums w-14 shrink-0 text-xs text-wmuted">
                 {star} star{star === 1 ? '' : 's'}
               </span>
-              <span className="relative block h-2 flex-1 overflow-hidden rounded-full bg-fill">
+              <span className="relative block h-2 flex-1 overflow-hidden rounded-full bg-wcanvas">
                 <motion.span
-                  className="absolute inset-y-0 left-0 rounded-full bg-warning"
+                  className="absolute inset-y-0 left-0 rounded-full bg-wgold"
                   initial={{ width: 0 }}
                   whileInView={{ width: `${pct}%` }}
                   transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: (5 - star) * 0.06 }}
                   viewport={{ once: true }}
                 />
               </span>
-              <span className="nums w-8 shrink-0 text-right text-xs text-ink-tertiary">
+              <span className="nums w-8 shrink-0 text-right text-xs text-wmuted">
                 {pct}%
               </span>
             </Row>

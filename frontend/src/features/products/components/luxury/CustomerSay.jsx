@@ -2,7 +2,7 @@ import { CheckCircle2, Star } from 'lucide-react';
 import { useProductReviews } from '@/features/reviews/hooks.js';
 import { StarRating } from '@/features/reviews/StarRating.jsx';
 import { RatingHistogram } from '@/features/reviews/RatingHistogram.jsx';
-import { Skeleton } from '@/components/ui/Skeleton.jsx';
+import { Skeleton } from '@/components/storefront/ui/Skeleton.jsx';
 
 /**
  * "What our customers say" — flat Flipkart/Amazon style.
@@ -30,21 +30,21 @@ export function CustomerSay({ product }) {
     <section aria-labelledby="customer-say" className="mt-10">
       <h2
         id="customer-say"
-        className="mb-4 text-base font-semibold text-ink-primary"
+        className="mb-4 text-base font-semibold text-wink"
       >
         Customer reviews
       </h2>
 
       <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
         {/* Rating summary */}
-        <div className="flex flex-col justify-center rounded-sm border border-line-subtle bg-bg-elevated p-5 text-center">
-          <p className="nums text-5xl font-semibold leading-none text-ink-primary tabular-nums">
+        <div className="flex flex-col justify-center rounded-sm border border-wline bg-wcard p-5 text-center">
+          <p className="nums text-5xl font-semibold leading-none text-wink tabular-nums">
             {ratingAvg.toFixed(1)}
           </p>
           <div className="mt-2.5 flex justify-center">
             <StarRating value={ratingAvg} size="lg" />
           </div>
-          <p className="mt-1.5 text-xs text-ink-secondary">
+          <p className="mt-1.5 text-xs text-wmuted">
             Based on {ratingCount.toLocaleString()} review{ratingCount === 1 ? '' : 's'}
           </p>
           <div className="mt-4 text-left">
@@ -64,18 +64,18 @@ export function CustomerSay({ product }) {
             {cards.map((r) => (
               <div
                 key={r.id}
-                className="flex flex-col rounded-sm border border-line-subtle bg-bg-elevated p-4"
+                className="flex flex-col rounded-sm border border-wline bg-wcard p-4"
               >
                 <div className="flex items-center gap-2.5">
-                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent/10 text-sm font-semibold text-accent">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-wgreen/10 text-sm font-semibold text-wgreen">
                     {(r.author_display || '?').charAt(0).toUpperCase()}
                   </span>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-ink-primary">
+                    <p className="truncate text-sm font-medium text-wink">
                       {r.author_display}
                     </p>
                     {r.is_verified_purchase && (
-                      <span className="inline-flex items-center gap-1 text-xs text-success">
+                      <span className="inline-flex items-center gap-1 text-xs text-wgreen">
                         <CheckCircle2 className="size-3" aria-hidden="true" />
                         Verified purchase
                       </span>
@@ -88,9 +88,9 @@ export function CustomerSay({ product }) {
                 </div>
 
                 {r.title && (
-                  <h3 className="mt-2 text-sm font-semibold text-ink-primary">{r.title}</h3>
+                  <h3 className="mt-2 text-sm font-semibold text-wink">{r.title}</h3>
                 )}
-                <p className="mt-1 line-clamp-4 text-xs leading-relaxed text-ink-secondary">
+                <p className="mt-1 line-clamp-4 text-xs leading-relaxed text-wmuted">
                   {r.body}
                 </p>
               </div>

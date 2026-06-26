@@ -17,12 +17,12 @@ import { formatPrice } from '@/lib/utils.js';
 import { useAddToCart } from '@/features/cart/hooks.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { WishlistButton } from '@/features/wishlist/WishlistButton.jsx';
-import { Button } from '@/components/ui/Button.jsx';
+import { Button } from '@/components/storefront/ui/Button.jsx';
 
 /**
  * Conversion panel — flat Flipkart/Amazon marketplace style.
  * Rendered inline inside the right column of the hero card (no wrapper card).
- * ADD TO CART = bg-cart (amber). BUY NOW = bg-cta (orange).
+ * ADD TO CART = bg-wgreen (primary). BUY NOW = bg-wgold (distinct secondary).
  * All logic (navigate, mutate, share, delivery dates, EMI) unchanged.
  */
 export function LuxuryBuyPanel({ product }) {
@@ -86,11 +86,11 @@ export function LuxuryBuyPanel({ product }) {
     <div className="space-y-5">
       {/* EMI */}
       {emiPerMonth > 0 && (
-        <p className="inline-flex items-center gap-1.5 rounded-lg border border-line-subtle bg-bg-sunken px-2.5 py-1.5 text-xs text-ink-secondary">
-          <CreditCard className="size-3.5 text-accent" aria-hidden="true" />
+        <p className="inline-flex items-center gap-1.5 rounded-lg border border-wline bg-wpaper px-2.5 py-1.5 text-xs text-wmuted">
+          <CreditCard className="size-3.5 text-wgreen" aria-hidden="true" />
           EMI from{' '}
-          <strong className="text-ink-primary">{formatPrice(emiPerMonth)}/mo</strong>
-          <span className="text-ink-tertiary">· 6 mo (est.)</span>
+          <strong className="text-wink">{formatPrice(emiPerMonth)}/mo</strong>
+          <span className="text-wmuted">· 6 mo (est.)</span>
         </p>
       )}
 
@@ -98,12 +98,12 @@ export function LuxuryBuyPanel({ product }) {
       <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
         {/* Delivery */}
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-tertiary">Delivery</p>
-          <p className="mt-1 text-sm text-ink-primary">
+          <p className="text-xs font-semibold uppercase tracking-wide text-wmuted">Delivery</p>
+          <p className="mt-1 text-sm text-wink">
             Free delivery by <strong className="font-semibold">{delivery.free}</strong>
           </p>
-          <p className="text-sm text-ink-secondary">
-            Or fastest by <span className="font-semibold text-accent">{delivery.fast}</span>
+          <p className="text-sm text-wmuted">
+            Or fastest by <span className="font-semibold text-wgreen">{delivery.fast}</span>
           </p>
         </div>
 
@@ -112,28 +112,28 @@ export function LuxuryBuyPanel({ product }) {
           <label
             id="lux-qty-label"
             htmlFor="lux-qty"
-            className="block text-xs font-semibold uppercase tracking-wide text-ink-tertiary"
+            className="block text-xs font-semibold uppercase tracking-wide text-wmuted"
           >
             Quantity
           </label>
           <div
             role="group"
             aria-labelledby="lux-qty-label"
-            className="mt-1 inline-flex items-center rounded-lg border border-line-strong"
+            className="mt-1 inline-flex items-center rounded-lg border border-wline"
           >
             <button
               type="button"
               aria-label="Decrease quantity"
               disabled={qty <= 1 || outOfStock}
               onClick={() => setQty((q) => Math.max(1, q - 1))}
-              className="grid size-9 place-items-center text-ink-secondary transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-30"
+              className="grid size-9 place-items-center text-wmuted transition-colors hover:text-wgreen focus-visible:outline-none disabled:opacity-30"
             >
               <Minus className="size-4" aria-hidden="true" />
             </button>
             <output
               id="lux-qty"
               aria-live="polite"
-              className="w-9 text-center text-sm font-semibold nums text-ink-primary"
+              className="w-9 text-center text-sm font-semibold nums text-wink"
             >
               {qty}
             </output>
@@ -142,7 +142,7 @@ export function LuxuryBuyPanel({ product }) {
               aria-label="Increase quantity"
               disabled={qty >= maxQty || outOfStock}
               onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
-              className="grid size-9 place-items-center text-ink-secondary transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-30"
+              className="grid size-9 place-items-center text-wmuted transition-colors hover:text-wgreen focus-visible:outline-none disabled:opacity-30"
             >
               <Plus className="size-4" aria-hidden="true" />
             </button>
@@ -151,30 +151,30 @@ export function LuxuryBuyPanel({ product }) {
       </div>
 
       {/* 3-up trust row */}
-      <div className="grid grid-cols-3 gap-2 rounded-lg bg-bg-sunken p-3 text-center">
+      <div className="grid grid-cols-3 gap-2 rounded-lg bg-wpaper p-3 text-center">
         <div className="flex flex-col items-center gap-1.5">
-          <span className="text-accent" aria-hidden="true">
+          <span className="text-wgreen" aria-hidden="true">
             <Truck className="size-5" />
           </span>
-          <p className="text-xs font-medium text-ink-primary">Free delivery</p>
+          <p className="text-xs font-medium text-wink">Free delivery</p>
         </div>
         <div className="flex flex-col items-center gap-1.5">
-          <span className="text-accent" aria-hidden="true">
+          <span className="text-wgreen" aria-hidden="true">
             <RotateCcw className="size-5" />
           </span>
-          <p className="text-xs font-medium text-ink-primary">7-day returns</p>
+          <p className="text-xs font-medium text-wink">7-day returns</p>
         </div>
         <div className="flex flex-col items-center gap-1.5">
-          <span className="text-accent" aria-hidden="true">
+          <span className="text-wgreen" aria-hidden="true">
             <ShieldCheck className="size-5" />
           </span>
-          <p className="text-xs font-medium text-ink-primary">100% authentic</p>
+          <p className="text-xs font-medium text-wink">100% authentic</p>
         </div>
       </div>
 
-      {/* CTAs — Add to Cart (amber) + Buy Now (orange) */}
+      {/* CTAs — Add to Cart (wgreen primary) + Buy Now (wgold secondary) */}
       <div className="flex flex-col gap-2.5">
-        {/* Add to Cart — amber */}
+        {/* Add to Cart — wgreen primary */}
         <Button
           variant="cart"
           size="lg"
@@ -195,7 +195,7 @@ export function LuxuryBuyPanel({ product }) {
           )}
         </Button>
 
-        {/* Buy Now — orange */}
+        {/* Buy Now — wgold distinct secondary */}
         <Button
           variant="cta"
           size="lg"
@@ -214,7 +214,7 @@ export function LuxuryBuyPanel({ product }) {
         <button
           type="button"
           onClick={handleShare}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-line-subtle bg-bg-elevated text-sm font-medium text-ink-secondary transition-colors hover:border-line-strong hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-wline bg-wcard text-sm font-medium text-wmuted transition-colors hover:border-wline hover:text-wink focus-visible:outline-none"
         >
           {shared ? (
             <>
@@ -230,13 +230,13 @@ export function LuxuryBuyPanel({ product }) {
         </button>
       </div>
 
-      <p className="flex items-center justify-center gap-1.5 text-xs text-ink-tertiary">
+      <p className="flex items-center justify-center gap-1.5 text-xs text-wmuted">
         <Lock className="size-3" aria-hidden="true" />
         Secure, encrypted checkout
       </p>
 
       {addToCart.isError && !addToCart.isPending && (
-        <p className="text-xs text-danger">
+        <p className="text-xs text-red-600">
           Couldn&apos;t add to cart — try signing in again.
         </p>
       )}

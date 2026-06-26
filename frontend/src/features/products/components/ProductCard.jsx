@@ -5,9 +5,9 @@ import { ProductMedia } from './ProductMedia.jsx';
 import { WishlistButton } from '@/features/wishlist/WishlistButton.jsx';
 
 /**
- * Flipkart-style product tile: a soft white card that lifts on hover, with the
- * product image floating on white, a brand eyebrow, a green rating pill, a
- * price line (dark price · struck MRP · green "% off") and an amber
+ * Wellness product tile: a warm wcard surface that lifts on hover, with the
+ * product image floating on white (contain), a brand eyebrow, a green rating
+ * pill, a price line (dark price · struck MRP · green "% off") and a wgreen
  * "ADD TO CART" bar. A discount ribbon rides the top-left edge.
  */
 export function ProductCard({ product, onQuickAdd }) {
@@ -40,10 +40,10 @@ export function ProductCard({ product, onQuickAdd }) {
   }
 
   return (
-    <div className="group hover-lift relative flex h-full flex-col overflow-hidden rounded-lg border border-line-subtle bg-bg-elevated">
+    <div className="group hover-lift relative flex h-full flex-col overflow-hidden rounded-xl2 border border-wline bg-wcard">
       {/* Discount ribbon — top-left edge */}
       {onSale && discountPct > 0 && (
-        <span className="absolute left-0 top-3 z-10 rounded-r-md bg-rating px-2 py-0.5 text-[11px] font-bold text-white">
+        <span className="absolute left-0 top-3 z-10 rounded-r-md bg-wgreen px-2 py-0.5 text-[11px] font-bold text-white">
           {discountPct}% OFF
         </span>
       )}
@@ -57,7 +57,7 @@ export function ProductCard({ product, onQuickAdd }) {
       {/* Media — product floats on white (contain, not cover) */}
       <Link
         to={`/products/${product.id}`}
-        className="block aspect-square overflow-hidden bg-white p-3 focus-visible:focus-ring sm:p-4"
+        className="block aspect-square overflow-hidden bg-white p-3 sm:p-4"
         tabIndex={-1}
         aria-hidden="true"
       >
@@ -70,48 +70,48 @@ export function ProductCard({ product, onQuickAdd }) {
       {/* Info */}
       <div className="flex flex-1 flex-col p-3">
         {product.brand && (
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-tertiary">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-wmuted">
             {product.brand}
           </p>
         )}
 
         <Link
           to={`/products/${product.id}`}
-          className="mt-0.5 line-clamp-2 min-h-[2.5rem] text-sm text-ink-primary transition-colors hover:text-accent focus-visible:focus-ring"
+          className="mt-0.5 line-clamp-2 min-h-[2.5rem] text-sm text-wink transition-colors hover:text-wgreen"
         >
           {product.name}
         </Link>
 
-        {/* Rating row — green pill + count */}
+        {/* Rating row — wgreen pill + count */}
         {hasRating && (
           <div className="mt-1.5 flex items-center gap-2">
-            <span className="rating-pill">
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-wgreen px-1.5 py-0.5 text-[11px] font-semibold text-white">
               {ratingNum.toFixed(1)}
               <Star className="size-[9px] fill-current" aria-hidden="true" />
             </span>
             {Number.isFinite(ratingCount) && ratingCount > 0 && (
-              <span className="text-xs text-ink-tertiary">
+              <span className="text-xs text-wmuted">
                 ({ratingCount.toLocaleString('en-IN')})
               </span>
             )}
           </div>
         )}
 
-        {/* Price row — dark price, struck compare, green % off */}
+        {/* Price row — dark price, struck compare, wgreen % off */}
         <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="text-lg font-bold tabular-nums text-ink-primary">
+          <span className="text-lg font-bold tabular-nums text-wink">
             {formatPrice(product.price)}
           </span>
           {onSale && (
             <>
               <s
-                className="text-sm tabular-nums text-ink-tertiary"
+                className="text-sm tabular-nums text-wmuted"
                 aria-label={`Was ${formatPrice(product.compare_at_price)}`}
               >
                 {formatPrice(product.compare_at_price)}
               </s>
               {discountPct > 0 && (
-                <span className="text-sm font-semibold text-rating">{discountPct}% off</span>
+                <span className="text-sm font-semibold text-wgreen">{discountPct}% off</span>
               )}
             </>
           )}
@@ -122,24 +122,23 @@ export function ProductCard({ product, onQuickAdd }) {
           <p
             className={cn(
               'mt-1 text-xs font-medium',
-              stock.tone === 'danger' ? 'text-danger' : 'text-warning',
+              stock.tone === 'danger' ? 'text-red-600' : 'text-wgold',
             )}
           >
             {stock.text}
           </p>
         )}
 
-        {/* Add to Cart — amber, matches the Flipkart reference */}
+        {/* Add to Cart — wgreen primary CTA */}
         <button
           type="button"
           onClick={handleQuickAdd}
           disabled={outOfStock}
           aria-label={`Add ${product.name} to cart`}
           className={cn(
-            'mt-3 flex h-9 items-center justify-center gap-1.5 rounded-lg',
-            'bg-cart text-xs font-semibold uppercase tracking-wide text-white',
-            'transition-all hover:bg-cart-hover active:scale-[0.98]',
-            'focus-visible:focus-ring',
+            'mt-3 flex h-9 items-center justify-center gap-1.5 rounded-full',
+            'bg-wgreen text-xs font-semibold uppercase tracking-wide text-white',
+            'transition-all hover:bg-wgreen-dark active:scale-[0.98]',
             'disabled:pointer-events-none disabled:opacity-50',
           )}
         >

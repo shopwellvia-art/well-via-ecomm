@@ -1,28 +1,41 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Shield,
-  ShieldCheck,
-  Lock,
-  Copy,
-  Check,
-  AlertTriangle,
-  X,
-  User as UserIcon,
-  Phone,
-} from 'lucide-react';
+import { Copy, AlertTriangle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Page } from '@/components/layout/Page.jsx';
-import { Button } from '@/components/ui/Button.jsx';
-import { Input } from '@/components/ui/Input.jsx';
-import { Badge } from '@/components/ui/Badge.jsx';
-import { Skeleton } from '@/components/ui/Skeleton.jsx';
-import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { useAuthStore } from '@/features/auth/store.js';
 import { authApi } from '@/features/auth/api.js';
 import { totpApi } from '@/features/totp/api.js';
+import AccountLayout from '@/components/storefront/AccountLayout';
+import {
+  ShieldIcon,
+  UserIcon,
+  LockIcon,
+  Check,
+  CloseIcon,
+} from '@/components/storefront/Icons';
 
+/* ── shared style constants ─────────────────────────────────────────────── */
+const inputCls =
+  'w-full bg-wpaper border border-wline rounded-xl px-[15px] py-[13px] text-[14px] text-wink ' +
+  'placeholder:text-wmuted/60 focus:outline-none focus:border-wgreen transition-colors';
+
+const labelCls = 'block text-[11px] tracking-[0.1em] uppercase text-wmuted mb-1.5';
+
+const btnPrimary =
+  'inline-flex items-center gap-2 rounded-full bg-wgreen border-0 px-7 py-3 text-[13.5px] ' +
+  'text-white cursor-pointer hover:bg-wgreen-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
+
+const btnOutline =
+  'inline-flex items-center gap-2 rounded-full border border-wline bg-transparent ' +
+  'px-5 py-2 text-[13px] text-wink cursor-pointer hover:border-wgreen transition-colors ' +
+  'disabled:opacity-50 disabled:cursor-not-allowed';
+
+const btnGhost =
+  'bg-transparent border-0 text-wmuted text-[13px] cursor-pointer hover:text-wink ' +
+  'transition-colors disabled:opacity-40 px-3 py-2';
+
+/* ── useSystemConfig ────────────────────────────────────────────────────── */
 function useSystemConfig() {
   return useQuery({
     queryKey: ['auth-config'],
@@ -31,8 +44,10 @@ function useSystemConfig() {
   });
 }
 
+/* ── CopyableCode ───────────────────────────────────────────────────────── */
 function CopyableCode({ value }) {
   const [copied, setCopied] = useState(false);
+
   function copy() {
     navigator.clipboard.writeText(value).then(
       () => {
@@ -42,35 +57,35 @@ function CopyableCode({ value }) {
       () => {},
     );
   }
+
   return (
     <button
       type="button"
       onClick={copy}
       aria-label={copied ? 'Copied' : 'Copy secret key'}
-      className="inline-flex items-center gap-1.5 rounded-xs border border-line-subtle bg-bg-sunken px-2.5 py-1.5 font-mono text-xs text-ink-primary transition-colors hover:border-line-strong hover:bg-bg-elevated focus-visible:focus-ring"
+      className="inline-flex items-center gap-1.5 rounded-full border border-wline bg-wpaper px-3 py-1.5 font-mono text-xs text-wink transition-colors hover:border-wgreen"
     >
       {copied ? (
-        <Check className="size-3 text-success" aria-hidden="true" />
+        <Check size={12} stroke="#183A2E" />
       ) : (
-        <Copy className="size-3 text-ink-tertiary" aria-hidden="true" />
+        <Copy size={12} className="text-wmuted" />
       )}
       {value}
     </button>
   );
 }
 
+/* ── BackupCodesPanel ───────────────────────────────────────────────────── */
 function BackupCodesPanel({ codes, onAcknowledge }) {
   return (
-    <div className="rounded-sm border border-warning/30 bg-warning/12 p-4">
+    <div className="rounded-xl border border-wgold/30 bg-wgold/10 p-5">
       <div className="flex items-start gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-warning/12 text-warning">
-          <AlertTriangle className="size-5" aria-hidden="true" />
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-wgold/15 text-wgold">
+          <AlertTriangle size={18} aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-ink-primary">
-            Save these backup codes
-          </h3>
-          <p className="mt-1 text-xs leading-relaxed text-ink-secondary">
+          <h3 className="text-[13.5px] font-semibold text-wink">Save these backup codes</h3>
+          <p className="mt-1 text-xs leading-relaxed text-wmuted">
             Each code can be used once if you lose access to your authenticator.
             We&apos;ll never show them again — copy them somewhere safe now.
           </p>
@@ -78,26 +93,26 @@ function BackupCodesPanel({ codes, onAcknowledge }) {
             {codes.map((c) => (
               <code
                 key={c}
-                className="nums rounded-xs border border-line-subtle bg-bg-elevated px-2 py-1.5 text-center font-mono text-sm text-ink-primary"
+                className="rounded-lg border border-wline bg-wcard px-2 py-1.5 text-center font-mono text-sm text-wink"
               >
                 {c}
               </code>
             ))}
           </div>
-          {/* fix-6: stack vertically on mobile instead of awkward wrapping */}
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <Button
-              size="sm"
-              variant="secondary"
+          {/* stack vertically on mobile */}
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <button
+              type="button"
               onClick={() => {
                 navigator.clipboard.writeText(codes.join('\n')).catch(() => {});
               }}
+              className={btnOutline}
             >
-              <Copy className="size-4" aria-hidden="true" /> Copy all
-            </Button>
-            <Button size="sm" onClick={onAcknowledge}>
-              <Check className="size-4" aria-hidden="true" /> I&apos;ve saved them
-            </Button>
+              <Copy size={14} aria-hidden="true" /> Copy all
+            </button>
+            <button type="button" onClick={onAcknowledge} className={btnPrimary}>
+              <Check size={14} /> I&apos;ve saved them
+            </button>
           </div>
         </div>
       </div>
@@ -105,6 +120,7 @@ function BackupCodesPanel({ codes, onAcknowledge }) {
   );
 }
 
+/* ── EnrollmentFlow ─────────────────────────────────────────────────────── */
 function EnrollmentFlow({ onDone, onCancel }) {
   const qc = useQueryClient();
   const [stage, setStage] = useState('starting');
@@ -153,38 +169,45 @@ function EnrollmentFlow({ onDone, onCancel }) {
     }
   }
 
+  /* ── starting ── */
   if (stage === 'starting') {
     return (
-      <div className="flex items-center gap-3 p-4">
-        <span className="size-5 animate-spin rounded-full border-2 border-line-subtle border-t-accent" aria-hidden="true" />
-        <p className="text-sm text-ink-secondary">Generating your secret&hellip;</p>
+      <div className="flex items-center gap-3 p-5">
+        <span
+          className="h-5 w-5 rounded-full border-2 border-wline border-t-wgreen animate-spin"
+          aria-hidden="true"
+        />
+        <p className="text-[13.5px] text-wmuted">Generating your secret&hellip;</p>
       </div>
     );
   }
+
+  /* ── error ── */
   if (stage === 'error') {
     return (
-      <div className="p-4">
-        <p className="text-sm text-danger">{error}</p>
-        <Button variant="ghost" className="mt-3" onClick={onCancel}>
+      <div className="p-5">
+        <p className="text-[13.5px] text-red-600">{error}</p>
+        <button type="button" onClick={onCancel} className={btnGhost + ' mt-3'}>
           Close
-        </Button>
+        </button>
       </div>
     );
   }
+
+  /* ── confirmed ── */
   if (stage === 'confirmed') {
     return (
-      <div className="flex flex-col gap-4">
-        <div className="rounded-sm border border-line-subtle bg-bg-elevated p-4">
+      <div className="flex flex-col gap-4 p-5">
+        <div className="rounded-xl border border-wline bg-wpaper p-4">
           <div className="flex items-center gap-3">
-            {/* fix-1/8: bg-success/10 → bg-success/12 */}
-            <span className="grid size-9 place-items-center rounded-full bg-success/12 text-success">
-              <ShieldCheck className="size-5" aria-hidden="true" />
+            <span className="grid size-9 place-items-center rounded-full bg-wgreen/10 text-wgreen">
+              <ShieldIcon size={20} />
             </span>
             <div>
-              <p className="text-sm font-semibold text-ink-primary">
+              <p className="text-[14px] font-semibold text-wink">
                 Two-factor authentication is on.
               </p>
-              <p className="mt-0.5 text-xs text-ink-secondary">
+              <p className="mt-0.5 text-xs text-wmuted">
                 You&apos;ll need a 6-digit code from your authenticator on every sign-in.
               </p>
             </div>
@@ -195,60 +218,79 @@ function EnrollmentFlow({ onDone, onCancel }) {
     );
   }
 
-  // stage === 'scan'
+  /* ── scan ── */
   return (
-    <div className="p-4">
-      <h3 className="text-sm font-semibold text-ink-primary">
+    <div className="p-5">
+      <h3 className="text-[14.5px] font-semibold text-wink">
         Scan with your authenticator
       </h3>
-      <p className="mt-1 text-xs leading-relaxed text-ink-secondary">
+      <p className="mt-1 text-xs leading-relaxed text-wmuted">
         Use Google Authenticator, 1Password, Authy, or any TOTP app. After scanning,
         enter the 6-digit code below to confirm.
       </p>
 
       <div className="mt-5 grid gap-5 sm:grid-cols-[144px_minmax(0,1fr)]">
-        {/* fix-7: wrap QR in figure/figcaption for AT context */}
-        <figure className="grid place-items-center self-start rounded-sm border border-line-subtle bg-white p-2.5 shadow-sm">
+        {/* QR code */}
+        <figure className="grid place-items-center self-start rounded-xl border border-wline bg-white p-2.5">
           <QRCodeSVG value={start.otpauth_uri} size={128} includeMargin={false} />
           <figcaption className="sr-only">
             Scan this QR code with your authenticator app to link it to your account.
           </figcaption>
         </figure>
+
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-tertiary">
-            Or enter this secret manually
-          </p>
+          <p className={labelCls}>Or enter this secret manually</p>
           <div className="mt-2">
             <CopyableCode value={start.secret} />
           </div>
           <div className="mt-4">
-            <Input
-              label="6-digit code"
+            <label className={labelCls} htmlFor="totp-code">
+              6-digit code
+            </label>
+            <input
+              id="totp-code"
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="123456"
               inputMode="numeric"
               autoComplete="one-time-code"
               maxLength={6}
-              error={error}
               required
+              className={inputCls}
             />
+            {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
           </div>
         </div>
       </div>
 
-      <div className="mt-4 flex justify-end gap-2">
-        <Button variant="ghost" onClick={onCancel} disabled={confirmMut.isPending}>
+      <div className="mt-5 flex justify-end gap-2.5">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={confirmMut.isPending}
+          className={btnGhost}
+        >
           Cancel
-        </Button>
-        <Button onClick={confirm} loading={confirmMut.isPending}>
-          <ShieldCheck className="size-4" aria-hidden="true" /> Confirm &amp; enable
-        </Button>
+        </button>
+        <button
+          type="button"
+          onClick={confirm}
+          disabled={confirmMut.isPending}
+          className={btnPrimary}
+        >
+          {confirmMut.isPending ? (
+            <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+          ) : (
+            <ShieldIcon size={16} stroke="white" />
+          )}
+          Confirm &amp; enable
+        </button>
       </div>
     </div>
   );
 }
 
+/* ── ProfileCard ────────────────────────────────────────────────────────── */
 function ProfileCard() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
@@ -289,75 +331,94 @@ function ProfileCard() {
     (phone || '') !== (user?.phone || '');
 
   return (
-    <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
-      <div className="border-b border-line-subtle bg-bg-sunken px-4 py-3">
-        <div className="flex items-center gap-2">
-          <UserIcon className="size-4 text-ink-tertiary" aria-hidden="true" />
-          <h2 className="text-sm font-semibold text-ink-primary">Personal information</h2>
-        </div>
+    <div className="bg-wcard border border-wline rounded-xl2 p-6 mb-[18px]">
+      {/* Card heading */}
+      <div className="flex items-center gap-2 mb-[18px]">
+        <UserIcon size={18} stroke="#6F6A60" />
+        <div className="font-wserif text-[20px] text-wink">Profile</div>
       </div>
-      <div className="p-4">
-        <p className="text-xs leading-relaxed text-ink-secondary">
-          Your email{' '}
-          <span className="font-medium text-ink-primary">{user.email}</span>{' '}
-          can&apos;t be changed here. Add a phone number to opt in to SMS updates on
-          order paid / shipped events.
-        </p>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Input
-            label="Full name"
+      <p className="text-xs leading-relaxed text-wmuted mb-4">
+        Your email{' '}
+        <span className="font-medium text-wink">{user.email}</span>{' '}
+        can&apos;t be changed here. Add a phone number to opt in to SMS updates on
+        order paid / shipped events.
+      </p>
+
+      <div className="grid gap-3.5 sm:grid-cols-2">
+        <div>
+          <label className={labelCls} htmlFor="profile-name">
+            Full Name
+          </label>
+          <input
+            id="profile-name"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             placeholder="Jane Doe"
             autoComplete="name"
+            className={inputCls}
           />
-          <Input
-            label="Phone (for SMS notifications)"
+        </div>
+        <div>
+          <label className={labelCls} htmlFor="profile-phone">
+            Phone (for SMS)
+          </label>
+          <input
+            id="profile-phone"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="+14155551234"
             inputMode="tel"
             autoComplete="tel"
-            helper="Include country code. Leave blank to opt out of SMS."
+            className={inputCls}
           />
-        </div>
-
-        {status === 'saved' && (
-          <p className="mt-3 flex items-center gap-1.5 text-xs text-success">
-            <Check className="size-3.5" aria-hidden="true" /> Saved.
+          <p className="mt-1 text-[11px] text-wmuted">
+            Include country code. Leave blank to opt out of SMS.
           </p>
-        )}
-        {status === 'error' && (
-          <p className="mt-3 flex items-center gap-1.5 text-xs text-danger">
-            <AlertTriangle className="size-3.5" aria-hidden="true" /> {errorMsg}
-          </p>
-        )}
-
-        <div className="mt-4 flex justify-end">
-          <Button
-            onClick={() => save.mutate()}
-            disabled={!dirty || save.isPending}
-            loading={save.isPending}
-          >
-            <Phone className="size-4" aria-hidden="true" /> Save
-          </Button>
         </div>
+      </div>
+
+      {/* Feedback */}
+      {status === 'saved' && (
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-wgreen">
+          <Check size={14} stroke="#183A2E" /> Saved.
+        </p>
+      )}
+      {status === 'error' && (
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-red-600">
+          <AlertTriangle size={14} aria-hidden="true" /> {errorMsg}
+        </p>
+      )}
+
+      <div className="mt-5 flex justify-end">
+        <button
+          type="button"
+          onClick={() => save.mutate()}
+          disabled={!dirty || save.isPending}
+          className={btnPrimary}
+        >
+          {save.isPending && (
+            <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+          )}
+          Save Changes
+        </button>
       </div>
     </div>
   );
 }
 
+/* ── AccountSecurityPage ────────────────────────────────────────────────── */
 export default function AccountSecurityPage() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
-  // fix-5/9: destructure isLoading so we can show a skeleton while config loads
+
+  // show skeleton while system config loads — prevents "Unavailable" badge flash
   const { data: cfg, isLoading: cfgLoading } = useSystemConfig();
   const [enrolling, setEnrolling] = useState(false);
 
-  // fix-3: stateful confirmation instead of window.confirm
+  // stateful inline confirm instead of window.confirm
   const [disableConfirming, setDisableConfirming] = useState(false);
-  // fix-2: surface disable mutation errors to the user
+  // surface disable mutation errors
   const [disableError, setDisableError] = useState(null);
 
   const disable = useMutation({
@@ -377,22 +438,23 @@ export default function AccountSecurityPage() {
     },
   });
 
+  /* ── not signed in ── */
   if (!user) {
     return (
-      <Page>
-        <h1 className="text-lg font-semibold text-ink-primary">Account security</h1>
-        <div className="mt-6">
-          <EmptyState
-            icon={Lock}
-            title="Sign in first"
-            action={
-              <Link to="/login?next=/account/security">
-                <Button size="sm">Sign in</Button>
-              </Link>
-            }
-          />
+      <AccountLayout active="security">
+        <div className="flex flex-col items-center gap-5 py-20 text-center">
+          <span className="grid size-14 place-items-center rounded-full bg-wline/60">
+            <LockIcon size={26} stroke="#6F6A60" />
+          </span>
+          <p className="text-[15px] text-wmuted">Sign in to manage your account security.</p>
+          <Link
+            to="/login?next=/account/security"
+            className="inline-block rounded-full bg-wgreen px-7 py-3 text-[13.5px] text-white no-underline hover:bg-wgreen-dark transition-colors"
+          >
+            Sign in
+          </Link>
         </div>
-      </Page>
+      </AccountLayout>
     );
   }
 
@@ -400,64 +462,58 @@ export default function AccountSecurityPage() {
   const totpOn = !!user.totp_enabled;
 
   return (
-    <Page>
+    <AccountLayout active="security">
       {/* Page header */}
-      <div className="mb-5 flex items-center gap-3 border-b border-line-subtle pb-4">
-        {/* fix-4: bg-accent/10 → bg-accent/12 */}
-        <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-accent/12 text-accent">
-          <Shield className="size-5" aria-hidden="true" />
-        </span>
-        <div>
-          <h1 className="text-lg font-semibold text-ink-primary">Account security</h1>
-          <p className="text-xs text-ink-secondary">
-            Manage your profile and two-factor authentication.
-          </p>
-        </div>
-      </div>
+      <h1 className="font-wserif font-medium text-[clamp(26px,3.4vw,38px)] m-0 mb-1.5 text-wink">
+        Account &amp; Security
+      </h1>
+      <p className="text-[14px] text-wmuted font-light m-0 mb-6">
+        Manage your personal details and how you sign in.
+      </p>
 
-      <div className="max-w-2xl space-y-4">
-        {/* Profile section */}
+      <div className="max-w-2xl">
+        {/* ── Profile ── */}
         <ProfileCard />
 
-        {/* fix-5/9: show skeleton while system config is loading so the
-            'Unavailable' badge never flashes before real data arrives */}
+        {/* ── Security / 2FA ── */}
+
         {cfgLoading ? (
-          <Skeleton className="h-24 rounded-sm" />
+          /* Loading skeleton */
+          <div className="h-24 rounded-xl2 bg-wline/50 animate-pulse" />
         ) : !systemEnabled && !totpOn ? (
-          /* System disabled */
-          <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
-            <div className="border-b border-line-subtle bg-bg-sunken px-4 py-3">
-              <div className="flex items-center gap-2">
-                <Shield className="size-4 text-ink-tertiary" aria-hidden="true" />
-                <h2 className="text-sm font-semibold text-ink-primary">
-                  Two-factor authentication
-                </h2>
-                <Badge tone="neutral">Unavailable</Badge>
-              </div>
+          /* System has 2FA disabled */
+          <div className="bg-wcard border border-wline rounded-xl2 p-6">
+            <div className="flex items-center gap-2 mb-[18px]">
+              <ShieldIcon size={18} stroke="#6F6A60" />
+              <div className="font-wserif text-[20px] text-wink">Security</div>
+              <span className="ml-1 rounded-full border border-wline px-2.5 py-0.5 text-[11px] text-wmuted">
+                Unavailable
+              </span>
             </div>
-            <div className="p-4">
-              <p className="text-sm leading-relaxed text-ink-secondary">
-                Your administrator hasn&apos;t enabled this feature yet. If you need it,
-                reach out to support.
-              </p>
-            </div>
+            <p className="text-[13.5px] leading-relaxed text-wmuted">
+              Your administrator hasn&apos;t enabled two-factor authentication yet. If you need
+              it, reach out to support.
+            </p>
           </div>
         ) : enrolling ? (
-          /* fix-7: aria-live so AT announces when enrollment panel appears */
+          /* Enrollment wizard */
           <div
             aria-live="polite"
-            className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm"
+            className="bg-wcard border border-wline rounded-xl2 overflow-hidden"
           >
-            <div className="flex items-center justify-between border-b border-line-subtle bg-bg-sunken px-4 py-3">
+            <div className="flex items-center justify-between border-b border-wline px-6 py-4">
               <div className="flex items-center gap-2">
-                <Shield className="size-4 text-accent" aria-hidden="true" />
-                <h2 className="text-sm font-semibold text-ink-primary">
-                  Set up authenticator
-                </h2>
+                <ShieldIcon size={18} stroke="#183A2E" />
+                <div className="font-wserif text-[20px] text-wink">Set up authenticator</div>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setEnrolling(false)}>
-                <X className="size-4" aria-hidden="true" /> Cancel
-              </Button>
+              <button
+                type="button"
+                onClick={() => setEnrolling(false)}
+                aria-label="Cancel enrollment"
+                className="grid size-8 place-items-center rounded-full border border-wline bg-transparent cursor-pointer hover:border-wgreen transition-colors"
+              >
+                <CloseIcon size={16} stroke="#6F6A60" />
+              </button>
             </div>
             <EnrollmentFlow
               onCancel={() => setEnrolling(false)}
@@ -465,91 +521,113 @@ export default function AccountSecurityPage() {
             />
           </div>
         ) : totpOn ? (
-          /* 2FA active */
-          <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
-            <div className="border-b border-line-subtle bg-bg-sunken px-4 py-3">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="size-4 text-success" aria-hidden="true" />
-                <h2 className="text-sm font-semibold text-ink-primary">
-                  Two-factor authentication
-                </h2>
-                <Badge tone="success" dot>Active</Badge>
+          /* 2FA is active — show toggle + disable control */
+          <div className="bg-wcard border border-wline rounded-xl2 p-6">
+            <div className="flex items-center gap-2 mb-[18px]">
+              <ShieldIcon size={18} stroke="#183A2E" />
+              <div className="font-wserif text-[20px] text-wink">Security</div>
+            </div>
+
+            {/* 2FA active row */}
+            <div className="flex flex-wrap gap-3.5 justify-between items-center py-4 border-t border-wline">
+              <div>
+                <div className="text-[14.5px] text-wink">Two-Factor Authentication</div>
+                <div className="text-[12.5px] text-wmuted">Your account is protected</div>
+              </div>
+              {/* Toggle visual — on state */}
+              <div className="flex items-center gap-2 text-[12px] text-wgreen">
+                <span className="w-[38px] h-[22px] rounded-full bg-wgreen relative inline-block shrink-0">
+                  <span className="absolute top-0.5 right-0.5 w-[18px] h-[18px] rounded-full bg-white" />
+                </span>
+                On
               </div>
             </div>
-            <div className="flex items-start justify-between gap-3 p-4">
-              <p className="text-xs leading-relaxed text-ink-secondary">
-                You&apos;ll be asked for a 6-digit code from your authenticator every time
-                you sign in.
-              </p>
-              {/* fix-3: inline confirm/cancel pattern replacing window.confirm */}
-              <div className="flex shrink-0 flex-col items-end gap-1">
-                {disableConfirming ? (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setDisableConfirming(false);
-                        setDisableError(null);
-                      }}
-                      disabled={disable.isPending}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => disable.mutate()}
-                      loading={disable.isPending}
-                    >
-                      <X className="size-4" aria-hidden="true" /> Confirm disable
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
+
+            {/* Inline disable confirm */}
+            <div className="mt-4 flex flex-col items-end gap-2">
+              {disableConfirming ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
                     onClick={() => {
+                      setDisableConfirming(false);
                       setDisableError(null);
-                      setDisableConfirming(true);
                     }}
-                    loading={disable.isPending}
+                    disabled={disable.isPending}
+                    className={btnGhost}
                   >
-                    <X className="size-4" aria-hidden="true" /> Disable
-                  </Button>
-                )}
-                {/* fix-2: surface disable errors */}
-                {disableError && (
-                  <p className="mt-2 text-xs text-danger">{disableError}</p>
-                )}
-              </div>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => disable.mutate()}
+                    disabled={disable.isPending}
+                    className="inline-flex items-center gap-2 rounded-full border border-wline bg-transparent px-5 py-2 text-[13px] text-wink cursor-pointer hover:border-red-400 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {disable.isPending ? (
+                      <span className="h-4 w-4 rounded-full border-2 border-wline border-t-wgreen animate-spin" />
+                    ) : (
+                      <CloseIcon size={14} />
+                    )}
+                    Confirm disable
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDisableError(null);
+                    setDisableConfirming(true);
+                  }}
+                  disabled={disable.isPending}
+                  className="inline-flex items-center gap-2 rounded-full border border-wline bg-transparent px-5 py-2 text-[13px] text-wink cursor-pointer hover:border-red-400 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <CloseIcon size={14} /> Disable
+                </button>
+              )}
+              {disableError && (
+                <p className="text-xs text-red-600">{disableError}</p>
+              )}
             </div>
           </div>
         ) : (
           /* Offer enrollment */
-          <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
-            <div className="border-b border-line-subtle bg-bg-sunken px-4 py-3">
-              <div className="flex items-center gap-2">
-                <Shield className="size-4 text-ink-tertiary" aria-hidden="true" />
-                <h2 className="text-sm font-semibold text-ink-primary">
-                  Two-factor authentication
-                </h2>
-                <Badge tone="accent" outline>Recommended</Badge>
+          <div className="bg-wcard border border-wline rounded-xl2 p-6">
+            <div className="flex items-center gap-2 mb-[18px]">
+              <ShieldIcon size={18} stroke="#6F6A60" />
+              <div className="font-wserif text-[20px] text-wink">Security</div>
+              <span className="ml-1 rounded-full border border-wgold text-wgold px-2.5 py-0.5 text-[11px]">
+                Recommended
+              </span>
+            </div>
+
+            {/* 2FA off row with toggle visual */}
+            <div className="flex flex-wrap gap-3.5 justify-between items-center py-4 border-t border-wline">
+              <div>
+                <div className="text-[14.5px] text-wink">Two-Factor Authentication</div>
+                <div className="text-[12.5px] text-wmuted">Add an extra layer of security</div>
               </div>
+              {/* Toggle visual — off state */}
+              <span className="w-[38px] h-[22px] rounded-full bg-wline relative inline-block shrink-0">
+                <span className="absolute top-0.5 left-0.5 w-[18px] h-[18px] rounded-full bg-white" />
+              </span>
             </div>
-            <div className="p-4">
-              <p className="text-sm leading-relaxed text-ink-secondary">
-                Pair your account with an authenticator app (Google Authenticator,
-                1Password, Authy, etc.). Even if your password leaks, attackers won&apos;t
-                get in without the 6-digit code that rotates every 30 seconds.
-              </p>
-              <Button className="mt-4" onClick={() => setEnrolling(true)}>
-                <Shield className="size-4" aria-hidden="true" /> Set up two-factor authentication
-              </Button>
-            </div>
+
+            <p className="text-[13.5px] leading-relaxed text-wmuted mt-1 mb-5">
+              Pair your account with an authenticator app (Google Authenticator, 1Password,
+              Authy, etc.). Even if your password leaks, attackers won&apos;t get in without
+              the 6-digit code that rotates every 30 seconds.
+            </p>
+            <button
+              type="button"
+              onClick={() => setEnrolling(true)}
+              className={btnPrimary}
+            >
+              <ShieldIcon size={16} stroke="white" /> Set up two-factor authentication
+            </button>
           </div>
         )}
       </div>
-    </Page>
+    </AccountLayout>
   );
 }

@@ -13,7 +13,7 @@ import {
 /**
  * Reusable heart button. Two visual variants:
  *
- * - "overlay" — circular white button, sits over product imagery. Red when active.
+ * - "overlay" — circular white button, sits over product imagery. Green when active.
  *   Stops link navigation on click.
  *
  * - "inline" — flat row with a label, used inside panels like BuyBox.
@@ -62,11 +62,10 @@ export function WishlistButton({
         whileTap={reducedMotion ? undefined : buttonPress}
         className={cn(
           'inline-flex h-11 w-full items-center justify-center gap-2 rounded-xs border text-sm font-medium transition-colors',
-          'focus-visible:focus-ring',
           'disabled:opacity-50 disabled:pointer-events-none',
           isSaved
-            ? 'border-danger/30 bg-danger/8 text-danger hover:bg-danger/12'
-            : 'border-line-subtle bg-bg-sunken text-ink-secondary hover:border-line-strong hover:text-ink-primary',
+            ? 'border-wgreen/30 bg-wgreen/10 text-wgreen hover:bg-wgreen/20'
+            : 'border-wline bg-wpaper text-wmuted hover:border-wline hover:text-wink',
           className,
         )}
       >
@@ -85,7 +84,7 @@ export function WishlistButton({
     );
   }
 
-  // overlay — solid white circular button; red fill when active
+  // overlay — solid white circular button; wellness green fill when active
   const sizeClass = size === 'sm' ? 'size-8' : 'size-9';
   const iconSize = size === 'sm' ? 'size-4' : 'size-[18px]';
 
@@ -100,13 +99,12 @@ export function WishlistButton({
       className={cn(
         'grid place-items-center rounded-full',
         // Solid white — visible over product images without needing backdrop blur
-        'bg-white border border-line-subtle shadow-sm',
+        'bg-white border border-wline shadow-sm',
         'transition-[color,border-color,background-color] duration-150',
-        'focus-visible:focus-ring',
         'disabled:opacity-60 disabled:pointer-events-none',
         isSaved
-          ? 'text-danger hover:bg-danger/8'
-          : 'text-ink-secondary hover:text-danger hover:border-danger/30',
+          ? 'text-wgreen hover:bg-wgreen/10'
+          : 'text-wmuted hover:text-wgreen hover:border-wgreen/30',
         sizeClass,
         className,
       )}

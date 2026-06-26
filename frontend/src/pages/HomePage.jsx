@@ -1,143 +1,97 @@
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
-import {
-  PackageX,
-  AlertCircle,
-  Truck,
-  ShieldCheck,
-  RefreshCcw,
-  TrendingUp,
-  Gamepad2,
-  Sparkles,
-  ArrowRight,
-} from 'lucide-react';
-import Hero from '@/components/marketing/Hero.jsx';
-import CategoryMarquee from '@/components/marketing/CategoryMarquee.jsx';
-import DealsBanner from '@/components/marketing/DealsBanner.jsx';
-import BestsellersSection from '@/components/marketing/BestsellersSection.jsx';
-import CommunityBand from '@/components/marketing/CommunityBand.jsx';
-import { Page } from '@/components/layout/Page.jsx';
-import { ProductGrid } from '@/features/products/components/ProductGrid.jsx';
-import { EmptyState } from '@/components/feedback/EmptyState.jsx';
-import { Button, buttonVariants } from '@/components/ui/Button.jsx';
-import { useProducts } from '@/features/products/hooks.js';
-import { useAddToCart } from '@/features/cart/hooks.js';
-import { cn } from '@/lib/utils.js';
+import { useProducts, useBestsellers } from '@/features/products/hooks.js';
+import HeroSection from '@/components/storefront/HeroSection';
+import ProductGrid from '@/components/storefront/ProductGrid';
+import WImage from '@/components/storefront/WImage';
+import { Check, Stars } from '@/components/storefront/Icons';
 
-/* ── Perk strip data ────────────────────────────────────────────────────────── */
+/* ── Static content ─────────────────────────────────────────────────────────── */
 
-const PERK_ITEMS = [
+const STORY_POINTS = [
+  'Science-led formulations',
+  'Designed for daily use',
+  'Made for modern lifestyles',
+];
+
+const TRUST_STATS = [
+  { value: '12.4k+', label: 'Five-star reviews' },
+  { value: '100%',   label: 'Clean ingredients' },
+  { value: 'GMP',    label: 'Certified manufacturing' },
+  { value: 'FSSAI',  label: 'Approved & compliant' },
+];
+
+const REVIEWS = [
   {
-    icon: Truck,
-    title: 'Free delivery',
-    sub: 'On orders over ₹499',
+    quote: 'My cycles are regular and my skin has never looked better. A gentle ritual that works.',
+    name: 'Aditi K.',
+    role: 'Verified Buyer',
   },
   {
-    icon: ShieldCheck,
-    title: 'Secure checkout',
-    sub: '256-bit SSL encryption',
+    quote: 'Finally a supplement that feels luxurious, not clinical. The taste is genuinely lovely.',
+    name: 'Sara M.',
+    role: 'Verified Buyer',
   },
   {
-    icon: RefreshCcw,
-    title: 'Easy returns',
-    sub: '7-day hassle-free',
-  },
-  {
-    icon: TrendingUp,
-    title: 'Best prices',
-    sub: 'Guaranteed or we match',
+    quote: 'Two months in and my energy through the day is steadier. Beautifully simple to keep up.',
+    name: 'Priya R.',
+    role: 'Verified Buyer',
   },
 ];
 
-/* ── Perk strip — 2-col mobile / 4-col desktop, accent icon + bold title ───── */
+/* ── Loading skeleton for product grid ─────────────────────────────────────── */
 
-function PerkStrip() {
+function ProductSkeleton({ count = 4 }) {
   return (
-    <section
-      aria-label="Why shop with us"
-      className="mx-auto mt-3 max-w-content px-4 sm:px-6"
-    >
-      <ul
-        className="grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-line-subtle bg-line-subtle sm:grid-cols-4"
-        role="list"
-      >
-        {PERK_ITEMS.map(({ icon: Icon, title, sub }) => (
-          <li
-            key={title}
-            className="flex items-center gap-3 bg-bg-elevated px-4 py-3.5"
-          >
-            <span className="shrink-0 text-accent">
-              <Icon className="size-6" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-ink-primary">{title}</p>
-              <p className="text-xs text-ink-tertiary">{sub}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 lg:gap-[22px]">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="bg-wcard border border-wline rounded-xl2 overflow-hidden animate-pulse"
+        >
+          <div className="w-full h-[200px] bg-wcanvas" />
+          <div className="p-[18px] space-y-3">
+            <div className="h-2.5 bg-wcanvas rounded w-3/4" />
+            <div className="h-5 bg-wcanvas rounded w-full" />
+            <div className="h-2.5 bg-wcanvas rounded w-1/2" />
+            <div className="mt-4 h-10 bg-wcanvas rounded-full w-full" />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
-/* ── Promo banners — two gradient cards side by side ───────────────────────── */
+/* ── Inline error state ─────────────────────────────────────────────────────── */
 
-function PromoBanners() {
+function InlineError({ onRetry }) {
   return (
-    <section
-      aria-label="Promotional offers"
-      className="mx-auto mt-3 max-w-content px-4 sm:px-6"
-    >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {/* Gaming Week */}
-        <Link
-          to="/products"
-          className="group relative flex items-center overflow-hidden rounded-sm p-6 shadow-sm transition-shadow hover:shadow-lift"
-          style={{ background: 'linear-gradient(110deg,#123a8f,#2874F0)' }}
-          aria-label="Gaming Week — Consoles and gear up to 40% off"
-        >
-          <div className="relative z-10">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/80">
-              Sponsored
-            </p>
-            <h3 className="mt-1 text-xl font-bold text-white">Gaming Week</h3>
-            <p className="mt-1 text-sm text-white/85">Consoles &amp; gear up to 40% off</p>
-            <span className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-[#FFE11B]">
-              Shop now
-              <ArrowRight className="size-3.5" aria-hidden="true" />
-            </span>
-          </div>
-          {/* Decorative glyph */}
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-white/15" aria-hidden="true">
-            <Gamepad2 className="size-36" />
-          </div>
-        </Link>
+    <div className="py-16 text-center">
+      <p className="text-wmuted mb-5 text-[15px]">
+        Could not load products. Please try again.
+      </p>
+      <button
+        onClick={onRetry}
+        className="bg-wgreen text-white rounded-full px-8 py-3 text-[13px] tracking-wide hover:bg-wgreen-dark transition-colors border-0 cursor-pointer"
+      >
+        Retry
+      </button>
+    </div>
+  );
+}
 
-        {/* Beauty Bestsellers */}
-        <Link
-          to="/products"
-          className="group relative flex items-center overflow-hidden rounded-sm p-6 shadow-sm transition-shadow hover:shadow-lift"
-          style={{ background: 'linear-gradient(110deg,#1f7a4d,#34c47a)' }}
-          aria-label="Beauty Bestsellers — Skincare and fragrance from ₹699"
-        >
-          <div className="relative z-10">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/80">
-              New &amp; trending
-            </p>
-            <h3 className="mt-1 text-xl font-bold text-white">Beauty Bestsellers</h3>
-            <p className="mt-1 text-sm text-white/85">Skincare &amp; fragrance from ₹699</p>
-            <span className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-white">
-              Explore
-              <ArrowRight className="size-3.5" aria-hidden="true" />
-            </span>
-          </div>
-          {/* Decorative glyph */}
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-white/15" aria-hidden="true">
-            <Sparkles className="size-36" />
-          </div>
-        </Link>
+/* ── Section heading ─────────────────────────────────────────────────────────── */
+
+function SectionHeading({ eyebrow, title }) {
+  return (
+    <div className="text-center mb-7 lg:mb-11">
+      <div className="text-[11px] tracking-[0.24em] uppercase text-wgold mb-3.5">
+        {eyebrow}
       </div>
-    </section>
+      <h2 className="font-wserif font-medium text-[clamp(30px,3.6vw,46px)] m-0 text-wink">
+        {title}
+      </h2>
+    </div>
   );
 }
 
@@ -145,89 +99,158 @@ function PromoBanners() {
 
 export default function HomePage() {
   const reduce = useReducedMotion();
-  const { data, isLoading, isError, refetch } = useProducts({ page: 1, page_size: 10 });
-  const addToCart = useAddToCart();
-  const products = data?.items ?? [];
+
+  /* Real data — PRESERVE these hooks */
+  const {
+    data: bestsellersData,
+    isLoading: bestsellersLoading,
+  } = useBestsellers(8);
+  const bestsellers = bestsellersData ?? [];
+
+  const {
+    data: productsData,
+    isLoading: productsLoading,
+    isError: productsError,
+    refetch,
+  } = useProducts({ page: 1, page_size: 8 });
+  const products = productsData?.items ?? [];
 
   return (
-    <Page bleed>
-      {/* 1) Hero carousel */}
-      <Hero />
+    <motion.div
+      initial={reduce ? false : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+      className="bg-wcanvas"
+    >
+      {/* 1. Split hero */}
+      <HeroSection />
 
-      {/* 2) Perk strip — 4-up icons: free delivery / secure checkout / easy returns / best prices */}
-      <PerkStrip />
-
-      {/* 3) Category marquee — Shop by Category */}
-      <CategoryMarquee />
-
-      {/* 4) Deals of the Day — orange header + countdown + horizontal deal rail */}
-      <DealsBanner />
-
-      {/* 5) Bestsellers rail */}
-      <BestsellersSection />
-
-      {/* 6) Promo banners — Gaming Week + Beauty Bestsellers */}
-      <PromoBanners />
-
-      {/* 7) Recommended for you — full product grid */}
-      <section className="mx-auto mt-3 max-w-content px-4 sm:px-6">
-        <motion.div
-          initial={reduce ? false : { opacity: 0, y: 16 }}
-          whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.1 }}
-          transition={{ duration: 0.4 }}
-          className="overflow-hidden rounded-sm bg-bg-elevated p-5 shadow-sm"
-        >
-          {/* Header */}
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-ink-primary">Recommended for you</h2>
-            <Link
-              to="/products"
-              className="text-sm font-semibold text-accent transition-colors hover:text-accent-hover focus-visible:focus-ring"
-            >
-              View all ›
-            </Link>
-          </div>
-
-          {isError ? (
-            <EmptyState
-              icon={AlertCircle}
-              iconTone="danger"
-              title="Could not load products"
-              description="There was a problem fetching the catalog. Please try again."
-              size="sm"
-              action={
-                <Button size="sm" onClick={() => refetch()}>
-                  Retry
-                </Button>
-              }
-            />
-          ) : !isLoading && products.length === 0 ? (
-            <EmptyState
-              icon={PackageX}
-              title="No products yet"
-              description="The catalog is being stocked. Check back shortly."
-              size="sm"
-              action={
-                <Link to="/products" className={cn(buttonVariants({ variant: 'primary', size: 'sm' }))}>
-                  Browse the shop
-                </Link>
-              }
-            />
+      {/* 2. Featured Rituals — bestsellers (up to 4) */}
+      <section className="px-5 sm:px-10 lg:px-16 py-10 lg:py-[68px] bg-gradient-to-b from-transparent to-[rgba(216,208,196,0.18)]">
+        <SectionHeading eyebrow="Curated for you" title="Your Daily Wellness Rituals" />
+        <div className="max-w-[1140px] mx-auto">
+          {bestsellersLoading ? (
+            <ProductSkeleton count={4} />
           ) : (
-            <ProductGrid
-              products={products}
-              loading={isLoading}
-              skeletonCount={10}
-              columns={5}
-              onQuickAdd={(p) => addToCart.mutate({ productId: p.id })}
-            />
+            <ProductGrid products={bestsellers.slice(0, 4)} cols={4} />
           )}
-        </motion.div>
+        </div>
+        <div className="text-center mt-[34px]">
+          <Link
+            to="/products"
+            className="inline-block bg-transparent border border-wgreen text-wgreen no-underline rounded-full px-[34px] py-[13px] text-[13px] tracking-wide hover:bg-wgreen hover:text-white transition-colors"
+          >
+            View All Products
+          </Link>
+        </div>
       </section>
 
-      {/* 8) Newsletter */}
-      <CommunityBand />
-    </Page>
+      {/* 3. Our Story — copy + checklist left / lifestyle image right */}
+      <section className="grid md:grid-cols-2 gap-6 lg:gap-14 items-center px-5 sm:px-10 lg:px-16 py-10 lg:py-[72px]">
+        <div>
+          <div className="text-[11px] tracking-[0.24em] uppercase text-wgold mb-4">
+            Our Story
+          </div>
+          <h2 className="font-wserif font-medium text-[clamp(30px,3.8vw,48px)] leading-[1.08] m-0 mb-5 text-wink">
+            Wellness that
+            <br />
+            fits into real life
+          </h2>
+          <p className="text-[15.5px] leading-[1.75] text-wmuted m-0 mb-4 font-light max-w-[460px]">
+            At Wellvia, we believe nutrition should feel light, enjoyable, and
+            trustworthy — never clinical or overwhelming. Every formulation is
+            thoughtfully crafted with clean ingredients, transparent labels and
+            science-led outcomes.
+          </p>
+          <div className="flex flex-col gap-3 mt-6">
+            {STORY_POINTS.map((s) => (
+              <div key={s} className="flex items-center gap-3 text-[14.5px] text-wink">
+                <span className="w-[30px] h-[30px] rounded-full border border-wline flex items-center justify-center shrink-0">
+                  <Check size={14} stroke="#183A2E" />
+                </span>
+                {s}
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* WImage handles null gracefully with a warm gradient placeholder */}
+        <WImage
+          src={null}
+          alt="Wellvia wellness lifestyle"
+          shape="rounded"
+          className="w-full h-[clamp(340px,40vw,480px)]"
+        />
+      </section>
+
+      {/* 4. Trust stats — green bar */}
+      <section className="px-5 sm:px-10 lg:px-16 py-8 lg:py-[52px] bg-wgreen">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 lg:gap-10 max-w-[1100px] mx-auto text-center">
+          {TRUST_STATS.map((t) => (
+            <div key={t.label}>
+              <div className="font-wserif text-[clamp(34px,4vw,48px)] text-white leading-none mb-2">
+                {t.value}
+              </div>
+              <div className="text-[12px] tracking-wide text-[#f3efe6]/70 uppercase">
+                {t.label}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 5. Recommended for You — full catalog page 1 */}
+      <section className="px-5 sm:px-10 lg:px-16 py-10 lg:py-[68px]">
+        <SectionHeading eyebrow="Picked for you" title="Recommended for You" />
+        <div className="max-w-[1140px] mx-auto">
+          {productsLoading ? (
+            <ProductSkeleton count={8} />
+          ) : productsError ? (
+            <InlineError onRetry={refetch} />
+          ) : (
+            <ProductGrid products={products} cols={4} />
+          )}
+        </div>
+        {!productsLoading && !productsError && products.length > 0 && (
+          <div className="text-center mt-[34px]">
+            <Link
+              to="/products"
+              className="inline-block bg-transparent border border-wgreen text-wgreen no-underline rounded-full px-[34px] py-[13px] text-[13px] tracking-wide hover:bg-wgreen hover:text-white transition-colors"
+            >
+              Browse All Products
+            </Link>
+          </div>
+        )}
+      </section>
+
+      {/* 6. Customer reviews — static testimonials */}
+      <section className="px-5 sm:px-10 lg:px-16 py-10 lg:py-[68px] bg-wpaper">
+        <SectionHeading eyebrow="Loved by thousands" title="Real Rituals, Real Results" />
+        <div className="grid md:grid-cols-3 gap-[18px] max-w-[1100px] mx-auto">
+          {REVIEWS.map((r, i) => (
+            <div
+              key={i}
+              className="bg-wcard border border-wline rounded-xl2 p-6 flex flex-col gap-3.5"
+            >
+              <Stars />
+              <p className="font-wserif text-[18px] leading-[1.5] text-wink m-0 flex-1 italic">
+                &ldquo;{r.quote}&rdquo;
+              </p>
+              <div className="flex items-center gap-2.5">
+                {/* Avatar initial fallback */}
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-wgold/25 via-wpaper to-wcanvas flex items-center justify-center shrink-0">
+                  <span className="select-none text-[14px] font-semibold text-wink/50">
+                    {r.name.charAt(0)}
+                  </span>
+                </div>
+                <div className="text-[13px]">
+                  <div className="text-wink">{r.name}</div>
+                  <div className="text-wmuted text-[11.5px]">{r.role}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </motion.div>
   );
 }

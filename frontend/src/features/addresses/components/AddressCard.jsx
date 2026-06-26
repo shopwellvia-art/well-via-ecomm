@@ -1,13 +1,13 @@
 import { Home, Briefcase, MapPin, MapPinned, Star, Pencil, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/Button.jsx';
-import { Badge } from '@/components/ui/Badge.jsx';
+import { Button } from '@/components/storefront/ui/Button.jsx';
+import { Badge } from '@/components/storefront/ui/Badge.jsx';
 import { cn } from '@/lib/utils.js';
 
 // Keys match the API's lowercase AddressLabel values ("home"/"work"/"other").
 const LABEL_META = {
-  home:  { icon: Home,      tone: 'accent',   iconBg: 'bg-accent/12 text-accent'          },
-  work:  { icon: Briefcase, tone: 'info',      iconBg: 'bg-info/12 text-info'              },
-  other: { icon: MapPin,    tone: 'neutral',   iconBg: 'bg-fill-strong text-ink-secondary' },
+  home:  { icon: Home,      tone: 'accent',   iconBg: 'bg-wgreen/10 text-wgreen'  },
+  work:  { icon: Briefcase, tone: 'info',      iconBg: 'bg-wgreen/10 text-wgreen'  },
+  other: { icon: MapPin,    tone: 'neutral',   iconBg: 'bg-wpaper text-wmuted'      },
 };
 
 /**
@@ -39,10 +39,10 @@ export default function AddressCard({
   return (
     <div
       className={cn(
-        'min-w-0 rounded-sm border transition-colors duration-150',
+        'min-w-0 rounded-xl border transition-colors duration-150',
         selected
-          ? 'border-accent bg-accent/8'
-          : 'border-line-subtle bg-bg-elevated',
+          ? 'border-wgreen bg-wgreen/10'
+          : 'border-wline bg-wcard',
         compact ? 'p-3' : 'p-4',
       )}
     >
@@ -68,7 +68,7 @@ export default function AddressCard({
 
         {/* Pinned badge — shown when a map-pinned coordinate is stored */}
         {address.latitude != null && (
-          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-ink-tertiary">
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-wmuted">
             <MapPinned className="size-3 shrink-0" aria-hidden="true" />
             Pinned
           </span>
@@ -76,21 +76,21 @@ export default function AddressCard({
       </div>
 
       {/* Address body */}
-      <p className={cn('mt-2.5 font-semibold text-ink-primary', compact ? 'text-xs' : 'text-sm')}>
+      <p className={cn('mt-2.5 font-semibold text-wink', compact ? 'text-xs' : 'text-sm')}>
         {address.full_name}
       </p>
-      <p className={cn('mt-0.5 text-ink-secondary', compact ? 'text-xs' : 'text-sm')}>
+      <p className={cn('mt-0.5 text-wmuted', compact ? 'text-xs' : 'text-sm')}>
         {address.line1}
         {address.line2 ? `, ${address.line2}` : ''}
         {address.landmark ? ` (${address.landmark})` : ''}
       </p>
-      <p className={cn('text-ink-secondary', compact ? 'text-xs' : 'text-sm')}>
+      <p className={cn('text-wmuted', compact ? 'text-xs' : 'text-sm')}>
         {address.city}, {address.state}{' '}
         <span className="nums">– {address.pincode}</span>
       </p>
       <p
         className={cn(
-          'mt-0.5 nums text-ink-tertiary',
+          'mt-0.5 nums text-wmuted',
           compact ? 'text-[11px]' : 'text-xs',
         )}
       >
@@ -99,7 +99,7 @@ export default function AddressCard({
 
       {/* Action buttons */}
       {(onEdit || onDelete || onSetDefault) && (
-        <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-line-subtle pt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-wline pt-3">
           {onEdit && (
             <Button
               type="button"
@@ -108,7 +108,7 @@ export default function AddressCard({
               iconOnly
               aria-label={`Edit address for ${address.full_name}`}
               onClick={() => onEdit(address)}
-              className="focus-visible:focus-ring"
+              className=""
             >
               <Pencil className="size-3.5" aria-hidden="true" />
             </Button>
@@ -119,7 +119,7 @@ export default function AddressCard({
               variant="ghost"
               size="sm"
               onClick={() => onSetDefault(address.id)}
-              className="text-ink-secondary hover:text-accent"
+              className="text-wmuted hover:text-wgreen"
             >
               <Star className="size-3.5" aria-hidden="true" />
               Set default
@@ -134,7 +134,7 @@ export default function AddressCard({
               aria-label={`Delete address for ${address.full_name}`}
               onClick={() => onDelete(address.id)}
               loading={deleting}
-              className="ml-auto text-ink-tertiary hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
+              className="ml-auto text-wmuted hover:bg-red-50 hover:text-red-600"
             >
               <Trash2 className="size-3.5" aria-hidden="true" />
             </Button>

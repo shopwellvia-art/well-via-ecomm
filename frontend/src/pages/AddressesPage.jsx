@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Plus, X } from 'lucide-react';
-import { Page } from '@/components/layout/Page.jsx';
-import { Button } from '@/components/ui/Button.jsx';
-import { Skeleton } from '@/components/ui/Skeleton.jsx';
-import { EmptyState } from '@/components/feedback/EmptyState.jsx';
+import AccountLayout from '@/components/storefront/AccountLayout';
+import { CloseIcon } from '@/components/storefront/Icons';
 import { useAuthStore } from '@/features/auth/store.js';
 import {
   useAddresses,
@@ -13,10 +10,38 @@ import {
   useDeleteAddress,
   useSetDefaultAddress,
 } from '@/features/addresses/hooks.js';
-import AddressCard from '@/features/addresses/components/AddressCard.jsx';
 import AddressForm from '@/features/addresses/components/AddressForm.jsx';
 import { fadeUp, staggerContainer, scaleIn } from '@/lib/motion.js';
 import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
+
+// Displayable label text for each label key the API returns.
+const LABEL_DISPLAY = {
+  home: 'Home',
+  work: 'Work',
+  other: 'Other',
+};
+
+// Inline SVG pin — no MapPin in the storefront Icons set.
+function PinIcon({ size = 44, className = '' }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+      <circle cx="12" cy="9" r="2.5" />
+    </svg>
+  );
+}
 
 export default function AddressesPage() {
   const user = useAuthStore((s) => s.user);
@@ -38,33 +63,30 @@ export default function AddressesPage() {
   // inline error from a failed delete mutation
   const [deleteError, setDeleteError] = useState(null);
 
+  // ── Not signed-in guard ────────────────────────────────────────────────────
   if (!user) {
     return (
-      <Page>
-        {/* Page header */}
-        <div className="mb-6 flex items-center gap-3 border-b border-line-subtle pb-5">
-          <span className="grid size-9 place-items-center rounded-sm bg-accent/12 text-accent">
-            <MapPin className="size-5" aria-hidden="true" />
-          </span>
-          <div>
-            <h1 className="text-lg font-semibold text-ink-primary">Manage Addresses</h1>
-            <p className="text-xs text-ink-secondary">
-              Saved delivery addresses — pick one at checkout.
-            </p>
-          </div>
+      <AccountLayout active="addresses">
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <PinIcon size={48} className="text-wmuted mb-4" />
+          <h2 className="font-wserif text-2xl text-wink mb-2">
+            Sign in to manage addresses
+          </h2>
+          <p className="text-wmuted text-sm mb-6">
+            Save delivery addresses for faster checkout.
+          </p>
+          <Link
+            to="/login?next=/account/addresses"
+            className="bg-wgreen text-white rounded-full px-6 py-3 text-sm hover:bg-wgreen-dark transition-colors no-underline"
+          >
+            Sign in
+          </Link>
         </div>
-        <EmptyState
-          icon={MapPin}
-          title="Sign in first"
-          action={
-            <Link to="/login?next=/account/addresses">
-              <Button size="sm">Sign in</Button>
-            </Link>
-          }
-        />
-      </Page>
+      </AccountLayout>
     );
   }
+
+  // ── Handlers (all original logic preserved) ────────────────────────────────
 
   function handleCreate(values) {
     setFormError(null);
@@ -125,29 +147,31 @@ export default function AddressesPage() {
       ? addresses?.find((a) => a.id === formMode.id)
       : null;
 
+  // ── Page render ────────────────────────────────────────────────────────────
   return (
-    <Page>
-      {/* ── Page header bar ── */}
-      <div className="mb-5 flex items-center justify-between gap-4 border-b border-line-subtle pb-4">
-        <div className="flex items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-accent/12 text-accent">
-            <MapPin className="size-5" aria-hidden="true" />
-          </span>
-          <div>
-            <h1 className="text-lg font-semibold text-ink-primary">Manage Addresses</h1>
-            <p className="text-xs text-ink-secondary">
-              Saved delivery addresses — pick one at checkout.
-            </p>
-          </div>
+    <AccountLayout active="addresses">
+      {/* ── Page header ── */}
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-7">
+        <div>
+          <h1 className="font-wserif font-medium text-[clamp(26px,3vw,38px)] text-wink mb-1 leading-tight">
+            Addresses
+          </h1>
+          <p className="text-[14px] text-wmuted font-light">
+            Saved delivery locations — pick one at checkout.
+          </p>
         </div>
+
         {formMode === null && (
-          <Button
-            size="sm"
-            onClick={() => { setFormMode('create'); setFormError(null); }}
+          <button
+            type="button"
+            onClick={() => {
+              setFormMode('create');
+              setFormError(null);
+            }}
+            className="bg-wgreen text-white border-0 rounded-full px-6 py-3 text-[13.5px] cursor-pointer hover:bg-wgreen-dark transition-colors"
           >
-            <Plus className="size-4" aria-hidden="true" />
-            Add new address
-          </Button>
+            + Add Address
+          </button>
         )}
       </div>
 
@@ -155,36 +179,49 @@ export default function AddressesPage() {
         variants={staggerContainer(0.06)}
         initial="hidden"
         animate="show"
-        className="max-w-2xl space-y-4"
       >
         {/* ── Add / Edit form ── */}
         {formMode !== null && (
-          <motion.div variants={scaleIn}>
-            <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated shadow-sm">
+          <motion.div variants={scaleIn} className="mb-6">
+            <div className="bg-wcard border border-wline rounded-xl2 overflow-hidden">
               {/* Form header */}
-              <div className="flex items-center justify-between border-b border-line-subtle bg-bg-sunken px-4 py-3">
-                <h2 className="text-sm font-semibold text-ink-primary">
-                  {formMode === 'create' ? 'Add new address' : 'Edit address'}
+              <div className="flex items-center justify-between border-b border-wline bg-wpaper px-5 py-4">
+                <h2 className="font-wserif text-[18px] text-wink leading-tight">
+                  {formMode === 'create' ? 'Add New Address' : 'Edit Address'}
                 </h2>
                 <button
                   type="button"
                   aria-label="Close form"
-                  onClick={() => { setFormMode(null); setFormError(null); }}
-                  className="grid size-7 place-items-center rounded-xs text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+                  onClick={() => {
+                    setFormMode(null);
+                    setFormError(null);
+                  }}
+                  className="w-8 h-8 flex items-center justify-center rounded-full text-wmuted bg-transparent border-0 cursor-pointer hover:bg-wline hover:text-wink transition-colors"
                 >
-                  <X className="size-4" aria-hidden="true" />
+                  <CloseIcon size={15} />
                 </button>
               </div>
-              <div className="p-4">
+
+              <div className="p-5">
+                {/* Form-level error banner */}
                 {formError && (
-                  <div className="mb-4 flex items-start gap-2.5 rounded-sm border border-danger/30 bg-danger/8 px-3.5 py-3 text-sm text-danger">
+                  <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     {formError}
                   </div>
                 )}
+
+                {/*
+                  AddressForm is a feature component — kept intact with all its
+                  logic: pincode lookup, GPS geolocation, lazy MapAddressPicker,
+                  label segmented-control, set-as-default checkbox, validation.
+                */}
                 <AddressForm
                   initialValues={editingAddress || undefined}
                   onSubmit={formMode === 'create' ? handleCreate : handleUpdate}
-                  onCancel={() => { setFormMode(null); setFormError(null); }}
+                  onCancel={() => {
+                    setFormMode(null);
+                    setFormError(null);
+                  }}
                   submitLabel={formMode === 'create' ? 'Save address' : 'Update address'}
                   busy={createAddress.isPending || updateAddress.isPending}
                   showSetDefault
@@ -194,100 +231,195 @@ export default function AddressesPage() {
           </motion.div>
         )}
 
-        {/* ── Address list ── */}
+        {/* ── Address list / loading / error / empty ── */}
         {isLoading ? (
-          <motion.div variants={fadeUp} className="flex flex-col gap-3">
+          /* Skeleton: 2-col grid matching the real card layout */
+          <motion.div variants={fadeUp} className="grid sm:grid-cols-2 gap-4">
             {Array.from({ length: 2 }).map((_, i) => (
-              <Skeleton key={i} className="h-32 rounded-sm" />
+              <div
+                key={i}
+                className="bg-wcard border border-wline rounded-xl2 p-[22px] animate-pulse"
+              >
+                <div className="h-[10px] w-14 bg-wline rounded-full mb-3" />
+                <div className="h-4 w-36 bg-wline rounded mb-2.5" />
+                <div className="h-3 w-full bg-wline rounded mb-1.5" />
+                <div className="h-3 w-4/5 bg-wline rounded mb-1.5" />
+                <div className="h-3 w-28 bg-wline rounded" />
+              </div>
             ))}
           </motion.div>
         ) : isError ? (
           <motion.div variants={fadeUp}>
-            <div className="flex flex-col items-start gap-2.5 rounded-sm border border-danger/30 bg-danger/8 p-4 text-sm text-danger">
+            <div className="flex flex-col items-start gap-3 bg-wcard border border-red-200 rounded-xl2 p-5 text-sm text-red-700">
               <span>Could not load your addresses. Please try again.</span>
-              <Button size="sm" variant="outline" className="mt-2" onClick={() => refetch()}>
+              <button
+                type="button"
+                onClick={() => refetch()}
+                className="bg-transparent border border-red-300 text-red-700 rounded-full px-4 py-1.5 text-xs cursor-pointer hover:bg-red-50 transition-colors"
+              >
                 Retry
-              </Button>
+              </button>
             </div>
           </motion.div>
         ) : !addresses?.length && formMode === null ? (
+          /* Empty state */
           <motion.div variants={fadeUp}>
-            <div className="rounded-sm border border-line-subtle bg-bg-elevated p-8 text-center shadow-sm">
-              <MapPin className="mx-auto mb-3 size-10 text-ink-tertiary" aria-hidden="true" />
-              <p className="text-sm font-medium text-ink-primary">No saved addresses yet</p>
-              <p className="mt-1 text-xs text-ink-secondary">
+            <div className="bg-wcard border border-wline rounded-xl2 p-10 text-center">
+              <PinIcon size={44} className="text-wmuted mx-auto mb-4" />
+              <p className="font-wserif text-[18px] text-wink mb-1">No saved addresses</p>
+              <p className="text-[13px] text-wmuted mb-5">
                 Add a delivery address to make checkout faster.
               </p>
-              <Button
-                size="sm"
-                className="mt-4"
-                onClick={() => { setFormMode('create'); setFormError(null); }}
+              <button
+                type="button"
+                onClick={() => {
+                  setFormMode('create');
+                  setFormError(null);
+                }}
+                className="bg-wgreen text-white border-0 rounded-full px-6 py-3 text-[13.5px] cursor-pointer hover:bg-wgreen-dark transition-colors"
               >
-                <Plus className="size-4" aria-hidden="true" />
-                Add new address
-              </Button>
+                + Add Address
+              </button>
             </div>
           </motion.div>
         ) : (
+          /* 2-column wellness card grid */
           <motion.div
             variants={staggerContainer(0.07)}
             initial="hidden"
             animate="show"
-            className="flex flex-col gap-3"
+            className="grid sm:grid-cols-2 gap-4"
           >
-            {(addresses || []).map((addr) => (
-              <motion.div key={addr.id} variants={fadeUp}>
-                <AddressCard
-                  address={addr}
-                  onEdit={(a) => {
-                    setFormMode({ id: a.id });
-                    setFormError(null);
-                    setConfirmingDeleteId(null);
-                  }}
-                  onDelete={handleDelete}
-                  onSetDefault={handleSetDefault}
-                  deleting={deletingId === addr.id}
-                />
-                {/* Inline delete confirmation — replaces window.confirm */}
-                {confirmingDeleteId === addr.id && (
+            {(addresses || []).map((addr) => {
+              const labelKey = String(addr.label || 'other').toLowerCase();
+              const labelText = (LABEL_DISPLAY[labelKey] || labelKey).toUpperCase();
+              const isConfirmingDelete = confirmingDeleteId === addr.id;
+              const isDeleting = deletingId === addr.id;
+
+              return (
+                <motion.div key={addr.id} variants={fadeUp}>
+                  {/* ── Wellness address card ── */}
                   <div
-                    role="alertdialog"
-                    aria-live="assertive"
-                    aria-label="Confirm address deletion"
-                    className="mt-1 flex items-center gap-2 rounded-sm border border-danger/30 bg-danger/8 px-3 py-2 text-sm text-danger"
+                    className={cn(
+                      'bg-wcard border border-wline rounded-xl2 p-[22px] transition-shadow duration-200',
+                      addr.is_default
+                        ? 'shadow-[0_0_0_1.5px_#183A2E]'
+                        : 'hover:shadow-sm',
+                    )}
                   >
-                    <span className="flex-1">Delete this address?</span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-danger/40 text-danger hover:bg-danger/12"
-                      onClick={() => handleDelete(addr.id)}
-                    >
-                      Delete
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-ink-secondary"
-                      onClick={() => setConfirmingDeleteId(null)}
-                    >
-                      Cancel
-                    </Button>
+                    {/* Top row: label eyebrow + default badge */}
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[11px] tracking-[0.12em] uppercase text-wgold">
+                        {labelText}
+                        {addr.latitude != null && (
+                          <span className="ml-1.5 text-wmuted normal-case tracking-normal text-[10px]">
+                            · pinned
+                          </span>
+                        )}
+                      </span>
+                      {addr.is_default && (
+                        <span className="text-[10.5px] bg-wgreen text-white px-2.5 py-[3px] rounded-full">
+                          Default
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Recipient name */}
+                    <p className="text-[15px] text-wink font-medium mb-1">{addr.full_name}</p>
+
+                    {/* Address block */}
+                    <p className="text-[13px] text-wmuted leading-[1.6] font-light">
+                      {addr.line1}
+                      {addr.line2 ? `, ${addr.line2}` : ''}
+                      {addr.landmark ? ` (${addr.landmark})` : ''}
+                      <br />
+                      {addr.city}, {addr.state} — {addr.pincode}
+                      {addr.phone && (
+                        <>
+                          <br />
+                          {addr.phone}
+                        </>
+                      )}
+                    </p>
+
+                    {/* Action row */}
+                    <div className="flex flex-wrap items-center gap-x-[18px] gap-y-2 mt-4 pt-3 border-t border-wline text-[12.5px]">
+                      {/* Edit */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormMode({ id: addr.id });
+                          setFormError(null);
+                          setConfirmingDeleteId(null);
+                        }}
+                        className="text-wgreen cursor-pointer bg-transparent border-0 p-0 hover:text-wgreen-dark transition-colors"
+                      >
+                        Edit
+                      </button>
+
+                      {/* Set default — only shown on non-default cards */}
+                      {!addr.is_default && (
+                        <button
+                          type="button"
+                          onClick={() => handleSetDefault(addr.id)}
+                          className="text-wmuted cursor-pointer bg-transparent border-0 p-0 hover:text-wink transition-colors"
+                        >
+                          Set default
+                        </button>
+                      )}
+
+                      {/* Remove — first click shows inline confirmation */}
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(addr.id)}
+                        disabled={isDeleting}
+                        className="text-wmuted cursor-pointer bg-transparent border-0 p-0 hover:text-red-600 transition-colors ml-auto disabled:opacity-50"
+                      >
+                        {isDeleting ? 'Removing…' : 'Remove'}
+                      </button>
+                    </div>
                   </div>
-                )}
-              </motion.div>
-            ))}
-            {/* Inline delete mutation error */}
-            {deleteError && (
-              <motion.div variants={fadeUp}>
-                <div className="flex items-start gap-2.5 rounded-sm border border-danger/30 bg-danger/8 px-3.5 py-3 text-sm text-danger">
-                  {deleteError}
-                </div>
-              </motion.div>
-            )}
+
+                  {/* Inline delete confirmation — replaces window.confirm (two-step flow) */}
+                  {isConfirmingDelete && (
+                    <div
+                      role="alertdialog"
+                      aria-live="assertive"
+                      aria-label="Confirm address deletion"
+                      className="mt-2 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700"
+                    >
+                      <span className="flex-1">Delete this address?</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(addr.id)}
+                        className="rounded-full bg-red-600 text-white border-0 px-3 py-1.5 text-[12px] cursor-pointer hover:bg-red-700 transition-colors"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingDeleteId(null)}
+                        className="text-wmuted text-[12px] bg-transparent border-0 p-0 cursor-pointer hover:text-wink transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        )}
+
+        {/* Inline delete mutation error (persists across cards) */}
+        {deleteError && (
+          <motion.div variants={fadeUp} className="mt-3">
+            <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {deleteError}
+            </div>
           </motion.div>
         )}
       </motion.div>
-    </Page>
+    </AccountLayout>
   );
 }

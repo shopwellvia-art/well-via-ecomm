@@ -1,25 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  ShoppingBag,
-  ArrowRight,
-  Lock,
   AlertTriangle,
-  TicketPercent,
-  X,
-  MapPin,
-  ShieldCheck,
-  Zap,
-  LocateFixed,
   Loader2,
-  Star,
+  MapPin,
+  LocateFixed,
+  TicketPercent,
+  Zap,
 } from 'lucide-react';
-import { Page } from '@/components/layout/Page.jsx';
-import { Breadcrumbs } from '@/components/layout/Breadcrumbs.jsx';
-import { Button } from '@/components/ui/Button.jsx';
-import { Input } from '@/components/ui/Input.jsx';
-import { Skeleton } from '@/components/ui/Skeleton.jsx';
-import { EmptyState } from '@/components/feedback/EmptyState.jsx';
+import { LockIcon, CloseIcon, ShieldIcon } from '@/components/storefront/Icons';
+import WImage from '@/components/storefront/WImage';
 import {
   useCart,
   useRemoveFromCart,
@@ -28,7 +18,11 @@ import {
   useUpdateCartQuantity,
 } from '@/features/cart/hooks.js';
 import { useWishlist, useAddToWishlist } from '@/features/wishlist/hooks.js';
-import { useAddresses, useCurrentLocation, friendlyGeoError } from '@/features/addresses/hooks.js';
+import {
+  useAddresses,
+  useCurrentLocation,
+  friendlyGeoError,
+} from '@/features/addresses/hooks.js';
 import AddressSelectDrawer from '@/features/addresses/components/AddressSelectDrawer.jsx';
 import { useAuthStore } from '@/features/auth/store.js';
 import FreeShippingNudge from '@/features/shipping/components/FreeShippingNudge.jsx';
@@ -37,6 +31,7 @@ import { cn, formatPrice } from '@/lib/utils.js';
 
 const LABEL_TEXT = { home: 'Home', work: 'Work', other: 'Other' };
 
+/* ── Coupon block ─────────────────────────────────────────────────────── */
 function CouponBlock({ appliedCode, discount }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState(null);
@@ -61,16 +56,16 @@ function CouponBlock({ appliedCode, discount }) {
 
   if (appliedCode) {
     return (
-      <div className="flex items-center justify-between rounded-sm border border-success/25 bg-success/12 px-3 py-2.5 text-sm">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className="grid size-7 shrink-0 place-items-center rounded-sm bg-success/12 text-success">
-            <TicketPercent className="size-3.5" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate font-mono text-xs font-semibold text-ink-primary nums">
+      <div className="flex items-center justify-between rounded-xl border border-wgold/30 bg-wgold/10 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div className="grid size-8 place-items-center rounded-full bg-wgold/20 text-wgold">
+            <TicketPercent className="size-4" aria-hidden="true" />
+          </div>
+          <div>
+            <p className="font-mono text-sm font-semibold tracking-wider text-wink">
               {appliedCode}
             </p>
-            <p className="text-[11px] text-success">Saving {formatPrice(discount)}</p>
+            <p className="text-xs text-wgold">Saving {formatPrice(discount)}</p>
           </div>
         </div>
         <button
@@ -78,9 +73,9 @@ function CouponBlock({ appliedCode, discount }) {
           aria-label={`Remove coupon ${appliedCode}`}
           disabled={remove.isPending}
           onClick={() => remove.mutate()}
-          className="grid size-8 place-items-center rounded-sm text-ink-tertiary transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring disabled:opacity-50"
+          className="grid size-8 place-items-center rounded-full text-wmuted transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
         >
-          <X className="size-4" />
+          <CloseIcon size={16} />
         </button>
       </div>
     );
@@ -88,27 +83,33 @@ function CouponBlock({ appliedCode, discount }) {
 
   return (
     <form onSubmit={handleApply}>
-      <p className="mb-1.5 text-xs font-medium text-ink-secondary">Have a coupon?</p>
+      <p className="mb-2 text-sm font-medium text-wmuted">Have a coupon?</p>
       <div className="flex items-start gap-2">
         <div className="flex-1">
-          <Input
-            label="Coupon code"
+          <input
+            type="text"
             placeholder="WELCOME10"
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            error={error}
-            className="uppercase placeholder:normal-case"
+            className="w-full rounded-full border border-wline bg-wpaper px-4 py-2.5 text-sm uppercase text-wink placeholder:normal-case placeholder:text-wmuted/60 transition-colors focus:border-wgreen/60 focus:outline-none"
           />
+          {error && (
+            <p className="mt-1 px-2 text-xs text-red-500">{error}</p>
+          )}
         </div>
-        <Button type="submit" size="md" variant="outline" loading={apply.isPending}>
-          Apply
-        </Button>
+        <button
+          type="submit"
+          disabled={apply.isPending}
+          className="shrink-0 rounded-full border border-wline bg-wpaper px-5 py-2.5 text-sm font-semibold text-wink transition-colors hover:border-wgreen hover:text-wgreen disabled:opacity-50"
+        >
+          {apply.isPending ? 'Applying…' : 'Apply'}
+        </button>
       </div>
     </form>
   );
 }
 
-/** "Delivery by Thu, Jun 18" — from the serviceability ETA (max days). */
+/* ── Delivery ETA helper ──────────────────────────────────────────────── */
 function deliveryByText(serviceability) {
   const days = serviceability?.eta_days_max ?? serviceability?.eta_days_min;
   if (!serviceability?.serviceable || !days) return null;
@@ -121,30 +122,40 @@ function deliveryByText(serviceability) {
   });
 }
 
-/** Flipkart-style "Deliver to:" bar with the address-change drawer trigger. */
-function DeliverToBar({ address, detectedPincode, serviceability, onChange, onDetect, detectPending, detectError }) {
+/* ── Deliver-to bar ───────────────────────────────────────────────────── */
+function DeliverToBar({
+  address,
+  detectedPincode,
+  serviceability,
+  onChange,
+  onDetect,
+  detectPending,
+  detectError,
+}) {
+  const unserviceable = serviceability && !serviceability.serviceable;
+
   if (!address) {
     return (
-      <div className="flex flex-col gap-1.5">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line-subtle bg-bg-elevated px-5 py-3">
-          <div className="flex items-center gap-2 text-sm text-ink-secondary">
-            <MapPin className="size-4 text-ink-tertiary" aria-hidden="true" />
+      <div className="border-b border-wline bg-wpaper/60 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm text-wmuted">
+            <MapPin className="size-4 shrink-0 text-wgold" aria-hidden="true" />
             {detectedPincode ? (
               <span>
                 Deliver to{' '}
-                <span className="font-semibold text-ink-primary nums">{detectedPincode}</span>
-                <span className="ml-1 text-ink-tertiary">(your location)</span>
+                <span className="font-semibold text-wink">{detectedPincode}</span>
+                <span className="ml-1">(your location)</span>
               </span>
             ) : (
-              'Add a delivery address to see delivery dates and charges.'
+              <span>Add a delivery address to see delivery dates and charges.</span>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               disabled={detectPending}
               onClick={onDetect}
-              className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent/80 focus-visible:focus-ring disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-wgreen transition-colors hover:text-wgreen-dark disabled:opacity-50"
             >
               {detectPending ? (
                 <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
@@ -153,42 +164,41 @@ function DeliverToBar({ address, detectedPincode, serviceability, onChange, onDe
               )}
               {detectPending ? 'Detecting…' : 'Detect my location'}
             </button>
-            <span className="text-xs text-ink-tertiary">·</span>
+            <span className="text-wmuted">·</span>
             <button
               type="button"
               onClick={onChange}
-              className="text-xs font-semibold text-accent transition-colors hover:text-accent/80 focus-visible:focus-ring"
+              className="text-xs font-semibold text-wgreen transition-colors hover:text-wgreen-dark"
             >
               Add address
             </button>
           </div>
         </div>
         {detectError && (
-          <p className="px-5 text-xs text-danger">{detectError}</p>
+          <p className="mt-2 text-xs text-red-500">{detectError}</p>
         )}
       </div>
     );
   }
 
   const labelText = LABEL_TEXT[String(address.label).toLowerCase()] || 'Other';
-  const unserviceable = serviceability && !serviceability.serviceable;
 
   return (
-    <div className="border-b border-line-subtle bg-bg-elevated px-5 py-3">
+    <div className="border-b border-wline bg-wpaper/60 px-5 py-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0 flex items-center gap-2">
-          <MapPin className="size-4 shrink-0 text-ink-tertiary" aria-hidden="true" />
+        <div className="flex min-w-0 items-center gap-2">
+          <MapPin className="size-4 shrink-0 text-wgold" aria-hidden="true" />
           <div className="min-w-0">
             <p className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-ink-secondary">Deliver to:</span>
-              <span className="font-semibold text-ink-primary">
-                {address.full_name}, <span className="nums">{address.pincode}</span>
+              <span className="text-wmuted">Deliver to:</span>
+              <span className="font-semibold text-wink">
+                {address.full_name}, {address.pincode}
               </span>
-              <span className="rounded-xs bg-fill px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">
+              <span className="rounded-full bg-wcanvas px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-wmuted">
                 {labelText}
               </span>
             </p>
-            <p className="mt-0.5 truncate text-xs text-ink-tertiary">
+            <p className="mt-0.5 truncate text-xs text-wmuted">
               {address.line1}
               {address.line2 ? `, ${address.line2}` : ''}, {address.city}, {address.state}
             </p>
@@ -197,14 +207,14 @@ function DeliverToBar({ address, detectedPincode, serviceability, onChange, onDe
         <button
           type="button"
           onClick={onChange}
-          className="shrink-0 text-sm font-semibold text-accent transition-colors hover:text-accent/80 focus-visible:focus-ring"
+          className="shrink-0 text-sm font-semibold text-wgreen transition-colors hover:text-wgreen-dark"
         >
           Change
         </button>
       </div>
       {unserviceable && (
-        <p className="mt-2 flex items-start gap-1.5 border-t border-line-subtle pt-2 text-xs text-danger">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+        <p className="mt-2 flex items-center gap-1.5 border-t border-wline pt-2.5 text-xs text-red-500">
+          <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
           Sorry — we don&apos;t deliver to {address.pincode} yet. Try another address.
         </p>
       )}
@@ -212,20 +222,27 @@ function DeliverToBar({ address, detectedPincode, serviceability, onChange, onDe
   );
 }
 
-/** Mobile sticky bottom bar — total + Place Order CTA. */
-function PlaceOrderBar({ total, disabled, onPlaceOrder, className = '' }) {
+/* ── Mobile sticky bottom bar ─────────────────────────────────────────── */
+function PlaceOrderBar({ total, disabled, onPlaceOrder }) {
   return (
-    <div className={`flex items-center justify-between gap-4 ${className}`}>
-      <div className="flex items-baseline gap-2">
-        <span className="text-lg font-bold text-ink-primary nums">{formatPrice(total)}</span>
+    <div className="flex items-center justify-between gap-4">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-wmuted">Total</p>
+        <p className="font-wserif text-2xl text-wink">{formatPrice(total)}</p>
       </div>
-      <Button variant="cta" size="lg" className="px-8" disabled={disabled} onClick={onPlaceOrder}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onPlaceOrder}
+        className="rounded-full bg-wgreen px-8 py-3 text-sm font-semibold text-white transition-colors hover:bg-wgreen-dark disabled:pointer-events-none disabled:opacity-50"
+      >
         Place Order
-      </Button>
+      </button>
     </div>
   );
 }
 
+/* ── Main page ────────────────────────────────────────────────────────── */
 export default function CartPage() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
@@ -350,325 +367,354 @@ export default function CartPage() {
     navigate('/checkout');
   }
 
+  /* ── Auth gate ── */
   if (!user || status === 401) {
     return (
-      <Page>
-        <h1 className="text-xl font-semibold text-ink-primary">Your cart</h1>
-        <div className="mt-8">
-          <EmptyState
-            icon={Lock}
-            title="Sign in to view your cart"
-            description="Your cart is saved to your account so it's here wherever you shop."
-            action={
-              <Link to="/login">
-                <Button size="sm">Sign in</Button>
-              </Link>
-            }
-          />
+      <div className="mx-auto flex min-h-[60vh] max-w-[1320px] flex-col items-center justify-center px-4 py-20 text-center">
+        <div className="mb-5 grid size-16 place-items-center rounded-full bg-wgold/10 text-wgold">
+          <LockIcon size={28} stroke="#B49A63" />
         </div>
-      </Page>
+        <h2 className="font-wserif mb-2 text-3xl font-medium text-wink">
+          Sign in to view your cart
+        </h2>
+        <p className="mb-8 max-w-xs text-wmuted">
+          Your cart is saved to your account so it&apos;s here wherever you shop.
+        </p>
+        <Link
+          to="/login"
+          className="rounded-full bg-wgreen px-8 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-wgreen-dark"
+        >
+          Sign in
+        </Link>
+      </div>
     );
   }
 
+  /* ── Error state ── */
   if (isError) {
     return (
-      <Page>
-        <h1 className="text-xl font-semibold text-ink-primary">Your cart</h1>
-        <div className="mt-8">
-          <EmptyState
-            icon={AlertTriangle}
-            iconTone="danger"
-            title="We couldn't load your cart"
-            description="Something went wrong on our end. Please try again."
-            action={
-              <Button size="sm" onClick={() => refetch()}>
-                Retry
-              </Button>
-            }
-          />
+      <div className="mx-auto flex min-h-[60vh] max-w-[1320px] flex-col items-center justify-center px-4 py-20 text-center">
+        <div className="mb-5 grid size-16 place-items-center rounded-full bg-red-50 text-red-400">
+          <AlertTriangle className="size-8" aria-hidden="true" />
         </div>
-      </Page>
+        <h2 className="font-wserif mb-2 text-3xl font-medium text-wink">
+          We couldn&apos;t load your cart
+        </h2>
+        <p className="mb-8 max-w-xs text-wmuted">
+          Something went wrong on our end. Please try again.
+        </p>
+        <button
+          onClick={() => refetch()}
+          className="rounded-full bg-wgreen px-8 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-wgreen-dark"
+        >
+          Retry
+        </button>
+      </div>
     );
   }
 
+  /* ── Main ── */
   return (
-    <Page className="mx-auto w-full max-w-content px-4 py-4 sm:px-6">
-      <Breadcrumbs current="Cart" className="mb-3" />
+    <div className="mx-auto max-w-[1320px] px-4 py-8 sm:px-6 lg:px-8">
+      {/* Breadcrumb */}
+      <nav
+        className="mb-6 flex items-center gap-2 text-sm text-wmuted"
+        aria-label="Breadcrumb"
+      >
+        <Link to="/" className="transition-colors hover:text-wink">
+          Home
+        </Link>
+        <span>/</span>
+        <span className="text-wink">Cart</span>
+      </nav>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_360px]">
-          <div className="flex flex-col gap-3">
-            <Skeleton className="h-14 rounded-lg" />
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-36 rounded-lg" />
+        /* ── Loading skeleton ── */
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
+          <div className="flex flex-col gap-4">
+            <div className="h-16 animate-pulse rounded-xl2 bg-wcanvas" />
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-40 animate-pulse rounded-xl2 bg-wcanvas" />
             ))}
           </div>
-          <Skeleton className="h-72 rounded-lg" />
+          <div className="h-96 animate-pulse rounded-xl3 bg-wcanvas" />
         </div>
       ) : items.length === 0 ? (
-        <div className="mt-8">
-          <EmptyState
-            icon={ShoppingBag}
-            title="Your cart is empty"
-            description="Browse the collection and add something you love."
-            action={
-              <Link to="/products">
-                <Button size="sm">
-                  Continue shopping
-                  <ArrowRight className="size-4" aria-hidden="true" />
-                </Button>
-              </Link>
-            }
-          />
+        /* ── Empty state ── */
+        <div className="flex flex-col items-center justify-center py-24 text-center animate-rise">
+          <div className="mb-6 grid size-20 place-items-center rounded-full bg-wgold/10 text-wgold">
+            {/* Shopping bag */}
+            <svg
+              width="36"
+              height="36"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M6 8h12l-1 12H7L6 8Z" />
+              <path d="M9 8a3 3 0 0 1 6 0" />
+            </svg>
+          </div>
+          <h2 className="font-wserif mb-2 text-[clamp(26px,4vw,40px)] font-medium text-wink">
+            Your cart is empty
+          </h2>
+          <p className="mb-8 max-w-xs text-wmuted">
+            Browse the collection and add something you love.
+          </p>
+          <Link
+            to="/products"
+            className="rounded-full bg-wgreen px-8 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-wgreen-dark"
+          >
+            Continue Shopping
+          </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_360px]">
+        /* ── Filled cart ── */
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_380px]">
+
           {/* ── LEFT: item list ── */}
-          <section className="overflow-hidden rounded-lg bg-bg-elevated shadow-sm">
-            {/* Cart header */}
-            <div className="flex items-center justify-between border-b border-line-subtle px-5 py-4">
-              <h1 className="text-lg font-bold text-ink-primary">
-                My Cart{' '}
-                <span className="nums">({items.length})</span>
+          <section>
+            {/* Cart heading + deliver-to quick label */}
+            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+              <h1 className="font-wserif text-[clamp(28px,4vw,44px)] font-medium text-wink">
+                Your Cart{' '}
+                <span className="text-wmuted text-2xl font-light">
+                  ({items.length})
+                </span>
               </h1>
-              {selectedAddress ? (
-                <span className="text-sm text-ink-tertiary">
+              {(selectedAddress || detectedPincode) && (
+                <span className="text-sm text-wmuted">
                   Deliver to{' '}
-                  <b className="font-semibold text-ink-secondary nums">{selectedAddress.pincode}</b>
+                  <b className="font-semibold text-wink">
+                    {selectedAddress?.pincode || detectedPincode}
+                  </b>
                 </span>
-              ) : detectedPincode ? (
-                <span className="text-sm text-ink-tertiary">
-                  Deliver to{' '}
-                  <b className="font-semibold text-ink-secondary nums">{detectedPincode}</b>
-                </span>
-              ) : null}
+              )}
             </div>
 
-            {/* Deliver-to bar */}
-            <DeliverToBar
-              address={selectedAddress}
-              detectedPincode={detectedPincode}
-              serviceability={serviceability}
-              onChange={() => setDrawerOpen(true)}
-              onDetect={handleDetectLocation}
-              detectPending={detectLocation.isPending}
-              detectError={detectError}
-            />
+            {/* Card: deliver-to bar + item rows */}
+            <div className="overflow-hidden rounded-xl2 border border-wline bg-wcard">
+              <DeliverToBar
+                address={selectedAddress}
+                detectedPincode={detectedPincode}
+                serviceability={serviceability}
+                onChange={() => setDrawerOpen(true)}
+                onDetect={handleDetectLocation}
+                detectPending={detectLocation.isPending}
+                detectError={detectError}
+              />
 
-            {/* Item rows */}
-            <ul className="divide-y divide-line-subtle">
-              {items.map((item) => {
-                const mrp =
-                  item.compare_at_price &&
-                  Number(item.compare_at_price) > Number(item.unit_price)
-                    ? Number(item.compare_at_price)
-                    : null;
-                const savePct = mrp
-                  ? Math.round(((mrp - Number(item.unit_price)) / mrp) * 100)
-                  : 0;
-                const busy =
-                  savingForLater === item.product_id ||
-                  removingId === item.product_id ||
-                  updatingId === item.product_id;
+              <ul className="divide-y divide-wline">
+                {items.map((item) => {
+                  const mrp =
+                    item.compare_at_price &&
+                    Number(item.compare_at_price) > Number(item.unit_price)
+                      ? Number(item.compare_at_price)
+                      : null;
+                  const savePct = mrp
+                    ? Math.round(((mrp - Number(item.unit_price)) / mrp) * 100)
+                    : 0;
+                  const busy =
+                    savingForLater === item.product_id ||
+                    removingId === item.product_id ||
+                    updatingId === item.product_id;
 
-                return (
-                  <li key={item.product_id} className="flex gap-4 p-5">
-                    {/* Thumbnail */}
-                    <Link
-                      to={`/products/${item.product_id}`}
-                      aria-label={item.name}
-                      className="size-24 shrink-0 overflow-hidden rounded-lg border border-line-subtle bg-bg-sunken sm:size-28"
-                    >
-                      {item.image_url ? (
-                        <img
+                  return (
+                    <li key={item.product_id} className="flex gap-4 p-5 sm:gap-5">
+                      {/* Thumbnail */}
+                      <Link
+                        to={`/products/${item.product_id}`}
+                        aria-label={item.name}
+                        className="size-[88px] shrink-0 sm:size-[104px]"
+                      >
+                        <WImage
                           src={item.image_url}
                           alt={item.name}
-                          loading="lazy"
-                          className="size-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            const sib = e.currentTarget.nextSibling;
-                            if (sib) sib.style.display = 'grid';
-                          }}
+                          shape="rounded"
+                          className="size-full border border-wline"
                         />
-                      ) : null}
-                      <span
-                        style={{ display: item.image_url ? 'none' : 'grid' }}
-                        className="size-full place-items-center text-xl font-semibold text-ink-tertiary"
-                      >
-                        {item.name.charAt(0).toUpperCase()}
-                      </span>
-                    </Link>
+                      </Link>
 
-                    {/* Details */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          {/* Brand eyebrow */}
-                          {item.brand && (
-                            <p className="text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
-                              {item.brand}
-                            </p>
-                          )}
-                          {/* Product name */}
-                          <Link
-                            to={`/products/${item.product_id}`}
-                            className="line-clamp-1 text-sm font-medium text-ink-primary transition-colors hover:text-accent"
-                          >
-                            {item.name}
-                          </Link>
-                          <p className="mt-0.5 text-xs text-ink-tertiary">Seller: ShopWell Retail</p>
-                        </div>
-                        {/* Rating pill */}
-                        {item.rating && (
-                          <span className="rating-pill shrink-0">
-                            {Number(item.rating).toFixed(1)}
-                            <Star
-                              className="size-2.5 fill-white stroke-none"
-                              aria-hidden="true"
-                            />
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Price row */}
-                      <div className="mt-2 flex flex-wrap items-baseline gap-2">
-                        <span className="text-lg font-bold text-ink-primary nums">
-                          {formatPrice(item.unit_price)}
-                        </span>
-                        {mrp && (
-                          <span className="text-sm text-ink-tertiary line-through nums">
-                            {formatPrice(mrp)}
-                          </span>
-                        )}
-                        {savePct > 0 && (
-                          <span className="text-sm font-semibold text-rating">
-                            {savePct}% off
-                          </span>
-                        )}
-                      </div>
-
-                      {Number(item.line_tax) > 0 && (
-                        <p className="mt-0.5 text-[11px] text-ink-tertiary">
-                          incl. {formatPrice(item.line_tax)} tax · line total{' '}
-                          <span className="nums">{formatPrice(item.line_total)}</span>
-                        </p>
-                      )}
-
-                      {deliveryBy && (
-                        <p className="mt-1 text-xs text-ink-secondary">
-                          Delivery by{' '}
-                          <span className="font-semibold text-success">{deliveryBy}</span>
-                        </p>
-                      )}
-
-                      {/* Controls row */}
-                      <div className="mt-3 flex flex-wrap items-center gap-4">
-                        {/* Quantity stepper */}
-                        <div
-                          className="inline-flex items-center rounded-lg border border-line-strong"
-                          aria-label={`Quantity for ${item.name}`}
-                        >
-                          <button
-                            type="button"
-                            disabled={busy || item.quantity <= 1}
-                            aria-label="Decrease quantity"
-                            onClick={() =>
-                              handleUpdateQty(item.product_id, item.quantity - 1)
-                            }
-                            className="grid size-8 place-items-center text-ink-secondary transition-colors hover:text-accent focus-visible:focus-ring disabled:opacity-40"
-                          >
-                            −
-                          </button>
-                          <span className="w-9 text-center text-sm font-semibold nums">
-                            {updatingId === item.product_id ? (
-                              <Loader2 className="mx-auto size-3.5 animate-spin text-ink-tertiary" aria-hidden="true" />
-                            ) : (
-                              item.quantity
+                      {/* Details */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            {/* Brand eyebrow */}
+                            {item.brand && (
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-wmuted">
+                                {item.brand}
+                              </p>
                             )}
+                            {/* Product name */}
+                            <Link
+                              to={`/products/${item.product_id}`}
+                              className="font-wserif line-clamp-2 text-[18px] leading-snug text-wink transition-colors hover:text-wgreen"
+                            >
+                              {item.name}
+                            </Link>
+                            <p className="mt-0.5 text-xs text-wmuted">
+                              Seller: ShopWell Retail
+                            </p>
+                          </div>
+                          {/* Rating pill */}
+                          {item.rating && (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-wgold/15 px-2 py-0.5 text-xs font-semibold text-wgold">
+                              {Number(item.rating).toFixed(1)}&nbsp;★
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Price row */}
+                        <div className="mt-2 flex flex-wrap items-baseline gap-2">
+                          <span className="font-wserif text-xl text-wink">
+                            {formatPrice(item.unit_price)}
                           </span>
+                          {mrp && (
+                            <span className="text-sm text-wmuted line-through">
+                              {formatPrice(mrp)}
+                            </span>
+                          )}
+                          {savePct > 0 && (
+                            <span className="text-sm font-semibold text-wgold">
+                              {savePct}% off
+                            </span>
+                          )}
+                        </div>
+
+                        {Number(item.line_tax) > 0 && (
+                          <p className="mt-0.5 text-[11px] text-wmuted">
+                            incl. {formatPrice(item.line_tax)} tax · line total{' '}
+                            {formatPrice(item.line_total)}
+                          </p>
+                        )}
+
+                        {deliveryBy && (
+                          <p className="mt-1 text-xs text-wmuted">
+                            Delivery by{' '}
+                            <span className="font-semibold text-wgreen">{deliveryBy}</span>
+                          </p>
+                        )}
+
+                        {/* Controls row */}
+                        <div className="mt-3.5 flex flex-wrap items-center gap-4">
+                          {/* Quantity stepper — pill shape, wellness style */}
+                          <div
+                            className="inline-flex items-center overflow-hidden rounded-full border border-wline"
+                            aria-label={`Quantity for ${item.name}`}
+                          >
+                            <button
+                              type="button"
+                              disabled={busy || item.quantity <= 1}
+                              aria-label="Decrease quantity"
+                              onClick={() =>
+                                handleUpdateQty(item.product_id, item.quantity - 1)
+                              }
+                              className="px-3.5 py-2 text-[15px] text-wink transition-colors hover:text-wgreen disabled:opacity-40"
+                            >
+                              −
+                            </button>
+                            <span className="min-w-[24px] text-center text-sm font-semibold text-wink">
+                              {updatingId === item.product_id ? (
+                                <Loader2
+                                  className="mx-auto size-3.5 animate-spin text-wmuted"
+                                  aria-hidden="true"
+                                />
+                              ) : (
+                                item.quantity
+                              )}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              aria-label="Increase quantity"
+                              onClick={() =>
+                                handleUpdateQty(item.product_id, item.quantity + 1)
+                              }
+                              className="px-3.5 py-2 text-[15px] text-wink transition-colors hover:text-wgreen disabled:opacity-40"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          {/* Save for later */}
                           <button
                             type="button"
                             disabled={busy}
-                            aria-label="Increase quantity"
-                            onClick={() =>
-                              handleUpdateQty(item.product_id, item.quantity + 1)
-                            }
-                            className="grid size-8 place-items-center text-ink-secondary transition-colors hover:text-accent focus-visible:focus-ring disabled:opacity-40"
+                            aria-label={`Save ${item.name} for later`}
+                            onClick={() => handleSaveForLater(item)}
+                            className="text-sm font-medium text-wmuted transition-colors hover:text-wgreen disabled:opacity-50"
                           >
-                            +
+                            {savingForLater === item.product_id
+                              ? 'Saving…'
+                              : 'Save for later'}
+                          </button>
+
+                          {/* Remove */}
+                          <button
+                            type="button"
+                            disabled={busy}
+                            aria-label={`Remove ${item.name} from cart`}
+                            onClick={() => handleRemoveItem(item.product_id)}
+                            className="text-sm font-medium text-wmuted transition-colors hover:text-red-500 disabled:opacity-50"
+                          >
+                            Remove
+                          </button>
+
+                          {/* Buy now */}
+                          <button
+                            type="button"
+                            disabled={busy || serviceable === false}
+                            aria-label={`Buy ${item.name} now`}
+                            onClick={() =>
+                              navigate(
+                                `/checkout?buyNow=${item.product_id}&qty=${item.quantity}`,
+                              )
+                            }
+                            className="inline-flex items-center gap-1 text-sm font-semibold text-wgold transition-colors hover:text-wgold/75 disabled:opacity-50"
+                          >
+                            <Zap className="size-3.5" aria-hidden="true" />
+                            Buy this now
                           </button>
                         </div>
-
-                        {/* Save for later */}
-                        <button
-                          type="button"
-                          disabled={busy}
-                          aria-label={`Save ${item.name} for later`}
-                          onClick={() => handleSaveForLater(item)}
-                          className="text-sm font-semibold text-ink-secondary transition-colors hover:text-accent focus-visible:focus-ring disabled:opacity-50"
-                        >
-                          {savingForLater === item.product_id ? 'Saving…' : 'Save for later'}
-                        </button>
-
-                        {/* Remove */}
-                        <button
-                          type="button"
-                          disabled={busy}
-                          aria-label={`Remove ${item.name} from cart`}
-                          onClick={() => handleRemoveItem(item.product_id)}
-                          className="text-sm font-semibold text-ink-secondary transition-colors hover:text-danger focus-visible:focus-ring disabled:opacity-50"
-                        >
-                          Remove
-                        </button>
-
-                        {/* Buy now */}
-                        <button
-                          type="button"
-                          disabled={busy || serviceable === false}
-                          aria-label={`Buy ${item.name} now`}
-                          onClick={() =>
-                            navigate(
-                              `/checkout?buyNow=${item.product_id}&qty=${item.quantity}`,
-                            )
-                          }
-                          className="inline-flex items-center gap-1 text-sm font-semibold text-accent transition-colors hover:text-accent/80 focus-visible:focus-ring disabled:opacity-50"
-                        >
-                          <Zap className="size-3.5" aria-hidden="true" />
-                          Buy this now
-                        </button>
                       </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           </section>
 
-          {/* ── RIGHT: price details rail ── */}
+          {/* ── RIGHT: order summary rail ── */}
           <aside className="lg:sticky lg:top-[120px] lg:self-start">
-            {/* Price Details card */}
-            <div className="overflow-hidden rounded-lg bg-bg-elevated shadow-sm">
-              <h2 className="border-b border-line-subtle px-5 py-3.5 text-xs font-bold uppercase tracking-wide text-ink-tertiary">
-                Price Details
-              </h2>
 
-              <div className="space-y-3 px-5 py-4 text-sm">
+            {/* Price Details card */}
+            <div className="overflow-hidden rounded-xl3 border border-wline bg-wcard">
+              {/* Card header */}
+              <div className="border-b border-wline px-6 py-4">
+                <h2 className="font-wserif text-xl font-semibold text-wink">
+                  Order Summary
+                </h2>
+              </div>
+
+              {/* Line items */}
+              <div className="space-y-3 px-6 py-5 text-sm">
                 <FreeShippingNudge subtotal={subtotal} />
 
                 <div className="flex justify-between">
-                  <span className="text-ink-secondary">
+                  <span className="text-wmuted">
                     Price ({items.length} item{items.length === 1 ? '' : 's'})
                   </span>
-                  <span className="font-medium text-ink-primary nums">
-                    {formatPrice(mrpTotal)}
-                  </span>
+                  <span className="font-medium text-wink">{formatPrice(mrpTotal)}</span>
                 </div>
 
                 {mrpSavings > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-ink-secondary">Discount</span>
-                    <span className="font-semibold text-rating nums">
+                    <span className="text-wmuted">Discount</span>
+                    <span className="font-semibold text-wgold">
                       −{formatPrice(mrpSavings)}
                     </span>
                   </div>
@@ -676,15 +722,15 @@ export default function CartPage() {
 
                 {discountAmount > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-ink-secondary">
+                    <span className="text-wmuted">
                       Coupon
                       {couponCode && (
-                        <span className="ml-1 font-mono text-[10px] text-ink-tertiary">
+                        <span className="ml-1 font-mono text-[10px] text-wmuted">
                           ({couponCode})
                         </span>
                       )}
                     </span>
-                    <span className="font-semibold text-rating nums">
+                    <span className="font-semibold text-wgold">
                       −{formatPrice(discountAmount)}
                     </span>
                   </div>
@@ -692,83 +738,101 @@ export default function CartPage() {
 
                 {taxAmount > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-ink-secondary">Taxes</span>
-                    <span className="font-medium text-ink-primary nums">
-                      {formatPrice(taxAmount)}
-                    </span>
+                    <span className="text-wmuted">Taxes</span>
+                    <span className="font-medium text-wink">{formatPrice(taxAmount)}</span>
                   </div>
                 )}
 
                 <div className="flex justify-between">
-                  <span className="text-ink-secondary">Delivery charges</span>
+                  <span className="text-wmuted">Delivery charges</span>
                   {quote ? (
                     shippingAmount === 0 ? (
-                      <span className="font-semibold text-rating">FREE</span>
+                      <span className="font-semibold text-wgreen">FREE</span>
                     ) : (
-                      <span className="font-medium text-ink-primary nums">
+                      <span className="font-medium text-wink">
                         {formatPrice(shippingAmount)}
                       </span>
                     )
                   ) : (
-                    <span className="text-xs text-ink-tertiary">
+                    <span className="text-xs text-wmuted">
                       {selectedAddress ? 'Calculating…' : 'FREE'}
                     </span>
                   )}
                 </div>
 
-                <div className="flex justify-between border-t border-dashed border-line-strong pt-3 text-base font-bold text-ink-primary">
-                  <span>Total Amount</span>
-                  <span className="nums">{formatPrice(total)}</span>
+                {/* Total row */}
+                <div className="flex items-baseline justify-between border-t border-dashed border-wline pt-4">
+                  <span className="text-base font-semibold text-wink">Total</span>
+                  <span className="font-wserif text-2xl text-wink">
+                    {formatPrice(total)}
+                  </span>
                 </div>
               </div>
 
+              {/* Savings banner */}
               {totalSavings > 0 && (
-                <div className="border-t border-dashed border-line-subtle px-5 py-3">
-                  <p className="text-sm font-semibold text-rating">
+                <div className="border-t border-wline bg-wgold/10 px-6 py-3">
+                  <p className="text-sm font-semibold text-wgold">
                     You save {formatPrice(totalSavings)} on this order
                   </p>
                 </div>
               )}
 
               {/* Place Order CTA */}
-              <div className="px-5 pb-5 pt-2">
+              <div className="px-6 pb-6 pt-4">
                 <button
                   type="button"
                   disabled={(svcLoading && !!pincode) || serviceable === false}
                   onClick={placeOrder}
                   className={cn(
-                    'flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-cta text-sm font-bold uppercase tracking-wide text-white shadow-sm',
-                    'transition-transform hover:-translate-y-0.5 active:translate-y-0',
-                    'focus-visible:focus-ring disabled:opacity-50 disabled:pointer-events-none',
+                    'w-full rounded-full bg-wgreen py-4 text-sm font-semibold tracking-wide text-white',
+                    'transition-colors hover:bg-wgreen-dark',
+                    'disabled:pointer-events-none disabled:opacity-50',
                   )}
                 >
-                  Place Order
+                  Proceed to Checkout
                 </button>
                 {serviceable === false && (
-                  <p className="mt-2 text-center text-xs text-danger">
+                  <p className="mt-2 text-center text-xs text-red-500">
                     Delivery isn&apos;t available at the selected address.
                   </p>
                 )}
               </div>
 
-              {/* Secure payment assurance */}
-              <div className="flex items-start gap-2.5 border-t border-line-subtle px-5 py-3.5 text-sm text-ink-secondary">
-                <ShieldCheck className="mt-0.5 size-[22px] shrink-0 text-rating" aria-hidden="true" />
-                Safe and secure payments. Easy returns. 100% authentic products.
+              {/* Encrypted checkout badge */}
+              <div className="flex items-center justify-center gap-1.5 border-t border-wline px-6 py-3.5 text-xs text-wmuted">
+                <LockIcon size={13} stroke="#B49A63" />
+                <span>Checkout is encrypted &amp; secure</span>
               </div>
             </div>
 
             {/* Coupon card */}
-            <div className="mt-3 overflow-hidden rounded-lg bg-bg-elevated shadow-sm">
-              <div className="p-4">
-                <CouponBlock appliedCode={couponCode} discount={discountAmount} />
-              </div>
+            <div className="mt-4 rounded-xl2 border border-wline bg-wcard p-5">
+              <CouponBlock appliedCode={couponCode} discount={discountAmount} />
+            </div>
+
+            {/* Continue shopping link */}
+            <div className="mt-4 text-center">
+              <Link
+                to="/products"
+                className="text-sm font-medium text-wgreen underline underline-offset-4 hover:text-wgreen-dark"
+              >
+                Continue Shopping
+              </Link>
+            </div>
+
+            {/* Shield assurance */}
+            <div className="mt-4 flex items-start gap-2.5 rounded-xl2 border border-wline bg-wcard px-4 py-3.5 text-sm text-wmuted">
+              <ShieldIcon size={20} stroke="#183A2E" strokeWidth={1.5} />
+              <span>
+                Safe and secure payments. Easy returns. 100% authentic products.
+              </span>
             </div>
           </aside>
 
-          {/* Mobile sticky place-order bar */}
+          {/* ── Mobile sticky place-order bar ── */}
           <div
-            className="fixed inset-x-0 bottom-0 z-40 border-t border-line-subtle bg-bg-elevated px-4 pt-3 shadow-md lg:hidden"
+            className="fixed inset-x-0 bottom-0 z-40 border-t border-wline bg-wcard px-4 pt-3 shadow-lg lg:hidden"
             style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
           >
             <PlaceOrderBar
@@ -782,12 +846,13 @@ export default function CartPage() {
         </div>
       )}
 
+      {/* Address select drawer — preserved exactly */}
       <AddressSelectDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         selectedId={selectedAddress?.id ?? null}
         onSelect={(addr) => setPickedAddressId(addr.id)}
       />
-    </Page>
+    </div>
   );
 }

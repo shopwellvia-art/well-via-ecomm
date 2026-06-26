@@ -34,17 +34,17 @@ export function Reveal({ children, className, delay = 0, y = 24, as = 'div' }) {
   );
 }
 
-/** Section heading with a small accent eyebrow — used between page sections. */
+/** Section heading with a small gold eyebrow — used between page sections. */
 export function SectionHeading({ eyebrow, title, className }) {
   return (
     <div className={cn('flex flex-col gap-2', className)}>
       {eyebrow && (
-        <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
-          <span className="h-px w-6 bg-accent/50" aria-hidden="true" />
+        <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-wgold">
+          <span className="h-px w-6 bg-wgold/50" aria-hidden="true" />
           {eyebrow}
         </span>
       )}
-      <h2 className="text-h2 text-ink-primary text-balance">{title}</h2>
+      <h2 className="text-h2 font-wserif text-wink text-balance">{title}</h2>
     </div>
   );
 }

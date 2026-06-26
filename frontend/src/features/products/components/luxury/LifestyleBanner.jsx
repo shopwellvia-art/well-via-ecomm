@@ -50,7 +50,7 @@ export function LifestyleBanner({ product }) {
           <div className="mt-2">
             <Link
               to="/products"
-              className="inline-flex h-10 items-center gap-2 rounded-sm bg-white px-5 text-sm font-semibold text-ink-primary shadow-sm transition-[filter] hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              className="inline-flex h-10 items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-wink shadow-sm transition-[filter] hover:brightness-95 focus-visible:outline-none"
             >
               Explore collection
               <ArrowRight className="size-4" aria-hidden="true" />

@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, MapPin, CheckCircle2 } from 'lucide-react';
-import { Button } from '@/components/ui/Button.jsx';
-import { Skeleton } from '@/components/ui/Skeleton.jsx';
+import { Button } from '@/components/storefront/ui/Button.jsx';
+import { Skeleton } from '@/components/storefront/ui/Skeleton.jsx';
 import { cn } from '@/lib/utils.js';
 import { useAddresses, useCreateAddress } from '../hooks.js';
 import AddressForm from './AddressForm.jsx';
@@ -137,11 +137,11 @@ export default function AddressSelectDrawer({ open, onClose, selectedId, onSelec
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'tween', duration: 0.25, ease: 'easeOut' }}
-            className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-bg-elevated shadow-xl outline-none"
+            className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-wcard shadow-xl outline-none"
           >
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-line-subtle px-5 py-4">
-              <h2 id="drawer-title" className="text-sm font-semibold text-ink-primary">
+            <div className="flex items-center justify-between border-b border-wline px-5 py-4">
+              <h2 id="drawer-title" className="font-wserif text-sm font-semibold text-wink">
                 Select delivery address
               </h2>
               <div className="flex items-center gap-2">
@@ -151,7 +151,7 @@ export default function AddressSelectDrawer({ open, onClose, selectedId, onSelec
                     variant="ghost"
                     size="sm"
                     onClick={() => setAdding(true)}
-                    className="text-accent hover:text-accent"
+                    className="text-wgreen hover:text-wgreen"
                   >
                     <Plus className="size-3.5" aria-hidden="true" />
                     Add New
@@ -162,7 +162,7 @@ export default function AddressSelectDrawer({ open, onClose, selectedId, onSelec
                   type="button"
                   aria-label="Close"
                   onClick={onClose}
-                  className="grid size-8 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+                  className="grid size-8 place-items-center rounded-md text-wmuted transition-colors hover:bg-wpaper hover:text-wink"
                 >
                   <X className="size-4" />
                 </button>
@@ -183,31 +183,31 @@ export default function AddressSelectDrawer({ open, onClose, selectedId, onSelec
                     showSetDefault={false}
                   />
                   {createAddress.isError && (
-                    <p className="mt-2 text-xs text-danger">
+                    <p className="mt-2 text-xs text-red-600">
                       {createAddress.error?.response?.data?.error?.message ||
                         'Could not save the address. Please check the details and try again.'}
                     </p>
                   )}
                 </div>
               ) : isError ? (
-                <div className="p-4 text-sm text-danger">
+                <div className="p-4 text-sm text-red-600">
                   Could not load addresses.{' '}
                   <button
                     type="button"
                     onClick={() => window.location.reload()}
-                    className="font-semibold underline underline-offset-2 focus-visible:focus-ring"
+                    className="font-semibold underline underline-offset-2"
                   >
                     Retry
                   </button>
                 </div>
               ) : isLoading ? (
                 <div className="flex flex-col gap-2">
-                  <Skeleton className="h-20 rounded-sm" />
-                  <Skeleton className="h-20 rounded-sm" />
+                  <Skeleton className="h-20 rounded-xl" />
+                  <Skeleton className="h-20 rounded-xl" />
                 </div>
               ) : (
                 <>
-                  <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-widest text-ink-tertiary">
+                  <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-widest text-wmuted">
                     Saved addresses
                   </p>
                   <ul
@@ -228,10 +228,10 @@ export default function AddressSelectDrawer({ open, onClose, selectedId, onSelec
                               onClose?.();
                             }}
                             className={cn(
-                              'w-full rounded-sm border p-3.5 text-left transition-colors duration-150',
+                              'w-full rounded-xl border p-3.5 text-left transition-colors duration-150',
                               isSelected
-                                ? 'border-accent bg-accent/8'
-                                : 'border-line-subtle bg-bg-elevated hover:border-line-strong hover:shadow-sm',
+                                ? 'border-wgreen bg-wgreen/10'
+                                : 'border-wline bg-wcard hover:border-wline hover:shadow-sm',
                             )}
                           >
                             <div className="flex items-start gap-3">
@@ -240,8 +240,8 @@ export default function AddressSelectDrawer({ open, onClose, selectedId, onSelec
                                 className={cn(
                                   'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
                                   isSelected
-                                    ? 'border-accent bg-accent'
-                                    : 'border-line-strong bg-transparent',
+                                    ? 'border-wgreen bg-wgreen'
+                                    : 'border-wline bg-transparent',
                                 )}
                                 aria-hidden="true"
                               >
@@ -251,29 +251,29 @@ export default function AddressSelectDrawer({ open, onClose, selectedId, onSelec
                               </span>
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="min-w-0 truncate text-sm font-semibold text-ink-primary">
+                                  <span className="min-w-0 truncate text-sm font-semibold text-wink">
                                     {addr.full_name}
                                   </span>
-                                  <span className="rounded-sm bg-fill px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">
+                                  <span className="rounded-md bg-wpaper px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-wmuted">
                                     {LABEL_TEXT[String(addr.label).toLowerCase()] || 'Other'}
                                   </span>
-                                  <span className="text-xs font-semibold text-ink-primary nums">
+                                  <span className="text-xs font-semibold text-wink nums">
                                     {addr.pincode}
                                   </span>
                                   {isSelected && (
-                                    <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold text-accent">
+                                    <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold text-wgreen">
                                       <CheckCircle2 className="size-3" aria-hidden="true" />
                                       Selected
                                     </span>
                                   )}
                                 </div>
-                                <p className="mt-1 line-clamp-2 text-xs text-ink-secondary">
+                                <p className="mt-1 line-clamp-2 text-xs text-wmuted">
                                   {addr.line1}
                                   {addr.line2 ? `, ${addr.line2}` : ''}
                                   {addr.landmark ? ` (${addr.landmark})` : ''}, {addr.city},{' '}
                                   {addr.state}
                                 </p>
-                                <p className="mt-0.5 text-[11px] text-ink-tertiary nums">
+                                <p className="mt-0.5 text-[11px] text-wmuted nums">
                                   {addr.phone}
                                 </p>
                               </div>
@@ -286,8 +286,8 @@ export default function AddressSelectDrawer({ open, onClose, selectedId, onSelec
 
                   {(addresses?.length ?? 0) === 0 && (
                     <div className="mt-6 flex flex-col items-center gap-2 text-center">
-                      <MapPin className="size-6 text-ink-tertiary" aria-hidden="true" />
-                      <p className="text-sm text-ink-secondary">
+                      <MapPin className="size-6 text-wmuted" aria-hidden="true" />
+                      <p className="text-sm text-wmuted">
                         No saved addresses yet.
                       </p>
                     </div>

@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils.js';
  * both when there's no image_url AND when the image fails to load (404, dead
  * URL) — so a broken image never leaks the browser's broken-glyph + alt text
  * over the card. Always fills a fixed-aspect box so CLS stays 0.
+ *
+ * Fallback uses warm wellness tones: wpaper / wcanvas / wgold.
  */
 export function ProductMedia({ product, className, eager = false }) {
   const initial = (product?.name || '?').trim().charAt(0).toUpperCase();
@@ -36,11 +38,11 @@ export function ProductMedia({ product, className, eager = false }) {
     <div
       aria-hidden="true"
       className={cn(
-        'grid size-full place-items-center bg-gradient-to-br from-accent/25 via-bg-elevated to-bg-sunken',
+        'grid size-full place-items-center bg-gradient-to-br from-wgold/20 via-wpaper to-wcanvas',
         className,
       )}
     >
-      <span className="text-5xl font-semibold text-ink-primary/30">{initial}</span>
+      <span className="text-5xl font-semibold text-wink/30">{initial}</span>
     </div>
   );
 }

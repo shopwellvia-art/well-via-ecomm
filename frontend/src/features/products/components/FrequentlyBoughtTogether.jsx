@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Plus, ShoppingBag, Check, Loader2 } from 'lucide-react';
-import { Skeleton } from '@/components/ui/Skeleton.jsx';
+import { Skeleton } from '@/components/storefront/ui/Skeleton.jsx';
 import { useAddToCart } from '@/features/cart/hooks.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { formatPrice } from '@/lib/utils.js';
@@ -9,7 +9,7 @@ import { ProductMedia } from './ProductMedia.jsx';
 /**
  * Frequently bought together — source product plus up to 2 companions
  * pre-checked. User can deselect; combined price + action update accordingly.
- * Flat Amazon/Flipkart style card, no glass/shadow effects.
+ * Wellness wcard surface, rounded-xl2 card.
  */
 export function FrequentlyBoughtTogether({ product, related, isLoading }) {
   const user = useAuthStore((s) => s.user);
@@ -39,7 +39,7 @@ export function FrequentlyBoughtTogether({ product, related, isLoading }) {
   const selectedCount = all.filter((p) => selected.has(p.id)).length;
 
   if (isLoading) {
-    return <Skeleton className="mt-10 h-40 rounded-sm" />;
+    return <Skeleton className="mt-10 h-40 rounded-xl2" />;
   }
   if (companions.length === 0) return null;
 
@@ -63,19 +63,19 @@ export function FrequentlyBoughtTogether({ product, related, isLoading }) {
       await Promise.all(ids.map((productId) => addToCart.mutateAsync({ productId, quantity: 1 })));
       setDoneAt(Date.now());
     } catch {
-      setAddError('Couldn’t add items — please try again.');
+      setAddError("Couldn't add items — please try again.");
     }
   }
 
   return (
     <section className="mt-10">
-      <h2 className="mb-3 text-base font-semibold text-ink-primary">
+      <h2 className="mb-3 text-base font-semibold text-wink">
         Frequently bought together
       </h2>
 
-      <div className="overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated">
+      <div className="overflow-hidden rounded-xl2 border border-wline bg-wcard">
         {/* Product tiles row */}
-        <div className="flex items-center gap-3 overflow-x-auto pb-1 sm:flex-wrap sm:gap-4 sm:overflow-visible border-b border-line-subtle p-4">
+        <div className="flex items-center gap-3 overflow-x-auto pb-1 sm:flex-wrap sm:gap-4 sm:overflow-visible border-b border-wline p-4">
           {all.map((p, i) => (
             <div key={p.id} className="flex shrink-0 items-center gap-3">
               <BundleTile
@@ -86,7 +86,7 @@ export function FrequentlyBoughtTogether({ product, related, isLoading }) {
               />
               {i < all.length - 1 && (
                 <Plus
-                  className="size-4 shrink-0 text-ink-tertiary"
+                  className="size-4 shrink-0 text-wmuted"
                   aria-hidden="true"
                 />
               )}
@@ -97,10 +97,10 @@ export function FrequentlyBoughtTogether({ product, related, isLoading }) {
         {/* Total + CTA row */}
         <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3">
           <div>
-            <p className="text-xs text-ink-tertiary">
+            <p className="text-xs text-wmuted">
               Total {selectedCount > 1 ? `(${selectedCount} items)` : ''}
             </p>
-            <p className="mt-0.5 text-xl font-semibold text-accent tabular-nums">
+            <p className="mt-0.5 text-xl font-semibold text-wgreen tabular-nums">
               {formatPrice(total)}
             </p>
           </div>
@@ -108,7 +108,7 @@ export function FrequentlyBoughtTogether({ product, related, isLoading }) {
             type="button"
             onClick={addAll}
             disabled={selectedCount === 0 || addToCart.isPending}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-sm bg-accent px-5 text-sm font-semibold text-white transition-[background-color] hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 disabled:pointer-events-none"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-wgreen px-5 text-sm font-semibold text-white transition-[background-color] hover:bg-wgreen-dark disabled:opacity-40 disabled:pointer-events-none"
           >
             {addToCart.isPending ? (
               <>
@@ -129,7 +129,7 @@ export function FrequentlyBoughtTogether({ product, related, isLoading }) {
           </button>
         </div>
         {addError && (
-          <p className="px-4 pb-3 text-xs text-danger">{addError}</p>
+          <p className="px-4 pb-3 text-xs text-red-600">{addError}</p>
         )}
       </div>
     </section>
@@ -142,8 +142,8 @@ function BundleTile({ product, isSource, selected, onToggle }) {
       className={[
         'flex cursor-pointer items-center gap-3 rounded-sm border p-2 transition-colors',
         selected
-          ? 'border-accent/50 bg-accent/5'
-          : 'border-line-subtle bg-bg-sunken hover:border-line-strong',
+          ? 'border-wgreen/50 bg-wgreen/5'
+          : 'border-wline bg-wpaper hover:border-wline',
         isSource ? 'cursor-default' : '',
       ].join(' ')}
     >
@@ -153,18 +153,18 @@ function BundleTile({ product, isSource, selected, onToggle }) {
         disabled={isSource}
         onChange={onToggle}
         aria-label={`Include ${product.name} in bundle`}
-        className="size-4 shrink-0 accent-accent"
+        className="size-4 shrink-0 accent-wgreen"
       />
-      <div className="size-14 shrink-0 overflow-hidden rounded-sm border border-line-subtle bg-bg-elevated">
+      <div className="size-14 shrink-0 overflow-hidden rounded-sm border border-wline bg-wcard">
         <ProductMedia product={product} />
       </div>
       <div className="min-w-0 max-w-[160px]">
-        <p className="line-clamp-2 text-xs font-medium text-ink-primary">{product.name}</p>
-        <p className="mt-0.5 text-xs font-semibold text-accent tabular-nums">
+        <p className="line-clamp-2 text-xs font-medium text-wink">{product.name}</p>
+        <p className="mt-0.5 text-xs font-semibold text-wgreen tabular-nums">
           {formatPrice(product.price)}
         </p>
         {isSource && (
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-accent">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-wgold">
             This item
           </p>
         )}

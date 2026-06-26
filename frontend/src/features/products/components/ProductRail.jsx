@@ -1,16 +1,16 @@
 import { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Skeleton } from '@/components/ui/Skeleton.jsx';
-import { Badge } from '@/components/ui/Badge.jsx';
+import { Skeleton } from '@/components/storefront/ui/Skeleton.jsx';
+import { Badge } from '@/components/storefront/ui/Badge.jsx';
 import { formatPrice, stockLabel } from '@/lib/utils.js';
 import { ProductMedia } from './ProductMedia.jsx';
 
 /**
- * Horizontally-scrolling product rail — Flipkart style.
- * White cards with flat border on grey bg. Native touch-swipe; arrow buttons on desktop.
+ * Horizontally-scrolling product rail — wellness palette.
+ * Warm wcard cards with wline border on wpaper bg. Native touch-swipe; arrow buttons on desktop.
  *
- * `cardStyle` — when true, wraps the rail in a white rounded-lg card with a
+ * `cardStyle` — when true, wraps the rail in a wcard rounded-xl2 card with a
  * header row (title + "View all ›" link) matching the mock's "You may also like"
  * section. Defaults to the plain section layout.
  */
@@ -27,8 +27,8 @@ export function ProductRail({ title, products, isLoading, cardStyle = false }) {
   if (isLoading) {
     if (cardStyle) {
       return (
-        <section className="mt-3 overflow-hidden rounded-lg bg-bg-elevated shadow-sm" aria-label={title}>
-          <div className="flex items-center justify-between border-b border-line-subtle px-5 py-4">
+        <section className="mt-3 overflow-hidden rounded-xl2 bg-wcard shadow-sm" aria-label={title}>
+          <div className="flex items-center justify-between border-b border-wline px-5 py-4">
             <Skeleton className="h-5 w-36" />
             <Skeleton className="h-4 w-16" />
           </div>
@@ -76,12 +76,12 @@ export function ProductRail({ title, products, isLoading, cardStyle = false }) {
 
   if (cardStyle) {
     return (
-      <section className="mt-3 overflow-hidden rounded-lg bg-bg-elevated shadow-sm" aria-label={title}>
-        <div className="flex items-center justify-between border-b border-line-subtle px-5 py-4">
-          <h2 className="text-lg font-bold text-ink-primary">{title}</h2>
+      <section className="mt-3 overflow-hidden rounded-xl2 bg-wcard shadow-sm" aria-label={title}>
+        <div className="flex items-center justify-between border-b border-wline px-5 py-4">
+          <h2 className="text-lg font-bold text-wink">{title}</h2>
           <Link
             to="/products"
-            className="text-sm font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="text-sm font-semibold text-wgreen hover:underline"
           >
             View all ›
           </Link>
@@ -100,7 +100,7 @@ export function ProductRail({ title, products, isLoading, cardStyle = false }) {
             type="button"
             onClick={() => scrollBy(-1)}
             aria-label="Scroll left"
-            className="absolute left-1.5 top-1/2 hidden size-9 -translate-y-1/2 place-items-center rounded-full border border-line-subtle bg-bg-elevated text-ink-primary shadow-md transition hover:bg-bg-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:grid"
+            className="absolute left-1.5 top-1/2 hidden size-9 -translate-y-1/2 place-items-center rounded-full border border-wline bg-wcard text-wink shadow-md transition hover:bg-wpaper md:grid"
           >
             <ChevronLeft className="size-4" aria-hidden="true" />
           </button>
@@ -108,7 +108,7 @@ export function ProductRail({ title, products, isLoading, cardStyle = false }) {
             type="button"
             onClick={() => scrollBy(1)}
             aria-label="Scroll right"
-            className="absolute right-1.5 top-1/2 hidden size-9 -translate-y-1/2 place-items-center rounded-full border border-line-subtle bg-bg-elevated text-ink-primary shadow-md transition hover:bg-bg-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:grid"
+            className="absolute right-1.5 top-1/2 hidden size-9 -translate-y-1/2 place-items-center rounded-full border border-wline bg-wcard text-wink shadow-md transition hover:bg-wpaper md:grid"
           >
             <ChevronRight className="size-4" aria-hidden="true" />
           </button>
@@ -120,7 +120,7 @@ export function ProductRail({ title, products, isLoading, cardStyle = false }) {
   return (
     <section className="mt-10" aria-label={title}>
       <div className="mb-3 flex items-center justify-between gap-4">
-        <h2 className="text-base font-semibold text-ink-primary">{title}</h2>
+        <h2 className="text-base font-semibold text-wink">{title}</h2>
         <div className="hidden gap-1 md:flex">
           <ArrowBtn onClick={() => scrollBy(-1)} dir="left" />
           <ArrowBtn onClick={() => scrollBy(1)} dir="right" />
@@ -145,18 +145,18 @@ function RailCard({ product, wide = false }) {
     <div className={wide ? 'w-[200px] shrink-0 snap-start' : 'w-40 shrink-0 snap-start'}>
       <Link
         to={`/products/${product.id}`}
-        className="group block overflow-hidden rounded-lg border border-line-subtle bg-bg-elevated shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="group block overflow-hidden rounded-xl2 border border-wline bg-wcard shadow-sm transition-shadow hover:shadow-md"
       >
-        <div className="aspect-square overflow-hidden bg-bg-sunken">
+        <div className="aspect-square overflow-hidden bg-wpaper">
           <div className="size-full transition-transform duration-300 group-hover:scale-[1.03]">
             <ProductMedia product={product} />
           </div>
         </div>
         <div className="flex flex-col gap-1 p-2.5">
-          <p className="line-clamp-2 text-xs font-medium leading-snug text-ink-primary">
+          <p className="line-clamp-2 text-xs font-medium leading-snug text-wink">
             {product.name}
           </p>
-          <p className="nums text-sm font-semibold text-accent">
+          <p className="nums text-sm font-semibold text-wgreen">
             {formatPrice(product.price)}
           </p>
           <Badge tone={stock.tone} size="sm" className="self-start text-[10px]">
@@ -175,7 +175,7 @@ function ArrowBtn({ onClick, dir }) {
       type="button"
       onClick={onClick}
       aria-label={dir === 'left' ? 'Scroll left' : 'Scroll right'}
-      className="grid size-8 place-items-center rounded-sm border border-line-subtle bg-bg-elevated text-ink-secondary transition-colors hover:border-line-strong hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="grid size-8 place-items-center rounded-sm border border-wline bg-wcard text-wmuted transition-colors hover:border-wline hover:text-wink"
     >
       <Icon className="size-4" aria-hidden="true" />
     </button>

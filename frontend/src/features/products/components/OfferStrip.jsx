@@ -20,24 +20,24 @@ const OFFERS = [
 ];
 
 /**
- * "Available offers" card — Flipkart-style rows: green tag icon + bold label + detail.
- * Flat white card with a header title and border separators.
+ * "Available offers" card — wellness palette rows: green tag icon + bold label + detail.
+ * Warm wcard card with a header title and border separators.
  */
 export function OfferStrip() {
   return (
     <section className="mt-5" aria-label="Available offers">
-      <div className="rounded-lg border border-line-subtle">
-        <h2 className="border-b border-line-subtle px-4 py-2.5 text-sm font-bold text-ink-primary">
+      <div className="rounded-xl2 border border-wline">
+        <h2 className="border-b border-wline px-4 py-2.5 text-sm font-bold text-wink">
           Available offers
         </h2>
         <ul className="space-y-2.5 px-4 py-3.5 text-sm">
           {OFFERS.map(({ label, detail }) => (
             <li key={label} className="flex gap-2.5">
-              <span className="mt-0.5 shrink-0 text-rating" aria-hidden="true">
+              <span className="mt-0.5 shrink-0 text-wgreen" aria-hidden="true">
                 <Tag className="size-4" strokeWidth={1.8} />
               </span>
               <span>
-                <b className="font-semibold text-ink-primary">{label} </b>
+                <b className="font-semibold text-wink">{label} </b>
                 {detail}
               </span>
             </li>

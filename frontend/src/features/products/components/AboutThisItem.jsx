@@ -9,18 +9,18 @@ export function AboutThisItem({ product, categoryName }) {
 
   return (
     <section className="mt-6" aria-labelledby="about-heading">
-      <div className="rounded-sm border border-line-subtle bg-bg-elevated">
+      <div className="rounded-xl2 border border-wline bg-wcard">
         <h2
           id="about-heading"
-          className="border-b border-line-subtle px-4 py-2.5 text-sm font-semibold text-ink-primary"
+          className="border-b border-wline px-4 py-2.5 text-sm font-semibold text-wink"
         >
           About this item
         </h2>
         <ul className="px-4 py-3 space-y-2">
           {bullets.map((b) => (
-            <li key={b.slice(0, 40)} className="flex items-start gap-2.5 text-sm text-ink-secondary">
+            <li key={b.slice(0, 40)} className="flex items-start gap-2.5 text-sm text-wmuted">
               <span
-                className="mt-1.5 size-1.5 shrink-0 rounded-full bg-accent"
+                className="mt-1.5 size-1.5 shrink-0 rounded-full bg-wgreen"
                 aria-hidden="true"
               />
               <span className="leading-relaxed">{b}</span>

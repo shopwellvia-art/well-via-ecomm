@@ -24,10 +24,10 @@ export default function FreeShippingNudge({ subtotal }) {
   return (
     <div
       className={
-        'flex items-center gap-2 rounded-sm border px-3 py-2 text-xs ' +
+        'flex items-center gap-2 rounded-xl border px-3 py-2 text-xs ' +
         (unlocked
-          ? 'border-success/30 bg-success/12 text-success'
-          : 'border-accent/30 bg-accent/12 text-accent')
+          ? 'border-wgreen/30 bg-wgreen/10 text-wgreen'
+          : 'border-wgreen/30 bg-wgreen/10 text-wgreen')
       }
     >
       {unlocked ? (
@@ -39,7 +39,7 @@ export default function FreeShippingNudge({ subtotal }) {
         {unlocked ? (
           <>
             <span className="font-semibold">Free shipping unlocked</span>{' '}
-            <span className="text-ink-secondary">on prepaid orders.</span>
+            <span className="text-wmuted">on prepaid orders.</span>
           </>
         ) : (
           <>

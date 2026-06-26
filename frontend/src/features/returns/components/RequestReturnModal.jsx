@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { Undo2, AlertTriangle, Check, X } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { Card } from '@/components/ui/Card.jsx';
-import { Button } from '@/components/ui/Button.jsx';
-import { Textarea } from '@/components/ui/Textarea.jsx';
+import { Card } from '@/components/storefront/ui/Card.jsx';
+import { Button } from '@/components/storefront/ui/Button.jsx';
+import { Textarea } from '@/components/storefront/ui/Textarea.jsx';
 import { scaleIn, fadeUp } from '@/lib/motion.js';
 import { useCreateReturn } from '@/features/returns/hooks.js';
 
@@ -97,20 +97,20 @@ export default function RequestReturnModal({ order, onClose, onCreated }) {
         animate="show"
         className="w-full max-w-lg"
       >
-        <Card className="overflow-hidden p-0">
+        <Card className="bg-wcard overflow-hidden p-0">
           {/* Modal header */}
-          <div className="flex items-center gap-3 border-b border-line-subtle px-6 py-4">
-            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent/12 text-accent">
+          <div className="flex items-center gap-3 border-b border-wline px-6 py-4">
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-wgreen/10 text-wgreen">
               <Undo2 className="size-4" aria-hidden="true" />
             </span>
             <div className="min-w-0 flex-1">
               <h2
                 id="return-modal-title"
-                className="text-h3 text-ink-primary tracking-tight"
+                className="font-wserif text-h3 text-wink tracking-tight"
               >
                 Request a return
               </h2>
-              <p className="mt-0.5 text-xs text-ink-tertiary">
+              <p className="mt-0.5 text-xs text-wmuted">
                 Order #{order.id} — we&apos;ll arrange pickup and refund once items
                 arrive back.
               </p>
@@ -121,7 +121,7 @@ export default function RequestReturnModal({ order, onClose, onCreated }) {
               onClick={onClose}
               aria-label="Close"
               disabled={create.isPending}
-              className="grid size-11 shrink-0 place-items-center rounded-lg text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring disabled:pointer-events-none"
+              className="grid size-11 shrink-0 place-items-center rounded-lg text-wmuted transition-colors hover:bg-wpaper hover:text-wink disabled:pointer-events-none"
             >
               <X className="size-4" aria-hidden="true" />
             </button>
@@ -130,22 +130,22 @@ export default function RequestReturnModal({ order, onClose, onCreated }) {
           <div className="max-h-[calc(100svh-12rem)] overflow-y-auto px-6 py-5">
             {/* Items section */}
             <motion.div variants={fadeUp} initial="hidden" animate="show">
-              <p className="text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
+              <p className="text-xs font-semibold uppercase tracking-widest text-wmuted">
                 Select items to return
               </p>
               <ul className="mt-2.5 flex flex-col gap-2">
                 {order.items.map((it) => (
                   <li
                     key={it.id}
-                    className="flex items-center gap-3 rounded-lg border border-line-subtle bg-bg-sunken px-3.5 py-2.5 transition-colors hover:border-line-strong"
+                    className="flex items-center gap-3 rounded-xl border border-wline bg-wpaper px-3.5 py-2.5 transition-colors hover:border-wline"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-ink-primary">
+                      <p className="truncate text-sm font-medium text-wink">
                         {it.name || `Product #${it.product_id}`}
                       </p>
-                      <p className="mt-0.5 text-[11px] text-ink-tertiary">
+                      <p className="mt-0.5 text-[11px] text-wmuted">
                         Qty ordered:{' '}
-                        <span className="nums font-semibold text-ink-secondary">
+                        <span className="nums font-semibold text-wmuted">
                           {it.quantity}
                         </span>
                       </p>
@@ -153,7 +153,7 @@ export default function RequestReturnModal({ order, onClose, onCreated }) {
                     <div className="flex shrink-0 flex-col items-end gap-0.5">
                       <label
                         htmlFor={`qty-${it.id}`}
-                        className="text-[10px] uppercase tracking-wide text-ink-tertiary"
+                        className="text-[10px] uppercase tracking-wide text-wmuted"
                       >
                         Return qty
                       </label>
@@ -165,7 +165,7 @@ export default function RequestReturnModal({ order, onClose, onCreated }) {
                         step={1}
                         value={qtys[it.id] ?? 0}
                         onChange={(e) => setQty(it.id, Number(e.target.value))}
-                        className="w-20 rounded-lg border border-line-subtle bg-bg-elevated px-2.5 py-2 text-right text-sm text-ink-primary transition-colors hover:border-line-strong focus:border-accent focus:outline-none nums"
+                        className="w-20 rounded-xl border border-wline bg-wcard px-2.5 py-2 text-right text-sm text-wink transition-colors hover:border-wline focus:border-wgreen focus:outline-none nums"
                       />
                     </div>
                   </li>
@@ -175,7 +175,7 @@ export default function RequestReturnModal({ order, onClose, onCreated }) {
 
             {/* Return reason section */}
             <div className="mt-5">
-              <p className="text-xs font-semibold uppercase tracking-widest text-ink-tertiary">
+              <p className="text-xs font-semibold uppercase tracking-widest text-wmuted">
                 Reason for return
               </p>
               <div className="mt-2.5 grid gap-1.5 sm:grid-cols-2">
@@ -185,10 +185,10 @@ export default function RequestReturnModal({ order, onClose, onCreated }) {
                     <label
                       key={r.value}
                       className={[
-                        'flex cursor-pointer items-center gap-2.5 rounded-lg border px-3.5 py-2.5 text-sm transition-colors',
+                        'flex cursor-pointer items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-sm transition-colors',
                         selected
-                          ? 'border-accent/40 bg-accent/8 text-ink-primary'
-                          : 'border-line-subtle bg-bg-sunken text-ink-secondary hover:border-line-strong hover:text-ink-primary',
+                          ? 'border-wgreen/40 bg-wgreen/10 text-wink'
+                          : 'border-wline bg-wpaper text-wmuted hover:border-wline hover:text-wink',
                       ].join(' ')}
                     >
                       <input
@@ -197,7 +197,7 @@ export default function RequestReturnModal({ order, onClose, onCreated }) {
                         value={r.value}
                         checked={selected}
                         onChange={(e) => setReason(e.target.value)}
-                        className="accent-[--accent] shrink-0"
+                        className="accent-[#183A2E] shrink-0"
                       />
                       {r.label}
                     </label>
@@ -223,7 +223,7 @@ export default function RequestReturnModal({ order, onClose, onCreated }) {
                 variants={fadeUp}
                 initial="hidden"
                 animate="show"
-                className="mt-4 flex items-start gap-2 rounded-lg border border-danger/25 bg-danger/8 px-3.5 py-3 text-sm text-danger"
+                className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-600"
               >
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                 <span>{error}</span>
@@ -232,7 +232,7 @@ export default function RequestReturnModal({ order, onClose, onCreated }) {
           </div>
 
           {/* Footer actions */}
-          <div className="flex items-center justify-end gap-2.5 border-t border-line-subtle bg-bg-sunken px-6 py-4">
+          <div className="flex items-center justify-end gap-2.5 border-t border-wline bg-wpaper px-6 py-4">
             <Button
               variant="ghost"
               onClick={onClose}

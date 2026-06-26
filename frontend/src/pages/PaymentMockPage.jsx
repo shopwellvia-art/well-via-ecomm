@@ -1,9 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { ShieldCheck, X, Check, Lock, AlertTriangle } from 'lucide-react';
-import { Page } from '@/components/layout/Page.jsx';
-import { Button } from '@/components/ui/Button.jsx';
-import { Card } from '@/components/ui/Card.jsx';
+import { LockIcon, ShieldIcon, Check, CloseIcon } from '@/components/storefront/Icons';
 import { paymentsApi } from '@/features/payments/api.js';
 import { formatPrice } from '@/lib/utils.js';
 
@@ -11,6 +8,9 @@ import { formatPrice } from '@/lib/utils.js';
  * Stand-in for PhonePe's hosted page when the active payment gateway is "mock".
  * Two buttons — approve / decline — POST the decision to our webhook,
  * then redirect the user to the `return` URL the backend embedded.
+ *
+ * Bare route (/payments/mock/:txnId) — no Layout header/footer.
+ * Renders its own full-screen wellness canvas.
  */
 export default function PaymentMockPage() {
   const { txnId } = useParams();
@@ -37,17 +37,43 @@ export default function PaymentMockPage() {
   // All hooks are declared above so React's rules-of-hooks are satisfied.
   if (!txnId) {
     return (
-      <Page>
-        <div className="flex min-h-[70vh] items-center justify-center py-12">
-          <Card className="p-8 text-center">
-            <AlertTriangle className="mx-auto mb-3 size-8 text-warning" aria-hidden="true" />
-            <p className="font-semibold text-ink-primary">Missing transaction ID</p>
-            <p className="mt-1 text-sm text-ink-secondary">
+      <main className="paper font-wsans min-h-screen flex items-start justify-center pt-[clamp(40px,8vh,90px)] px-6 pb-16">
+        <div className="w-full max-w-[440px] bg-wcard border border-wline rounded-xl3 overflow-hidden shadow-[0_24px_60px_-30px_rgba(40,30,10,0.4)] animate-rise">
+          {/* Green header band */}
+          <div className="bg-wgreen px-6 py-[18px] flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[14px] text-white/90">
+              <LockIcon size={16} stroke="#f3efe6" />
+              Secure Payment
+            </div>
+            <span className="text-[12px] text-white/60">Mock Gateway</span>
+          </div>
+
+          {/* Error body */}
+          <div className="px-6 py-8 text-center">
+            <div className="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-amber-50 border border-amber-200">
+              {/* Warning triangle — inline SVG, no external icon lib needed */}
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#92400e"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                <path d="M12 9v4m0 3h.01" />
+              </svg>
+            </div>
+            <p className="font-semibold text-wink">Missing transaction ID</p>
+            <p className="mt-1.5 text-sm text-wmuted">
               This URL is invalid. Please return to the checkout and try again.
             </p>
-          </Card>
+          </div>
         </div>
-      </Page>
+      </main>
     );
   }
 
@@ -69,90 +95,128 @@ export default function PaymentMockPage() {
   }
 
   return (
-    <Page>
-      <div className="flex min-h-[70vh] items-center justify-center py-12">
-        <div className="w-full max-w-md">
-          <Card className="overflow-hidden p-0">
-            {/* Branded header — PhonePe purple, flat (no gradient).
-                bg-[#5f259f] is an intentional brand-color bypass: this purple
-                is PhonePe's registered brand color and has no semantic token
-                equivalent. It is scoped to this dev-only sandbox simulator. */}
-            <div className="flex items-center gap-3 bg-[#5f259f] px-6 py-5 text-white">
-              <span className="grid size-10 shrink-0 place-items-center rounded-sm bg-white/12">
-                <ShieldCheck className="size-5" aria-hidden="true" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold leading-tight">
-                  PhonePe (Sandbox simulator)
-                </p>
-                <p className="mt-0.5 text-xs opacity-70">
-                  Demo mode — no real payment will be taken.
-                </p>
-              </div>
-              <Lock className="size-4 shrink-0 opacity-60" aria-hidden="true" />
+    <main className="paper font-wsans min-h-screen flex items-start justify-center pt-[clamp(40px,8vh,90px)] px-6 pb-16">
+      <div className="w-full max-w-[440px] bg-wcard border border-wline rounded-xl3 overflow-hidden shadow-[0_24px_60px_-30px_rgba(40,30,10,0.4)] animate-rise">
+
+        {/* ── Branded green header band ────────────────────────────────── */}
+        <div className="bg-wgreen px-6 py-[18px] flex items-center justify-between">
+          <div className="flex items-center gap-2 text-[14px] text-white/90">
+            <LockIcon size={16} stroke="#f3efe6" />
+            Secure Payment
+          </div>
+          <div className="flex items-center gap-1.5 text-[12px] text-white/60">
+            <ShieldIcon size={13} stroke="currentColor" strokeWidth={1.5} />
+            Mock Gateway
+          </div>
+        </div>
+
+        {/* ── Card body ────────────────────────────────────────────────── */}
+        <div className="px-6 py-[26px]">
+
+          {/* Amount summary row */}
+          <div className="flex justify-between items-center pb-4 border-b border-wline mb-[18px]">
+            <div>
+              <div className="text-[12px] text-wmuted">Paying to</div>
+              <div className="text-[15px] text-wink font-medium">Wellvia Wellness Pvt Ltd</div>
             </div>
+            <div className="font-wserif text-[28px] leading-none text-wink">
+              {formatPrice(amountMajor)}
+            </div>
+          </div>
 
-            <div className="px-6 py-8">
-              {/* Amount display */}
-              <div className="rounded-sm border border-line-subtle bg-bg-sunken px-5 py-4">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-ink-tertiary">
-                  Amount due
-                </p>
-                <p className="mt-2 break-words text-3xl font-semibold leading-none text-ink-primary nums sm:text-4xl">
-                  {formatPrice(amountMajor)}
-                </p>
-                <p className="mt-2 flex items-center gap-1.5 break-all text-xs text-ink-tertiary">
-                  <span className="shrink-0 font-medium">Txn</span>
-                  <code className="font-mono text-[11px] text-ink-secondary nums">
-                    {txnId}
-                  </code>
-                </p>
-              </div>
+          {/* Transaction ID */}
+          <p className="mb-5 text-[11px] text-wmuted break-all">
+            Txn&nbsp;
+            <code className="font-mono text-[11px] text-wink/70">{txnId}</code>
+          </p>
 
-              {/* Action buttons */}
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <Button
-                  variant="primary"
-                  size="lg"
-                  onClick={() => decide('approve')}
-                  loading={working === 'approve'}
-                  disabled={!!working}
-                  className="gap-2"
+          {/* Eyebrow label */}
+          <p className="mb-3 text-[11px] tracking-[0.1em] uppercase text-wmuted">
+            Sandbox Mode — no real payment will be taken
+          </p>
+
+          {/* ── Action buttons ───────────────────────────────────────── */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            {/* Approve */}
+            <button
+              type="button"
+              onClick={() => decide('approve')}
+              disabled={!!working}
+              className="flex items-center justify-center gap-2 w-full bg-wgreen text-white rounded-full py-[14px] text-[15px] font-medium hover:bg-wgreen-dark disabled:opacity-60 transition-colors cursor-pointer"
+            >
+              {working === 'approve' ? (
+                <svg
+                  className="animate-spin360 size-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  aria-hidden="true"
                 >
-                  <Check className="size-4" aria-hidden="true" />
-                  Approve payment
-                </Button>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={() => decide('decline')}
-                  loading={working === 'decline'}
-                  disabled={!!working}
-                  className="gap-2 border-danger/40 text-danger hover:border-danger/60 hover:bg-danger/8"
-                >
-                  <X className="size-4" aria-hidden="true" />
-                  Decline
-                </Button>
-              </div>
-
-              {/* Error state */}
-              {error && (
-                <div className="mt-4 flex items-start gap-2 rounded-sm border border-danger/25 bg-danger/8 px-3.5 py-2.5 text-sm text-danger">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                  <span>{error}</span>
-                </div>
+                  <path d="M12 3a9 9 0 1 0 9 9" />
+                </svg>
+              ) : (
+                <Check size={16} />
               )}
+              Approve payment
+            </button>
 
-              {/* Sandbox disclaimer */}
-              <p className="mt-6 text-center text-xs text-ink-tertiary">
-                This page only exists while the payment gateway is set to{' '}
-                <code className="font-mono text-[11px]">Mock</code>. With real
-                PhonePe credentials, you&apos;d be on phonepe.com instead.
-              </p>
+            {/* Decline */}
+            <button
+              type="button"
+              onClick={() => decide('decline')}
+              disabled={!!working}
+              className="flex items-center justify-center gap-2 w-full bg-transparent text-red-600 border border-red-200 rounded-full py-[14px] text-[15px] font-medium hover:bg-red-50 hover:border-red-300 disabled:opacity-60 transition-colors cursor-pointer"
+            >
+              {working === 'decline' ? (
+                <svg
+                  className="animate-spin360 size-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 3a9 9 0 1 0 9 9" />
+                </svg>
+              ) : (
+                <CloseIcon size={16} />
+              )}
+              Decline
+            </button>
+          </div>
+
+          {/* ── Error state ──────────────────────────────────────────── */}
+          {error && (
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
+              <svg
+                className="mt-0.5 size-4 shrink-0"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                <path d="M12 9v4m0 3h.01" />
+              </svg>
+              <span>{error}</span>
             </div>
-          </Card>
+          )}
+
+          {/* ── Sandbox disclaimer ───────────────────────────────────── */}
+          <p className="mt-6 text-center text-[11.5px] text-wmuted">
+            256-bit SSL encrypted · This page only exists while the payment
+            gateway is set to{' '}
+            <code className="font-mono text-[11px]">Mock</code>. With real
+            PhonePe credentials, you&apos;d be on phonepe.com instead.
+          </p>
         </div>
       </div>
-    </Page>
+    </main>
   );
 }

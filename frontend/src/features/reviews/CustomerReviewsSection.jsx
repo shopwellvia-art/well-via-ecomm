@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { MessageSquare, PencilLine, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/Button.jsx';
-import { Skeleton } from '@/components/ui/Skeleton.jsx';
+import { Button } from '@/components/storefront/ui/Button.jsx';
+import { Skeleton } from '@/components/storefront/ui/Skeleton.jsx';
 import { cn } from '@/lib/utils.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { listStagger, fadeUp, fadeIn } from '@/lib/motion.js';
@@ -52,9 +52,9 @@ export function CustomerReviewsSection({ product }) {
       initial="hidden"
       whileInView="show"
       viewport={{ once: true, amount: 0.1 }}
-      className="mt-16 border-t border-line-subtle pt-12"
+      className="mt-16 border-t border-wline pt-12"
     >
-      <h2 id="reviews-heading" className="text-h2 tracking-tight text-ink-primary">
+      <h2 id="reviews-heading" className="font-wserif text-h2 tracking-tight text-wink">
         Customer reviews
       </h2>
 
@@ -62,18 +62,18 @@ export function CustomerReviewsSection({ product }) {
         {/* ── Left rail — aggregate ── */}
         <aside aria-label="Rating summary" className="lg:sticky lg:top-24 lg:self-start">
           {ratingCount === 0 ? (
-            <p className="text-sm text-ink-secondary">
+            <p className="text-sm text-wmuted">
               No reviews yet. Be the first to share your thoughts.
             </p>
           ) : (
             <>
               <div className="flex items-end gap-3">
-                <p className="nums text-5xl font-semibold leading-none tracking-tight text-ink-primary">
+                <p className="nums text-5xl font-semibold leading-none tracking-tight text-wink">
                   {ratingAvg.toFixed(1)}
                 </p>
                 <div className="pb-1">
                   <StarRating value={ratingAvg} size="md" />
-                  <p className="mt-1 text-xs text-ink-tertiary">
+                  <p className="mt-1 text-xs text-wmuted">
                     {ratingCount.toLocaleString()} rating{ratingCount === 1 ? '' : 's'}
                   </p>
                 </div>
@@ -85,9 +85,9 @@ export function CustomerReviewsSection({ product }) {
           )}
 
           {/* Write review CTA */}
-          <div className="mt-6 rounded-sm border border-line-subtle bg-bg-elevated p-4">
-            <p className="text-sm font-semibold text-ink-primary">Review this product</p>
-            <p className="mt-1 text-xs text-ink-tertiary">
+          <div className="mt-6 rounded-xl2 border border-wline bg-wcard p-4">
+            <p className="text-sm font-semibold text-wink">Review this product</p>
+            <p className="mt-1 text-xs text-wmuted">
               Share your thoughts with other customers.
             </p>
             {!user ? (
@@ -97,7 +97,7 @@ export function CustomerReviewsSection({ product }) {
                 </Button>
               </Link>
             ) : userReviewed ? (
-              <p className="mt-3 text-xs text-ink-tertiary">
+              <p className="mt-3 text-xs text-wmuted">
                 You&apos;ve already reviewed this product.
               </p>
             ) : (
@@ -130,16 +130,16 @@ export function CustomerReviewsSection({ product }) {
           )}
 
           {/* Sort + count row */}
-          <div className="flex items-center justify-between gap-3 border-b border-line-subtle pb-4">
-            <p className="text-sm text-ink-secondary">
+          <div className="flex items-center justify-between gap-3 border-b border-wline pb-4">
+            <p className="text-sm text-wmuted">
               {isLoading ? (
                 <Skeleton className="inline-block h-3.5 w-32" />
               ) : ratingCount > 0 ? (
                 <>
                   Showing{' '}
-                  <span className="nums font-medium text-ink-primary">{items.length}</span>
+                  <span className="nums font-medium text-wink">{items.length}</span>
                   {' '}of{' '}
-                  <span className="nums font-medium text-ink-primary">{total}</span>
+                  <span className="nums font-medium text-wink">{total}</span>
                   {' '}review{total === 1 ? '' : 's'}
                 </>
               ) : (
@@ -154,7 +154,7 @@ export function CustomerReviewsSection({ product }) {
             {isLoading ? (
               <div className="flex flex-col gap-5">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="flex flex-col gap-2.5 border-t border-line-subtle pt-5 first:border-t-0 first:pt-0">
+                  <div key={i} className="flex flex-col gap-2.5 border-t border-wline pt-5 first:border-t-0 first:pt-0">
                     <div className="flex items-center gap-2.5">
                       <Skeleton variant="circle" className="size-8 rounded-full" />
                       <div className="flex flex-col gap-1.5">
@@ -168,20 +168,20 @@ export function CustomerReviewsSection({ product }) {
                 ))}
               </div>
             ) : isError ? (
-              <div className="py-8 text-center text-sm text-danger">
+              <div className="py-8 text-center text-sm text-red-600">
                 Couldn&apos;t load reviews.{' '}
                 <button onClick={() => refetch()} className="underline">
                   Retry
                 </button>
               </div>
             ) : items.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 rounded-sm border border-dashed border-line-subtle py-14 text-center">
-                <span className="grid size-10 place-items-center rounded-full bg-fill">
-                  <MessageSquare className="size-5 text-ink-tertiary" aria-hidden="true" />
+              <div className="flex flex-col items-center gap-3 rounded-xl2 border border-dashed border-wline py-14 text-center">
+                <span className="grid size-10 place-items-center rounded-full bg-wcanvas">
+                  <MessageSquare className="size-5 text-wmuted" aria-hidden="true" />
                 </span>
                 <div>
-                  <p className="text-sm font-medium text-ink-secondary">No reviews yet</p>
-                  <p className="mt-0.5 text-xs text-ink-tertiary">Be the first to leave one.</p>
+                  <p className="text-sm font-medium text-wmuted">No reviews yet</p>
+                  <p className="mt-0.5 text-xs text-wmuted">Be the first to leave one.</p>
                 </div>
               </div>
             ) : (
@@ -189,7 +189,7 @@ export function CustomerReviewsSection({ product }) {
                 variants={listStagger(0.06)}
                 initial="hidden"
                 animate="show"
-                className="divide-y divide-line-subtle"
+                className="divide-y divide-wline"
               >
                 {items.map((r) => (
                   <li key={r.id}>
@@ -202,7 +202,7 @@ export function CustomerReviewsSection({ product }) {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="mt-8 flex items-center justify-center gap-3 border-t border-line-subtle pt-6">
+            <div className="mt-8 flex items-center justify-center gap-3 border-t border-wline pt-6">
               <Button
                 variant="secondary"
                 size="sm"
@@ -212,7 +212,7 @@ export function CustomerReviewsSection({ product }) {
                 <ChevronLeft className="size-4" aria-hidden="true" />
                 Previous
               </Button>
-              <span className="nums text-xs text-ink-tertiary">
+              <span className="nums text-xs text-wmuted">
                 Page {page} of {totalPages}
               </span>
               <Button
@@ -234,22 +234,22 @@ export function CustomerReviewsSection({ product }) {
 
 function SortMenu({ value, onChange }) {
   return (
-    <label className="inline-flex items-center gap-2 text-xs text-ink-secondary">
+    <label className="inline-flex items-center gap-2 text-xs text-wmuted">
       Sort by
       <span className="relative">
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={cn(
-            'h-8 appearance-none rounded-sm border border-line-subtle bg-bg-sunken pl-3 pr-7 text-xs text-ink-primary',
-            'transition-colors hover:border-line-strong focus-visible:border-accent focus-visible:outline-none',
+            'h-8 appearance-none rounded-sm border border-wline bg-wpaper pl-3 pr-7 text-xs text-wink',
+            'transition-colors hover:border-wline focus-visible:outline-none',
           )}
         >
           <option value="top">Top reviews</option>
           <option value="newest">Most recent</option>
         </select>
         <ChevronDown
-          className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-ink-tertiary"
+          className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-wmuted"
           aria-hidden="true"
         />
       </span>

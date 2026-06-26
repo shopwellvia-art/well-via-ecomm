@@ -1,21 +1,32 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { safeUrl } from '@/lib/safeUrl.js';
 import { Check } from 'lucide-react';
-import { Page } from '@/components/layout/Page.jsx';
-import { Card, CardBody, CardHeader } from '@/components/ui/Card.jsx';
-import { Button } from '@/components/ui/Button.jsx';
-import { Input } from '@/components/ui/Input.jsx';
-import { Textarea } from '@/components/ui/Textarea.jsx';
+import { safeUrl } from '@/lib/safeUrl.js';
 import { useSitePages } from '@/features/site-pages/hooks.js';
 import { SITE_PAGES_DEFAULTS, resolvePageIcon } from '@/features/site-pages/defaults.js';
 import {
-  CompanyHero,
-  Section,
-  SectionLabel,
-  PageDisabled,
-} from '@/features/site-pages/components.jsx';
+  ContentPage,
+  WSection,
+  WSectionLabel,
+} from '@/components/storefront/ContentPage.jsx';
 import { staggerContainer, fadeUp } from '@/lib/motion.js';
+
+// ── Inline form field helpers ────────────────────────────────────────────────
+
+const fieldCls =
+  'w-full rounded-xl border border-wline bg-wpaper px-4 py-2.5 text-sm text-wink placeholder:text-wmuted outline-none transition-colors focus:border-wgold focus:ring-1 focus:ring-wgold/30';
+
+function WField({ label, error, children }) {
+  return (
+    <div className="mb-4">
+      <label className="mb-1.5 block text-sm font-medium text-wink">{label}</label>
+      {children}
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+    </div>
+  );
+}
+
+// ── Contact form (logic identical to original) ───────────────────────────────
 
 function ContactForm({ form }) {
   const [values, setValues] = useState({ name: '', email: '', message: '' });
@@ -39,194 +50,194 @@ function ContactForm({ form }) {
       setErrors(next);
       return;
     }
-    // No backend endpoint for general enquiries — acknowledge locally, the
-    // same pattern the footer newsletter uses.
+    // No backend endpoint for general enquiries — acknowledge locally.
     setSubmitted(true);
     setValues({ name: '', email: '', message: '' });
     window.setTimeout(() => setSubmitted(false), 5000);
   }
 
   return (
-    <Card>
-      <CardHeader title={form?.heading || 'Send us a message'} />
-      <CardBody className="p-6 sm:p-8">
-        {form?.note && (
-          <p className="mb-5 text-sm text-ink-secondary">{form.note}</p>
-        )}
+    <div className="rounded-xl2 border border-wline bg-wcard p-6 shadow-sm sm:p-8">
+      <h3 className="font-wserif text-xl text-wink">
+        {form?.heading || 'Send us a message'}
+      </h3>
+      {form?.note && (
+        <p className="mt-2 text-sm text-wmuted">{form.note}</p>
+      )}
 
-        <form onSubmit={onSubmit} noValidate>
-          <div className="grid gap-x-4 sm:grid-cols-2">
-            <Input
-              label="Your name"
+      <form onSubmit={onSubmit} noValidate className="mt-6">
+        <div className="grid gap-x-4 sm:grid-cols-2">
+          <WField label="Your name" error={errors.name}>
+            <input
+              className={fieldCls}
               value={values.name}
               onChange={(e) => set('name', e.target.value)}
-              error={errors.name}
               autoComplete="name"
               required
             />
-            <Input
-              label="Email"
+          </WField>
+          <WField label="Email" error={errors.email}>
+            <input
               type="email"
+              className={fieldCls}
               value={values.email}
               onChange={(e) => set('email', e.target.value)}
-              error={errors.email}
               autoComplete="email"
               required
             />
-          </div>
-          <Textarea
-            label="Message"
+          </WField>
+        </div>
+        <WField label="Message" error={errors.message}>
+          <textarea
+            className={`${fieldCls} resize-none`}
             rows={5}
-            maxRows={8}
             value={values.message}
             onChange={(e) => set('message', e.target.value)}
-            error={errors.message}
             placeholder="How can we help?"
             required
           />
-          <div className="mt-5 flex items-center gap-4">
-            <Button type="submit" variant="primary" disabled={submitted}>Send message</Button>
-            {submitted && (
-              <motion.span
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="flex items-center gap-1.5 text-sm text-success"
-                role="status"
-              >
-                <Check className="size-4" aria-hidden="true" />
-                {form?.success || "Thanks — we'll be in touch shortly."}
-              </motion.span>
-            )}
-          </div>
-        </form>
-      </CardBody>
-    </Card>
+        </WField>
+        <div className="flex items-center gap-4">
+          <button
+            type="submit"
+            disabled={submitted}
+            className="rounded-full bg-wgreen px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-wgreen-dark disabled:opacity-60"
+          >
+            Send message
+          </button>
+          {submitted && (
+            <motion.span
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex items-center gap-1.5 text-sm text-green-700"
+              role="status"
+            >
+              <Check className="size-4" aria-hidden="true" />
+              {form?.success || "Thanks — we'll be in touch shortly."}
+            </motion.span>
+          )}
+        </div>
+      </form>
+    </div>
   );
 }
 
+// ── Page ─────────────────────────────────────────────────────────────────────
+
 export default function ContactPage() {
+  // ── Data wiring (unchanged) ──────────────────────────────────────────────
   const { data, isLoading } = useSitePages();
 
+  // Show skeleton while the first fetch is in-flight (no cached data yet).
   if (isLoading && !data) {
     return (
-      <Page>
-        <div className="space-y-4 py-12 animate-pulse">
-          <div className="h-6 w-48 rounded bg-line-subtle" />
-          <div className="h-4 w-full max-w-lg rounded bg-line-subtle" />
-          <div className="h-4 w-2/3 max-w-md rounded bg-line-subtle" />
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <ContentPage isLoading>
+        <div className="animate-pulse space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-28 rounded bg-line-subtle" />
+              <div key={i} className="h-28 rounded-xl2 bg-wline/40" />
             ))}
           </div>
-          <div className="mt-6 h-64 rounded bg-line-subtle" />
+          <div className="mt-6 h-64 rounded-xl2 bg-wline/40" />
         </div>
-      </Page>
+      </ContentPage>
     );
   }
 
   const page = { ...SITE_PAGES_DEFAULTS.contact, ...data?.contact };
 
   if (page.enabled === false) {
-    return (
-      <Page>
-        <PageDisabled title="Contact Us" />
-      </Page>
-    );
+    return <ContentPage disabled disabledTitle="Contact Us" />;
   }
 
   return (
-    <>
-      <CompanyHero hero={page.hero} current="Contact Us" />
+    <ContentPage
+      eyebrow={page.hero?.eyebrow}
+      title={page.hero?.title}
+      subtitle={page.hero?.subtitle}
+    >
+      {/* ── Contact method tiles ──────────────────────────────────────── */}
+      {page.methods?.length > 0 && (
+        <WSection className="mt-0">
+          <motion.div
+            variants={staggerContainer(0.06)}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '-60px' }}
+            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+          >
+            {page.methods.map((m, i) => {
+              const Icon = resolvePageIcon(m.icon);
+              const body = (
+                <div className="flex flex-col gap-3 p-5">
+                  <span className="grid size-10 place-items-center rounded-full bg-wgold/10 text-wgold">
+                    <Icon className="size-5" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <h3 className="font-semibold text-wink">{m.title}</h3>
+                    <p className="mt-0.5 text-sm text-wmuted">{m.detail}</p>
+                  </div>
+                </div>
+              );
+              return (
+                <motion.div key={i} variants={fadeUp}>
+                  <div className="h-full rounded-xl2 border border-wline bg-wcard shadow-sm transition-shadow hover:shadow-md">
+                    {m.href ? (
+                      <a
+                        href={safeUrl(m.href)}
+                        className="block h-full rounded-xl2 outline-none focus-visible:ring-2 focus-visible:ring-wgold/50"
+                      >
+                        {body}
+                      </a>
+                    ) : (
+                      body
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </WSection>
+      )}
 
-      <Page>
-        {/* Contact method tiles */}
-        {page.methods?.length > 0 && (
-          <Section className="mt-6">
+      {/* ── Form + offices ────────────────────────────────────────────── */}
+      <WSection className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <div>
+          {page.intro && (
+            <p className="mb-5 text-sm leading-relaxed text-wmuted">{page.intro}</p>
+          )}
+          <ContactForm form={page.form} />
+        </div>
+
+        {/* Offices */}
+        {page.offices?.length > 0 && (
+          <div>
+            <WSectionLabel className="mb-4">Our offices</WSectionLabel>
             <motion.div
-              variants={staggerContainer(0.06)}
+              variants={staggerContainer(0.07)}
               initial="hidden"
               whileInView="show"
               viewport={{ once: true, margin: '-60px' }}
-              className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+              className="flex flex-col gap-3"
             >
-              {page.methods.map((m, i) => {
-                const Icon = resolvePageIcon(m.icon);
-                const body = (
-                  <CardBody className="flex flex-col gap-3 p-5">
-                    <span className="grid size-10 place-items-center rounded-sm bg-accent-soft text-accent">
-                      <Icon className="size-5" aria-hidden="true" />
-                    </span>
-                    <div>
-                      <h3 className="font-semibold text-ink-primary">{m.title}</h3>
-                      <p className="mt-0.5 text-sm text-ink-secondary">{m.detail}</p>
-                    </div>
-                  </CardBody>
-                );
-                return (
-                  <motion.div key={i} variants={fadeUp}>
-                    <Card interactive className="h-full">
-                      {m.href ? (
-                        <a
-                          href={safeUrl(m.href)}
-                          className="block h-full rounded-sm focus-visible:focus-ring"
-                        >
-                          {body}
-                        </a>
-                      ) : (
-                        body
-                      )}
-                    </Card>
-                  </motion.div>
-                );
-              })}
+              {page.offices.map((o, i) => (
+                <motion.div key={i} variants={fadeUp}>
+                  <div className="rounded-xl2 border border-wline bg-wcard p-5 shadow-sm">
+                    <h3 className="font-semibold text-wink">{o.city}</h3>
+                    <address className="mt-1.5 not-italic text-sm leading-6 text-wmuted">
+                      {(o.lines || []).map((line, li) => (
+                        <span key={li} className="block">
+                          {line}
+                        </span>
+                      ))}
+                    </address>
+                  </div>
+                </motion.div>
+              ))}
             </motion.div>
-          </Section>
-        )}
-
-        {/* Form + offices */}
-        <Section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-          <div>
-            {page.intro && (
-              <p className="mb-5 text-sm leading-relaxed text-ink-secondary">
-                {page.intro}
-              </p>
-            )}
-            <ContactForm form={page.form} />
           </div>
-
-          {/* Offices */}
-          {page.offices?.length > 0 && (
-            <div>
-              <SectionLabel className="mb-4">Our offices</SectionLabel>
-              <motion.div
-                variants={staggerContainer(0.07)}
-                initial="hidden"
-                whileInView="show"
-                viewport={{ once: true, margin: '-60px' }}
-                className="flex flex-col gap-3"
-              >
-                {page.offices.map((o, i) => (
-                  <motion.div key={i} variants={fadeUp}>
-                    <Card>
-                      <CardBody>
-                        <h3 className="font-semibold text-ink-primary">{o.city}</h3>
-                        <address className="mt-1.5 not-italic text-sm leading-6 text-ink-secondary">
-                          {(o.lines || []).map((line, li) => (
-                            <span key={li} className="block">
-                              {line}
-                            </span>
-                          ))}
-                        </address>
-                      </CardBody>
-                    </Card>
-                  </motion.div>
-                ))}
-              </motion.div>
-            </div>
-          )}
-        </Section>
-      </Page>
-    </>
+        )}
+      </WSection>
+    </ContentPage>
   );
 }

@@ -11,7 +11,7 @@ import { ProductMedia } from '../ProductMedia.jsx';
  * Sticky buy bar.
  *
  * MOBILE (< lg): always-visible fixed bottom bar with a grid-cols-2 layout —
- *   Add to Cart (amber) | Buy Now (orange). Matches the mock exactly.
+ *   Add to Cart (wgreen) | Buy Now (wgold). Wellness palette.
  *
  * DESKTOP (≥ lg): the bar slides in once the #pdp-buybox scrolls out of view,
  *   showing the product thumbnail + name + price + Buy Now + Add to Cart.
@@ -86,13 +86,13 @@ export function StickyBuyBar({ product }) {
       <div
         role="region"
         aria-label="Quick buy"
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-2 gap-2 border-t border-line-subtle bg-bg-elevated p-2.5 shadow-lg lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-2 gap-2 border-t border-wline bg-wcard p-2.5 shadow-lg lg:hidden"
       >
         <button
           type="button"
           onClick={handleAdd}
           disabled={outOfStock || addToCart.isPending}
-          className="flex h-12 items-center justify-center gap-2 rounded-lg bg-cart text-sm font-bold uppercase tracking-wide text-white active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cart disabled:pointer-events-none disabled:opacity-50"
+          className="flex h-12 items-center justify-center gap-2 rounded-full bg-wgreen text-sm font-bold uppercase tracking-wide text-white active:scale-[0.98] focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
         >
           {added ? (
             <>
@@ -110,7 +110,7 @@ export function StickyBuyBar({ product }) {
           type="button"
           onClick={handleBuyNow}
           disabled={outOfStock}
-          className="flex h-12 items-center justify-center gap-2 rounded-lg bg-cta text-sm font-bold uppercase tracking-wide text-white active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cta disabled:pointer-events-none disabled:opacity-50"
+          className="flex h-12 items-center justify-center gap-2 rounded-full bg-wgold text-sm font-bold uppercase tracking-wide text-wink active:scale-[0.98] focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
         >
           <Zap className="size-[18px] fill-current" aria-hidden="true" />
           Buy now
@@ -127,30 +127,30 @@ export function StickyBuyBar({ product }) {
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             role="region"
             aria-label="Quick buy"
-            className="fixed inset-x-0 bottom-0 z-40 hidden border-t border-line-subtle bg-bg-elevated shadow-lg lg:block"
+            className="fixed inset-x-0 bottom-0 z-40 hidden border-t border-wline bg-wcard shadow-lg lg:block"
           >
             <div className="mx-auto flex max-w-content items-center gap-3 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:gap-4 sm:px-6">
               {/* Product thumbnail */}
-              <div className="size-11 shrink-0 overflow-hidden rounded-lg border border-line-subtle">
+              <div className="size-11 shrink-0 overflow-hidden rounded-lg border border-wline">
                 <ProductMedia product={product} />
               </div>
 
               {/* Name + price */}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-ink-primary">
+                <p className="truncate text-sm font-medium text-wink">
                   {product.name}
                 </p>
-                <p className="nums text-sm font-semibold text-ink-primary tabular-nums">
+                <p className="nums text-sm font-semibold text-wink tabular-nums">
                   {formatPrice(product.price)}
                 </p>
               </div>
 
-              {/* Add to Cart — amber */}
+              {/* Add to Cart — wgreen primary */}
               <button
                 type="button"
                 onClick={handleAdd}
                 disabled={outOfStock || addToCart.isPending}
-                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-cart px-5 text-sm font-bold uppercase tracking-wide text-white transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cart disabled:pointer-events-none disabled:opacity-40"
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-wgreen px-5 text-sm font-bold uppercase tracking-wide text-white transition-[filter] hover:brightness-110 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40"
               >
                 {added ? (
                   <>
@@ -165,12 +165,12 @@ export function StickyBuyBar({ product }) {
                 )}
               </button>
 
-              {/* Buy Now — orange */}
+              {/* Buy Now — wgold distinct secondary */}
               <button
                 type="button"
                 onClick={handleBuyNow}
                 disabled={outOfStock}
-                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-cta px-5 text-sm font-bold uppercase tracking-wide text-white transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cta disabled:pointer-events-none disabled:opacity-40"
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-wgold px-5 text-sm font-bold uppercase tracking-wide text-wink transition-[filter] hover:brightness-110 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40"
               >
                 <Zap className="size-4 fill-current" aria-hidden="true" />
                 Buy Now
