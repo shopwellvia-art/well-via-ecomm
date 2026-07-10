@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/features/auth/api.js';
 import { useAuthStore } from '@/features/auth/store.js';
+import { mergeGuestCart } from '@/features/cart/mergeGuestCart.js';
+import { useGuestCartStore } from '@/features/cart/guestStore.js';
 import { captureReferralFromUrl } from '@/features/loyalty/referralCapture.js';
 
 /**
@@ -11,6 +14,9 @@ import { captureReferralFromUrl } from '@/features/loyalty/referralCapture.js';
  *     stale after an admin made changes).
  *  2. On every navigation, if the URL carries `?ref=<code>`, stash it in
  *     sessionStorage so a later signup will attach the referral.
+ *  3. When a session appears (login/register/Google callback — any path that
+ *     sets an access token) and the guest cart holds items, replay them into
+ *     the server cart. Single choke point for guest-cart merging.
  *
  * Renders nothing.
  */
@@ -20,6 +26,19 @@ export default function AuthBootstrap() {
   const logout = useAuthStore((s) => s.logout);
   const location = useLocation();
   const fetched = useRef(false);
+  const queryClient = useQueryClient();
+  const merging = useRef(false);
+
+  useEffect(() => {
+    if (!token || merging.current) return;
+    if (!useGuestCartStore.getState().items.length) return;
+    merging.current = true;
+    mergeGuestCart(queryClient)
+      .catch(() => {}) // network/5xx → lines stay for the next transition
+      .finally(() => {
+        merging.current = false;
+      });
+  }, [token, queryClient]);
 
   useEffect(() => {
     if (!token || fetched.current) return;

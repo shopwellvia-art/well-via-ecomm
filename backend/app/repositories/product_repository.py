@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.orm import aliased, selectinload
 
@@ -28,28 +30,68 @@ class ProductRepository(BaseRepository[Product]):
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
+    # sort_by → ORDER BY clauses. "newest" keeps id desc as a tiebreaker so
+    # products created in the same second still page deterministically.
+    _SORTS = {
+        "newest": (Product.created_at.desc(), Product.id.desc()),
+        "price_asc": (Product.price.asc(), Product.id.desc()),
+        "price_desc": (Product.price.desc(), Product.id.desc()),
+        "rating": (Product.rating_avg.desc(), Product.rating_count.desc(), Product.id.desc()),
+    }
+
     def search(
         self,
         *,
         q: str | None = None,
         category_id: int | None = None,
+        category_ids: list[int] | None = None,
+        flavours: list[str] | None = None,
+        min_price: Decimal | None = None,
+        max_price: Decimal | None = None,
+        min_rating: Decimal | None = None,
+        in_stock: bool | None = None,
+        is_combo: bool | None = None,
+        discounted: bool | None = None,
+        sort_by: str = "newest",
         offset: int = 0,
         limit: int = 20,
     ) -> tuple[list[Product], int]:
+        conditions = []
+        if q:
+            conditions.append(Product.name.ilike(f"%{q}%"))
+        if category_id is not None:
+            conditions.append(Product.category_id == category_id)
+        if category_ids:
+            conditions.append(Product.category_id.in_(category_ids))
+        if flavours:
+            conditions.append(Product.flavour.in_(flavours))
+        if min_price is not None:
+            conditions.append(Product.price >= min_price)
+        if max_price is not None:
+            conditions.append(Product.price <= max_price)
+        if min_rating is not None:
+            # rating_count guard: unrated products default to avg 0 and must
+            # not slip through a "0★ & above" style filter as false positives.
+            conditions.append(Product.rating_avg >= min_rating)
+            conditions.append(Product.rating_count > 0)
+        if in_stock:
+            conditions.append(Product.stock > 0)
+        if is_combo is not None:
+            conditions.append(Product.is_combo == is_combo)
+        if discounted:
+            conditions.append(Product.compare_at_price.isnot(None))
+            conditions.append(Product.compare_at_price > Product.price)
+
         stmt = select(Product).options(selectinload(Product.images))
         count_stmt = select(func.count()).select_from(Product)
+        if conditions:
+            stmt = stmt.where(*conditions)
+            count_stmt = count_stmt.where(*conditions)
 
-        if q:
-            like = f"%{q}%"
-            stmt = stmt.where(Product.name.ilike(like))
-            count_stmt = count_stmt.where(Product.name.ilike(like))
-        if category_id is not None:
-            stmt = stmt.where(Product.category_id == category_id)
-            count_stmt = count_stmt.where(Product.category_id == category_id)
-
+        order_by = self._SORTS.get(sort_by, self._SORTS["newest"])
         total = self.db.execute(count_stmt).scalar_one()
         items = list(
-            self.db.execute(stmt.offset(offset).limit(limit).order_by(Product.id.desc()))
+            self.db.execute(stmt.order_by(*order_by).offset(offset).limit(limit))
             .scalars()
             .all()
         )

@@ -41,6 +41,24 @@ class ProductBase(BaseModel):
     cod_blocked: bool = False
     image_url: str | None = None
     category_id: int | None = None
+    # ── Storefront merchandising (all optional; see Product model for the
+    # JSON section contracts) ──
+    flavour: str | None = Field(default=None, max_length=80)
+    is_combo: bool = False
+    offer_text: str | None = Field(default=None, max_length=160)
+    coupon_code: str | None = Field(default=None, max_length=40)
+    coupon_hint: str | None = Field(default=None, max_length=160)
+    short_description: str | None = None
+    badge: str | None = Field(default=None, max_length=60)
+    sold_count: int | None = Field(default=None, ge=0)
+    ingredients: str | None = None
+    care_instructions: str | None = None
+    highlights: list | None = None
+    benefits: list | None = None
+    specifications: dict | None = None
+    box_contents: list | None = None
+    usage_steps: list | None = None
+    faqs: list | None = None
 
     @model_validator(mode="after")
     def _compare_at_must_exceed_price(self) -> "ProductBase":
@@ -65,6 +83,22 @@ class ProductUpdate(BaseModel):
     cod_blocked: bool | None = None
     image_url: str | None = None
     category_id: int | None = None
+    flavour: str | None = Field(default=None, max_length=80)
+    is_combo: bool | None = None
+    offer_text: str | None = Field(default=None, max_length=160)
+    coupon_code: str | None = Field(default=None, max_length=40)
+    coupon_hint: str | None = Field(default=None, max_length=160)
+    short_description: str | None = None
+    badge: str | None = Field(default=None, max_length=60)
+    sold_count: int | None = Field(default=None, ge=0)
+    ingredients: str | None = None
+    care_instructions: str | None = None
+    highlights: list | None = None
+    benefits: list | None = None
+    specifications: dict | None = None
+    box_contents: list | None = None
+    usage_steps: list | None = None
+    faqs: list | None = None
 
 
 class ProductRead(ProductBase):

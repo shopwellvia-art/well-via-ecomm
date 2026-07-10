@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Header from '@/components/storefront/Header';
 import Footer from '@/components/storefront/Footer';
 import CartDrawer from '@/components/storefront/CartDrawer';
+import PincodeModal from '@/features/shipping/components/PincodeModal.jsx';
 
 /**
  * Root storefront layout — Wellvia re-skin.
@@ -36,7 +37,7 @@ export default function Layout() {
   }, [pathname]);
 
   return (
-    <div className="wellvia-root bg-wcanvas min-h-full">
+    <div className="wellvia-root min-h-full">
       {/*
        * Skip link — keyboard users bypass the sticky header.
        * Visible only when focused (sr-only → not-sr-only on focus).
@@ -59,15 +60,17 @@ export default function Layout() {
         </main>
       ) : (
         /*
-         * Normal storefront routes — centred paper panel.
-         * The sticky Header takes its natural height in the flex column;
-         * the flex-1 main fills remaining space to push Footer to the bottom.
+         * Normal storefront routes — full-bleed (frontend-3). The sticky Header
+         * takes its natural height in the flex column; the flex-1 main fills
+         * remaining space to push Footer to the bottom. The cream + floral
+         * background comes from .wellvia-root; sections stay transparent.
          */
-        <div className="mx-auto max-w-[1320px] paper min-h-screen shadow-[0_30px_80px_-30px_rgba(40,30,10,0.22)] relative flex flex-col">
+        <div className="min-h-screen relative flex flex-col">
           <Header />
           {/* CartDrawer is fixed-position; mounting it here keeps it
               inside the .wellvia-root so Wellvia CSS tokens are in scope. */}
           <CartDrawer />
+          <PincodeModal />
           <main id="main-content" className="flex-1">
             <Outlet />
           </main>

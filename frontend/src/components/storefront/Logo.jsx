@@ -30,7 +30,14 @@ export function LeafMark({ size = 40, dot = true, color = '#B49A63' }) {
  *   stacked  true = leaf above wordmark; false = side-by-side  (default true)
  *   to       Link target  (default '/')
  */
-export default function Logo({ size = 'lg', stacked = true, to = '/' }) {
+export default function Logo({
+  size = 'lg',
+  stacked = true,
+  to = '/',
+  // On the dark-green header the mark + wordmark render in cream/gold.
+  markColor,
+  textClassName = 'text-wgreen',
+}) {
   const fontSize =
     size === 'lg' ? 'text-[25px]' : size === 'md' ? 'text-[18px]' : 'text-[13px]';
   const tracking =
@@ -44,9 +51,9 @@ export default function Logo({ size = 'lg', stacked = true, to = '/' }) {
       className={`flex ${stacked ? 'flex-col' : 'flex-row'} items-center gap-1.5 no-underline focus:outline-none`}
       aria-label="Wellvia — go to homepage"
     >
-      <LeafMark size={markSize} />
+      <LeafMark size={markSize} color={markColor} />
       <span
-        className={`font-display ${fontSize} ${tracking} font-medium text-wgreen`}
+        className={`font-display ${fontSize} ${tracking} font-medium ${textClassName}`}
         style={{ paddingLeft }}
       >
         WELLVIA

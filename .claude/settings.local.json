@@ -138,7 +138,8 @@
       "Bash(ls -la backend/.env)",
       "Bash(grep -E \"STORAGE_BACKEND|MEDIA_BASE_URL|UPLOAD_DIR|S3_|MYSQL_HOST|FRONTEND_URL|ENVIRONMENT\" backend/.env)",
       "Bash(xargs grep -l \"useQuery.*order\")",
-      "Bash(git config *)"
+      "Bash(git config *)",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }

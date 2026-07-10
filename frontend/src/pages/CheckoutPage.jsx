@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle,
@@ -24,7 +24,8 @@ import {
   SupportIcon,
 } from '@/components/storefront/Icons.jsx';
 import AddressPicker from '@/features/addresses/components/AddressPicker.jsx';
-import { useCart } from '@/features/cart/hooks.js';
+import LoginPanel from '@/features/auth/components/LoginPanel.jsx';
+import { useCart, useApplyCoupon, useRemoveCoupon } from '@/features/cart/hooks.js';
 import { useProduct } from '@/features/products/hooks.js';
 import { useCheckout } from '@/features/payments/hooks.js';
 import { useAuthStore } from '@/features/auth/store.js';
@@ -52,8 +53,10 @@ const TRUST_ITEMS = [
   { Icon: SupportIcon, label: 'Customer Support' },
 ];
 
-/* ─── Step name → numeric mapping (for StepIndicator) ─── */
-const STEP_NUM = { address: 1, payment: 2, review: 3 };
+/* ─── Step name → numeric mapping (for StepIndicator) ───
+   Mockup flow: Bag (items + login for guests) → Address → Payment (+ place
+   order). Signed-in users start directly on Address. */
+const STEP_NUM = { bag: 1, address: 2, payment: 3 };
 
 /* ─── Shared input style (wellness) ─── */
 const inputCls =
@@ -91,6 +94,10 @@ export default function CheckoutPage() {
     refetch: refetchCart,
   } = useCart();
   const checkout = useCheckout();
+  const applyCoupon = useApplyCoupon();
+  const removeCoupon = useRemoveCoupon();
+  const [couponInput, setCouponInput] = useState('');
+  const [couponError, setCouponError] = useState(null);
 
   /* ── Form state ── */
   const [addressPayload, setAddressPayload] = useState({});
@@ -107,8 +114,15 @@ export default function CheckoutPage() {
   const [otpVerified, setOtpVerified] = useState(false);
   // Gateway selector — only shown when >1 active gateway and method is prepaid/split_cod.
   const [selectedGateway, setSelectedGateway] = useState(null);
-  // Wellness 3-step flow: 'address' | 'payment' | 'review'
-  const [activeStep, setActiveStep] = useState('address');
+  // Mockup 3-step flow: 'bag' (items + login) | 'address' | 'payment'.
+  // Guests start on the bag step; signed-in users skip straight to address.
+  const [activeStep, setActiveStep] = useState(user ? 'address' : 'bag');
+
+  // When the guest signs in on the bag step (embedded LoginPanel — or any
+  // other path that sets a session), advance to the address step.
+  useEffect(() => {
+    if (user && activeStep === 'bag') setActiveStep('address');
+  }, [user, activeStep]);
 
   const pincode = addressPayload.pincode || '';
 
@@ -261,21 +275,14 @@ export default function CheckoutPage() {
   const numericStep = STEP_NUM[activeStep] || 1;
 
   function handleIndicatorStep(n) {
-    if (n === 1) setActiveStep('address');
-    else if (n === 2 && hasValidAddress) setActiveStep('payment');
-    // Step 3 (review) is only reachable via "Review Order" button, not indicator click.
+    if (n === 1 && !user) setActiveStep('bag');
+    else if (n === 2) setActiveStep('address');
+    // Step 3 (payment) is only reachable via "Continue to Payment", not indicator click.
   }
 
-  /* ── Payment method label for review summary ── */
-  const paymentMethodLabel =
-    paymentMethod === 'cod'
-      ? 'Cash on Delivery'
-      : paymentMethod === 'split_cod'
-      ? 'Split COD'
-      : activeInstrument?.label || 'Online Payment';
-
-  /* ── Auth guard ── */
-  if (!user) return <Navigate to="/login" replace />;
+  /* No auth guard — guests check out too: they see their (client-side) cart
+     on the bag step and sign in through the embedded LoginPanel. AuthBootstrap
+     then merges the guest cart into the server cart. */
 
   /* ── Fetch error ── */
   if (!isLoading && isError) {
@@ -474,7 +481,71 @@ export default function CheckoutPage() {
           <div className="bg-wcard border border-wline rounded-xl3 p-6 lg:p-9">
             <AnimatePresence mode="wait">
 
-              {/* ─── STEP 1 — Shipping Details ─── */}
+              {/* ─── STEP 1 — Bag (items + login for guests) ─── */}
+              {activeStep === 'bag' && (
+                <motion.div
+                  key="step-bag"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
+                >
+                  <h2 className="font-wserif font-semibold text-[24px] text-wink mb-1">
+                    Your Bag
+                  </h2>
+                  <p className="text-[13px] text-wmuted mb-[22px] font-light">
+                    {items.length} item{items.length === 1 ? '' : 's'} ready for checkout.
+                  </p>
+
+                  {/* Item cards */}
+                  <div className="flex flex-col gap-3 mb-6">
+                    {items.map((i) => (
+                      <div
+                        key={i.product_id}
+                        className="flex items-center gap-3.5 rounded-xl2 border border-wline bg-wpaper p-3.5"
+                      >
+                        <WImage
+                          src={i.image_url}
+                          alt={i.name}
+                          shape="rounded"
+                          className="w-[58px] h-[68px] shrink-0 border border-wline"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[14.5px] font-medium text-wink m-0 truncate">
+                            {i.name}
+                          </p>
+                          <p className="text-[12px] text-wmuted m-0 mt-0.5">
+                            Qty {i.quantity}
+                          </p>
+                        </div>
+                        <span className="rounded-lg bg-wgreen text-white text-[13px] px-3 py-1.5 leading-none shrink-0">
+                          {formatPrice(i.unit_price)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Login to continue */}
+                  {!user ? (
+                    <div className="rounded-xl2 border border-wline bg-wpaper p-5">
+                      <h3 className="font-wserif text-[19px] font-semibold text-wink m-0 mb-3">
+                        Login to continue
+                      </h3>
+                      <LoginPanel />
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setActiveStep('address')}
+                      className="w-full bg-wgreen text-white border-0 rounded-full py-4 text-[14.5px] tracking-wide cursor-pointer hover:bg-wgreen-dark transition-colors"
+                    >
+                      Continue →
+                    </button>
+                  )}
+                </motion.div>
+              )}
+
+              {/* ─── STEP 2 — Shipping Details ─── */}
               {activeStep === 'address' && (
                 <motion.div
                   key="step-address"
@@ -596,6 +667,41 @@ export default function CheckoutPage() {
                   <p className="text-[13px] text-wmuted mb-[18px] font-light">
                     Choose how you'd like to pay. All transactions are encrypted &amp; secure.
                   </p>
+
+                  {/* Address summary strip (mockup: Address card with ETA) */}
+                  <div className="mb-4 rounded-xl2 border border-wline bg-wpaper p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-2 text-[13.5px] text-wink font-medium">
+                        <span className="text-wgreen" aria-hidden="true">📍</span>
+                        Address
+                        {pincode && (
+                          <span className="text-wmuted font-normal">· Pincode {pincode}</span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveStep('address')}
+                        className="bg-transparent border-0 cursor-pointer text-[12.5px] text-wgreen underline"
+                      >
+                        Change
+                      </button>
+                    </div>
+                    {(quote?.eta_days_max ?? quote?.eta_days_min) != null && (
+                      <p className="text-[13px] text-wgreen font-medium m-0 mt-1.5">
+                        Delivery by{' '}
+                        {new Date(
+                          Date.now() +
+                            (quote.eta_days_max ?? quote.eta_days_min) * 86_400_000,
+                        ).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'long',
+                          weekday: 'long',
+                        })}
+                      </p>
+                    )}
+                  </div>
+
+                  <p className="text-[15px] font-medium text-wink mb-2.5">Payment Methods</p>
 
                   <div className="flex flex-col gap-2.5">
                     {enabledInstruments.length > 0 && (
@@ -767,77 +873,6 @@ export default function CheckoutPage() {
                     </div>
                   )}
 
-                  {/* Step navigation */}
-                  <div className="flex gap-3 mt-6">
-                    <button
-                      type="button"
-                      onClick={() => setActiveStep('address')}
-                      className="shrink-0 bg-transparent border border-wline text-wink rounded-full px-6 py-4 text-[14px] cursor-pointer hover:border-wgreen/40 transition-colors"
-                    >
-                      Back
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveStep('review')}
-                      className="flex-1 bg-wgreen text-white border-0 rounded-full py-4 text-[14.5px] cursor-pointer hover:bg-wgreen-dark transition-colors"
-                    >
-                      Review Order →
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* ─── STEP 3 — Review & Confirm ─── */}
-              {activeStep === 'review' && (
-                <motion.div
-                  key="step-review"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.22, ease: 'easeOut' }}
-                >
-                  <h2 className="font-wserif font-semibold text-[24px] text-wink mb-[22px]">
-                    Review &amp; Confirm
-                  </h2>
-
-                  <div className="flex flex-col gap-4">
-                    {/* Address summary */}
-                    <div className="bg-wpaper border border-wline rounded-xl2 p-[18px]">
-                      <div className="text-[11px] tracking-[0.14em] uppercase text-wgold mb-2 font-medium">
-                        Shipping To
-                      </div>
-                      <div className="text-[14px] leading-[1.6] text-wink">
-                        {pincode ? (
-                          <>Pincode: <span className="font-semibold">{pincode}</span></>
-                        ) : (
-                          'Address selected'
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setActiveStep('address')}
-                        className="mt-2 text-[12px] text-wgreen hover:text-wgreen-dark font-medium transition-colors bg-transparent border-0 cursor-pointer p-0"
-                      >
-                        Change address
-                      </button>
-                    </div>
-
-                    {/* Payment method summary */}
-                    <div className="bg-wpaper border border-wline rounded-xl2 p-[18px]">
-                      <div className="text-[11px] tracking-[0.14em] uppercase text-wgold mb-2 font-medium">
-                        Payment
-                      </div>
-                      <div className="text-[14px] text-wink">{paymentMethodLabel}</div>
-                      <button
-                        type="button"
-                        onClick={() => setActiveStep('payment')}
-                        className="mt-2 text-[12px] text-wgreen hover:text-wgreen-dark font-medium transition-colors bg-transparent border-0 cursor-pointer p-0"
-                      >
-                        Change payment
-                      </button>
-                    </div>
-                  </div>
-
                   {/* Error from submit attempt */}
                   {error && (
                     <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm text-red-600">
@@ -846,11 +881,11 @@ export default function CheckoutPage() {
                     </div>
                   )}
 
-                  {/* Step navigation + place order */}
-                  <div className="flex gap-3 mt-[22px]">
+                  {/* Step navigation + place order (mockup merges review into payment) */}
+                  <div className="flex gap-3 mt-6">
                     <button
                       type="button"
-                      onClick={() => setActiveStep('payment')}
+                      onClick={() => setActiveStep('address')}
                       className="shrink-0 bg-transparent border border-wline text-wink rounded-full px-6 py-4 text-[14px] cursor-pointer hover:border-wgreen/40 transition-colors"
                     >
                       Back
@@ -873,6 +908,7 @@ export default function CheckoutPage() {
                 </motion.div>
               )}
 
+
             </AnimatePresence>
           </div>
 
@@ -880,6 +916,11 @@ export default function CheckoutPage() {
               RIGHT — sticky order summary
           ══════════════════════════════════════ */}
           <div className="bg-wcard border border-wline rounded-xl3 p-6 lg:sticky lg:top-[90px]">
+            {/* Prepaid nudge strip (mockup: black band on the overview card) */}
+            <div className="-mx-6 -mt-6 mb-5 rounded-t-xl3 bg-wink text-white text-center text-[11.5px] tracking-wide py-2 px-4">
+              Prepaid Orders are delivered faster!
+            </div>
+
             <h3 className="font-wserif font-semibold text-[20px] text-wink mb-4">
               Order Summary
             </h3>
@@ -906,6 +947,32 @@ export default function CheckoutPage() {
                 </div>
               ))}
             </div>
+
+            {/* Savings band (mockup: green "You're saving more!" strip) */}
+            {(() => {
+              const mrpSavings = items.reduce((s, i) => {
+                const mrp = i.compare_at_price != null ? Number(i.compare_at_price) : null;
+                return mrp && mrp > Number(i.unit_price)
+                  ? s + (mrp - Number(i.unit_price)) * i.quantity
+                  : s;
+              }, 0);
+              const saved = mrpSavings + discountAmount + instrumentDiscount;
+              if (saved <= 0) return null;
+              const pct = Math.round((saved / (subtotal + saved)) * 100);
+              return (
+                <div className="mb-4 rounded-xl bg-[#e4efe0] px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium text-wink m-0">You’re saving more!</p>
+                    <p className="text-[11.5px] text-wmuted m-0">
+                      Great Pick — {formatPrice(saved)} saved
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-[12.5px] font-semibold text-wgreen">
+                    {pct}% Savings
+                  </span>
+                </div>
+              );
+            })()}
 
             {/* Free shipping nudge */}
             <FreeShippingNudge subtotal={subtotal} />
@@ -985,6 +1052,66 @@ export default function CheckoutPage() {
               <span className="font-wserif text-[24px] text-wink">{formatPrice(displayedTotal)}</span>
             </div>
 
+            {/* Coupons & Offers — server carts only (guests apply after login;
+                buy-now bypasses the cart so coupons don't apply) */}
+            {user && !buyNowMode && (
+              <div className="mt-4 rounded-xl border border-wline bg-wpaper p-3.5">
+                <p className="text-[13px] font-medium text-wink m-0 mb-2">
+                  Coupons &amp; Offers
+                </p>
+                {couponCode ? (
+                  <div className="flex items-center justify-between rounded-lg border border-wgreen/40 bg-wgreen/5 px-3 py-2">
+                    <span className="text-[12.5px] text-wgreen font-medium">
+                      {couponCode} applied
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeCoupon.mutate()}
+                      className="bg-transparent border-0 cursor-pointer text-[11.5px] text-wmuted underline hover:text-wink"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const code = couponInput.trim();
+                      if (!code) return;
+                      setCouponError(null);
+                      applyCoupon.mutate(code, {
+                        onSuccess: () => setCouponInput(''),
+                        onError: (err) =>
+                          setCouponError(
+                            err?.response?.data?.error?.message ||
+                              'This code can’t be applied.',
+                          ),
+                      });
+                    }}
+                    className="flex gap-2"
+                  >
+                    <input
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value)}
+                      placeholder="Enter the coupon code"
+                      aria-label="Coupon code"
+                      className="flex-1 min-w-0 rounded-lg border border-wline bg-wcard px-3 py-2 text-[12.5px] text-wink placeholder:text-wmuted"
+                    />
+                    <button
+                      type="submit"
+                      disabled={applyCoupon.isPending}
+                      className="rounded-lg bg-wgreen text-white text-[12px] px-3 py-2 border-0 cursor-pointer hover:bg-wgreen-dark disabled:opacity-60 transition-colors"
+                    >
+                      {applyCoupon.isPending ? '…' : 'Apply Code'}
+                    </button>
+                  </form>
+                )}
+                {couponError && (
+                  <p className="text-[11.5px] text-red-600 m-0 mt-2">{couponError}</p>
+                )}
+              </div>
+            )}
+
             {/* Trust badges */}
             <div className="flex flex-wrap gap-3 justify-center mt-5 pt-[18px] border-t border-wline">
               {TRUST_ITEMS.map(({ Icon, label }) => (
@@ -1019,8 +1146,9 @@ export default function CheckoutPage() {
         </div>
       )}
 
-      {/* ── Mobile sticky CTA bar (hidden on lg+ where the right rail is visible) ── */}
-      {!isLoading && items.length > 0 && (
+      {/* ── Mobile sticky CTA bar (hidden on lg+ where the right rail is
+             visible; hidden on the bag step for guests — LoginPanel is the CTA) ── */}
+      {!isLoading && items.length > 0 && !(activeStep === 'bag' && !user) && (
         <>
           {/* Spacer so content isn't hidden behind the fixed bar */}
           <div className="h-20 lg:hidden" aria-hidden="true" />
@@ -1033,22 +1161,22 @@ export default function CheckoutPage() {
               <button
                 type="button"
                 onClick={
-                  activeStep === 'address'
+                  activeStep === 'bag'
+                    ? () => setActiveStep('address')
+                    : activeStep === 'address'
                     ? () => hasValidAddress && setActiveStep('payment')
-                    : activeStep === 'payment'
-                    ? () => setActiveStep('review')
                     : startPay
                 }
                 disabled={
                   (activeStep === 'address' && !hasValidAddress) ||
-                  (activeStep === 'review' && (!canSubmit || submitting))
+                  (activeStep === 'payment' && (!canSubmit || submitting))
                 }
                 className="shrink-0 bg-wgreen text-white border-0 rounded-full px-6 py-3 text-[13.5px] font-medium hover:bg-wgreen-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
-                {activeStep === 'address'
+                {activeStep === 'bag'
                   ? 'Continue →'
-                  : activeStep === 'payment'
-                  ? 'Review →'
+                  : activeStep === 'address'
+                  ? 'Continue →'
                   : submitting
                   ? 'Processing…'
                   : paymentMethod === 'cod'

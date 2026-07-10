@@ -4,7 +4,6 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ShoppingCart, Zap, Check } from 'lucide-react';
 import { formatPrice } from '@/lib/utils.js';
 import { useAddToCart } from '@/features/cart/hooks.js';
-import { useAuthStore } from '@/features/auth/store.js';
 import { ProductMedia } from '../ProductMedia.jsx';
 
 /**
@@ -22,7 +21,6 @@ export function StickyBuyBar({ product }) {
   const navigate = useNavigate();
   const reduce = useReducedMotion();
   const addToCart = useAddToCart();
-  const user = useAuthStore((s) => s.user);
   const [desktopVisible, setDesktopVisible] = useState(false);
   const [added, setAdded] = useState(false);
 
@@ -54,30 +52,16 @@ export function StickyBuyBar({ product }) {
 
   const outOfStock = product.stock <= 0;
 
-  function addNext(action) {
-    if (!user) {
-      navigate(`/login?next=/products/${product.id}`);
-      return;
-    }
-    action();
-  }
-
+  // Guests use the client-side cart; checkout's bag step embeds login.
   function handleAdd() {
-    addNext(() =>
-      addToCart.mutate(
-        { productId: product.id, quantity: 1 },
-        { onSuccess: () => setAdded(true) },
-      ),
+    addToCart.mutate(
+      { productId: product.id, quantity: 1 },
+      { onSuccess: () => setAdded(true) },
     );
   }
 
   function handleBuyNow() {
-    const target = `/checkout?buyNow=${product.id}&qty=1`;
-    if (!user) {
-      navigate(`/login?next=${encodeURIComponent(target)}`);
-      return;
-    }
-    navigate(target);
+    navigate(`/checkout?buyNow=${product.id}&qty=1`);
   }
 
   return (

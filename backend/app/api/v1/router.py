@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     cart,
     categories,
     cod,
+    contact,
     coupons,
     dashboard,
     database,
@@ -82,6 +83,8 @@ api_router.include_router(analytics.router, prefix="/analytics", tags=["analytic
 api_router.include_router(footer.router, prefix="/footer", tags=["footer"])
 api_router.include_router(observability.router, prefix="/observability", tags=["observability"])
 api_router.include_router(site_pages.router, prefix="/site-pages", tags=["site-pages"])
+# Public contact-form + newsletter intake: POST /contact, POST /newsletter/subscribe
+api_router.include_router(contact.router, tags=["contact"])
 api_router.include_router(
     email_templates.router, prefix="/email-templates", tags=["email-templates"]
 )

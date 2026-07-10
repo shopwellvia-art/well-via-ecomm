@@ -10,14 +10,18 @@ export default {
         // below (which the admin UI depends on). Ported reference classes map
         // bg-page→bg-wcanvas, bg-bg→bg-wpaper, bg-card→bg-wcard, green→wgreen,
         // greenh→wgreen-dark, ink→wink, muted→wmuted, line→wline, gold→wgold.
-        wcanvas: '#DED7C9', // outer canvas
-        wpaper: '#ECE8DE', // paper background
-        wcard: '#FFFDF8', // cards / surfaces
-        wgreen: { DEFAULT: '#183A2E', dark: '#10291F' }, // primary + hover
-        wink: '#1E1E1A', // main text
-        wmuted: '#6F6A60', // secondary text
-        wline: '#D8D0C4', // borders
-        wgold: '#B49A63', // accent
+        wcanvas: '#F7F5F0', // cream page canvas (floral bg sits on this)
+        wpaper: '#FBFAF8', // near-white paper background
+        wcard: '#FFFFFF', // cards / surfaces (pure white, frontend-3)
+        // Three greens from frontend-3: DEFAULT (#044D39) for buttons/links,
+        // dark (#0B3D2C) for hover/deep, deep (#092F24) for header/footer bands,
+        // mid (#2E7D5B) for inline accents.
+        wgreen: { DEFAULT: '#044D39', dark: '#0B3D2C', deep: '#092F24', mid: '#2E7D5B' },
+        wink: '#141D18', // main / heading text (ink-strong)
+        wmuted: '#5C6A62', // secondary text
+        wline: '#E7E7E2', // borders / hairlines
+        wgold: '#E0A82E', // gold accent + rating stars
+        wsage: '#CDE3C3', // sage — savings strips / "you save" pills
 
         // Surface + ink are theme-driven — see :root/.light blocks in global.css.
         // RGB-triplet vars keep Tailwind opacity modifiers (e.g. bg-bg-base/50) working.
@@ -131,7 +135,7 @@ export default {
         sans: ['Roboto', 'system-ui', '-apple-system', 'Segoe UI', 'Arial', 'sans-serif'],
         // Wellvia storefront type — self-hosted via @fontsource (CSP-safe).
         display: ['Cinzel', 'serif'], // wordmark / display headings
-        wserif: ['"Cormorant Garamond"', 'Georgia', 'serif'], // editorial headings
+        wserif: ['"EB Garamond"', 'Georgia', 'serif'], // editorial headings (frontend-3)
         wsans: ['Jost', 'system-ui', 'sans-serif'], // storefront body
       },
       fontSize: {

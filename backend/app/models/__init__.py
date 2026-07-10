@@ -2,6 +2,7 @@ from app.models.address import Address, AddressLabel
 from app.models.audit import AuditEvent
 from app.models.email_template import EmailTemplate
 from app.models.base import Base
+from app.models.contact_message import ContactMessage, NewsletterSubscriber
 from app.models.coupon import Coupon, CouponUsage, DiscountType
 from app.models.customer import AccountStatus, Customer
 from app.models.footer_config import FooterConfig
@@ -44,6 +45,8 @@ __all__ = [
     "AuditEvent",
     "Base",
     "Category",
+    "ContactMessage",
+    "NewsletterSubscriber",
     "Coupon",
     "CouponUsage",
     "Customer",

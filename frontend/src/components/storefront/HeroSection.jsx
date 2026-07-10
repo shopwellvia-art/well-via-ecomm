@@ -1,54 +1,61 @@
 import { Link } from 'react-router-dom';
 import WImage from '@/components/storefront/WImage';
-import TrustBadges from '@/components/storefront/TrustBadges';
+import {
+  CheckCircle,
+  CloseIcon,
+  LeafIcon,
+  ShieldIcon,
+} from '@/components/storefront/Icons';
+import { useHeroSlides } from '@/features/hero-slides/hooks.js';
 
 /**
- * HeroSection — split text/image hero used by the Home page.
+ * HeroSection — Wellvia home hero ("Where daily wellness meets daily cravings!").
  *
- * All copy is editable via props with sensible wellness-brand defaults.
- * CTAs link to /products (real route) and /about.
- * The hero image is rendered via WImage which handles null/missing gracefully.
- *
- * Props:
- *   eyebrow        — small uppercase gold label above the headline
- *   heading        — main h1; can include <br /> via JSX or split on \n
- *   body           — sub-headline paragraph
- *   primaryLabel   — primary CTA button text
- *   primaryTo      — primary CTA link target
- *   secondaryLabel — secondary CTA button text
- *   secondaryTo    — secondary CTA link target
- *   heroImage      — src string for the hero photo (null = gradient fallback)
- *   heroAlt        — alt text for the hero image
- *   ratingScore    — displayed score in the floating review card
- *   reviewCount    — displayed count string in the floating review card
+ * Wiring:
+ *   - useHeroSlides(): when the admin has published slides, the first slide's
+ *     heading / subtext / CTA / image override the static mockup copy.
+ *     With no slides (dev default) the static hero below renders as designed.
+ *   - Right-hand imagery: slide image wins; else the static brand shot
+ *     extracted from the design file (/public/home/hero-products.jpg).
+ *   - Primary CTA → /products. Secondary CTA smooth-scrolls to #why-we-exist.
  */
-export default function HeroSection({
-  eyebrow = 'Clinically-backed wellness',
-  heading = 'Wellness, Refined\nfor Everyday Living',
-  body = 'Clinically backed nutrition and daily wellness rituals designed to feel gentle, effective, and beautifully simple.',
-  primaryLabel = 'Shop Rituals',
-  primaryTo = '/products',
-  secondaryLabel = 'Why Wellvia?',
-  secondaryTo = '/about',
-  heroImage = null,
-  heroAlt = 'Wellvia wellness product lifestyle photo',
-  ratingScore = '4.8',
-  reviewCount = '12,400+',
-}) {
+
+const DEFAULT_HEADING = 'Where daily wellness\nmeets daily cravings!';
+const DEFAULT_BODY =
+  'Clinically-backed nutrition and daily rituals designed to feel gentle, effective and beautifully simple.';
+
+const TRUST_CHIPS = [
+  { label: 'Clinically\nReviewed', Icon: CheckCircle },
+  { label: 'Vegan\n& Clean', Icon: LeafIcon },
+  { label: 'No Added\nSugar', Icon: CloseIcon },
+  { label: 'FSSAI\nCompliant', Icon: ShieldIcon },
+];
+
+function scrollToWhy() {
+  document
+    .getElementById('why-we-exist')
+    ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+export default function HeroSection() {
+  const { data: slides = [] } = useHeroSlides();
+
+  // First published slide (if any) overrides the static mockup copy.
+  const slide = slides[0] ?? null;
+
+  const heading = slide?.heading || DEFAULT_HEADING;
+  const body = slide?.subtext || DEFAULT_BODY;
+  const primaryLabel = slide?.cta_label || 'Shop Rituals';
+  const primaryTo = slide?.cta_href || '/products';
   const headingLines = heading.split('\n');
 
+  // Right-hand imagery: slide image wins; else the static brand shot.
+  const slideImage = slide?.image_url ?? null;
   return (
-    <section className="grid md:grid-cols-[1.05fr_1fr] gap-6 lg:gap-14 items-center px-5 sm:px-10 lg:px-16 pt-9 lg:pt-[72px] pb-10 lg:pb-16 animate-rise">
-      {/* Left: copy + CTAs */}
+    <section className="grid md:grid-cols-[1.05fr_1fr] gap-8 lg:gap-14 items-center px-5 sm:px-10 lg:px-16 pt-9 lg:pt-[64px] pb-10 lg:pb-16 animate-rise">
+      {/* ── Left: headline + copy + CTAs + trust chips ─────────────────── */}
       <div>
-        {/* Eyebrow */}
-        <div className="inline-flex items-center gap-2 text-[11px] tracking-[0.22em] uppercase text-wgold mb-[22px]">
-          <span className="w-6 h-px bg-wgold" />
-          {eyebrow}
-        </div>
-
-        {/* Headline */}
-        <h1 className="font-wserif font-medium text-[clamp(42px,5.6vw,72px)] leading-[1.02] -tracking-[0.01em] m-0 mb-[22px] text-wink">
+        <h1 className="font-wserif font-semibold text-[clamp(40px,5.2vw,66px)] leading-[1.06] -tracking-[0.01em] m-0 mb-[20px] text-wgreen">
           {headingLines.map((line, i) => (
             <span key={i}>
               {line}
@@ -57,60 +64,61 @@ export default function HeroSection({
           ))}
         </h1>
 
-        {/* Body */}
-        <p className="text-[clamp(15px,1.3vw,17.5px)] leading-[1.7] text-wmuted max-w-[430px] m-0 mb-8 font-light">
+        <p className="font-wserif text-[clamp(17px,1.5vw,21px)] leading-[1.55] text-wink/80 max-w-[460px] m-0 mb-8">
           {body}
         </p>
 
         {/* CTAs */}
-        <div className="flex flex-wrap gap-3.5 mb-9">
+        <div className="flex flex-wrap gap-4 mb-10">
           <Link
             to={primaryTo}
-            className="bg-wgreen text-white no-underline rounded-full px-[34px] py-4 text-[14px] tracking-wide shadow-[0_12px_28px_-12px_rgba(24,58,46,0.7)] hover:bg-wgreen-dark transition-colors"
+            className="bg-wgreen text-white no-underline rounded-[10px] px-9 py-[13px] font-wserif text-[18px] tracking-wide shadow-[0_12px_28px_-12px_rgba(24,58,46,0.7)] hover:bg-wgreen-dark transition-colors"
           >
             {primaryLabel}
           </Link>
-          <Link
-            to={secondaryTo}
-            className="bg-transparent text-wink no-underline border border-wline rounded-full px-8 py-4 text-[14px] tracking-wide hover:border-wgreen transition-colors"
+          <button
+            type="button"
+            onClick={scrollToWhy}
+            className="bg-transparent text-wgreen cursor-pointer border border-wgreen/50 rounded-[10px] px-9 py-[13px] font-wserif text-[18px] tracking-wide hover:border-wgreen hover:bg-wgreen/5 transition-colors"
           >
-            {secondaryLabel}
-          </Link>
+            Why Wellvia
+          </button>
         </div>
 
-        {/* Trust badges row */}
-        <TrustBadges />
+        {/* Trust chips — icon above a two-line label, per the mockup */}
+        <div className="flex flex-wrap gap-x-10 gap-y-5">
+          {TRUST_CHIPS.map(({ label, Icon }) => (
+            <div key={label} className="flex flex-col items-center gap-2 text-center">
+              <span className="w-11 h-11 rounded-full border border-wink/50 flex items-center justify-center text-wink">
+                <Icon size={19} strokeWidth={1.4} />
+              </span>
+              <span className="font-wserif text-[14.5px] leading-[1.25] text-wink whitespace-pre-line">
+                {label}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Right: hero image + floating rating card */}
-      <div className="relative">
-        {/* Soft gold radial glow behind the image */}
-        <div
-          className="absolute -right-[6%] -bottom-[8%] w-[62%] h-[78%] z-0 rounded-full"
-          style={{
-            background:
-              'radial-gradient(circle at 50% 40%, rgba(180,154,99,0.16), transparent 70%)',
-          }}
-        />
-
-        <WImage
-          src={heroImage}
-          alt={heroAlt}
-          shape="rounded"
-          className="w-full h-[clamp(360px,42vw,520px)] relative z-[1]"
-        />
-
-        {/* Floating review card */}
-        <div className="absolute -left-3.5 bottom-6 z-[2] bg-wcard border border-wline rounded-2xl px-[17px] py-[13px] shadow-[0_18px_40px_-20px_rgba(40,30,10,0.4)] flex items-center gap-3">
-          <span className="font-wserif text-[30px] text-wgreen leading-none">
-            {ratingScore}
-          </span>
-          <div className="text-[11px] leading-[1.5] text-wmuted">
-            <span className="text-wgold tracking-[1px]">★★★★★</span>
-            <br />
-            {reviewCount} reviews
-          </div>
-        </div>
+      {/* ── Right: brand composition (extracted from the design file) ───── */}
+      <div className="relative flex items-center justify-center">
+        {slideImage ? (
+          <WImage
+            src={slideImage}
+            alt={slide?.alt || 'Wellvia hero'}
+            shape="rounded"
+            className="w-full h-[clamp(320px,40vw,480px)] relative z-[1]"
+          />
+        ) : (
+          /* Static brand shot — two pouches with hand-drawn annotations,
+             cropped from zx10R/home&navbar mockup into /public/home/. */
+          <img
+            src="/home/hero-products.jpg"
+            alt="Wellvia Beauty Boost and Multivitamin gummies"
+            className="w-full max-w-[560px] h-auto rounded-xl2"
+            fetchPriority="high"
+          />
+        )}
       </div>
     </section>
   );

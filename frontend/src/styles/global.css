@@ -444,20 +444,25 @@
 }
 
 /* ─── Wellvia storefront (additive; scoped to .wellvia-root) ───────────────────
-   The customer/public re-skin sits on a warm "paper" canvas with Jost / Cormorant
-   Garamond / Cinzel type. Everything below is scoped under .wellvia-root (applied
-   on the storefront Layout wrapper) so the admin UI and its Flipkart tokens stay
+   The customer/public re-skin (frontend-3 look) sits on a cream canvas with a
+   soft repeating floral header behind everything, Jost body + EB Garamond
+   editorial headings. Everything below is scoped under .wellvia-root (applied on
+   the storefront Layout wrapper) so the admin UI and its Flipkart tokens stay
    exactly as they were. .paper is a shared surface utility (panels/forms). */
 .paper {
-  background-color: #ece8de;
-  background-image: url('/paper-texture.png');
-  background-size: 500px 500px;
-  background-repeat: repeat;
+  background-color: #f7f5f0;
 }
 
 .wellvia-root {
   font-family: 'Jost', system-ui, sans-serif;
-  color: #1e1e1a;
+  color: #141d18;
+  /* Cream page with a soft floral, repeated vertically full-width (frontend-3
+     body treatment). Sections stay transparent so the floral shows through. */
+  background-color: #fbfaf8;
+  background-image: url('/bg-floral.png');
+  background-size: 100% auto;
+  background-position: top center;
+  background-repeat: repeat-y;
 }
 .wellvia-root ::selection {
   background: #183a2e;
@@ -472,4 +477,30 @@
 .wellvia-root textarea:focus {
   outline: none;
   border-color: #183a2e;
+}
+
+/* Dual-thumb price range (FilterSidebar): the two stacked native inputs are
+   pointer-events-none so the track never swallows clicks; only the thumbs
+   themselves are interactive. */
+.range-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #183a2e;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(30, 24, 14, 0.35);
+  cursor: pointer;
+}
+.range-thumb::-moz-range-thumb {
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #183a2e;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(30, 24, 14, 0.35);
+  cursor: pointer;
 }

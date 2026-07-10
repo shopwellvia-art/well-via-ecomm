@@ -121,8 +121,8 @@ export const MailIcon = (p) => (
 );
 
 /** ★★★★★ rating stars — rendered as a styled text span. */
-export const Stars = ({ className = '' }) => (
+export const Stars = ({ className = '', count = 5 }) => (
   <span className={`text-wgold tracking-[1px] ${className}`} aria-hidden="true">
-    ★★★★★
+    {'★'.repeat(Math.max(0, Math.min(5, count)))}
   </span>
 );

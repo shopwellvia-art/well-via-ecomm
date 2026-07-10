@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { ProductImageManager } from '@/components/admin/ProductImageManager.jsx';
+import { ProductContentEditor } from '@/components/admin/ProductContentEditor.jsx';
 import { Card, CardHeader } from '@/components/ui/Card.jsx';
 import { Input } from '@/components/ui/Input.jsx';
 import { Textarea } from '@/components/ui/Textarea.jsx';
@@ -42,6 +43,23 @@ const EMPTY = {
   category_id: '',
 };
 
+/** Storefront merchandising + PDP content — all optional, edited via
+ *  ProductContentEditor and normalized in buildPayload. */
+const EMPTY_CONTENT = {
+  flavour: '',
+  is_combo: false,
+  badge: '',
+  offer_text: '',
+  coupon_code: '',
+  coupon_hint: '',
+  short_description: '',
+  ingredients: '',
+  highlights: [],
+  benefits: [],
+  usage_steps: [],
+  faqs: [],
+};
+
 /** Thin section heading used inside form cards */
 function SectionLabel({ icon: Icon, children }) {
   return (
@@ -65,6 +83,7 @@ export default function AdminProductFormPage() {
   const setProductTaxes = useSetProductTaxes();
 
   const [form, setForm] = useState(EMPTY);
+  const [content, setContent] = useState(EMPTY_CONTENT);
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState(null);
   const [selectedTaxIds, setSelectedTaxIds] = useState([]);
@@ -88,6 +107,20 @@ export default function AdminProductFormPage() {
         category_id: product.category_id != null ? String(product.category_id) : '',
       });
       setSelectedTaxIds((product.taxes || []).map((t) => t.id));
+      setContent({
+        flavour: product.flavour ?? '',
+        is_combo: !!product.is_combo,
+        badge: product.badge ?? '',
+        offer_text: product.offer_text ?? '',
+        coupon_code: product.coupon_code ?? '',
+        coupon_hint: product.coupon_hint ?? '',
+        short_description: product.short_description ?? '',
+        ingredients: product.ingredients ?? '',
+        highlights: Array.isArray(product.highlights) ? product.highlights : [],
+        benefits: Array.isArray(product.benefits) ? product.benefits : [],
+        usage_steps: Array.isArray(product.usage_steps) ? product.usage_steps : [],
+        faqs: Array.isArray(product.faqs) ? product.faqs : [],
+      });
     }
   }, [isEdit, product]);
 
@@ -143,6 +176,21 @@ export default function AdminProductFormPage() {
   }
 
   function buildPayload() {
+    // Row editors leave blank rows behind while typing — strip rows whose
+    // every field is empty, and send null (not []) so "no content" stays
+    // distinguishable from "empty list" in the DB.
+    const cleanRows = (list, fields) => {
+      const kept = (list || []).filter((r) =>
+        fields.some((f) => String(r?.[f] ?? '').trim() !== ''),
+      );
+      return kept.length ? kept : null;
+    };
+    const cleanStrings = (list) => {
+      const kept = (list || [])
+        .map((s) => (typeof s === 'string' ? s.trim() : (s?.label ?? '').trim()))
+        .filter(Boolean);
+      return kept.length ? kept : null;
+    };
     const base = {
       name: form.name.trim(),
       description: form.description.trim() || null,
@@ -155,6 +203,18 @@ export default function AdminProductFormPage() {
         form.weight_grams === '' ? null : Number(form.weight_grams),
       cod_blocked: !!form.cod_blocked,
       category_id: form.category_id === '' ? null : Number(form.category_id),
+      flavour: content.flavour.trim() || null,
+      is_combo: !!content.is_combo,
+      badge: content.badge.trim() || null,
+      offer_text: content.offer_text.trim() || null,
+      coupon_code: content.coupon_code.trim() || null,
+      coupon_hint: content.coupon_hint.trim() || null,
+      short_description: content.short_description.trim() || null,
+      ingredients: content.ingredients.trim() || null,
+      highlights: cleanStrings(content.highlights),
+      benefits: cleanRows(content.benefits, ['icon', 'title', 'text']),
+      usage_steps: cleanRows(content.usage_steps, ['label', 'text']),
+      faqs: cleanRows(content.faqs, ['q', 'a']),
     };
     return isEdit ? base : { sku: form.sku.trim(), ...base };
   }
@@ -389,6 +449,14 @@ export default function AdminProductFormPage() {
                 ))}
               </Select>
             </Card>
+          </motion.div>
+
+          {/* ── Storefront content ── */}
+          <motion.div variants={fadeUp} className="mt-5">
+            <ProductContentEditor
+              content={content}
+              onChange={(patch) => setContent((c) => ({ ...c, ...patch }))}
+            />
           </motion.div>
 
           {/* ── Taxes ── */}

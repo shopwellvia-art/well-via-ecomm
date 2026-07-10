@@ -1,138 +1,183 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import AccountLayout from '@/components/storefront/AccountLayout';
+import { Link, useNavigate } from 'react-router-dom';
 import WImage from '@/components/storefront/WImage';
 import {
   HeartIcon,
-  BagIcon,
+  CloseIcon,
   Check,
   LockIcon,
+  BagIcon,
+  Stars,
 } from '@/components/storefront/Icons';
 import {
   useWishlist,
   useRemoveFromWishlist,
 } from '@/features/wishlist/hooks.js';
+import { useProductsByIds } from '@/features/products/hooks.js';
 import { useAddToCart } from '@/features/cart/hooks.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { formatPrice } from '@/lib/utils.js';
 
-// ── Skeleton card while loading ──────────────────────────────────────────────
-function SkeletonCard() {
+const PAGE_SIZE = 6;
+
+/* ── Page shell (header row + content) ───────────────────────────────────── */
+function Shell({ children, count }) {
+  const navigate = useNavigate();
   return (
-    <div className="bg-wcard border border-wline rounded-xl2 overflow-hidden animate-pulse">
-      <div className="h-[200px] bg-wcanvas" />
-      <div className="p-4 space-y-3">
-        <div className="h-5 bg-wcanvas rounded-full w-3/4" />
-        <div className="h-3 bg-wcanvas rounded-full w-1/2" />
-        <div className="mt-4 flex items-center justify-between gap-3">
-          <div className="h-6 bg-wcanvas rounded-full w-1/3" />
-          <div className="h-9 bg-wcanvas rounded-full flex-1" />
+    <main className="bg-wcanvas min-h-[70vh] px-5 sm:px-10 lg:px-14 py-8 lg:py-12">
+      <div className="max-w-[1060px] mx-auto">
+        <div className="flex items-center gap-4 mb-2">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            aria-label="Go back"
+            className="w-10 h-10 rounded-full border border-wink/40 bg-transparent text-wink grid place-items-center cursor-pointer hover:bg-wcard transition-colors"
+          >
+            <span aria-hidden="true" className="text-[16px] leading-none">←</span>
+          </button>
+          <h1 className="font-wserif font-semibold text-[clamp(28px,3.2vw,38px)] text-wink m-0">
+            My Wishlist
+          </h1>
         </div>
+        {count != null && (
+          <p className="font-wserif text-[clamp(16px,1.6vw,21px)] text-wmuted text-right m-0 mb-6">
+            Showing {count} Saved {count === 1 ? 'Product' : 'Products'}
+          </p>
+        )}
+        {children}
       </div>
+    </main>
+  );
+}
+
+/* ── Loading skeleton row ────────────────────────────────────────────────── */
+function SkeletonRow() {
+  return (
+    <div className="bg-wcard border border-wline rounded-xl2 p-4 sm:p-5 flex items-center gap-5 animate-pulse">
+      <div className="w-[120px] h-[120px] rounded-lg bg-wcanvas shrink-0" />
+      <div className="flex-1 space-y-3">
+        <div className="h-5 bg-wcanvas rounded w-1/3" />
+        <div className="h-3 bg-wcanvas rounded w-1/2" />
+        <div className="h-4 bg-wcanvas rounded w-1/4" />
+      </div>
+      <div className="h-11 w-36 bg-wcanvas rounded-lg shrink-0 hidden sm:block" />
     </div>
   );
 }
 
-// ── Individual wishlist card ─────────────────────────────────────────────────
-function WishlistCard({ item }) {
+/* ── One wishlist row — image | name/stars/snippet | price | CTA | remove ── */
+function WishlistRow({ item, product }) {
   const remove = useRemoveFromWishlist();
   const add = useAddToCart();
+  const [addErr, setAddErr] = useState(false);
   const added = add.isSuccess && add.variables?.productId === item.product_id;
-  const [moveErr, setMoveErr] = useState(false);
 
-  function handleMoveToCart() {
-    setMoveErr(false);
+  // Enriched fields (from /products/by-ids) with wishlist-item fallbacks.
+  const price = product?.price ?? item.price;
+  const compareAt = product?.compare_at_price;
+  const isDiscounted = compareAt != null && Number(compareAt) > Number(price);
+  const snippet = product?.short_description || null;
+  const ratingCount = product?.rating_count ?? 0;
+  const ratingAvg = Number(product?.rating_avg ?? 0);
+  const outOfStock = product != null && product.stock <= 0;
+
+  function handleAddToCart() {
+    setAddErr(false);
     add.mutate(
       { productId: item.product_id, quantity: 1 },
-      {
-        onSuccess: () => {
-          remove.mutate(item.product_id);
-        },
-        onError: () => {
-          setMoveErr(true);
-        },
-      },
+      { onError: () => setAddErr(true) },
     );
   }
 
   return (
-    <article className="bg-wcard border border-wline rounded-xl2 overflow-hidden flex flex-col transition-transform duration-200 hover:-translate-y-[4px] hover:shadow-[0_20px_44px_-24px_rgba(40,30,10,0.38)] animate-rise">
-      {/* Image area */}
-      <div
-        className="relative"
-        style={{ background: 'linear-gradient(160deg,#efe9df,#e4dccd)' }}
+    <article className="relative bg-wcard border border-wline rounded-xl2 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-5 animate-rise">
+      {/* Remove — circular × pinned top-right */}
+      <button
+        type="button"
+        onClick={() => remove.mutate(item.product_id)}
+        disabled={remove.isPending}
+        aria-label={`Remove ${item.name} from wishlist`}
+        className="absolute top-4 right-4 w-8 h-8 rounded-full border border-wink/35 bg-transparent text-wink grid place-items-center cursor-pointer hover:bg-wcanvas disabled:opacity-40 transition-colors"
       >
+        <CloseIcon size={13} />
+      </button>
+
+      {/* Framed product image */}
+      <Link
+        to={`/products/${item.product_id}`}
+        aria-label={item.name}
+        className="shrink-0 border border-wline rounded-lg bg-white p-1.5 self-start sm:self-auto"
+      >
+        <WImage
+          src={item.image_url}
+          alt={item.name}
+          className="w-[120px] h-[120px] rounded-md"
+        />
+      </Link>
+
+      {/* Name + stars + snippet + price */}
+      <div className="flex-1 min-w-0 pr-8 sm:pr-0">
         <Link
           to={`/products/${item.product_id}`}
-          aria-label={item.name}
-          tabIndex={-1}
-        >
-          <WImage
-            src={item.image_url}
-            alt={item.name}
-            className="w-full h-[200px]"
-          />
-        </Link>
-
-        {/* Heart button — removes item from wishlist */}
-        <button
-          type="button"
-          onClick={() => remove.mutate(item.product_id)}
-          disabled={remove.isPending}
-          aria-label={`Remove ${item.name} from wishlist`}
-          className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center border border-wline bg-wcard/80 backdrop-blur-sm text-red-500 transition-colors hover:bg-wcard disabled:opacity-40"
-        >
-          <HeartIcon size={15} filled />
-        </button>
-      </div>
-
-      {/* Card body */}
-      <div className="p-[18px] pb-5 flex flex-col flex-1">
-        <Link
-          to={`/products/${item.product_id}`}
-          className="font-wserif font-semibold text-[21px] leading-[1.15] mb-[5px] no-underline text-wink hover:text-wgreen transition-colors"
+          className="block text-[20px] font-medium leading-snug text-wink no-underline hover:text-wgreen transition-colors truncate"
         >
           {item.name}
         </Link>
 
-        {item.brand ? (
-          <p className="text-[12.5px] text-wmuted leading-[1.5] m-0 mb-3 font-light flex-1">
-            {item.brand}
-          </p>
-        ) : (
-          <div className="flex-1 min-h-[14px]" />
+        {ratingCount > 0 && (
+          <div className="mt-0.5">
+            <Stars
+              count={Math.round(ratingAvg)}
+              className="text-[17px] text-[#E8B33C]"
+            />
+          </div>
         )}
 
-        {/* Price */}
-        <div className="font-wserif text-[20px] text-wink mb-[13px]">
-          {formatPrice(item.price)}
+        {snippet && (
+          <p className="font-wserif text-[16px] text-wink/70 leading-[1.45] m-0 mt-1 line-clamp-1">
+            {snippet}
+          </p>
+        )}
+
+        <div className="flex items-baseline gap-2.5 mt-2">
+          <span className="text-[19px] font-medium text-wink">
+            {formatPrice(price)}
+          </span>
+          {isDiscounted && (
+            <span className="text-[14px] text-wmuted line-through">
+              {formatPrice(compareAt)}
+            </span>
+          )}
         </div>
 
-        {/* Move-to-cart error */}
-        {moveErr && (
-          <p className="text-[11.5px] text-red-600 mb-2 leading-snug">
+        {addErr && (
+          <p className="text-[12px] text-red-600 m-0 mt-1.5">
             Could not add to cart. Please try again.
           </p>
         )}
+      </div>
 
-        {/* CTA — add to cart then remove from wishlist on success */}
+      {/* Add to cart */}
+      <div className="shrink-0 sm:self-end">
         <button
           type="button"
-          onClick={handleMoveToCart}
-          disabled={add.isPending || remove.isPending || added}
-          className="w-full bg-wgreen text-white border-0 rounded-full py-3 text-[12.5px] tracking-wide cursor-pointer hover:bg-wgreen-dark disabled:opacity-60 disabled:cursor-wait transition-colors flex items-center justify-center gap-2"
+          onClick={handleAddToCart}
+          disabled={add.isPending || added || outOfStock}
+          className="min-w-[176px] bg-wgreen text-white border-0 rounded-lg px-8 py-3 font-wserif text-[19px] tracking-wide cursor-pointer hover:bg-wgreen-dark disabled:opacity-60 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
         >
-          {added ? (
+          {outOfStock ? (
+            'Out of stock'
+          ) : added ? (
             <>
-              <Check size={14} />
-              Moved to Cart
+              <Check size={15} />
+              Added
             </>
           ) : add.isPending ? (
             'Adding…'
           ) : (
             <>
-              <BagIcon size={14} />
-              Add to Cart
+              <BagIcon size={15} />
+              Add to cart
             </>
           )}
         </button>
@@ -141,11 +186,11 @@ function WishlistCard({ item }) {
   );
 }
 
-// ── Empty wishlist ────────────────────────────────────────────────────────────
+/* ── Empty wishlist ──────────────────────────────────────────────────────── */
 function EmptyWishlist() {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-5 text-center">
-      <div className="w-[60px] h-[60px] rounded-full flex items-center justify-center bg-wcanvas border border-wline text-wmuted">
+      <div className="w-[60px] h-[60px] rounded-full flex items-center justify-center bg-wcard border border-wline text-wmuted">
         <HeartIcon size={26} />
       </div>
       <div>
@@ -166,18 +211,26 @@ function EmptyWishlist() {
   );
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
+/* ── Page ────────────────────────────────────────────────────────────────── */
 export default function WishlistPage() {
   const user = useAuthStore((s) => s.user);
   const { data: items = [], isLoading, isError, error, refetch } = useWishlist();
   const status = error?.response?.status;
 
-  // Not signed in — show sign-in prompt inside AccountLayout
+  // Enrich rows with rating / snippet / compare-at price from the catalog.
+  const ids = items.map((i) => i.product_id);
+  const { data: enriched = [] } = useProductsByIds(ids);
+  const productById = new Map(enriched.map((p) => [p.id, p]));
+
+  // "Show more" — client-side, 6 rows at a time.
+  const [visible, setVisible] = useState(PAGE_SIZE);
+
+  // Not signed in — sign-in prompt
   if (!user || status === 401) {
     return (
-      <AccountLayout active="wishlist">
+      <Shell>
         <div className="flex flex-col items-center justify-center py-20 gap-5 text-center">
-          <div className="w-[60px] h-[60px] rounded-full flex items-center justify-center bg-wcanvas border border-wline text-wmuted">
+          <div className="w-[60px] h-[60px] rounded-full flex items-center justify-center bg-wcard border border-wline text-wmuted">
             <LockIcon size={26} />
           </div>
           <div>
@@ -195,20 +248,17 @@ export default function WishlistPage() {
             Sign In
           </Link>
         </div>
-      </AccountLayout>
+      </Shell>
     );
   }
 
   // Error state
   if (isError) {
     return (
-      <AccountLayout active="wishlist">
-        <h1 className="font-wserif font-medium text-[clamp(28px,3.4vw,40px)] m-0 mb-1.5 text-wink">
-          Wishlist
-        </h1>
+      <Shell>
         <div className="flex flex-col items-center justify-center py-16 gap-5 text-center">
           <p className="font-wserif text-[20px] text-wink m-0 mb-1">
-            Couldn't load your wishlist
+            Couldn&apos;t load your wishlist
           </p>
           <p className="text-[13px] text-wmuted m-0">
             Something went wrong on our end. Please try again.
@@ -221,55 +271,55 @@ export default function WishlistPage() {
             Retry
           </button>
         </div>
-      </AccountLayout>
+      </Shell>
     );
   }
 
-  return (
-    <AccountLayout active="wishlist">
-      {/* Section heading */}
-      <div className="flex items-start justify-between gap-4 mb-6">
-        <div>
-          <h1 className="font-wserif font-medium text-[clamp(28px,3.4vw,40px)] m-0 mb-1.5 text-wink">
-            Wishlist
-          </h1>
-          <p className="text-[14px] text-wmuted m-0 font-light flex items-center gap-2">
-            Rituals you're saving for later.
-            {!isLoading && items.length > 0 && (
-              <span className="inline-flex items-center justify-center bg-wgreen text-white text-[10.5px] font-semibold rounded-full w-5 h-5 shrink-0">
-                {items.length}
-              </span>
-            )}
-          </p>
+  if (isLoading) {
+    return (
+      <Shell>
+        <div className="flex flex-col gap-5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonRow key={i} />
+          ))}
         </div>
+      </Shell>
+    );
+  }
 
-        {!isLoading && items.length > 0 && (
-          <Link
-            to="/products"
-            className="shrink-0 text-[12.5px] text-wgreen hover:text-wgreen-dark underline underline-offset-2 transition-colors self-center"
-          >
-            Continue shopping
-          </Link>
-        )}
+  if (items.length === 0) {
+    return (
+      <Shell count={0}>
+        <EmptyWishlist />
+      </Shell>
+    );
+  }
+
+  const shown = items.slice(0, visible);
+
+  return (
+    <Shell count={items.length}>
+      <div className="flex flex-col gap-5">
+        {shown.map((item) => (
+          <WishlistRow
+            key={item.id}
+            item={item}
+            product={productById.get(item.product_id)}
+          />
+        ))}
       </div>
 
-      {/* Loading — skeleton grid */}
-      {isLoading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <SkeletonCard key={i} />
-          ))}
-        </div>
-      ) : items.length === 0 ? (
-        <EmptyWishlist />
-      ) : (
-        /* Wishlist card grid */
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.map((item) => (
-            <WishlistCard key={item.id} item={item} />
-          ))}
+      {items.length > visible && (
+        <div className="text-center mt-10">
+          <button
+            type="button"
+            onClick={() => setVisible((v) => v + PAGE_SIZE)}
+            className="bg-transparent border-0 cursor-pointer font-wserif text-[19px] text-wink underline underline-offset-4 hover:text-wgreen transition-colors"
+          >
+            Show more
+          </button>
         </div>
       )}
-    </AccountLayout>
+    </Shell>
   );
 }

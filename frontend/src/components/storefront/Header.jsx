@@ -16,12 +16,16 @@ import {
   MenuIcon,
   CloseIcon,
 } from './Icons';
+import ShopMegaMenu, { ShopMobileLinks } from './ShopMegaMenu.jsx';
 
-/** Primary nav links — real app routes. */
+/** Primary nav links — real app routes (mockup order). "Shop" is rendered
+ *  via ShopMegaMenu on desktop and as an accordion on mobile. */
 const NAV = [
   { to: '/', label: 'Home', end: true },
-  { to: '/products', label: 'Shop' },
-  { to: '/about', label: 'About' },
+  { to: '/products', label: 'Shop', megaMenu: true },
+  { to: '/categories', label: 'Categories' },
+  { to: '/bestsellers', label: 'Best Sellers' },
+  { to: '/new-arrivals', label: 'New Arrivals' },
   { to: '/contact', label: 'Contact' },
 ];
 
@@ -198,68 +202,97 @@ export default function Header() {
   function CountBadge({ count }) {
     if (!count) return null;
     return (
-      <span className="absolute -top-2 -right-2 bg-wgreen text-white text-[9px] min-w-[15px] h-[15px] rounded-full flex items-center justify-center px-0.5 leading-none">
+      <span className="absolute -top-1.5 -right-2 bg-[#c0392b] text-white text-[9px] min-w-[15px] h-[15px] rounded-full flex items-center justify-center px-0.5 leading-none font-bold">
         {count > 99 ? '99+' : count}
       </span>
     );
   }
 
   return (
-    <header className="sticky top-0 z-40 bg-wpaper/95 backdrop-blur-md border-b border-wline">
+    <header className="sticky top-0 z-40 bg-wgreen-deep">
 
-      {/* ── Desktop ─────────────────────────────────────────────────────────── */}
-      <div className="hidden md:grid grid-cols-[1fr_auto_1fr] items-center gap-4 py-3.5 px-5 lg:px-[52px]">
-        {/* Left: small horizontal logo */}
-        <Logo size="sm" stacked={false} />
+      {/* ── Desktop (frontend-3: dark-green band, left logo, serif nav) ───────── */}
+      <div className="hidden md:flex items-center gap-4 lg:gap-7 py-2.5 px-5 lg:px-10">
+        {/* Left: logo — cream/gold on dark green */}
+        <Logo
+          size="md"
+          stacked={false}
+          markColor="#E9DDC0"
+          textClassName="text-[#F1EAD8]"
+        />
 
-        {/* Centre: large stacked logo */}
-        <Logo size="lg" stacked />
-
-        {/* Right: nav + icons */}
+        {/* Nav — EB Garamond, cream links */}
         <nav
-          className="flex items-center justify-end gap-4 lg:gap-7 text-[12.5px] tracking-[0.12em] uppercase"
+          className="flex items-center gap-4 lg:gap-6 font-wserif text-[16px] lg:text-[18px] flex-1"
           aria-label="Main navigation"
         >
-          {NAV.map((n) => (
-            <NavLink
-              key={n.to}
-              to={n.to}
-              end={n.end}
-              className={({ isActive }) =>
-                cn(
-                  'no-underline transition-colors',
-                  isActive ? 'text-wgreen font-medium' : 'text-wink hover:text-wgreen',
-                )
-              }
-            >
-              {n.label}
-            </NavLink>
-          ))}
+          {NAV.map((n) => {
+            const linkCls = ({ isActive }) =>
+              cn(
+                'no-underline transition-colors flex items-center gap-1.5 whitespace-nowrap',
+                isActive ? 'text-white' : 'text-[#c9d4cc] hover:text-white',
+              );
+            if (n.megaMenu) {
+              return <ShopMegaMenu key={n.to} linkClassName={linkCls} />;
+            }
+            return (
+              <NavLink key={n.to} to={n.to} end={n.end} className={linkCls}>
+                {n.label}
+              </NavLink>
+            );
+          })}
+        </nav>
 
-          {/* Divider */}
-          <span className="w-px h-[18px] bg-wline shrink-0" aria-hidden="true" />
+        {/* Persistent search pill (frontend-3) */}
+        <form
+          onSubmit={handleSearch}
+          role="search"
+          className="hidden lg:flex items-center bg-white rounded-full pl-4 pr-2 py-1.5 w-[300px] gap-2"
+        >
+          <label htmlFor="header-search" className="sr-only">
+            Search products
+          </label>
+          <input
+            id="header-search"
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Looking for immunity, beauty, or better sleep?"
+            autoComplete="off"
+            className="flex-1 min-w-0 border-0 bg-transparent text-[12.5px] text-wink placeholder:text-[#a9a9a4] outline-none"
+          />
+          <button
+            type="submit"
+            aria-label="Search"
+            className="text-[#6b6b66] hover:text-wgreen transition-colors bg-transparent border-0 p-1 cursor-pointer flex"
+          >
+            <SearchIcon size={16} strokeWidth={2} />
+          </button>
+        </form>
 
-          {/* Search toggle */}
+        {/* Icon row — cream on dark green */}
+        <div className="flex items-center gap-4 lg:gap-5">
+          {/* Search toggle — shown only when the pill is hidden (md screens) */}
           <button
             onClick={() => setSearchOpen((v) => !v)}
-            className="cursor-pointer bg-transparent border-0 p-0 text-wink hover:text-wgreen transition-colors"
+            className="lg:hidden cursor-pointer bg-transparent border-0 p-0 text-[#efe8d8] hover:text-white transition-colors flex"
             aria-label={searchOpen ? 'Close search' : 'Open search'}
             aria-expanded={searchOpen}
           >
             {searchOpen ? (
-              <CloseIcon size={18} strokeWidth={1.4} />
+              <CloseIcon size={20} strokeWidth={1.6} />
             ) : (
-              <SearchIcon size={18} strokeWidth={1.4} />
+              <SearchIcon size={20} strokeWidth={1.6} />
             )}
           </button>
 
           {/* Wishlist */}
           <Link
             to="/wishlist"
-            className="relative text-wink hover:text-wgreen transition-colors"
+            className="relative text-[#efe8d8] hover:text-white transition-colors flex"
             aria-label={`Wishlist${wishlistCount ? ` (${wishlistCount} items)` : ''}`}
           >
-            <HeartIcon size={18} strokeWidth={1.4} />
+            <HeartIcon size={22} strokeWidth={1.6} />
             <CountBadge count={wishlistCount} />
           </Link>
 
@@ -268,10 +301,10 @@ export default function Header() {
             {!user ? (
               <Link
                 to="/login"
-                className="flex items-center gap-1 text-wink hover:text-wgreen transition-colors no-underline"
+                className="flex items-center gap-1 text-[#efe8d8] hover:text-white transition-colors no-underline"
                 aria-label="Sign in"
               >
-                <UserIcon size={18} strokeWidth={1.4} />
+                <UserIcon size={22} strokeWidth={1.6} />
               </Link>
             ) : (
               <>
@@ -364,13 +397,13 @@ export default function Header() {
           {/* Cart */}
           <button
             onClick={openDrawer}
-            className="relative cursor-pointer bg-transparent border-0 p-0 text-wink hover:text-wgreen transition-colors"
+            className="relative cursor-pointer bg-transparent border-0 p-0 text-[#efe8d8] hover:text-white transition-colors flex"
             aria-label={`Open cart${cartCount ? ` (${cartCount} items)` : ''}`}
           >
-            <BagIcon size={19} strokeWidth={1.4} />
+            <BagIcon size={22} strokeWidth={1.6} />
             <CountBadge count={cartCount} />
           </button>
-        </nav>
+        </div>
       </div>
 
       {/* ── Mobile bar ──────────────────────────────────────────────────────── */}
@@ -378,44 +411,44 @@ export default function Header() {
         {/* Hamburger */}
         <button
           onClick={() => setMobileOpen(true)}
-          className="bg-transparent border-0 p-0 text-wink justify-self-start cursor-pointer"
+          className="bg-transparent border-0 p-0 text-[#efe8d8] justify-self-start cursor-pointer"
           aria-label="Open navigation menu"
           aria-expanded={mobileOpen}
           aria-controls="mobile-menu"
         >
-          <MenuIcon size={22} />
+          <MenuIcon size={24} />
         </button>
 
         {/* Centre: inline logo */}
-        <div className="flex items-center gap-1.5">
-          <LeafMark size={22} dot={false} />
-          <span className="font-display text-[17px] tracking-[0.2em] font-medium text-wgreen pl-[0.2em]">
+        <Link to="/" className="flex items-center gap-1.5 no-underline" aria-label="Wellvia — home">
+          <LeafMark size={22} dot={false} color="#E9DDC0" />
+          <span className="font-display text-[17px] tracking-[0.2em] font-medium text-[#F1EAD8] pl-[0.2em]">
             WELLVIA
           </span>
-        </div>
+        </Link>
 
         {/* Right: wishlist + cart */}
         <div className="flex items-center justify-end gap-4">
           <Link
             to="/wishlist"
-            className="relative text-wink"
+            className="relative text-[#efe8d8]"
             aria-label={`Wishlist${wishlistCount ? ` (${wishlistCount})` : ''}`}
           >
-            <HeartIcon size={18} strokeWidth={1.4} />
+            <HeartIcon size={22} strokeWidth={1.6} />
             {wishlistCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-wgreen text-white text-[9px] min-w-[15px] h-[15px] rounded-full flex items-center justify-center px-0.5 leading-none">
+              <span className="absolute -top-1.5 -right-2 bg-[#c0392b] text-white text-[9px] min-w-[15px] h-[15px] rounded-full flex items-center justify-center px-0.5 leading-none font-bold">
                 {wishlistCount}
               </span>
             )}
           </Link>
           <button
             onClick={openDrawer}
-            className="relative cursor-pointer bg-transparent border-0 p-0 text-wink"
+            className="relative cursor-pointer bg-transparent border-0 p-0 text-[#efe8d8]"
             aria-label={`Open cart${cartCount ? ` (${cartCount})` : ''}`}
           >
-            <BagIcon size={19} strokeWidth={1.4} />
+            <BagIcon size={22} strokeWidth={1.6} />
             {cartCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-wgreen text-white text-[9px] min-w-[15px] h-[15px] rounded-full flex items-center justify-center px-0.5 leading-none">
+              <span className="absolute -top-1.5 -right-2 bg-[#c0392b] text-white text-[9px] min-w-[15px] h-[15px] rounded-full flex items-center justify-center px-0.5 leading-none font-bold">
                 {cartCount}
               </span>
             )}
@@ -423,15 +456,15 @@ export default function Header() {
         </div>
       </div>
 
-      {/* ── Inline search bar (desktop + mobile) ────────────────────────────── */}
+      {/* ── Inline search bar (md screens, toggled) ─────────────────────────── */}
       {searchOpen && (
-        <div className="border-t border-wline px-5 lg:px-[52px] py-3 animate-rise">
+        <div className="lg:hidden border-t border-white/15 px-5 py-3 animate-rise">
           <form
             onSubmit={handleSearch}
             className="flex items-center gap-3 max-w-2xl mx-auto"
             role="search"
           >
-            <label htmlFor="header-search" className="sr-only">
+            <label htmlFor="header-search-md" className="sr-only">
               Search products
             </label>
             <div className="relative flex-1">
@@ -439,7 +472,7 @@ export default function Header() {
                 <SearchIcon size={15} strokeWidth={1.4} />
               </span>
               <input
-                id="header-search"
+                id="header-search-md"
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -533,22 +566,26 @@ export default function Header() {
                 aria-label="Mobile navigation"
               >
                 {NAV.map((n) => (
-                  <NavLink
-                    key={n.to}
-                    to={n.to}
-                    end={n.end}
-                    onClick={() => setMobileOpen(false)}
-                    className={({ isActive }) =>
-                      cn(
-                        'px-3 py-3 rounded-xl text-[14px] no-underline transition-colors',
-                        isActive
-                          ? 'bg-wgreen text-white'
-                          : 'text-wink hover:bg-wline/40',
-                      )
-                    }
-                  >
-                    {n.label}
-                  </NavLink>
+                  <div key={n.to}>
+                    <NavLink
+                      to={n.to}
+                      end={n.end}
+                      onClick={() => setMobileOpen(false)}
+                      className={({ isActive }) =>
+                        cn(
+                          'block px-3 py-3 rounded-xl text-[14px] no-underline transition-colors',
+                          isActive
+                            ? 'bg-wgreen text-white'
+                            : 'text-wink hover:bg-wline/40',
+                        )
+                      }
+                    >
+                      {n.label}
+                    </NavLink>
+                    {n.megaMenu && (
+                      <ShopMobileLinks onNavigate={() => setMobileOpen(false)} />
+                    )}
+                  </div>
                 ))}
               </nav>
 

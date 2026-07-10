@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -13,13 +15,36 @@ router = APIRouter()
 def list_products(
     q: str | None = Query(default=None),
     category_id: int | None = Query(default=None),
+    category_ids: str | None = Query(
+        default=None, description="CSV of category ids; superset of category_id"
+    ),
+    flavours: str | None = Query(default=None, description="CSV of flavour tags"),
+    min_price: Decimal | None = Query(default=None, ge=0),
+    max_price: Decimal | None = Query(default=None, ge=0),
+    min_rating: Decimal | None = Query(default=None, ge=0, le=5),
+    in_stock: bool | None = Query(default=None),
+    is_combo: bool | None = Query(default=None),
+    discounted: bool | None = Query(default=None),
+    sort_by: str = Query(default="newest", pattern="^(newest|price_asc|price_desc|rating)$"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     pagination = PaginationParams(page=page, page_size=page_size)
     items, total = ProductService(db).search(
-        q=q, category_id=category_id, offset=pagination.offset, limit=pagination.page_size
+        q=q,
+        category_id=category_id,
+        category_ids=category_ids,
+        flavours=flavours,
+        min_price=min_price,
+        max_price=max_price,
+        min_rating=min_rating,
+        in_stock=in_stock,
+        is_combo=is_combo,
+        discounted=discounted,
+        sort_by=sort_by,
+        offset=pagination.offset,
+        limit=pagination.page_size,
     )
     return Page[ProductRead](
         items=[ProductRead.model_validate(i) for i in items],

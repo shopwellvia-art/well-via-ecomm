@@ -13,6 +13,7 @@ import { PageFallback } from '@/components/feedback/PageFallback.jsx';
 // Route-based code splitting — each page is its own chunk.
 const HomePage = lazy(() => import('@/pages/HomePage.jsx'));
 const ProductListPage = lazy(() => import('@/pages/ProductListPage.jsx'));
+const CategoriesPage = lazy(() => import('@/pages/CategoriesPage.jsx'));
 const ProductDetailPage = lazy(() => import('@/pages/ProductDetailPage.jsx'));
 const CartPage = lazy(() => import('@/pages/CartPage.jsx'));
 const CheckoutPage = lazy(() => import('@/pages/CheckoutPage.jsx'));
@@ -72,6 +73,9 @@ export default function App() {
           <Route element={<Layout />}>
             <Route index element={<HomePage />} />
             <Route path="products" element={<ProductListPage />} />
+            <Route path="bestsellers" element={<ProductListPage mode="bestsellers" />} />
+            <Route path="new-arrivals" element={<ProductListPage mode="new-arrivals" />} />
+            <Route path="categories" element={<CategoriesPage />} />
             <Route path="products/:id" element={<ProductDetailPage />} />
             <Route path="cart" element={<CartPage />} />
             <Route path="wishlist" element={<WishlistPage />} />

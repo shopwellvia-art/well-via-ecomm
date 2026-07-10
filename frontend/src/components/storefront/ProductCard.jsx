@@ -1,5 +1,6 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn, formatPrice } from '@/lib/utils';
+import { useAuthStore } from '@/features/auth/store.js';
 import WImage from '@/components/storefront/WImage';
 import { HeartIcon, Stars } from '@/components/storefront/Icons';
 import { useAddToCart } from '@/features/cart/hooks';
@@ -9,41 +10,55 @@ import {
   useRemoveFromWishlist,
 } from '@/features/wishlist/hooks';
 
+/** Badge chip styling by kind; free-form strings fall back to 'default'. */
+const BADGE_STYLES = {
+  bestseller: 'bg-[#8e2f3c] text-white border-transparent',
+  new: 'bg-[#7c4a8c] text-white border-transparent',
+  sale: 'bg-wpaper/90 text-wgreen border-wline',
+  default: 'bg-wpaper/90 text-wgreen border-wline',
+};
+
 /**
  * ProductCard — wellness-styled product card.
  *
  * Props:
  *   product      — real product shape from the API
  *   buttonLabel  — override the CTA text (default "Add to Cart")
+ *   badge        — listing-context ribbon: 'bestseller' | 'new' | 'sale'.
+ *                  Precedence: this prop → product.badge (admin override) →
+ *                  derived "Sale" when discounted → none.
  *
  * Wiring:
  *   - Navigates to /products/:id (real route; not slug)
  *   - Image via WImage using product.image_url
  *   - Prices formatted via formatPrice; compare_at_price shown ONLY when > price
- *   - Rating pill shown ONLY when rating_count > 0
- *   - Subtitle from product.brand; omitted if absent
- *   - Tag badge derived ("Sale" when discounted); no reliance on a `tag` field
+ *   - Rating pill shown ONLY when rating_count > 0 (uses rating_avg)
+ *   - Subtitle from short_description, else flavour; omitted if absent
  *   - Add-to-cart via useAddToCart; disabled when stock <= 0
  *   - Wishlist heart toggle via useIsInWishlist / useAddToWishlist / useRemoveFromWishlist
  */
-export default function ProductCard({ product, buttonLabel = 'Add to Cart' }) {
+export default function ProductCard({ product, buttonLabel = 'Add to Cart', badge }) {
   const addToCart = useAddToCart();
   const inWishlist = useIsInWishlist(product?.id);
   const addWishlist = useAddToWishlist();
   const removeWishlist = useRemoveFromWishlist();
+  const isSignedIn = useAuthStore((s) => !!s.accessToken);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   if (!product) return null;
 
   const {
     id,
     name,
-    brand,
     price,
     compare_at_price,
     image_url,
     stock,
-    rating,
+    rating_avg,
     rating_count,
+    flavour,
+    short_description,
   } = product;
 
   const isDiscounted =
@@ -57,9 +72,26 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart' }) {
     : 0;
   const outOfStock = stock <= 0;
 
+  // Ribbon: listing context wins, then the admin's free-form product.badge,
+  // then the derived Sale chip.
+  const badgeText =
+    badge != null
+      ? badge.charAt(0).toUpperCase() + badge.slice(1)
+      : product.badge || (isDiscounted ? 'Sale' : null);
+  const badgeStyle =
+    BADGE_STYLES[(badge || product.badge || 'sale').toLowerCase()] ||
+    BADGE_STYLES.default;
+
+  const subtitle = short_description || null;
+
   const handleWishlist = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    // Wishlist is server-only by design — guests are sent to sign in.
+    if (!isSignedIn) {
+      navigate(`/login?next=${encodeURIComponent(location.pathname + location.search)}`);
+      return;
+    }
     if (inWishlist) {
       removeWishlist.mutate(id);
     } else {
@@ -82,10 +114,14 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart' }) {
       >
         <WImage src={image_url} alt={name} className="w-full h-[200px]" />
 
-        {/* Derived tag badge — "Sale" when discounted, omitted otherwise */}
-        {isDiscounted && (
-          <span className="absolute top-3 left-3 bg-wpaper/90 text-wgreen text-[9.5px] tracking-[0.14em] uppercase px-[11px] py-[5px] rounded-full border border-wline">
-            Sale
+        {badgeText && (
+          <span
+            className={cn(
+              'absolute top-3 left-3 text-[9.5px] tracking-[0.14em] uppercase px-[11px] py-[5px] rounded-full border',
+              badgeStyle,
+            )}
+          >
+            {badgeText}
           </span>
         )}
 
@@ -110,7 +146,7 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart' }) {
         {rating_count > 0 && (
           <div className="flex items-center gap-1.5 text-[11.5px] text-wgold mb-[7px]">
             <Stars />
-            <span className="text-wmuted">{Number(rating).toFixed(1)}</span>
+            <span className="text-wmuted">{Number(rating_avg).toFixed(1)}</span>
             <span className="text-wmuted text-[11px]">
               ({Number(rating_count).toLocaleString('en-IN')})
             </span>
@@ -125,10 +161,17 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart' }) {
           {name}
         </Link>
 
-        {/* Subtitle = brand; omit if absent; flex-1 so price row stays at bottom */}
-        {brand ? (
-          <p className="text-[12.5px] text-wmuted leading-[1.5] m-0 mb-3.5 font-light flex-1">
-            {brand}
+        {/* Flavour tag */}
+        {flavour && (
+          <span className="self-start rounded-full border border-wgold/40 bg-wgold/10 px-2.5 py-0.5 text-[10.5px] tracking-wide text-wgold mb-2">
+            {flavour}
+          </span>
+        )}
+
+        {/* Subtitle; flex-1 so price row stays at bottom */}
+        {subtitle ? (
+          <p className="text-[12.5px] text-wmuted leading-[1.5] m-0 mb-3.5 font-light flex-1 line-clamp-2">
+            {subtitle}
           </p>
         ) : (
           <div className="flex-1 min-h-[14px]" />
@@ -155,7 +198,7 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart' }) {
         {outOfStock ? (
           <button
             disabled
-            className="w-full bg-wline/60 text-wmuted border-0 rounded-full py-3 text-[12.5px] tracking-wide cursor-not-allowed"
+            className="w-full bg-wline/60 text-wmuted border-0 rounded-[6px] py-3 text-[13px] font-semibold tracking-[0.4px] cursor-not-allowed"
           >
             Out of Stock
           </button>
@@ -163,7 +206,7 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart' }) {
           <button
             onClick={handleAddToCart}
             disabled={addToCart.isPending}
-            className="w-full bg-wgreen text-white border-0 rounded-full py-3 text-[12.5px] tracking-wide cursor-pointer hover:bg-wgreen-dark disabled:opacity-60 disabled:cursor-wait transition-colors"
+            className="w-full bg-wgreen text-white border-0 rounded-[6px] py-3 text-[13px] font-semibold tracking-[0.4px] cursor-pointer hover:bg-wgreen-dark disabled:opacity-60 disabled:cursor-wait transition-colors"
           >
             {addToCart.isPending ? 'Adding…' : buttonLabel}
           </button>

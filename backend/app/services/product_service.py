@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -62,9 +64,48 @@ class ProductService:
         self.db.commit()
 
     def search(
-        self, *, q: str | None, category_id: int | None, offset: int, limit: int
+        self,
+        *,
+        q: str | None,
+        category_id: int | None,
+        offset: int,
+        limit: int,
+        category_ids: str | None = None,
+        flavours: str | None = None,
+        min_price: Decimal | None = None,
+        max_price: Decimal | None = None,
+        min_rating: Decimal | None = None,
+        in_stock: bool | None = None,
+        is_combo: bool | None = None,
+        discounted: bool | None = None,
+        sort_by: str = "newest",
     ) -> tuple[list[Product], int]:
-        return self.repo.search(q=q, category_id=category_id, offset=offset, limit=limit)
+        # CSV params arrive raw from the query string; parse them here so the
+        # repository deals only in typed lists.
+        parsed_category_ids: list[int] | None = None
+        if category_ids:
+            try:
+                parsed_category_ids = [int(x) for x in category_ids.split(",") if x.strip()]
+            except ValueError:
+                parsed_category_ids = None
+        parsed_flavours = (
+            [x.strip() for x in flavours.split(",") if x.strip()] if flavours else None
+        )
+        return self.repo.search(
+            q=q,
+            category_id=category_id,
+            category_ids=parsed_category_ids,
+            flavours=parsed_flavours,
+            min_price=min_price,
+            max_price=max_price,
+            min_rating=min_rating,
+            in_stock=in_stock,
+            is_combo=is_combo,
+            discounted=discounted,
+            sort_by=sort_by,
+            offset=offset,
+            limit=limit,
+        )
 
     def bestsellers(self, *, limit: int = 8) -> list[Product]:
         """Top sellers, with a graceful fallback for fresh catalogs.

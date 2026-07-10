@@ -1,37 +1,39 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Check } from 'lucide-react';
-import { safeUrl } from '@/lib/safeUrl.js';
+import { Check, MapPin, Mail, Phone } from 'lucide-react';
 import { useSitePages } from '@/features/site-pages/hooks.js';
-import { SITE_PAGES_DEFAULTS, resolvePageIcon } from '@/features/site-pages/defaults.js';
-import {
-  ContentPage,
-  WSection,
-  WSectionLabel,
-} from '@/components/storefront/ContentPage.jsx';
-import { staggerContainer, fadeUp } from '@/lib/motion.js';
+import { SITE_PAGES_DEFAULTS } from '@/features/site-pages/defaults.js';
+import { useSubmitContactMessage } from '@/features/contact/hooks.js';
 
 // ── Inline form field helpers ────────────────────────────────────────────────
 
 const fieldCls =
   'w-full rounded-xl border border-wline bg-wpaper px-4 py-2.5 text-sm text-wink placeholder:text-wmuted outline-none transition-colors focus:border-wgold focus:ring-1 focus:ring-wgold/30';
 
-function WField({ label, error, children }) {
+function WField({ label, error, optional, children }) {
   return (
     <div className="mb-4">
-      <label className="mb-1.5 block text-sm font-medium text-wink">{label}</label>
+      <label className="mb-1.5 block text-sm font-medium text-wink">
+        {label}
+        {optional && (
+          <span className="ml-1.5 text-xs font-normal text-wmuted">(optional)</span>
+        )}
+      </label>
       {children}
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   );
 }
 
-// ── Contact form (logic identical to original) ───────────────────────────────
+// ── Contact form — wired to POST /contact ───────────────────────────────────
+
+const EMPTY = { name: '', email: '', phone: '', subject: '', message: '' };
 
 function ContactForm({ form }) {
-  const [values, setValues] = useState({ name: '', email: '', message: '' });
+  const [values, setValues] = useState(EMPTY);
   const [errors, setErrors] = useState({});
-  const [submitted, setSubmitted] = useState(false);
+  const submit = useSubmitContactMessage();
 
   function set(field, val) {
     setValues((v) => ({ ...v, [field]: val }));
@@ -50,20 +52,31 @@ function ContactForm({ form }) {
       setErrors(next);
       return;
     }
-    // No backend endpoint for general enquiries — acknowledge locally.
-    setSubmitted(true);
-    setValues({ name: '', email: '', message: '' });
-    window.setTimeout(() => setSubmitted(false), 5000);
+
+    const payload = {
+      name: values.name.trim(),
+      email: values.email.trim(),
+      message: values.message.trim(),
+    };
+    if (values.phone.trim()) payload.phone = values.phone.trim();
+    if (values.subject.trim()) payload.subject = values.subject.trim();
+
+    submit.mutate(payload, {
+      onSuccess: () => setValues(EMPTY),
+    });
   }
+
+  const errorText =
+    submit.error?.response?.status === 429
+      ? 'Too many messages from this connection — please try again in a little while.'
+      : "Couldn't send your message. Please try again.";
 
   return (
     <div className="rounded-xl2 border border-wline bg-wcard p-6 shadow-sm sm:p-8">
       <h3 className="font-wserif text-xl text-wink">
         {form?.heading || 'Send us a message'}
       </h3>
-      {form?.note && (
-        <p className="mt-2 text-sm text-wmuted">{form.note}</p>
-      )}
+      {form?.note && <p className="mt-2 text-sm text-wmuted">{form.note}</p>}
 
       <form onSubmit={onSubmit} noValidate className="mt-6">
         <div className="grid gap-x-4 sm:grid-cols-2">
@@ -86,6 +99,22 @@ function ContactForm({ form }) {
               required
             />
           </WField>
+          <WField label="Phone" optional>
+            <input
+              type="tel"
+              className={fieldCls}
+              value={values.phone}
+              onChange={(e) => set('phone', e.target.value)}
+              autoComplete="tel"
+            />
+          </WField>
+          <WField label="Subject" optional>
+            <input
+              className={fieldCls}
+              value={values.subject}
+              onChange={(e) => set('subject', e.target.value)}
+            />
+          </WField>
         </div>
         <WField label="Message" error={errors.message}>
           <textarea
@@ -97,15 +126,15 @@ function ContactForm({ form }) {
             required
           />
         </WField>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           <button
             type="submit"
-            disabled={submitted}
+            disabled={submit.isPending}
             className="rounded-full bg-wgreen px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-wgreen-dark disabled:opacity-60"
           >
-            Send message
+            {submit.isPending ? 'Sending…' : 'Send message'}
           </button>
-          {submitted && (
+          {submit.isSuccess && (
             <motion.span
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
@@ -116,6 +145,11 @@ function ContactForm({ form }) {
               {form?.success || "Thanks — we'll be in touch shortly."}
             </motion.span>
           )}
+          {submit.isError && (
+            <span className="text-sm text-red-600" role="alert">
+              {errorText}
+            </span>
+          )}
         </div>
       </form>
     </div>
@@ -125,119 +159,111 @@ function ContactForm({ form }) {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ContactPage() {
-  // ── Data wiring (unchanged) ──────────────────────────────────────────────
+  // Site-pages config drives the enabled flag, info-card details and form copy.
   const { data, isLoading } = useSitePages();
 
-  // Show skeleton while the first fetch is in-flight (no cached data yet).
   if (isLoading && !data) {
     return (
-      <ContentPage isLoading>
-        <div className="animate-pulse space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-28 rounded-xl2 bg-wline/40" />
-            ))}
+      <div className="min-h-[70vh] px-5 sm:px-10 lg:px-14 py-10">
+        <div className="max-w-[1050px] mx-auto animate-pulse space-y-6">
+          <div className="h-10 w-64 rounded bg-wline/50" />
+          <div className="grid md:grid-cols-[1fr_1.3fr] gap-10">
+            <div className="h-[260px] rounded-xl2 bg-wline/40" />
+            <div className="h-[420px] rounded-xl2 bg-wline/40" />
           </div>
-          <div className="mt-6 h-64 rounded-xl2 bg-wline/40" />
         </div>
-      </ContentPage>
+      </div>
     );
   }
 
   const page = { ...SITE_PAGES_DEFAULTS.contact, ...data?.contact };
 
   if (page.enabled === false) {
-    return <ContentPage disabled disabledTitle="Contact Us" />;
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center px-6 py-20">
+        <div className="text-center">
+          <p className="font-wserif text-4xl leading-tight text-wink">Get in Touch</p>
+          <p className="mt-4 text-base text-wmuted">
+            This page isn&apos;t available right now. Please check back soon.
+          </p>
+        </div>
+      </div>
+    );
   }
 
+  // Contact details from the admin-managed contact methods (with fallbacks).
+  const methods = page.methods ?? [];
+  const findDetail = (...keys) =>
+    methods.find((m) =>
+      keys.some(
+        (k) =>
+          (m.icon || '').toLowerCase().includes(k) ||
+          (m.title || '').toLowerCase().includes(k),
+      ),
+    )?.detail;
+
+  const address = findDetail('mappin', 'visit', 'address') || 'Bengaluru, Karnataka, India';
+  const email = findDetail('mail', 'email') || 'care@shopwellvia.in';
+  const phone = findDetail('phone', 'call') || '+91 90000 00000';
+
+  const contactRows = [
+    { Icon: MapPin, title: 'Visit us', detail: address },
+    { Icon: Mail, title: 'Email us', detail: `${email} — replies within 24 hours` },
+    { Icon: Phone, title: 'Call us', detail: `${phone} · Mon–Sat, 9am–6pm IST` },
+  ];
+
   return (
-    <ContentPage
-      eyebrow={page.hero?.eyebrow}
-      title={page.hero?.title}
-      subtitle={page.hero?.subtitle}
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      className="pb-16"
     >
-      {/* ── Contact method tiles ──────────────────────────────────────── */}
-      {page.methods?.length > 0 && (
-        <WSection className="mt-0">
-          <motion.div
-            variants={staggerContainer(0.06)}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, margin: '-60px' }}
-            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-          >
-            {page.methods.map((m, i) => {
-              const Icon = resolvePageIcon(m.icon);
-              const body = (
-                <div className="flex flex-col gap-3 p-5">
-                  <span className="grid size-10 place-items-center rounded-full bg-wgold/10 text-wgold">
-                    <Icon className="size-5" aria-hidden="true" />
-                  </span>
-                  <div>
-                    <h3 className="font-semibold text-wink">{m.title}</h3>
-                    <p className="mt-0.5 text-sm text-wmuted">{m.detail}</p>
+      <div className="max-w-[1050px] mx-auto px-5 sm:px-10 lg:px-14 pt-10 lg:pt-14">
+        {/* Heading */}
+        <h1 className="font-wserif font-semibold text-[clamp(30px,4vw,42px)] text-wink m-0 mb-1.5">
+          Get in Touch
+        </h1>
+        <p className="font-wserif text-[clamp(16px,1.7vw,20px)] text-wmuted m-0 mb-9 lg:mb-11">
+          {page.intro ||
+            "Questions about a ritual, an order, or anything wellness? We're listening."}
+        </p>
+
+        <div className="grid md:grid-cols-[1fr_1.3fr] gap-8 lg:gap-12 items-start">
+          {/* Left: contact details + track-order nudge */}
+          <div className="flex flex-col gap-6">
+            {contactRows.map(({ Icon, title, detail }) => (
+              <div key={title} className="flex items-start gap-3.5">
+                <span className="w-11 h-11 shrink-0 rounded-full border border-wgreen/70 flex items-center justify-center text-wgreen">
+                  <Icon className="size-[19px]" strokeWidth={1.6} aria-hidden="true" />
+                </span>
+                <div>
+                  <div className="font-wserif text-[19px] text-wink">{title}</div>
+                  <div className="text-[14px] text-wmuted mt-0.5 leading-relaxed">
+                    {detail}
                   </div>
                 </div>
-              );
-              return (
-                <motion.div key={i} variants={fadeUp}>
-                  <div className="h-full rounded-xl2 border border-wline bg-wcard shadow-sm transition-shadow hover:shadow-md">
-                    {m.href ? (
-                      <a
-                        href={safeUrl(m.href)}
-                        className="block h-full rounded-xl2 outline-none focus-visible:ring-2 focus-visible:ring-wgold/50"
-                      >
-                        {body}
-                      </a>
-                    ) : (
-                      body
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </motion.div>
-        </WSection>
-      )}
+              </div>
+            ))}
 
-      {/* ── Form + offices ────────────────────────────────────────────── */}
-      <WSection className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <div>
-          {page.intro && (
-            <p className="mb-5 text-sm leading-relaxed text-wmuted">{page.intro}</p>
-          )}
+            {/* Sage track-order box */}
+            <div className="bg-wsage rounded-xl2 px-5 py-4 mt-1">
+              <div className="font-wserif text-[18px] text-[#16301f]">
+                Track an order instead?
+              </div>
+              <Link
+                to="/orders"
+                className="mt-1 inline-block text-[14px] text-wgreen underline underline-offset-2 hover:text-wgreen-dark transition-colors"
+              >
+                Go to Track Order →
+              </Link>
+            </div>
+          </div>
+
+          {/* Right: message form — real POST /contact */}
           <ContactForm form={page.form} />
         </div>
-
-        {/* Offices */}
-        {page.offices?.length > 0 && (
-          <div>
-            <WSectionLabel className="mb-4">Our offices</WSectionLabel>
-            <motion.div
-              variants={staggerContainer(0.07)}
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true, margin: '-60px' }}
-              className="flex flex-col gap-3"
-            >
-              {page.offices.map((o, i) => (
-                <motion.div key={i} variants={fadeUp}>
-                  <div className="rounded-xl2 border border-wline bg-wcard p-5 shadow-sm">
-                    <h3 className="font-semibold text-wink">{o.city}</h3>
-                    <address className="mt-1.5 not-italic text-sm leading-6 text-wmuted">
-                      {(o.lines || []).map((line, li) => (
-                        <span key={li} className="block">
-                          {line}
-                        </span>
-                      ))}
-                    </address>
-                  </div>
-                </motion.div>
-              ))}
-            </motion.div>
-          </div>
-        )}
-      </WSection>
-    </ContentPage>
+      </div>
+    </motion.div>
   );
 }

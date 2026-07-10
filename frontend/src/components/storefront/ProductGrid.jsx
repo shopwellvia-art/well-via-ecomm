@@ -6,10 +6,12 @@ import ProductCard from '@/components/storefront/ProductCard';
  * Props:
  *   products  — array of real product objects (from API / hooks)
  *   cols      — target column count: 2 | 3 | 4 (default 4)
+ *   badge     — optional listing-context ribbon forwarded to every card
+ *               ('bestseller' | 'new')
  *
  * Handles an empty products array with a subtle placeholder message.
  */
-export default function ProductGrid({ products, cols = 4 }) {
+export default function ProductGrid({ products, cols = 4, badge }) {
   if (!products || products.length === 0) {
     return (
       <div className="py-16 text-center text-wmuted text-[14px]">
@@ -28,7 +30,7 @@ export default function ProductGrid({ products, cols = 4 }) {
   return (
     <div className={`grid ${colClass} gap-3.5 lg:gap-[22px]`}>
       {products.map((p) => (
-        <ProductCard key={p.id} product={p} />
+        <ProductCard key={p.id} product={p} badge={badge} />
       ))}
     </div>
   );

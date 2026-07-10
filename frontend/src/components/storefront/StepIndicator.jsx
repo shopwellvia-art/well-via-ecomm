@@ -1,21 +1,19 @@
 /**
- * StepIndicator — Shipping → Payment → Review progress row for checkout.
+ * StepIndicator — checkout progress row.
  *
  * Props:
- *   step    — current step number (1-based; 1 = Shipping, 2 = Payment, 3 = Review)
+ *   step    — current step number (1-based)
  *   onStep  — optional callback(n) — called when the user clicks a completed step
  *             to navigate back; active/future steps are non-interactive
+ *   labels  — optional step label list (default: Bag → Address → Payment)
  */
-const STEPS = [
-  { num: 1, label: 'Shipping' },
-  { num: 2, label: 'Payment' },
-  { num: 3, label: 'Review' },
-];
+const DEFAULT_LABELS = ['Bag', 'Address', 'Payment'];
 
-export default function StepIndicator({ step, onStep }) {
+export default function StepIndicator({ step, onStep, labels = DEFAULT_LABELS }) {
+  const steps = labels.map((label, i) => ({ num: i + 1, label }));
   return (
     <div className="flex items-center justify-center gap-2 sm:gap-4 mb-7 lg:mb-10">
-      {STEPS.map((s, i) => {
+      {steps.map((s, i) => {
         const active = step === s.num;
         const done = step > s.num;
 
@@ -48,7 +46,7 @@ export default function StepIndicator({ step, onStep }) {
             </button>
 
             {/* Connector arrow between steps */}
-            {i < STEPS.length - 1 && (
+            {i < steps.length - 1 && (
               <span className="text-wline text-[16px] select-none">→</span>
             )}
           </div>
