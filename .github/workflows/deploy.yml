@@ -75,7 +75,7 @@ jobs:
           source: docker-compose.deploy.yml
           target: ${{ secrets.EC2_APP_DIR }}
 
-      - name: Pull images, restart, migrate
+      - name: Pull images and restart
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -92,8 +92,11 @@ jobs:
             # IMAGE_TAG is forwarded from the step env (the git SHA).
             docker compose -f docker-compose.deploy.yml pull
             docker compose -f docker-compose.deploy.yml up -d
-            # Apply DB migrations (idempotent — no-op when already at head).
-            docker compose -f docker-compose.deploy.yml exec -T backend alembic upgrade head
+            # NO automatic `alembic upgrade head` here: the shared remote MySQL
+            # is at a migration lineage ('conpay001') that this repo does not
+            # contain, and per the project convention (see
+            # backend/alembic/versions/s0t1u2v3w4x5_*.py) schema changes are
+            # applied to it manually from reviewed SQL only.
             # Reclaim space from old image layers.
             docker image prune -f
         env:
