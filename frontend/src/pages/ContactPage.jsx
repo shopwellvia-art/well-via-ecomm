@@ -160,21 +160,10 @@ function ContactForm({ form }) {
 
 export default function ContactPage() {
   // Site-pages config drives the enabled flag, info-card details and form copy.
-  const { data, isLoading } = useSitePages();
-
-  if (isLoading && !data) {
-    return (
-      <div className="min-h-[70vh] px-5 sm:px-10 lg:px-14 py-10">
-        <div className="max-w-[1050px] mx-auto animate-pulse space-y-6">
-          <div className="h-10 w-64 rounded bg-wline/50" />
-          <div className="grid md:grid-cols-[1fr_1.3fr] gap-10">
-            <div className="h-[260px] rounded-xl2 bg-wline/40" />
-            <div className="h-[420px] rounded-xl2 bg-wline/40" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Render immediately from defaults and let the network hydrate in the
+  // background — never block the whole page on the request (matches AboutPage /
+  // the policy pages). Keeps Contact instant even when the API is slow or down.
+  const { data } = useSitePages();
 
   const page = { ...SITE_PAGES_DEFAULTS.contact, ...data?.contact };
 

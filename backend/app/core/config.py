@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     MYSQL_DB: str
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
+    # Recycle pooled connections after this many seconds — keep it below the
+    # MySQL server / cloud-firewall idle timeout (AWS RDS often 300s) so idle
+    # connections are refreshed before they're dropped.
+    DB_POOL_RECYCLE: int = 280
+    # Socket timeouts (seconds) so a dead connection errors fast instead of
+    # hanging the request. Read/write is generous enough for real queries.
+    DB_CONNECT_TIMEOUT: int = 10
+    DB_READ_TIMEOUT: int = 30
 
     REDIS_URL: str = "redis://redis:6379/0"
 

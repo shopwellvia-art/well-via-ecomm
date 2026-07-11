@@ -43,11 +43,11 @@ const EXPLORE_LINKS = [
 
 // Fallback when the footer config carries no policy/help columns.
 const CARE_FALLBACK = [
-  { label: 'Shipping', to: '/help/shipping' },
-  { label: 'Cancellation & Returns', to: '/policy/returns' },
-  { label: 'Terms of Use', to: '/terms' },
-  { label: 'Privacy', to: '/privacy' },
-  { label: 'Security', to: '/security' },
+  { label: 'Shipping Policy', to: '/shipping' },
+  { label: 'Refund & Cancellation', to: '/refund' },
+  { label: 'Terms & Conditions', to: '/terms' },
+  { label: 'Privacy Policy', to: '/privacy' },
+  { label: 'Contact Us', to: '/contact' },
 ];
 
 /** Existing policy/help links from the config, reorganized under one heading. */

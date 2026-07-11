@@ -37,6 +37,10 @@ const CareersPage = lazy(() => import('@/pages/CareersPage.jsx'));
 const StoriesPage = lazy(() => import('@/pages/StoriesPage.jsx'));
 const PressPage = lazy(() => import('@/pages/PressPage.jsx'));
 const CorporatePage = lazy(() => import('@/pages/CorporatePage.jsx'));
+const PrivacyPage = lazy(() => import('@/pages/PrivacyPage.jsx'));
+const TermsPage = lazy(() => import('@/pages/TermsPage.jsx'));
+const RefundPage = lazy(() => import('@/pages/RefundPage.jsx'));
+const ShippingPage = lazy(() => import('@/pages/ShippingPage.jsx'));
 
 const AdminDashboardPage = lazy(() => import('@/pages/admin/AdminDashboardPage.jsx'));
 const AdminProductsPage = lazy(() => import('@/pages/admin/AdminProductsPage.jsx'));
@@ -97,6 +101,15 @@ export default function App() {
             <Route path="stories" element={<StoriesPage />} />
             <Route path="press" element={<PressPage />} />
             <Route path="corporate" element={<CorporatePage />} />
+            {/* Legal / customer-care policy pages (admin-editable) */}
+            <Route path="privacy" element={<PrivacyPage />} />
+            <Route path="terms" element={<TermsPage />} />
+            <Route path="refund" element={<RefundPage />} />
+            <Route path="shipping" element={<ShippingPage />} />
+            {/* Aliases matching existing footer link targets */}
+            <Route path="policy/returns" element={<RefundPage />} />
+            <Route path="help/returns" element={<RefundPage />} />
+            <Route path="help/shipping" element={<ShippingPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
 

@@ -1,26 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { useProducts } from '@/features/products/hooks.js';
+import { useCategories } from '@/features/categories/hooks.js';
 import { cn } from '@/lib/utils.js';
 
 /**
- * "Shop" nav item with a hover/focus mega-menu of product pill links —
- * matches the mockup's navbar dropdown listing every gummy as a pill.
+ * "Shop" nav item with a hover/focus mega-menu of category pill links.
  *
  * The trigger itself is a real NavLink to /products, so click/Enter still
  * navigates; the panel is progressive enhancement. Closes on Esc, on route
  * change (parent Header remounts links), and when focus/hover leaves.
  */
 /**
- * Mobile drawer variant — collapsible product list under the Shop link.
+ * Mobile drawer variant — collapsible category list under the Shop link.
  * Rendered inside Header's mobile menu; `onNavigate` closes the drawer.
  */
 export function ShopMobileLinks({ onNavigate }) {
   const [expanded, setExpanded] = useState(false);
-  const { data } = useProducts({ page_size: 24 });
-  const products = data?.items ?? [];
-  if (!products.length) return null;
+  const { data: categories = [] } = useCategories();
+  if (!categories.length) return null;
 
   return (
     <div className="pl-3">
@@ -30,18 +28,18 @@ export function ShopMobileLinks({ onNavigate }) {
         aria-expanded={expanded}
         className="w-full text-left bg-transparent border-0 cursor-pointer px-3 py-2 text-[12.5px] uppercase tracking-[0.12em] text-wmuted hover:text-wink transition-colors"
       >
-        {expanded ? '− Hide products' : '+ Browse products'}
+        {expanded ? '− Hide categories' : '+ Browse categories'}
       </button>
       {expanded && (
         <div className="flex flex-col gap-0.5 pb-1">
-          {products.map((p) => (
+          {categories.map((c) => (
             <Link
-              key={p.id}
-              to={`/products/${p.id}`}
+              key={c.id}
+              to={`/products?category_ids=${c.id}`}
               onClick={onNavigate}
               className="px-3 py-2 rounded-xl text-[13.5px] text-wmuted hover:bg-wline/40 hover:text-wink no-underline transition-colors truncate"
             >
-              {p.name}
+              {c.name}
             </Link>
           ))}
         </div>
@@ -56,9 +54,7 @@ export default function ShopMegaMenu({ linkClassName }) {
   const closeTimer = useRef(null);
   const reduce = useReducedMotion();
 
-  // Small catalog (8 SKUs today) — one page covers it.
-  const { data } = useProducts({ page_size: 24 });
-  const products = data?.items ?? [];
+  const { data: categories = [] } = useCategories();
 
   const scheduleClose = () => {
     clearTimeout(closeTimer.current);
@@ -119,7 +115,7 @@ export default function ShopMegaMenu({ linkClassName }) {
       </NavLink>
 
       <AnimatePresence>
-        {open && products.length > 0 && (
+        {open && categories.length > 0 && (
           <motion.div
             initial={reduce ? { opacity: 0 } : { opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
@@ -131,22 +127,22 @@ export default function ShopMegaMenu({ linkClassName }) {
           >
             <div className="w-[560px] max-w-[80vw] rounded-xl2 border border-wline bg-wcard shadow-md p-4 normal-case tracking-normal">
               <p className="px-1 pb-2.5 text-[11px] uppercase tracking-[0.14em] text-wmuted">
-                All products →
+                Shop by category →
               </p>
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
-                {products.map((p) => (
+                {categories.map((c) => (
                   <Link
-                    key={p.id}
-                    to={`/products/${p.id}`}
+                    key={c.id}
+                    to={`/products?category_ids=${c.id}`}
                     className={cn(
                       'flex items-center gap-2 rounded-full border border-wline bg-wpaper px-3 py-2',
                       'text-[13px] text-wink no-underline transition-colors',
                       'hover:border-wgreen/50 hover:text-wgreen',
                     )}
                   >
-                    {p.image_url ? (
+                    {c.image_url ? (
                       <img
-                        src={p.image_url}
+                        src={c.image_url}
                         alt=""
                         loading="lazy"
                         className="size-6 shrink-0 rounded-full object-cover"
@@ -154,7 +150,7 @@ export default function ShopMegaMenu({ linkClassName }) {
                     ) : (
                       <span className="size-6 shrink-0 rounded-full bg-wline/60" aria-hidden="true" />
                     )}
-                    <span className="truncate">{p.name}</span>
+                    <span className="truncate">{c.name}</span>
                   </Link>
                 ))}
               </div>
