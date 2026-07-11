@@ -1,10 +1,10 @@
 name: Build & Deploy to EC2
 
-# Push to main → build both images, push to GHCR, then deploy on the EC2.
+# Push to production → build both images, push to GHCR, then deploy on the EC2.
 # Manual runs are also allowed from the Actions tab.
 on:
   push:
-    branches: [main]
+    branches: [production]
   workflow_dispatch:
 
 concurrency:
