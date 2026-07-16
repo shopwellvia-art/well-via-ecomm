@@ -9,6 +9,7 @@ import {
   useAddToWishlist,
   useRemoveFromWishlist,
 } from '@/features/wishlist/hooks';
+import { toast } from '@/components/ui/Toaster.jsx';
 
 /** Badge chip styling by kind; free-form strings fall back to 'default'. */
 const BADGE_STYLES = {
@@ -92,16 +93,30 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
       navigate(`/login?next=${encodeURIComponent(location.pathname + location.search)}`);
       return;
     }
+    const onError = (err) =>
+      toast.error(
+        err?.response?.data?.error?.message ||
+          'Could not update your wishlist. Please try again.',
+      );
     if (inWishlist) {
-      removeWishlist.mutate(id);
+      removeWishlist.mutate(id, { onError });
     } else {
-      addWishlist.mutate(id);
+      addWishlist.mutate(id, { onError });
     }
   };
 
   const handleAddToCart = () => {
     if (outOfStock) return;
-    addToCart.mutate({ productId: id, quantity: 1 });
+    addToCart.mutate(
+      { productId: id, quantity: 1 },
+      {
+        onError: (err) =>
+          toast.error(
+            err?.response?.data?.error?.message ||
+              'Could not add to cart. Please try again.',
+          ),
+      },
+    );
   };
 
   return (

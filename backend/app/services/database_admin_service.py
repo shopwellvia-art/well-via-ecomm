@@ -12,12 +12,14 @@ the product treats as "superadmin".
 from __future__ import annotations
 
 import logging
+import secrets
 from dataclasses import dataclass
 from typing import Callable
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import hash_password
 from app.db.session import engine
 from app.models.base import Base
@@ -34,13 +36,21 @@ logger = logging.getLogger(__name__)
 # mirrored in the frontend panel) so all three agree on the exact string.
 CONFIRM_PHRASE = "DELETE EVERYTHING"
 
-# Mirrors scripts/seed.py ADMIN so a wiped database can be brought back to a
-# loggable state. Keep these in sync with scripts/seed.py.
-_BOOTSTRAP_ADMIN = {
-    "email": "vinay@gmail.com",
-    "full_name": "Vinay",
-    "password": "vinay@123",
-}
+def _resolve_bootstrap_admin() -> tuple[str, str, str, bool]:
+    """Resolve the bootstrap admin (email, full_name, password, was_generated).
+
+    Credentials come from the environment (BOOTSTRAP_ADMIN_*), never from source.
+    When no password is configured a strong random one is generated so a wiped
+    database is never brought back with a known, shared password — the generated
+    value is surfaced once (truncate API response + server logs) so the operator
+    can capture it and rotate at will.
+    """
+    email = settings.BOOTSTRAP_ADMIN_EMAIL
+    name = settings.BOOTSTRAP_ADMIN_NAME
+    configured = settings.BOOTSTRAP_ADMIN_PASSWORD
+    if configured:
+        return email, name, configured, False
+    return email, name, secrets.token_urlsafe(18), True
 
 
 def _truncate_all(db: Session) -> int:
@@ -72,26 +82,31 @@ def _truncate_all(db: Session) -> int:
     return len(tables)
 
 
-def _reseed_admin(db: Session) -> str:
+def _reseed_admin(db: Session) -> tuple[str, str | None]:
     """Recreate the bootstrap admin + its customer profile, then re-seed RBAC so
     the permission/role set exists and the admin role is linked back onto the
-    freshly-created is_admin user. Returns the admin email."""
+    freshly-created is_admin user.
+
+    Returns (email, generated_password) where generated_password is the one-time
+    random password when one was generated (so the caller can surface it), or
+    None when a preset BOOTSTRAP_ADMIN_PASSWORD was used (already known)."""
+    email, name, password, was_generated = _resolve_bootstrap_admin()
     admin = User(
-        email=_BOOTSTRAP_ADMIN["email"],
-        hashed_password=hash_password(_BOOTSTRAP_ADMIN["password"]),
+        email=email,
+        hashed_password=hash_password(password),
         is_active=True,
         is_admin=True,
     )
     db.add(admin)
     db.flush()  # need admin.id for the customer satellite
-    first, _, last = _BOOTSTRAP_ADMIN["full_name"].partition(" ")
+    first, _, last = name.partition(" ")
     db.add(Customer(user_id=admin.id, first_name=first or None, last_name=last or None))
     db.commit()
     # Idempotent — same path as app startup. Upserts permissions, ensures the
     # admin/customer system roles, and backfills the admin role onto the new
     # is_admin user (commits internally).
     seed_rbac(db)
-    return _BOOTSTRAP_ADMIN["email"]
+    return email, (password if was_generated else None)
 
 
 def truncate_all_and_reseed(db: Session) -> dict:
@@ -101,25 +116,43 @@ def truncate_all_and_reseed(db: Session) -> dict:
     """
     logger.warning("DATABASE TRUNCATE requested — wiping all application tables")
     count = _truncate_all(db)
-    admin_email = _reseed_admin(db)
+    admin_email, generated_password = _reseed_admin(db)
     # The truncate also emptied system_settings; migrations won't re-run
     # (alembic_version survives), so re-seed the shipped defaults here or the
     # admin Settings page comes back blank.
     seed_settings(db)
     # Re-seed email/SMS template defaults so the template editor doesn't go blank.
     seed_email_templates(db)
-    logger.warning(
-        "DATABASE TRUNCATE complete — %d tables emptied, admin %s re-seeded",
-        count,
-        admin_email,
+    if generated_password:
+        # Logged once so an operator who missed the API response can still
+        # recover access. Rotate afterwards.
+        logger.warning(
+            "DATABASE TRUNCATE complete — %d tables emptied, admin %s re-seeded "
+            "with a GENERATED one-time password: %s",
+            count,
+            admin_email,
+            generated_password,
+        )
+    else:
+        logger.warning(
+            "DATABASE TRUNCATE complete — %d tables emptied, admin %s re-seeded",
+            count,
+            admin_email,
+        )
+    detail = (
+        f"Database truncated — {count} tables emptied and the admin account "
+        f"({admin_email}) was re-created. Sign in again to continue."
     )
+    if generated_password:
+        detail += (
+            " A one-time password was generated — copy it from the "
+            "generated_password field now; it is not stored anywhere."
+        )
     return {
         "tables_truncated": count,
         "reseeded_admin": admin_email,
-        "detail": (
-            f"Database truncated — {count} tables emptied and the admin account "
-            f"({admin_email}) was re-created. Sign in again to continue."
-        ),
+        "generated_password": generated_password,
+        "detail": detail,
     }
 
 

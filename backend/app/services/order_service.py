@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -114,6 +115,7 @@ class OrderService:
         tracking_number: str | None,
         carrier: str | None,
     ) -> Order:
+        self._lock_order(order_id)
         order = self.admin_get(order_id)
         self._assert_transition(order, OrderStatus.SHIPPED)
         order.status = OrderStatus.SHIPPED
@@ -126,6 +128,7 @@ class OrderService:
         return order
 
     def mark_delivered(self, order_id: int) -> Order:
+        self._lock_order(order_id)
         order = self.admin_get(order_id)
         self._assert_transition(order, OrderStatus.DELIVERED)
         order.status = OrderStatus.DELIVERED
@@ -142,6 +145,7 @@ class OrderService:
         """Cancel an unshipped order. Restores stock + reverses loyalty points.
         Use `refund` for shipped/delivered orders so the reporting distinction
         is preserved."""
+        self._lock_order(order_id)
         order = self.admin_get(order_id)
         self._assert_transition(order, OrderStatus.CANCELLED)
         if not reason.strip():
@@ -161,6 +165,7 @@ class OrderService:
         """Refund a paid/shipped/delivered order. Same downstream effects as
         cancel but lands in REFUNDED so analytics can separate "never went
         out" from "came back to us"."""
+        self._lock_order(order_id)
         order = self.admin_get(order_id)
         self._assert_transition(order, OrderStatus.REFUNDED)
         if not reason.strip():
@@ -183,6 +188,19 @@ class OrderService:
 
     # ---- Internals ----
 
+    def _lock_order(self, order_id: int) -> None:
+        """Take a row lock on the order before a state transition.
+
+        The transitions below are check-then-act on order.status with no lock,
+        so two concurrent admin actions (or an admin action racing payment
+        settlement) could both read the same status and both apply their side
+        effects — double stock restore, double loyalty reversal. Acquiring the
+        row lock first serializes them; the lock releases on the request commit.
+        """
+        self.db.execute(
+            select(Order.id).where(Order.id == order_id).with_for_update()
+        ).first()
+
     def _assert_transition(self, order: Order, target: OrderStatus) -> None:
         allowed = _ALLOWED_TRANSITIONS.get(order.status, set())
         if target not in allowed:
@@ -201,7 +219,9 @@ class OrderService:
                     order.id,
                 )
                 continue
-            product.stock = (product.stock or 0) + item.quantity
+            # Atomic increment, not a Python read-modify-write: a concurrent
+            # sale's decrement must not be lost between our read and flush.
+            self.products.increment_stock(product, item.quantity)
 
     def _reverse_loyalty(self, order: Order) -> None:
         """Reverse the points awarded for this order. Idempotent — the

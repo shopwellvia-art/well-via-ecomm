@@ -22,6 +22,7 @@ import redis
 from sqlalchemy.orm import Session
 
 from app.core.config import settings as env_settings
+from app.db.redis import get_redis
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.integrations.shipping import (
     CartLine,
@@ -88,9 +89,7 @@ class ShippingService:
         self.settings = SettingsService(db)
         self.products = ProductRepository(db)
         self.orders = OrderRepository(db)
-        self._redis = redis.Redis.from_url(
-            env_settings.REDIS_URL, decode_responses=True
-        )
+        self._redis = get_redis()
 
     # ---- serviceability ----
 

@@ -1,0 +1,46 @@
+# CI-only overlay for docker-compose.yml — used by .github/workflows/test.yml.
+#
+# The base compose file has NO mysql service on purpose: production talks to an
+# EXTERNAL remote MySQL configured via backend/.env. This overlay adds a
+# THROWAWAY mysql:8 container so the integration suite gets a disposable database
+# that is created fresh and destroyed (`docker compose down -v`) every CI run.
+# It must NEVER point at the shared remote production MySQL (13.204.184.41).
+#
+# Usage (see test.yml — it sets COMPOSE_FILE so both files are always applied):
+#   docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build mysql redis backend
+
+services:
+  mysql:
+    image: mysql:8
+    restart: "no"
+    # CI-only throwaway credentials — these must match the backend/.env that
+    # test.yml synthesizes (MYSQL_USER=ecom / MYSQL_PASSWORD=ecom_password /
+    # MYSQL_DB=ecommerce). mysql:8 auto-creates that user with full rights on
+    # MYSQL_DATABASE, which the Alembic migrations need for DDL.
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ecommerce
+      MYSQL_USER: ecom
+      MYSQL_PASSWORD: ecom_password
+    # Ephemeral data dir — nothing to persist between CI runs, and it keeps the
+    # runner's disk clean.
+    tmpfs:
+      - /var/lib/mysql
+    # No host port published — only the backend container connects (over the
+    # compose network as host "mysql").
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # Override the base backend so it waits for the throwaway MySQL to be healthy
+  # before it boots (the base file only knows about redis). depends_on maps merge
+  # across compose files, so redis's condition from docker-compose.yml is kept.
+  backend:
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy

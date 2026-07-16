@@ -17,6 +17,7 @@ import httpx
 import redis
 
 from app.core.config import settings
+from app.db.redis import get_redis
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +32,7 @@ _POSTALPINCODE_URL = "https://api.postalpincode.in/pincode/{pin}"
 
 class PincodeService:
     def __init__(self) -> None:
-        self._redis = redis.Redis.from_url(
-            settings.REDIS_URL, decode_responses=True
-        )
+        self._redis = get_redis()
 
     def lookup(self, pincode: str) -> dict:
         """Return ``{pincode, found, city, state}``.

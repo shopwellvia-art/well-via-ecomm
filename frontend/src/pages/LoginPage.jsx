@@ -119,7 +119,11 @@ export default function LoginPage() {
     staleTime: Infinity,
   });
   const googleEnabled = Boolean(authConfig?.google_login);
-  const showTestLogins = env.appEnv !== 'production';
+  // Gate on Vite's compile-time DEV flag, not a runtime env value: `false` in
+  // any production build lets Vite dead-code-eliminate the block below AND the
+  // TEST_ACCOUNTS credentials, so they never ship in the bundle. (The old
+  // runtime check still compiled the passwords into the shipped JS.)
+  const showTestLogins = import.meta.env.DEV;
 
   const isRegister = mode === 'register';
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));

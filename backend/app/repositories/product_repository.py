@@ -112,6 +112,20 @@ class ProductRepository(BaseRepository[Product]):
             raise ConflictError(f"Insufficient stock for product {product.sku}")
         self.db.flush()
 
+    def increment_stock(self, product: Product, qty: int) -> None:
+        # Atomic counterpart to decrement_stock. Restock paths (cancellation,
+        # refund, payment failure) must NOT read-modify-write product.stock in
+        # Python: a concurrent sale's atomic decrement committing in between
+        # would be clobbered by the stale restore, silently inflating stock and
+        # causing oversell. Expression-based UPDATE keeps both operations atomic.
+        self.db.execute(
+            update(Product)
+            .where(Product.id == product.id)
+            .values(stock=Product.stock + qty)
+            .execution_options(synchronize_session="fetch")
+        )
+        self.db.flush()
+
     def bestsellers(self, *, limit: int, category_id: int | None = None) -> list[Product]:
         """Top products by units sold across paid/shipped/delivered orders.
 

@@ -24,6 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.db.redis import get_redis
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError, ValidationError
 from app.models.coupon import Coupon, DiscountType
 from app.models.customer import Customer
@@ -58,9 +59,7 @@ class LoyaltyService:
         self.rule_repo = EarnRuleRepository(db)
         self.vip_repo = VipTierRepository(db)
         self.users = UserRepository(db)
-        self.redis = redis_client or redis.Redis.from_url(
-            settings.REDIS_URL, decode_responses=True
-        )
+        self.redis = redis_client or get_redis()
         # Per-instance rule cache — avoids repeat DB hits when one request
         # triggers multiple awards (rare, but free).
         self._rule_cache: dict[str, int] = {}
@@ -339,18 +338,24 @@ class LoyaltyService:
             expires_at=expires_at,
         )
         try:
-            self.tx_repo.add(tx)
-            customer.points_balance = (customer.points_balance or 0) + multiplied
-            if affects_lifetime and multiplied > 0:
-                customer.lifetime_points = (customer.lifetime_points or 0) + multiplied
-                # Lifetime moved → may have crossed a tier threshold.
-                self._maybe_promote_tier(customer)
-            self.db.flush()
+            # SAVEPOINT, not a full rollback: _award runs on the caller's shared
+            # session (e.g. inside PaymentService._mark_paid, after order.status
+            # was set to PAID but before commit). A plain self.db.rollback() on
+            # an idempotency-race IntegrityError would discard those pending
+            # writes — the customer pays, gets a confirmation, and the order
+            # stays PENDING. begin_nested() confines the rollback to this insert.
+            with self.db.begin_nested():
+                self.tx_repo.add(tx)
+                customer.points_balance = (customer.points_balance or 0) + multiplied
+                if affects_lifetime and multiplied > 0:
+                    customer.lifetime_points = (customer.lifetime_points or 0) + multiplied
+                    # Lifetime moved → may have crossed a tier threshold.
+                    self._maybe_promote_tier(customer)
             return tx
         except IntegrityError:
-            # Race: another worker beat us to the same idempotency key. Roll
-            # the row back and return None — caller treats it as already-done.
-            self.db.rollback()
+            # Race: another worker beat us to the same idempotency key. The
+            # SAVEPOINT already rolled back just this insert; the caller's other
+            # pending writes are intact. Treat the duplicate as already-done.
             return None
 
     def _maybe_promote_tier(self, customer: Customer) -> None:

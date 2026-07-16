@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -18,7 +18,6 @@ from app.schemas.order import (
     AdminOrderRow,
     NotesRequest,
     OrderAddressRead,
-    OrderCreate,
     OrderItemRead,
     OrderPaymentRead,
     OrderRead,
@@ -453,14 +452,14 @@ def admin_update_notes(
 
 # ---- USER ROUTES ----
 
-
-@router.post("", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
-def create_order(
-    payload: OrderCreate,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    return OrderService(db).create(user.id, payload)
+# NOTE: The legacy `POST /orders` (create_order) route was removed. It called
+# OrderService.create — a pre-checkout path that decremented real stock and left
+# the order PENDING with no payment attached and gateway_code NULL, so
+# reconcile_pending never settled or expired it. Any authenticated user could
+# loop it to reserve (drain) inventory for every product without ever paying.
+# The single supported order-creation path is now POST /checkout
+# (payments.checkout_router). OrderService.create is retained as an internal /
+# test-only order builder and is no longer reachable over HTTP.
 
 
 @router.get("", response_model=list[OrderRead])

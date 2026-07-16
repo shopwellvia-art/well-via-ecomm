@@ -7,6 +7,7 @@ happen in `record_usage`, which the payment service calls on PAID.
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -86,14 +87,32 @@ class CouponService:
     def record_usage(
         self, coupon: Coupon, user_id: int, order_id: int, discount_amount: Decimal
     ) -> CouponUsage:
-        """Called from payment service on PAID. Increments coupon.usage_count."""
+        """Called from payment service on PAID (post-payment). Records the usage
+        row and atomically bumps usage_count.
+
+        The increment is an atomic expression UPDATE, not a Python
+        read-modify-write, so two concurrent settlements never lose a count.
+
+        It deliberately does NOT re-enforce usage_limit here: this runs AFTER
+        the gateway has captured payment, so refusing would strand an already
+        paid order in PENDING forever (the reconcile cron would re-hit the same
+        error each cycle). The cap is enforced earlier, in validate() at cart
+        time, before the customer pays. Any residual over-issue from a checkout
+        race is bounded and far preferable to losing a paid order — enforce the
+        hard cap with a reservation at checkout if that tradeoff is unacceptable.
+        """
+        self.db.execute(
+            update(Coupon)
+            .where(Coupon.id == coupon.id)
+            .values(usage_count=Coupon.usage_count + 1)
+            .execution_options(synchronize_session="fetch")
+        )
         usage = CouponUsage(
             coupon_id=coupon.id,
             user_id=user_id,
             order_id=order_id,
             discount_amount=discount_amount,
         )
-        coupon.usage_count = (coupon.usage_count or 0) + 1
         self.usages.add(usage)
         self.db.flush()
         return usage

@@ -1,9 +1,23 @@
 name: Build & Deploy to EC2
 
-# Push to production → build both images, push to GHCR, then deploy on the EC2.
-# Manual runs are also allowed from the Actions tab.
+# Push to production → the "Backend tests" workflow runs → and ONLY if it
+# succeeds does this workflow build/push/deploy. The `workflow_run` trigger is
+# what gates the deploy on green tests: `push` alone would ship regardless of
+# whether tests passed. Every job is additionally guarded on
+# `workflow_run.conclusion == 'success'`.
+#
+# Manual runs from the Actions tab (workflow_dispatch) deliberately bypass the
+# gate, for emergency redeploys of an already-tested commit.
+#
+# NOTE: a `workflow_run`-triggered run uses the workflow file from the
+# repository's DEFAULT branch, and `github.sha` points at that branch's head —
+# so we build/tag/deploy `github.event.workflow_run.head_sha` (the commit the
+# tests actually ran against) instead. On a manual run that is empty, so we fall
+# back to `github.sha`.
 on:
-  push:
+  workflow_run:
+    workflows: ["Backend tests"]
+    types: [completed]
     branches: [production]
   workflow_dispatch:
 
@@ -13,19 +27,28 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  # Image repositories (lowercase owner). Tags: <git-sha> + latest.
+  # Image repositories (lowercase owner). Tags: <deploy-sha> + latest.
   BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/simple-com-backend
   FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/simple-com-frontend
+  # The commit to build & deploy — see the header note about workflow_run.
+  DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
   build-and-push:
     name: Build & push images
     runs-on: ubuntu-latest
+    # Deploy gate: only build/ship when the tests that triggered us passed. A
+    # manual run has no workflow_run payload, so it is allowed through.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Build the exact commit the tests ran against, not the default-branch
+          # head (which is what workflow_run checks out by default).
+          ref: ${{ env.DEPLOY_SHA }}
 
       - uses: docker/setup-buildx-action@v3
 
@@ -43,7 +66,7 @@ jobs:
           push: true
           tags: |
             ${{ env.BACKEND_IMAGE }}:latest
-            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.BACKEND_IMAGE }}:${{ env.DEPLOY_SHA }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
@@ -54,7 +77,7 @@ jobs:
           push: true
           tags: |
             ${{ env.FRONTEND_IMAGE }}:latest
-            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+            ${{ env.FRONTEND_IMAGE }}:${{ env.DEPLOY_SHA }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
@@ -64,6 +87,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Ship the compose file from the exact commit we built/deployed.
+          ref: ${{ env.DEPLOY_SHA }}
 
       # Ship the latest compose file to the host so it stays in sync.
       - name: Copy compose file to EC2
@@ -89,7 +115,7 @@ jobs:
             # Authenticate to GHCR so private images can be pulled.
             echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
-            # IMAGE_TAG is forwarded from the step env (the git SHA).
+            # IMAGE_TAG is forwarded from the step env (the deployed commit SHA).
             docker compose -f docker-compose.deploy.yml pull
             docker compose -f docker-compose.deploy.yml up -d
             # NO automatic `alembic upgrade head` here: the shared remote MySQL
@@ -100,6 +126,6 @@ jobs:
             # Reclaim space from old image layers.
             docker image prune -f
         env:
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{ env.DEPLOY_SHA }}
           GHCR_USER: ${{ github.repository_owner }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}

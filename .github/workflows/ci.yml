@@ -102,7 +102,9 @@ jobs:
       # STEP 5 (optional, learning): lint = check code style / common mistakes.
       # `continue-on-error: true` means: try it, but DON'T fail the whole job if
       # it errors. We keep it non-blocking because ESLint here still needs a v9
-      # "eslint.config.js" flat-config file. Once you add that config, delete the
+      # "eslint.config.js" flat-config file, which does not exist in the repo yet
+      # (so the step currently CANNOT pass). This is intentionally the only
+      # non-blocking step in CI. Once you add that config, delete the
       # `continue-on-error` line to make lint a required, blocking check.
       - name: Lint (non-blocking for now)
         run: npm run lint
@@ -111,8 +113,10 @@ jobs:
       # STEP 6 (optional, learning): run unit tests with Vitest.
       #  --run              -> run once and exit (don't stay in watch mode).
       #  --passWithNoTests  -> succeed even though there are 0 test files yet.
-      # When you start writing tests, remove --passWithNoTests so missing/failing
-      # tests correctly turn the job red.
+      # This step is already BLOCKING: a failing test turns the job red today.
+      # --passWithNoTests only tolerates the current zero-test state; keep it for
+      # now, and remove it once real tests exist so an empty suite can't sneak
+      # through as a false green.
       - name: Unit tests (Vitest)
         run: npm test -- --run --passWithNoTests
 

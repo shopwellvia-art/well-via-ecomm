@@ -20,6 +20,19 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = Field(default="development")
     DEBUG: bool = False
 
+    # Destructive DB maintenance (POST /admin/database/truncate|seed) is refused
+    # in production unless this is explicitly enabled for a supervised operation.
+    DB_ADMIN_OPS_ENABLED: bool = False
+
+    # Bootstrap superadmin re-seeded after a full truncate and by scripts/seed.py.
+    # Sourced from the environment so no credential lives in source. When the
+    # password is blank a strong random one is generated and surfaced once (in
+    # the truncate API response and server logs); in production the email must be
+    # set explicitly (see the model validator below).
+    BOOTSTRAP_ADMIN_EMAIL: str = "admin@example.com"
+    BOOTSTRAP_ADMIN_PASSWORD: str = ""
+    BOOTSTRAP_ADMIN_NAME: str = "Admin"
+
     # SECRET_KEY also seeds the PASETO v4.local symmetric key (see core/security.py).
     SECRET_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -104,9 +117,12 @@ class Settings(BaseSettings):
     # soft-locked for ACCOUNT_LOCKOUT_MINUTES. A successful login clears both.
     ACCOUNT_LOCKOUT_THRESHOLD: int = 10
     ACCOUNT_LOCKOUT_MINUTES: int = 15
-    # When set, requests carrying these IPs in X-Forwarded-For are trusted.
-    # The nginx container is the only upstream that should be talking to the
-    # backend; if you're behind a different proxy add its IP here.
+    # Peers allowed to set X-Forwarded-For (matched by IP or CIDR). Only when the
+    # connecting peer matches is the client IP read from the forwarded header;
+    # otherwise the raw peer is used, so arbitrary clients can't spoof their IP.
+    # Behind Docker the nginx container's bridge IP is dynamic, so the deployment
+    # must trust the bridge subnet as a CIDR (e.g. "172.16.0.0/12") — set it in
+    # the environment. If every per-IP limit collapses to one bucket, this is why.
     TRUSTED_PROXIES: List[str] = ["127.0.0.1", "::1"]
 
     # Payments. The active gateway ("mock"/"phonepe") and the PhonePe
@@ -119,6 +135,10 @@ class Settings(BaseSettings):
     #   PAYMENT_WEBHOOK_URL — the S2S callback URL handed to PhonePe.
     PAYMENT_RETURN_URL: str = "http://localhost:5173/payments/return"
     PAYMENT_WEBHOOK_URL: str = "http://localhost:8000/api/v1/payments/webhook/phonepe"
+    # Shared secret the reconcile-cron sidecar sends as X-Reconcile-Token so the
+    # long-running scheduler authenticates without a short-lived human token.
+    # Blank disables machine auth (human payments.manage still works).
+    PAYMENT_RECONCILE_TOKEN: str = ""
 
     # Observability / APM. Per-request + slow-query timing is captured in-process
     # and persisted off the hot path by a background flush thread (see
