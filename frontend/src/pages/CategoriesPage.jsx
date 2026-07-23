@@ -23,28 +23,37 @@ export default function CategoriesPage() {
   const combos = combosQuery.data?.items ?? [];
 
   return (
-    <Page bleed>
-      {/* ── HERO ── */}
-      <section
-        className="border-b border-wline"
-        style={{ background: 'linear-gradient(115deg,#e3efe6 0%,#f2f7ef 55%,#dcebe0 100%)' }}
-      >
-        <div className="max-w-[1320px] mx-auto px-5 sm:px-10 lg:px-16 py-12 lg:py-16">
-          <h1 className="font-wserif font-medium text-[clamp(30px,4.2vw,50px)] text-wink m-0 mb-2 leading-[1.05] max-w-xl">
-            Your Perfect Wellness Bundle.
-          </h1>
-          <p className="text-[14.5px] text-wmuted m-0 font-light max-w-md">
-            Curated bundles that offer more benefits at better value.
-          </p>
-          <Link
-            to="/products?offers=combo"
-            className="mt-5 inline-block bg-wgreen text-white no-underline rounded-full px-6 py-3 text-[13px] tracking-wide hover:bg-wgreen-dark transition-colors"
-          >
-            Shop your combos →
-          </Link>
-        </div>
-      </section>
+   <Page bleed>
+  {/* ── HERO ── */}
+<section className="relative overflow-hidden border-b border-wline pt-20 sm:pt-36 h-[180px] sm:min-h-[420px]">
+    <img
+      src="/hero-categories.png"
+      alt=""
+      className="absolute inset-0 w-full h-full object-cover object-center"
+    />
 
+    <div className="absolute inset-0 bg-black/20" />
+
+<div className="relative z-10 max-w-[1320px] mx-auto px-5 sm:px-10 lg:px-16 pt-0 sm:pt-10 pb-10 sm:pb-20 -translate-y-10 sm:translate-y-0">
+
+  <h1 className="font-cormorant font-semibold text-black text-[22px] sm:text-[clamp(30px,4.2vw,50px)] leading-[1.1] m-0 mb-1 sm:mb-2 max-w-[180px] sm:max-w-xl">
+    Your Perfect Wellness Bundle.
+  </h1>
+
+  <p className="font-outfit text-black text-[11px] sm:text-[14.5px] font-light leading-[1.4] m-0 max-w-[160px] sm:max-w-md">
+    Curated bundles that offer more benefits at better value.
+  </p>
+
+  <Link
+    to="/products?offers=combo"
+    className="mt-3 sm:mt-5 inline-block rounded-full px-4 sm:px-6 py-2 sm:py-3 text-[10px] sm:text-[13px] tracking-wide text-white no-underline transition-colors"
+    style={{ backgroundColor: "#08112C" }}
+  >
+    Shop your combos →
+  </Link>
+
+</div>
+  </section>
       <div className="max-w-[1320px] mx-auto px-5 sm:px-10 lg:px-16 py-8 lg:py-12">
         {/* ── TABS ── */}
         <div

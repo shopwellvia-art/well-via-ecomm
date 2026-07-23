@@ -16,10 +16,10 @@ import {
   MenuIcon,
   CloseIcon,
 } from './Icons';
-import ShopMegaMenu, { ShopMobileLinks } from './ShopMegaMenu.jsx';
+import ShopMegaMenu, { ShopMobileLinks, ChevronIcon } from './ShopMegaMenu.jsx';
 
 /** Primary nav links — real app routes (mockup order). "Shop" is rendered
- *  via ShopMegaMenu on desktop and as an accordion on mobile. */
+ *  via ShopMegaMenu on desktop and as an accordion toggle on mobile. */
 const NAV = [
   { to: '/', label: 'Home', end: true },
   { to: '/products', label: 'Shop', megaMenu: true },
@@ -49,9 +49,16 @@ const ACCOUNT_LINKS = [
  *   - Wishlist count           → useWishlist()
  *   - Account dropdown         → useAuthStore() (full a11y ported from AccountMenu.jsx)
  *   - Search                   → navigate('/products?q=<term>')
+ *   - Mobile "Shop" row        → accordion toggle (mobileShopOpen), does not navigate itself
+ *
+ * All mobile-drawer closing (X button, backdrop click, Esc, link clicks)
+ * funnels through the single `closeMobileMenu` callback so `mobileOpen` is
+ * only ever set from one place — this avoids the drawer getting "stuck"
+ * from two competing state updates racing each other.
  */
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileShopOpen, setMobileShopOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [accountOpen, setAccountOpen] = useState(false);
@@ -66,6 +73,8 @@ export default function Header() {
   const navigate = useNavigate();
   const location = useLocation();
   const reduce = useReducedMotion();
+
+  const isShopSection = location.pathname.startsWith('/products');
 
   // Cart count — sum of quantities across all lines.
   const { data: cartData } = useCart();
@@ -90,12 +99,24 @@ export default function Header() {
     ? user.name || (user.email ? user.email.split('@')[0] : 'Account')
     : '';
 
-  // ── Close everything on route change ────────────────────────────────────────
-  useEffect(() => {
-    setAccountOpen(false);
+  // Single source of truth for closing the mobile drawer — used by the X
+  // button, the backdrop, Esc, every nav link, and the shop sub-links.
+  // Nothing else is allowed to call setMobileOpen directly.
+  const closeMobileMenu = useCallback(() => {
     setMobileOpen(false);
-    setSearchOpen(false);
-  }, [location.pathname]);
+    setMobileShopOpen(false);
+  }, []);
+
+  // ── Close the account dropdown / inline search on route change ───────────────
+  // (mobileOpen is intentionally NOT touched here — every link that can close
+  // the drawer already calls closeMobileMenu() itself. Also closing it here,
+  // right as the route changes, raced with Framer Motion's exit animation and
+  // could leave the drawer "stuck" open with the X no longer responding.)
+  useEffect(() => {
+  closeMobileMenu();
+  setAccountOpen(false);
+  setSearchOpen(false);
+}, [location.pathname, closeMobileMenu]);
 
   // ── Lock body scroll while mobile menu is open ───────────────────────────────
   useEffect(() => {
@@ -104,6 +125,16 @@ export default function Header() {
       document.body.style.overflow = '';
     };
   }, [mobileOpen]);
+
+  // Esc closes the mobile menu too.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') closeMobileMenu();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [mobileOpen, closeMobileMenu]);
 
   // ── Account dropdown — focus management ──────────────────────────────────────
   const getMenuItems = useCallback(() => {
@@ -183,7 +214,7 @@ export default function Header() {
   // ── Sign out ──────────────────────────────────────────────────────────────────
   async function handleSignOut() {
     setAccountOpen(false);
-    setMobileOpen(false);
+    closeMobileMenu();
     // Best-effort server-side revocation — failure still logs out locally.
     const rt = useAuthStore.getState().refreshToken;
     if (rt) authApi.logout(rt).catch(() => {});
@@ -209,8 +240,7 @@ export default function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-40 bg-wgreen-deep">
-
+    <header className="sticky top-0 z-40 bg-[#08112C]">
       {/* ── Desktop (frontend-3: dark-green band, left logo, serif nav) ───────── */}
       <div className="hidden md:flex items-center gap-4 lg:gap-7 py-2.5 px-5 lg:px-10">
         {/* Left: logo — cream/gold on dark green */}
@@ -264,7 +294,7 @@ export default function Header() {
           <button
             type="submit"
             aria-label="Search"
-            className="text-[#6b6b66] hover:text-wgreen transition-colors bg-transparent border-0 p-1 cursor-pointer flex"
+            className="text-[#6b6b66] hover:text-[#08112C] transition-colors bg-transparent border-0 p-1 cursor-pointer flex"
           >
             <SearchIcon size={16} strokeWidth={2} />
           </button>
@@ -317,7 +347,7 @@ export default function Header() {
                   aria-label="Account menu"
                   className="flex items-center cursor-pointer bg-transparent border-0 p-0"
                 >
-                  <span className="grid size-7 shrink-0 place-items-center rounded-full bg-wgreen text-white text-xs font-bold select-none">
+                  <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#08112C] text-white text-xs font-bold select-none">
                     {userInitial}
                   </span>
                 </button>
@@ -410,7 +440,11 @@ export default function Header() {
       <div className="grid md:hidden grid-cols-[1fr_auto_1fr] items-center px-[18px] py-[13px]">
         {/* Hamburger */}
         <button
-          onClick={() => setMobileOpen(true)}
+          type="button"
+          onClick={() => {
+  setMobileShopOpen(false);
+  setMobileOpen(true);
+}}
           className="bg-transparent border-0 p-0 text-[#efe8d8] justify-self-start cursor-pointer"
           aria-label="Open navigation menu"
           aria-expanded={mobileOpen}
@@ -484,7 +518,7 @@ export default function Header() {
             </div>
             <button
               type="submit"
-              className="bg-wgreen text-white rounded-full px-5 py-2.5 text-[13px] cursor-pointer hover:bg-wgreen-dark transition-colors whitespace-nowrap"
+              className="bg-[#08112C] text-white rounded-full px-5 py-2.5 text-[13px] cursor-pointer hover:bg-[#08112C] transition-colors whitespace-nowrap"
             >
               Search
             </button>
@@ -493,28 +527,29 @@ export default function Header() {
       )}
 
       {/* ── Mobile slide-in menu ─────────────────────────────────────────────── */}
-      <AnimatePresence>
         {mobileOpen && (
           <>
             {/* Backdrop */}
             <motion.div
-              initial={{ opacity: 0 }}
+  key="mobile-menu-backdrop"
+                initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              onClick={() => setMobileOpen(false)}
-              className="fixed inset-0 bg-wink/30 z-[80]"
+              onClick={closeMobileMenu}
+              className="fixed inset-0 bg-wink/30 z-[100]"
               aria-hidden="true"
             />
 
             {/* Drawer */}
             <motion.div
+  key="mobile-menu-drawer"
               id="mobile-menu"
               initial={reduce ? { opacity: 0 } : { x: -300, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={reduce ? { opacity: 0 } : { x: -300, opacity: 0 }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              className="fixed top-0 left-0 h-full w-[300px] max-w-full bg-wcard z-[81] flex flex-col shadow-[4px_0_30px_rgba(30,24,14,0.15)]"
+              className="fixed top-0 left-0 h-full w-[300px] max-w-full bg-wcard z-[101] flex flex-col shadow-[4px_0_30px_rgba(30,24,14,0.15)]"
               role="dialog"
               aria-modal="true"
               aria-label="Navigation menu"
@@ -528,8 +563,9 @@ export default function Header() {
                   </span>
                 </div>
                 <button
-                  onClick={() => setMobileOpen(false)}
-                  className="bg-transparent border-0 p-0 text-wmuted cursor-pointer hover:text-wink transition-colors"
+                  type="button"
+                  onClick={closeMobileMenu}
+                  className="relative z-10 -m-2 cursor-pointer border-0 bg-transparent p-2 text-wmuted transition-colors hover:text-wink"
                   aria-label="Close menu"
                 >
                   <CloseIcon size={20} />
@@ -553,7 +589,7 @@ export default function Header() {
                   />
                   <button
                     type="submit"
-                    className="bg-wgreen text-white rounded-full px-4 py-2 text-[13px] cursor-pointer hover:bg-wgreen-dark transition-colors"
+                    className="bg-[#08112C] text-white rounded-full px-4 py-2 text-[13px] cursor-pointer hover:bg-[#08112C] transition-colors"
                   >
                     Go
                   </button>
@@ -565,28 +601,78 @@ export default function Header() {
                 className="flex flex-col px-5 py-4 gap-1 overflow-y-auto flex-1"
                 aria-label="Mobile navigation"
               >
-                {NAV.map((n) => (
-                  <div key={n.to}>
+                {NAV.map((n) => {
+                  if (n.megaMenu) {
+                    // "Shop" row is an accordion trigger on mobile — it toggles
+                    // the category list open/closed instead of navigating away.
+                    // The "All Products →" link inside the panel is what
+                    // actually navigates to /products.
+                    return (
+                      <div key={n.to}>
+                        <button
+                          type="button"
+                          onClick={() => setMobileShopOpen((v) => !v)}
+                          aria-expanded={mobileShopOpen}
+                          aria-controls="mobile-shop-panel"
+                          className={cn(
+                            'flex w-full items-center justify-between px-3 py-3 rounded-xl text-[14px] transition-colors cursor-pointer border-0 bg-transparent font-[inherit] text-left',
+                            isShopSection
+                              ? 'bg-[#08112C] text-white'
+                              : 'text-wink hover:bg-wline/40',
+                          )}
+                        >
+                          <span>{n.label}</span>
+                          <ChevronIcon
+                            className={cn(
+                              'transition-transform duration-200',
+                              mobileShopOpen && 'rotate-180',
+                            )}
+                          />
+                        </button>
+                        <AnimatePresence initial={false}>
+                          {mobileShopOpen && (
+                            <motion.div
+                              id="mobile-shop-panel"
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                              className="overflow-hidden"
+                            >
+                              <ShopMobileLinks
+  onNavigate={() => {
+    setMobileOpen(false);
+    setMobileShopOpen(false);
+  }}
+/>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  }
+                  return (
                     <NavLink
+                      key={n.to}
                       to={n.to}
                       end={n.end}
-                      onClick={() => setMobileOpen(false)}
+                      onClick={() => {
+  setMobileOpen(false);
+  setMobileShopOpen(false);
+}}
                       className={({ isActive }) =>
                         cn(
                           'block px-3 py-3 rounded-xl text-[14px] no-underline transition-colors',
                           isActive
-                            ? 'bg-wgreen text-white'
+                            ? 'bg-[#08112C] text-white'
                             : 'text-wink hover:bg-wline/40',
                         )
                       }
                     >
                       {n.label}
                     </NavLink>
-                    {n.megaMenu && (
-                      <ShopMobileLinks onNavigate={() => setMobileOpen(false)} />
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </nav>
 
               {/* Account / sign-in section */}
@@ -615,7 +701,7 @@ export default function Header() {
                       {isStaff && (
                         <Link
                           to="/admin"
-                          onClick={() => setMobileOpen(false)}
+                          onClick={closeMobileMenu}
                           className="px-3 py-2.5 rounded-xl text-[13.5px] text-wmuted hover:bg-wline/40 hover:text-wink no-underline transition-colors"
                         >
                           Admin Dashboard
@@ -625,7 +711,7 @@ export default function Header() {
                         <Link
                           key={link.to}
                           to={link.to}
-                          onClick={() => setMobileOpen(false)}
+                          onClick={closeMobileMenu}
                           className="px-3 py-2.5 rounded-xl text-[13.5px] text-wmuted hover:bg-wline/40 hover:text-wink no-underline transition-colors"
                         >
                           {link.label}
@@ -642,8 +728,8 @@ export default function Header() {
                 ) : (
                   <Link
                     to="/login"
-                    onClick={() => setMobileOpen(false)}
-                    className="block w-full text-center bg-wgreen text-white rounded-full py-3 text-[14px] font-medium no-underline hover:bg-wgreen-dark transition-colors"
+                    onClick={closeMobileMenu}
+                    className="block w-full text-center bg-[#08112C] text-white rounded-full py-3 text-[14px] font-medium no-underline hover:bg-[#08112C] transition-colors"
                   >
                     Sign In
                   </Link>
@@ -652,7 +738,6 @@ export default function Header() {
             </motion.div>
           </>
         )}
-      </AnimatePresence>
     </header>
   );
 }

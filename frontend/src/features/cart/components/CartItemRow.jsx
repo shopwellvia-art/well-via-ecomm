@@ -25,7 +25,7 @@ export default function CartItemRow({ item }) {
   return (
     <div className="flex gap-3.5 rounded-xl2 border border-wline bg-wcard p-3.5 shadow-sm">
       <WImage
-        src={item.image_url}
+        src={item.image}
         alt={item.name}
         shape="rounded"
         className="w-[72px] h-[84px] shrink-0 border border-wline"
@@ -40,7 +40,7 @@ export default function CartItemRow({ item }) {
 
         <div className="flex items-center justify-between gap-2 mt-auto pt-3">
           {/* Price chip */}
-          <span className="rounded-lg bg-wgreen text-white text-[13px] px-3 py-1.5 leading-none">
+          <span className="rounded-lg bg-[#08112C] text-white text-[13px] px-3 py-1.5 leading-none">
             {formatPrice(item.unit_price)}
           </span>
 

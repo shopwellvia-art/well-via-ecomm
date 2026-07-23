@@ -79,7 +79,7 @@ export default function Footer() {
   ];
 
   return (
-    <footer className="bg-wgreen-deep text-wpaper">
+    <footer className="bg-[#08112C] text-wpaper">
       <div className="max-w-[1280px] mx-auto px-5 sm:px-10 lg:px-14 pt-12 lg:pt-16 pb-8">
         <div className="flex flex-wrap gap-x-14 gap-y-12 justify-between">
           {/* ── Brand + newsletter ─────────────────────────────────────── */}

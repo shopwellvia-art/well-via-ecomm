@@ -1,158 +1,47 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Check, MapPin, Mail, Phone } from 'lucide-react';
+import { MapPin, Mail, Phone } from 'lucide-react';
 import { useSitePages } from '@/features/site-pages/hooks.js';
 import { SITE_PAGES_DEFAULTS } from '@/features/site-pages/defaults.js';
-import { useSubmitContactMessage } from '@/features/contact/hooks.js';
 
-// ── Inline form field helpers ────────────────────────────────────────────────
+// ── Decorative hero leaves (inline SVG, no image asset required) ───────────
 
-const fieldCls =
-  'w-full rounded-xl border border-wline bg-wpaper px-4 py-2.5 text-sm text-wink placeholder:text-wmuted outline-none transition-colors focus:border-wgold focus:ring-1 focus:ring-wgold/30';
-
-function WField({ label, error, optional, children }) {
+function HeroLeaves({ className, flip = false }) {
   return (
-    <div className="mb-4">
-      <label className="mb-1.5 block text-sm font-medium text-wink">
-        {label}
-        {optional && (
-          <span className="ml-1.5 text-xs font-normal text-wmuted">(optional)</span>
-        )}
-      </label>
-      {children}
-      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
-    </div>
-  );
-}
-
-// ── Contact form — wired to POST /contact ───────────────────────────────────
-
-const EMPTY = { name: '', email: '', phone: '', subject: '', message: '' };
-
-function ContactForm({ form }) {
-  const [values, setValues] = useState(EMPTY);
-  const [errors, setErrors] = useState({});
-  const submit = useSubmitContactMessage();
-
-  function set(field, val) {
-    setValues((v) => ({ ...v, [field]: val }));
-    if (errors[field]) setErrors((e) => ({ ...e, [field]: undefined }));
-  }
-
-  function onSubmit(e) {
-    e.preventDefault();
-    const next = {};
-    if (!values.name.trim()) next.name = 'Please tell us your name.';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim()))
-      next.email = 'Please enter a valid email address.';
-    if (values.message.trim().length < 10)
-      next.message = 'Please add a little more detail (10+ characters).';
-    if (Object.keys(next).length) {
-      setErrors(next);
-      return;
-    }
-
-    const payload = {
-      name: values.name.trim(),
-      email: values.email.trim(),
-      message: values.message.trim(),
-    };
-    if (values.phone.trim()) payload.phone = values.phone.trim();
-    if (values.subject.trim()) payload.subject = values.subject.trim();
-
-    submit.mutate(payload, {
-      onSuccess: () => setValues(EMPTY),
-    });
-  }
-
-  const errorText =
-    submit.error?.response?.status === 429
-      ? 'Too many messages from this connection — please try again in a little while.'
-      : "Couldn't send your message. Please try again.";
-
-  return (
-    <div className="rounded-xl2 border border-wline bg-wcard p-6 shadow-sm sm:p-8">
-      <h3 className="font-wserif text-xl text-wink">
-        {form?.heading || 'Send us a message'}
-      </h3>
-      {form?.note && <p className="mt-2 text-sm text-wmuted">{form.note}</p>}
-
-      <form onSubmit={onSubmit} noValidate className="mt-6">
-        <div className="grid gap-x-4 sm:grid-cols-2">
-          <WField label="Your name" error={errors.name}>
-            <input
-              className={fieldCls}
-              value={values.name}
-              onChange={(e) => set('name', e.target.value)}
-              autoComplete="name"
-              required
-            />
-          </WField>
-          <WField label="Email" error={errors.email}>
-            <input
-              type="email"
-              className={fieldCls}
-              value={values.email}
-              onChange={(e) => set('email', e.target.value)}
-              autoComplete="email"
-              required
-            />
-          </WField>
-          <WField label="Phone" optional>
-            <input
-              type="tel"
-              className={fieldCls}
-              value={values.phone}
-              onChange={(e) => set('phone', e.target.value)}
-              autoComplete="tel"
-            />
-          </WField>
-          <WField label="Subject" optional>
-            <input
-              className={fieldCls}
-              value={values.subject}
-              onChange={(e) => set('subject', e.target.value)}
-            />
-          </WField>
-        </div>
-        <WField label="Message" error={errors.message}>
-          <textarea
-            className={`${fieldCls} resize-none`}
-            rows={5}
-            value={values.message}
-            onChange={(e) => set('message', e.target.value)}
-            placeholder="How can we help?"
-            required
+    <svg
+      viewBox="0 0 160 160"
+      className={className}
+      style={flip ? { transform: 'scaleX(-1)' } : undefined}
+      aria-hidden="true"
+      focusable="false"
+    >
+      <g opacity="0.5">
+        <path
+          d="M0 20 C 40 10, 70 35, 75 80 C 78 110, 65 135, 40 155"
+          fill="none"
+          stroke="#5F7A52"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+        {[
+          { x: 20, y: 40, rot: 25 },
+          { x: 45, y: 65, rot: -20 },
+          { x: 30, y: 95, rot: 40 },
+          { x: 55, y: 115, rot: -10 },
+        ].map((l, i) => (
+          <ellipse
+            key={i}
+            cx={l.x}
+            cy={l.y}
+            rx="14"
+            ry="6"
+            fill="#7C9A6C"
+            opacity="0.55"
+            transform={`rotate(${l.rot} ${l.x} ${l.y})`}
           />
-        </WField>
-        <div className="flex flex-wrap items-center gap-4">
-          <button
-            type="submit"
-            disabled={submit.isPending}
-            className="rounded-full bg-wgreen px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-wgreen-dark disabled:opacity-60"
-          >
-            {submit.isPending ? 'Sending…' : 'Send message'}
-          </button>
-          {submit.isSuccess && (
-            <motion.span
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex items-center gap-1.5 text-sm text-green-700"
-              role="status"
-            >
-              <Check className="size-4" aria-hidden="true" />
-              {form?.success || "Thanks — we'll be in touch shortly."}
-            </motion.span>
-          )}
-          {submit.isError && (
-            <span className="text-sm text-red-600" role="alert">
-              {errorText}
-            </span>
-          )}
-        </div>
-      </form>
-    </div>
+        ))}
+      </g>
+    </svg>
   );
 }
 
@@ -166,11 +55,9 @@ export default function ContactPage() {
     return (
       <div className="min-h-[70vh] px-5 sm:px-10 lg:px-14 py-10">
         <div className="max-w-[1050px] mx-auto animate-pulse space-y-6">
-          <div className="h-10 w-64 rounded bg-wline/50" />
-          <div className="grid md:grid-cols-[1fr_1.3fr] gap-10">
-            <div className="h-[260px] rounded-xl2 bg-wline/40" />
-            <div className="h-[420px] rounded-xl2 bg-wline/40" />
-          </div>
+          <div className="h-[220px] rounded-b-3xl bg-wline/40" />
+          <div className="h-[180px] max-w-[560px] mx-auto rounded-xl2 bg-wline/40" />
+          <div className="h-[420px] max-w-[560px] mx-auto rounded-xl2 bg-wline/40" />
         </div>
       </div>
     );
@@ -182,7 +69,7 @@ export default function ContactPage() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-6 py-20">
         <div className="text-center">
-          <p className="font-wserif text-4xl leading-tight text-wink">Get in Touch</p>
+          <p className="font-wserif text-4xl leading-tight text-wink">Contact Us</p>
           <p className="mt-4 text-base text-wmuted">
             This page isn&apos;t available right now. Please check back soon.
           </p>
@@ -206,11 +93,9 @@ export default function ContactPage() {
   const email = findDetail('mail', 'email') || 'care@shopwellvia.in';
   const phone = findDetail('phone', 'call') || '+91 90000 00000';
 
-  const contactRows = [
-    { Icon: MapPin, title: 'Visit us', detail: address },
-    { Icon: Mail, title: 'Email us', detail: `${email} — replies within 24 hours` },
-    { Icon: Phone, title: 'Call us', detail: `${phone} · Mon–Sat, 9am–6pm IST` },
-  ];
+  const hours = page.hours || 'Monday – Saturday (9:00 AM – 6:00 PM IST)';
+  const responseNote =
+    page.responseNote || 'We aim to respond to all queries within 24–48 business hours.';
 
   return (
     <motion.div
@@ -219,49 +104,67 @@ export default function ContactPage() {
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       className="pb-16"
     >
-      <div className="max-w-[1050px] mx-auto px-5 sm:px-10 lg:px-14 pt-10 lg:pt-14">
-        {/* Heading */}
-        <h1 className="font-wserif font-semibold text-[clamp(30px,4vw,42px)] text-wink m-0 mb-1.5">
-          Get in Touch
-        </h1>
-        <p className="font-wserif text-[clamp(16px,1.7vw,20px)] text-wmuted m-0 mb-9 lg:mb-11">
-          {page.intro ||
-            "Questions about a ritual, an order, or anything wellness? We're listening."}
+      {/* Hero banner */}
+     <div className="relative overflow-hidden min-h-[180px] sm:min-h-[300px] px-6 py-10 sm:py-20 flex flex-col justify-center items-center text-center">
+  <img
+    src="/hero-contact.png"
+    alt=""
+    className="absolute inset-0 w-full h-full object-cover object-center"
+  />
+
+  {/* Optional overlay for better text readability */}
+  <div className="absolute inset-0 bg-black/20" />
+
+  {/* <h1 className="relative z-10 font-wserif font-semibold text-[clamp(30px,4vw,42px)] text-white m-0">
+    Contact Us
+  </h1>
+
+  <p className="relative z-10 mt-3 max-w-md mx-auto font-wserif text-[clamp(15px,1.6vw,18px)] text-white">
+    {page.intro ||
+      "We're here to help! Reach out for any queries, feedback or support."}
+  </p> */}
+</div>
+
+      <div className="max-w-[620px] mx-auto px-5 sm:px-10 mt-10 lg:mt-14">
+        <p className="text-center font-wserif text-[19px] text-wink mb-6">
+          Feel free to reach out to us at any time.
         </p>
 
-        <div className="grid md:grid-cols-[1fr_1.3fr] gap-8 lg:gap-12 items-start">
-          {/* Left: contact details + track-order nudge */}
-          <div className="flex flex-col gap-6">
-            {contactRows.map(({ Icon, title, detail }) => (
-              <div key={title} className="flex items-start gap-3.5">
-                <span className="w-11 h-11 shrink-0 rounded-full border border-wgreen/70 flex items-center justify-center text-wgreen">
-                  <Icon className="size-[19px]" strokeWidth={1.6} aria-hidden="true" />
-                </span>
-                <div>
-                  <div className="font-wserif text-[19px] text-wink">{title}</div>
-                  <div className="text-[14px] text-wmuted mt-0.5 leading-relaxed">
-                    {detail}
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {/* Sage track-order box */}
-            <div className="bg-wsage rounded-xl2 px-5 py-4 mt-1">
-              <div className="font-wserif text-[18px] text-[#16301f]">
-                Track an order instead?
-              </div>
-              <Link
-                to="/orders"
-                className="mt-1 inline-block text-[14px] text-wgreen underline underline-offset-2 hover:text-wgreen-dark transition-colors"
-              >
-                Go to Track Order →
-              </Link>
+        {/* Contact details block */}
+        <div className="rounded-2xl border border-wline bg-wcard px-6 py-6 sm:px-10 sm:py-8 flex flex-col gap-4">
+          {[
+            { label: 'Mail id', value: email, Icon: Mail },
+            { label: 'Phone', value: phone, Icon: Phone },
+            { label: 'Address', value: address, Icon: MapPin },
+          ].map(({ label, value, Icon }) => (
+            <div key={label} className="flex items-start gap-3 text-[15px]">
+              <Icon className="size-[17px] mt-0.5 text-wgreen shrink-0" strokeWidth={1.6} aria-hidden="true" />
+              <p className="m-0 text-wink">
+                <span className="font-medium">{label} :</span>{' '}
+                <span className="text-wmuted">{value}</span>
+              </p>
             </div>
-          </div>
+          ))}
+        </div>
 
-          {/* Right: message form — real POST /contact */}
-          <ContactForm form={page.form} />
+        {/* Support hours */}
+        <div className="text-center mt-10">
+          <p className="font-wserif text-[18px] text-wink m-0 mb-1">Customer Support Hours:</p>
+          <p className="text-[15px] font-medium text-wink m-0">{hours}</p>
+          <p className="text-[13px] text-wmuted mt-2 max-w-sm mx-auto">{responseNote}</p>
+        </div>
+
+        {/* Sage track-order box */}
+        <div className="bg-wsage rounded-xl2 px-5 py-4 mt-10 mb-4 text-center">
+          <div className="font-wserif text-[18px] text-[#16301f]">
+            Track an order instead?
+          </div>
+          <Link
+            to="/orders"
+            className="mt-1 inline-block text-[14px] text-[#08112C] underline underline-offset-2 hover:text-wgreen-dark transition-colors"
+          >
+            Go to Track Order →
+          </Link>
         </div>
       </div>
     </motion.div>

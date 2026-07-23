@@ -6,6 +6,14 @@ export const PRICE_MIN = 100;
 export const PRICE_MAX = 2000;
 
 /** Rating filter rows — mockup shows 5★ / 4★+ / 3★+. */
+const GOALS = [
+  "Immunity Support",
+  "Gut Health",
+  "Beauty & Glow",
+  "Better Sleep",
+  "Daily Wellness",
+  "Energy & Vitality",
+];
 const RATING_OPTIONS = [
   { value: '5', label: '' },
   { value: '4', label: '& above' },
@@ -44,22 +52,8 @@ function CheckRow({ checked, onChange, children }) {
   );
 }
 
-/**
- * FilterSidebar — the mockup's listing filter rail (Goal / Flavour / Price /
- * Offers / Rating / Availability).
- *
- * Purely presentational: reads `filters`, emits `onChange(patch)`. The parent
- * (ProductListPage) owns state in the URL search params so filtered views are
- * shareable and back-button safe.
- *
- * filters = {
- *   categoryIds: number[],  flavours: string[],
- *   minPrice: number|null,  maxPrice: number|null,
- *   offers: string[] ('combo' | 'discounted' | 'best_value'),
- *   minRating: string|null, inStock: boolean,
- * }
- */
 export default function FilterSidebar({ filters, onChange, categories = [] }) {
+  console.log(categories);
   const toggleIn = (list, value) =>
     list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
 
@@ -71,19 +65,22 @@ export default function FilterSidebar({ filters, onChange, categories = [] }) {
   return (
     <div className="bg-wcard border border-wline rounded-xl2 p-5">
       {/* ── Goal (categories) ── */}
-      {categories.length > 0 && (
-        <Section title="Goal">
-          {categories.map((c) => (
-            <CheckRow
-              key={c.id}
-              checked={filters.categoryIds.includes(c.id)}
-              onChange={() => onChange({ categoryIds: toggleIn(filters.categoryIds, c.id) })}
-            >
-              {c.name}
-            </CheckRow>
-          ))}
-        </Section>
-      )}
+      {/* ── Goal ── */}
+    <Section title="Goal">
+  {GOALS.map((goal) => (
+    <CheckRow
+      key={goal}
+      checked={filters.goals.includes(goal)}
+      onChange={() =>
+        onChange({
+          goals: toggleIn(filters.goals, goal),
+        })
+      }
+    >
+      {goal}
+    </CheckRow>
+  ))}
+</Section>
 
       {/* ── Flavour ── */}
       <Section title="Flavour">

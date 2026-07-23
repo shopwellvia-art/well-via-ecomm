@@ -114,13 +114,14 @@ export const SITE_PAGES_DEFAULTS = {
 
   contact: {
     enabled: true,
-    hero: {
-      eyebrow: 'Contact Us',
-      title: "We'd love to hear from you",
-      subtitle: 'Questions about an order, a product, or a partnership? Our team is here to help.',
-    },
-    intro:
-      "Reach us through any of the channels below, or drop us a message and we'll get back within one business day.",
+    // hero: {
+    //   eyebrow: 'Contact Us',
+    //   title: "We'd love to hear from you",
+    //   subtitle: 'Questions about an order, a product, or a partnership? Our team is here to help.',
+    // },
+    // intro:
+    //   "Reach us through any of the channels below kavya, or drop us a message and 
+    //   we'll get back within one business day.",
     methods: [
       { icon: 'Mail', title: 'Email us', detail: 'support@lumen.com', href: 'mailto:support@lumen.com' },
       { icon: 'Phone', title: 'Call us', detail: '044-4561 4700', href: 'tel:+914445614700' },

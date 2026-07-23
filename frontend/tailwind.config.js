@@ -137,6 +137,7 @@ export default {
         display: ['Cinzel', 'serif'], // wordmark / display headings
         wserif: ['"EB Garamond"', 'Georgia', 'serif'], // editorial headings (frontend-3)
         wsans: ['Jost', 'system-ui', 'sans-serif'], // storefront body
+        cormorant: ['Cormorant Garamond', 'serif'],
       },
       fontSize: {
         display: ['clamp(2.5rem, 6vw, 3.5rem)', { lineHeight: '1.07', letterSpacing: '-0.02em', fontWeight: '600' }],

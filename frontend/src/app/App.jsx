@@ -9,6 +9,9 @@ import RequireSuperadmin from './RequireSuperadmin.jsx';
 import ScrollToTop from './ScrollToTop.jsx';
 import AuthBootstrap from './AuthBootstrap.jsx';
 import { PageFallback } from '@/components/feedback/PageFallback.jsx';
+import ProductDemoPage from '../pages/ProductDemoPage.jsx';
+import CheckoutFirst from '../pages/CheckoutFirst.jsx';
+import CheckoutAddress from '../pages/Address.jsx';
 
 // Route-based code splitting — each page is its own chunk.
 const HomePage = lazy(() => import('@/pages/HomePage.jsx'));
@@ -16,7 +19,7 @@ const ProductListPage = lazy(() => import('@/pages/ProductListPage.jsx'));
 const CategoriesPage = lazy(() => import('@/pages/CategoriesPage.jsx'));
 const ProductDetailPage = lazy(() => import('@/pages/ProductDetailPage.jsx'));
 const CartPage = lazy(() => import('@/pages/CartPage.jsx'));
-const CheckoutPage = lazy(() => import('@/pages/CheckoutPage.jsx'));
+const CheckoutPageFinal = lazy(() => import('@/pages/CheckoutPageFinal.jsx'));
 const PaymentMockPage = lazy(() => import('@/pages/PaymentMockPage.jsx'));
 const PaymentReturnPage = lazy(() => import('@/pages/PaymentReturnPage.jsx'));
 const OrdersPage = lazy(() => import('@/pages/OrdersPage.jsx'));
@@ -29,6 +32,7 @@ const LoginPage = lazy(() => import('@/pages/LoginPage.jsx'));
 const ForgotPasswordPage = lazy(() => import('@/pages/ForgotPasswordPage.jsx'));
 const AuthCallbackPage = lazy(() => import('@/pages/AuthCallbackPage.jsx'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage.jsx'));
+
 
 // Company / content pages (footer "About" links) — admin-editable.
 const AboutPage = lazy(() => import('@/pages/AboutPage.jsx'));
@@ -82,7 +86,9 @@ export default function App() {
             <Route path="rewards" element={<RewardsPage />} />
             <Route path="account/security" element={<AccountSecurityPage />} />
             <Route path="account/addresses" element={<AddressesPage />} />
-            <Route path="checkout" element={<CheckoutPage />} />
+            <Route path="checkoutfirst" element={<CheckoutFirst/>}/>
+            <Route path="checkoutfinal" element={<CheckoutPageFinal />} />
+            <Route path='address' element={<CheckoutAddress/>}/>
             <Route path="orders" element={<OrdersPage />} />
             <Route path="orders/:id" element={<OrderDetailPage />} />
             <Route path="payments/mock/:txnId" element={<PaymentMockPage />} />
@@ -97,6 +103,7 @@ export default function App() {
             <Route path="stories" element={<StoriesPage />} />
             <Route path="press" element={<PressPage />} />
             <Route path="corporate" element={<CorporatePage />} />
+            <Route path='product' element={<ProductDemoPage/>}/>
             <Route path="*" element={<NotFoundPage />} />
           </Route>
 

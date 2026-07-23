@@ -4,6 +4,9 @@ import { useProducts, useBestsellers } from '@/features/products/hooks.js';
 import HeroSection from '@/components/storefront/HeroSection';
 import ProductCard from '@/components/storefront/ProductCard';
 import { Stars } from '@/components/storefront/Icons';
+import { Heart } from "lucide-react";
+import { useEffect, useState } from 'react';
+import { AnimatePresence } from "framer-motion";
 
 /* ── Static content (no blog/review backends exist — copy from the mockup) ── */
 
@@ -24,13 +27,65 @@ const BLOG_POSTS = [
     image: '/home/blog-habits.jpg',
   },
 ];
+const DEMO_PRODUCTS = [
+  {
+    id: 1,
+    name: "Sleep Gummies",
+    price: "₹349",
+    image: "/sleep-gummies.png",
+  },
+  {
+    id: 2,
+    name: "Multivitamin Gummies",
+    price: "₹349",
+    image: "/multi-gummies.png",
+  },
+  {
+    id: 3,
+    name: "Immunity Gummies",
+    price: "₹349",
+    image: "/immunity-gummies.png",
+  },
+  {
+    id: 4,
+    name: "Omega Gummies",
+    price: "₹349",
+    image: "/omega-gummies.png",
+  },
+];
 
-const REVIEW = {
-  quote:
-    'Finally, a wellness routine I actually stick to. Tastes great and fits effortlessly into my day.',
-  name: 'Priya S.',
-  stars: 4,
-};
+const REVIEWS = [
+  {
+    quote:
+      "Finally, a wellness routine I actually stick to. Tastes great and fits effortlessly into my day.",
+    name: "Priya S.",
+    stars: 5,
+  },
+  {
+    quote:
+      "The gummies are delicious and I've actually been consistent for the first time.",
+    name: "Ananya R.",
+    stars: 5,
+  },
+  {
+    quote:
+      "Loved the packaging, the taste, and the results. Highly recommend!",
+    name: "Rohan M.",
+    stars: 4,
+  },
+  {
+    quote:
+      "My sleep quality improved within a couple of weeks. Amazing experience.",
+    name: "Sneha K.",
+    stars: 5,
+  },
+  {
+    quote:
+      "Simple, effective, and something I genuinely look forward to every day.",
+    name: "Aarav P.",
+    stars: 5,
+  },
+];
 
 const ROUTINES = [
   {
@@ -46,7 +101,7 @@ const ROUTINES = [
     label: 'Night Routine',
     note: 'Beauty + Sleep = Glow While You Rest',
     lines: ['END YOUR', 'DAY RIGHT.'],
-    sub: 'Nourish your body with restful sleep',
+    sub: 'Nourish your body with restful & peaceful sleep',
     align: 'right',
   },
 ];
@@ -72,7 +127,7 @@ function RailSkeleton({ count = 4 }) {
     </div>
   );
 }
-
+//
 function InlineError({ onRetry }) {
   return (
     <div className="py-16 text-center">
@@ -93,6 +148,15 @@ function InlineError({ onRetry }) {
 
 export default function HomePage() {
   const reduce = useReducedMotion();
+  const [reviewIndex, setReviewIndex] = useState(0);
+
+useEffect(() => {
+  const interval = setInterval(() => {
+    setReviewIndex((prev) => (prev + 1) % REVIEWS.length);
+  }, 5000);
+
+  return () => clearInterval(interval);
+}, []);
 
   /* Real data */
   const {
@@ -120,35 +184,36 @@ export default function HomePage() {
       <HeroSection />
 
       {/* 2. Why we Exist — spilled-gummies visual left, right-aligned copy */}
-      <section
-        id="why-we-exist"
-        className="grid md:grid-cols-[1fr_1.05fr] gap-8 lg:gap-16 items-center px-5 sm:px-10 lg:px-16 py-12 lg:py-[84px]"
-      >
-        <div className="flex justify-center md:justify-start">
-          {/* Tilted pouch with berry spill — brand shot from the design file */}
-          <img
-            src="/home/why-pouch.jpg"
-            alt="Wellvia Immunity gummies spilling from the pouch"
-            loading="lazy"
-            className="w-[clamp(280px,38vw,520px)] h-auto rounded-xl2"
-          />
-        </div>
+      {/* 2. Why we Exist — spilled-gummies visual left, right-aligned copy */}
+<section
+  id="why-we-exist"
+  className="grid grid-cols-[0.85fr_1.15fr] md:grid-cols-[1fr_1.05fr] gap-4 lg:gap-16 items-center pr-5 sm:pr-10 lg:pr-16 py-6 lg:py-[40px]"
+>
+  <div className="flex justify-start w-full">
+    {/* Tilted pouch with berry spill — brand shot from the design file */}
+    <img
+      src="/homepage2.png"
+      alt="Wellvia Immunity gummies spilling from the pouch"
+      loading="lazy"
+      className="block w-full max-w-[140px] sm:max-w-[220px] md:max-w-[520px] h-auto rounded-xl2"
+    />
+  </div>
 
-        <div className="text-right">
-          <h2 className="font-wserif font-semibold text-[clamp(28px,3vw,40px)] text-wgreen m-0 mb-5">
-            Why we Exist?
-          </h2>
-          <p className="font-wserif font-semibold text-[clamp(22px,2.2vw,30px)] text-wink m-0 mb-4">
-            It started with one belief.
-          </p>
-          <p className="font-wserif text-[clamp(18px,1.8vw,25px)] leading-[1.55] text-wink/85 m-0 max-w-[520px] ml-auto">
-            Taking care of your health shouldn&apos;t feel like a chore.
-            That&apos;s why we created gummies that are enjoyable to take,
-            thoughtfully formulated, and made to fit effortlessly into your
-            day.
-          </p>
-        </div>
-      </section>
+  <div className="text-left md:text-right pl-5 sm:pl-10 lg:pl-16">
+    <h2 className="font-cormorant font-semibold text-[22px] sm:text-[28px] md:text-[clamp(28px,3vw,40px)] text-[#08112C] m-0 mb-3 md:mb-5">
+      Why we Exist?
+    </h2>
+    <p className="font-cormorant font-semibold text-[16px] sm:text-[20px] md:text-[clamp(22px,2.2vw,30px)] text-wink m-0 mb-2 md:mb-4">
+      It started with one belief.
+    </p>
+    <p className="font-cormorant text-[13px] sm:text-[16px] md:text-[clamp(18px,1.8vw,25px)] leading-[1.5] md:leading-[1.55] text-wink/85 m-0 max-w-full md:max-w-[520px] md:ml-auto">
+      Taking care of your health shouldn&apos;t feel like a chore.
+      That&apos;s why we created gummies that are enjoyable to take,
+      thoughtfully formulated, and made to fit effortlessly into your
+      day.
+    </p>
+  </div>
+</section>
 
       {/* 3. Product rail — bestsellers */}
       <section className="px-5 sm:px-10 lg:px-16 py-10 lg:py-[64px]">
@@ -158,46 +223,67 @@ export default function HomePage() {
           Help it a little.
         </h2>
 
-        {bestsellersLoading ? (
-          <RailSkeleton />
-        ) : bestsellersError ? (
-          <InlineError onRetry={refetchBestsellers} />
-        ) : bestsellers.length === 0 ? (
-          <p className="text-wmuted text-[15px]">
-            Our rituals are restocking —{' '}
-            <Link to="/products" className="text-wgreen underline underline-offset-2">
-              browse the full catalog
-            </Link>
-            .
+      {bestsellersLoading ? (
+  <RailSkeleton />
+) : (
+  <div className="flex md:grid md:grid-cols-4 gap-4 md:gap-6 overflow-x-auto md:overflow-visible snap-x snap-mandatory md:snap-none -mx-5 px-5 md:mx-0 md:px-0 pb-2 scrollbar-hide">
+    {DEMO_PRODUCTS.map((p) => (
+      <div
+        key={p.id}
+        className="shrink-0 w-[46%] sm:w-[42%] md:w-auto snap-start rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm"
+      >
+        <div className="relative">
+          <img
+            src={p.image}
+            alt={p.name}
+            className="w-full h-40 sm:h-52 md:h-64 object-cover"
+          />
+
+          {/* Wishlist */}
+          <button
+            className="absolute top-3 right-3 w-8 h-8 md:w-10 md:h-10 rounded-full bg-white shadow flex items-center justify-center hover:bg-gray-100 transition"
+          >
+            <Heart size={14} />
+          </button>
+        </div>
+
+        <div className="p-3 md:p-4">
+          <h3 className="font-semibold text-[13px] sm:text-base md:text-lg">{p.name}</h3>
+
+          <p className="text-[#2B5E3B] font-semibold mt-1 text-[12px] sm:text-sm md:text-base">
+            {p.price}
           </p>
-        ) : (
-          <div className="rail flex gap-[18px] overflow-x-auto pb-3 snap-x">
-            {bestsellers.map((p) => (
-              <div key={p.id} className="w-[262px] shrink-0 snap-start">
-                <ProductCard product={p} />
-              </div>
-            ))}
-          </div>
-        )}
+
+          <button
+            onClick={() => console.log("Add to cart:", p.name)}
+            className="mt-3 md:mt-4 w-full bg-[#08112C] text-white rounded-lg py-2 md:py-3 text-[12px] sm:text-sm md:text-base hover:bg-[#08112C] transition"
+          >
+            Add to Cart
+          </button>
+        </div>
+      </div>
+    ))}
+  </div>
+)}
       </section>
 
       {/* 4. New Launches — pale-green band (frontend-3) */}
-      <section className="bg-[#f2f4ea] px-5 sm:px-10 lg:px-16 py-12 lg:py-[76px]">
-        <div className="text-center mb-10">
-          <h2 className="font-wserif font-semibold text-[clamp(30px,3.6vw,46px)] text-wink m-0 mb-5">
+      <section className="px-5 sm:px-10 lg:px-16 py-12 lg:py-[76px]">
+        <div className="text-center mb-6 md:mb-10">
+          <h2 className="font-wserif font-semibold text-[26px] sm:text-[32px] md:text-[clamp(30px,3.6vw,46px)] text-wink m-0 mb-3 md:mb-5">
             New Launches
           </h2>
           <Link
             to="/new-arrivals"
-            className="inline-block bg-wgreen text-white no-underline rounded-full px-8 py-[11px] font-wserif text-[16px] tracking-wide hover:bg-wgreen-dark transition-colors"
+            className="hidden md:inline-block bg-[#08112C] text-white no-underline rounded-full px-8 py-[11px] font-wserif text-[16px] tracking-wide hover:bg-[#010E37] transition-colors"
           >
             Explore All
           </Link>
         </div>
 
-        <div className="grid md:grid-cols-[1.2fr_1fr] gap-10 items-center max-w-[1100px] mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-4 md:gap-10 items-center max-w-[1100px] mx-auto">
           {/* Limited-collection trio — brand shot from the design file */}
-          <div className="flex items-center justify-center">
+          <div className="order-2 md:order-1 flex items-center justify-center">
             <img
               src="/home/launch-trio.jpg"
               alt="Core Omega, Beauty Boost and Sleep gummies — the limited collection"
@@ -207,21 +293,22 @@ export default function HomePage() {
           </div>
 
           {/* Limited collection copy */}
-          <div className="text-center md:text-left">
-            <h3 className="font-wserif font-semibold text-[clamp(26px,2.8vw,38px)] leading-[1.15] text-wgreen-deep m-0 mb-7">
-              The Wellness Gummy
-              <br />
-              Limited Collection
-            </h3>
-            <Link
-              to="/new-arrivals"
-              className="inline-block bg-transparent border border-wgreen text-wgreen no-underline rounded-[12px] px-10 py-3.5 font-wserif text-[18px] tracking-wide hover:bg-wgreen hover:text-white transition-colors"
-            >
-              Shop Now!
-            </Link>
-          </div>
-        </div>
-      </section>
+        {/* Limited collection copy — text + button in a row on mobile */}
+    <div className="order-1 md:order-2 flex flex-row items-center justify-between gap-3 md:block md:text-left">
+      <h3 className="font-wserif font-semibold text-[16px] sm:text-[20px] md:text-[clamp(26px,2.8vw,38px)] leading-[1.15] text-wgreen-deep m-0 md:mb-7 max-w-[60%] md:max-w-none">
+        The Wellness Gummy
+        <br className="hidden md:block" />
+        {' '}Limited Collection
+      </h3>
+      <Link
+        to="/new-arrivals"
+        className="shrink-0 inline-block bg-transparent border border-[#08112C] text-[#08112C] no-underline rounded-[10px] md:rounded-[12px] px-4 py-2 md:px-10 md:py-3.5 font-wserif text-[13px] md:text-[18px] tracking-wide hover:bg-[#010E37] hover:text-white transition-colors whitespace-nowrap"
+      >
+        Shop Now!
+      </Link>
+    </div>
+  </div>
+</section>
 
       {/* 5. Build Your Daily Routine — brand imagery from the design file;
              each card links to its real combo product when one exists,
@@ -236,99 +323,99 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-10 lg:gap-14 max-w-[1140px] mx-auto">
-          {ROUTINES.map((r, i) => {
-            const right = r.align === 'right';
-            const combo = combos[i] ?? null;
-            const target = combo ? `/products/${combo.id}` : '/categories';
-            return (
-              <div
-                key={r.key}
-                className={`flex items-center gap-6 ${right ? 'md:flex-row-reverse' : ''}`}
-              >
-                {/* Caption block */}
-                <div className={`shrink-0 max-w-[190px] ${right ? 'text-right' : ''}`}>
-                  <div className="font-wserif text-[15px] text-wink/70 underline underline-offset-4 mb-2.5">
-                    {r.label}
-                  </div>
-                  <div className="font-wserif font-semibold text-[24px] leading-[1.2] text-wink mb-1.5">
-                    {r.lines.map((l, li) => (
-                      <span key={li}>
-                        {li === r.lines.length - 1 ? (
-                          <span className="text-wgreen">{l}</span>
-                        ) : (
-                          l
-                        )}
-                        {li < r.lines.length - 1 && <br />}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="text-[13.5px] text-wmuted m-0 mb-4">{r.sub}</p>
-                  <Link
-                    to={target}
-                    className="inline-block border border-wgreen/60 text-wgreen no-underline rounded-[10px] px-4 py-2 text-[13px] tracking-wide hover:bg-wgreen hover:text-white transition-colors whitespace-nowrap"
-                  >
-                    {right ? "← See What's Inside" : "See What's Inside →"}
-                  </Link>
-                </div>
-
-                {/* Bundle visual — includes the hand-written pairing note */}
-                <div className="flex-1">
-                  <Link to={target} className="block" aria-label={combo?.name ?? r.label}>
-                    <img
-                      src={`/home/routine-${r.key}.jpg`}
-                      alt={combo?.name ?? `${r.label} gummies bundle`}
-                      loading="lazy"
-                      className="w-full max-w-[420px] mx-auto h-auto rounded-xl2"
-                    />
-                  </Link>
-                  {combo && (
-                    <div className="mt-2 text-center font-wserif text-[15px] text-wink">
-                      {combo.name}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10 lg:gap-14 max-w-[1140px] mx-auto">
+  {ROUTINES.map((r, i) => {
+    const right = r.align === 'right';
+    const combo = combos[i] ?? null;
+    const target = combo ? `/products/${combo.id}` : '/categories';
+    return (
+      <div
+        key={r.key}
+        className={`flex items-center gap-3 md:gap-6 ${right ? 'flex-row-reverse' : ''}`}
+      >
+        {/* Caption block */}
+        <div className={`shrink-0 max-w-[42%] md:max-w-[190px] ${right ? 'text-right' : ''}`}>
+          <div className="font-wserif text-[11px] sm:text-[13px] md:text-[15px] text-wink/70 underline underline-offset-4 mb-1.5 md:mb-2.5">
+            {r.label}
+          </div>
+          <div className="font-wserif font-semibold text-[15px] sm:text-[19px] md:text-[24px] leading-[1.2] text-wink mb-1 md:mb-1.5">
+            {r.lines.map((l, li) => (
+              <span key={li}>
+                {li === r.lines.length - 1 ? (
+                  <span className="text-wgreen">{l}</span>
+                ) : (
+                  l
+                )}
+                {li < r.lines.length - 1 && <br />}
+              </span>
+            ))}
+          </div>
+          <p className="text-[10px] sm:text-[12px] md:text-[13.5px] text-wmuted m-0 mb-2 md:mb-4">{r.sub}</p>
+          <Link
+            to={target}
+            className="inline-block border border-[#08112C]/60 text-[#08112C] no-underline rounded-[10px] px-3 py-1.5 md:px-4 md:py-2 text-[10px] sm:text-[12px] md:text-[13px] tracking-wide hover:bg-[#010E37] hover:text-white transition-colors whitespace-nowrap"
+          >
+            {right ? "← See What's Inside" : "See What's Inside →"}
+          </Link>
         </div>
+
+        {/* Bundle visual */}
+        <div className="flex-1 min-w-0">
+          <Link to={target} className="block" aria-label={combo?.name ?? r.label}>
+            <img
+              src={`/home/routine-${r.key}.jpg`}
+              alt={combo?.name ?? `${r.label} gummies bundle`}
+              loading="lazy"
+              className="w-full max-w-[420px] mx-auto h-auto rounded-xl2"
+            />
+          </Link>
+          {combo && (
+            <div className="mt-2 text-center font-wserif text-[15px] text-wink">
+              {combo.name}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  })}
+</div>
       </section>
 
-      {/* 6. Wellness, without the confusion — static blog cards */}
-      <section className="px-5 sm:px-10 lg:px-16 py-12 lg:py-[84px]">
-        <div className="grid md:grid-cols-2 gap-8 items-start max-w-[1140px] mx-auto mb-10 lg:mb-14">
-          <h2 className="font-display text-[clamp(26px,3vw,40px)] leading-[1.3] tracking-[0.04em] text-wink m-0">
+     {/* 6. Wellness, without the confusion — static blog cards */}
+<section className="px-5 sm:px-10 lg:px-16 py-12 lg:py-[84px]">
+  <div className="grid grid-cols-2 gap-4 md:gap-8 items-start max-w-[1140px] mx-auto mb-6 lg:mb-14">
+    <h2 className="font-cormorant text-[18px] sm:text-[24px] md:text-[clamp(26px,3vw,40px)] leading-[1.3] tracking-[0.04em] text-wink m-0">
             WELLNESS,
             <br />
-            <span className="text-wgreen">WITHOUT</span> THE
+            <span className="text-[#08112C]">WITHOUT</span> THE
             <br />
             CONFUSION.
           </h2>
-          <p className="font-wserif text-[clamp(18px,1.8vw,25px)] leading-[1.55] text-wink/85 m-0 md:text-right">
+          <p className="font-cormorant text-[12px] sm:text-[15px] md:text-[clamp(18px,1.8vw,25px)] leading-[1.4] md:leading-[1.6] text-wink/85 m-0 text-right md:text-right max-w-full md:max-w-[360px] ml-auto">
             No complicated jargon. No wellness myths. Just simple insights to
             help you make better choices every day.
           </p>
         </div>
 
-        <div className="grid sm:grid-cols-3 gap-6 lg:gap-9 max-w-[1140px] mx-auto">
-          {BLOG_POSTS.map((post) => (
-            <article key={post.title}>
-              <img
-                src={post.image}
-                alt=""
-                loading="lazy"
-                className="w-full h-[clamp(220px,24vw,300px)] object-cover rounded-xl2 mb-5"
-              />
-              <h3 className="font-wserif font-semibold text-[clamp(20px,1.9vw,26px)] leading-[1.25] text-wink m-0 mb-1.5">
-                {post.title}
-              </h3>
-              <div className="font-wserif text-[14.5px] text-wmuted mb-2">{post.date}</div>
-              <Link
-                to="/stories"
-                className="font-wserif text-[16px] text-wgreen no-underline hover:underline underline-offset-4"
-              >
-                Read more→
-              </Link>
+       <div className="flex sm:grid sm:grid-cols-3 gap-4 lg:gap-9 max-w-[1140px] mx-auto overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none -mx-5 px-5 sm:mx-auto sm:px-0 pb-2 scrollbar-hide">
+    {BLOG_POSTS.map((post) => (
+      <article key={post.title} className="shrink-0 w-[70%] sm:w-auto snap-start">
+        <img
+          src={post.image}
+          alt=""
+          loading="lazy"
+          className="w-full h-[160px] sm:h-[clamp(220px,24vw,300px)] object-contain sm:object-cover bg-wcanvas rounded-xl2 mb-3 sm:mb-5"
+        />
+        <h3 className="font-wserif font-semibold text-[15px] sm:text-[clamp(20px,1.9vw,26px)] leading-[1.25] text-wink m-0 mb-1 sm:mb-1.5">
+          {post.title}
+        </h3>
+        <div className="font-wserif text-[11px] sm:text-[14.5px] text-wmuted mb-1.5 sm:mb-2">{post.date}</div>
+        <Link
+          to="/stories"
+          className="font-wserif text-[13px] sm:text-[16px] text-[#08112C] no-underline hover:underline underline-offset-4"
+        >
+          Read more→
+        </Link>
             </article>
           ))}
         </div>
@@ -340,40 +427,57 @@ export default function HomePage() {
           The Reviews Behind the Routine
         </h2>
 
-        <div className="max-w-[1080px] mx-auto border border-wgreen/40 rounded-xl3 bg-wcard/40 p-6 sm:p-10 grid md:grid-cols-[1fr_1.25fr] gap-8 items-center">
-          {/* Avatar cluster — customer photos from the design file */}
-          <div className="hidden md:flex items-center justify-center" aria-hidden="true">
-            <img
-              src="/home/avatars.jpg"
-              alt=""
-              loading="lazy"
-              className="w-full max-w-[340px] h-auto rounded-xl2"
-            />
-          </div>
+        <div className="max-w-[1080px] mx-auto border border-wgreen/40 rounded-xl3 bg-wcard/40 p-4 sm:p-6 md:p-10 grid grid-cols-[0.8fr_1.2fr] md:grid-cols-[1fr_1.25fr] gap-3 sm:gap-6 md:gap-8 items-center">
+  {/* Avatar cluster — now visible on mobile too */}
+  <div className="flex items-center justify-center" aria-hidden="true">
+    <img
+      src="/home/avatars.jpg"
+      alt=""
+      loading="lazy"
+      className="w-full max-w-[110px] sm:max-w-[180px] md:max-w-[340px] h-auto rounded-xl2"
+    />
+  </div>
 
-          {/* Quote card */}
-          <div className="relative bg-white rounded-xl2 shadow-[0_28px_60px_-34px_rgba(30,30,26,0.45)] p-7 sm:p-9">
-            <span
-              className="absolute top-5 right-7 font-wserif text-[64px] leading-none text-wline select-none"
-              aria-hidden="true"
-            >
-              &rdquo;
-            </span>
-            <Stars count={REVIEW.stars} className="text-[22px]" />
-            <blockquote className="font-wserif font-medium text-[clamp(18px,1.8vw,23px)] leading-[1.5] text-wink m-0 mt-4 mb-5">
-              &ldquo;{REVIEW.quote}&rdquo;
-            </blockquote>
-            <div className="font-wserif text-[17px] text-wink/80">{REVIEW.name}</div>
-            <span
-              className="absolute -bottom-2 left-8 font-wserif text-[110px] leading-none text-wline/60 select-none"
-              aria-hidden="true"
-            >
-              &ldquo;
-            </span>
-          </div>
-        </div>
+  {/* Quote card */}
+  <div className="relative bg-white rounded-xl2 shadow-[0_28px_60px_-34px_rgba(30,30,26,0.45)] px-4 pt-4 pb-0 sm:px-6 sm:pt-6 sm:pb-1 md:px-9 md:pt-9 md:pb-2">
+    <span
+      className="absolute top-2 right-3 sm:top-5 sm:right-7 font-wserif text-[32px] sm:text-[48px] md:text-[64px] leading-none text-wline select-none"
+      aria-hidden="true"
+    >
+      &rdquo;
+    </span>
 
-        <div className="text-center mt-9">
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={reviewIndex}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -20 }}
+        transition={{ duration: 0.7 }}
+      >
+        <Stars count={REVIEWS[reviewIndex].stars} className="text-[14px] sm:text-[18px] md:text-[22px]" />
+
+        <blockquote className="font-wserif font-medium text-[13px] sm:text-[17px] md:text-[clamp(18px,1.8vw,23px)] leading-[1.4] md:leading-[1.5] text-wink m-0 mt-2 sm:mt-4 mb-2 sm:mb-5">
+          &ldquo;{REVIEWS[reviewIndex].quote}&rdquo;
+        </blockquote>
+
+        <div className="font-wserif text-[12px] sm:text-[15px] md:text-[17px] text-wink/80">
+  {REVIEWS[reviewIndex].name}
+</div>
+
+<div className="flex justify-start mt-2">
+  <span
+    className="font-wserif text-[42px] sm:text-[56px] md:text-[72px] leading-none text-wline/60 select-none"
+    aria-hidden="true"
+  >
+    &ldquo;
+  </span>
+</div>
+      </motion.div>
+    </AnimatePresence>
+  </div>
+</div>
+        <div className="text-center mt-4">
           <Link
             to="/products"
             className="font-wserif text-[19px] text-wink underline underline-offset-[6px] hover:text-wgreen transition-colors"
@@ -384,89 +488,147 @@ export default function HomePage() {
       </section>
 
       {/* 8. Brand philosophy — the puzzle piece */}
-      <section className="px-5 sm:px-10 lg:px-16 py-12 lg:py-[84px]">
-        {/* 8a. the piece that brings it all together */}
-        <div className="grid md:grid-cols-2 gap-10 items-center max-w-[1140px] mx-auto mb-16 lg:mb-24">
-          <div>
-            <h2 className="font-wserif text-[clamp(32px,3.8vw,52px)] leading-[1.15] text-wink/85 m-0 mb-5">
-              the piece that brings
-              <br />
-              it all together.
-            </h2>
-            <p className="font-wserif text-[clamp(17px,1.6vw,22px)] leading-[1.5] text-wmuted m-0 max-w-[340px]">
-              &ldquo;sometimes, the smallest things make the biggest
-              difference.&rdquo;
-            </p>
-            <div className="h-px bg-wline max-w-[380px] my-8" />
-            <p className="text-[17px] leading-snug text-wink m-0 mb-4 max-w-[250px]">
-              Science backed supplements for everyday
-            </p>
-            <Link
-              to="/products"
-              className="inline-flex items-center gap-2.5 bg-wgreen text-white no-underline rounded-full pl-6 pr-2 py-2 text-[15px] hover:bg-wgreen-dark transition-colors"
-            >
-              Shop now
-              <span className="w-8 h-8 rounded-full border border-white/40 grid place-items-center text-[15px]">
-                ↗
-              </span>
-            </Link>
-          </div>
+    <section className="px-5 sm:px-10 lg:px-16 pt-2 pb-12 lg:pt-8 lg:pb-[60px]">
+  {/* 8a. the piece that brings it all together */}
+  <div className="grid grid-cols-2 md:grid-cols-2 gap-4 md:gap-10 items-center max-w-[1140px] mx-auto mb-8 md:mb-16 lg:mb-24">
+    <div>
+      <h2 className="font-wserif text-[18px] sm:text-[26px] md:text-[clamp(32px,3.8vw,52px)] leading-[1.2] md:leading-[1.15] text-wink/85 m-0 mb-2 md:mb-5">
+        the piece that brings
+        <br />
+        it all together.
+      </h2>
+      <p className="font-wserif text-[11px] sm:text-[15px] md:text-[clamp(17px,1.6vw,22px)] leading-[1.4] md:leading-[1.5] text-wmuted m-0 max-w-[340px]">
+        &ldquo;sometimes, the smallest things make the biggest
+        difference.&rdquo;
+      </p>
+    </div>
 
-          {/* Puzzle-piece brand art from the design file */}
-          <div className="flex justify-center" aria-hidden="true">
-            <img
-              src="/home/puzzle-piece.jpg"
-              alt=""
-              loading="lazy"
-              className="w-full max-w-[400px] h-auto rounded-xl2"
-            />
-          </div>
-        </div>
+    <div className="flex justify-center" aria-hidden="true">
+      <img
+        src="/home/puzzle-piece.jpg"
+        alt=""
+        loading="lazy"
+        className="w-full max-w-[160px] sm:max-w-[260px] md:max-w-[400px] h-auto rounded-xl2"
+      />
+    </div>
+  </div>
 
-        {/* 8b. together with what? */}
-        <div className="grid md:grid-cols-[1.15fr_1fr] gap-12 items-center max-w-[1140px] mx-auto mb-16 lg:mb-24">
-          {/* Pastel habit-chip cluster from the design file */}
-          <div className="flex justify-center md:justify-start" aria-hidden="true">
-            <img
-              src="/home/puzzle-chips.jpg"
-              alt=""
-              loading="lazy"
-              className="w-full max-w-[500px] h-auto rounded-xl2"
-            />
-          </div>
+  <div className="flex justify-center items-center gap-4 sm:gap-8 md:gap-16 mt-4 md:mt-8">
+    <img
+      src="/homepage download.png"
+      alt=""
+      className="w-24 sm:w-32 md:w-52 translate-y-20 md:translate-y-32"
+    />
 
-          <div>
-            <h2 className="font-wserif text-[clamp(30px,3.4vw,46px)] text-wink/85 m-0 mb-3 md:text-right">
-              together with what?
-            </h2>
-            <div className="h-px bg-wline mb-9" />
-            <ul className="m-0 p-0 list-none font-wserif text-[clamp(20px,2vw,28px)] text-wink/85 space-y-7">
-              <li>Healthy habits</li>
-              <li className="pl-10 md:pl-24">Daily routine</li>
-              <li className="pl-4 md:pl-10">Choices you make</li>
-            </ul>
-          </div>
-        </div>
+    <div className="text-center">
+      <p className="font-cormorant text-[11px] sm:text-[14px] md:text-[17px] leading-[1.3] md:leading-none text-wink mb-2 md:mb-5 max-w-[600px]">
+        Science backed supplements for everyday
+      </p>
 
-        {/* 8c. Closing quote */}
-        <div className="grid md:grid-cols-2 gap-10 items-center max-w-[1140px] mx-auto">
-          <blockquote className="font-wserif text-[clamp(26px,3vw,42px)] leading-[1.3] text-wink/85 m-0">
-            &ldquo;Every healthy routine has its pieces. This is one of
-            them.&rdquo;
-          </blockquote>
-          <div className="grid grid-cols-2 gap-4">
-            {['/home/lifestyle-1.jpg', '/home/lifestyle-2.jpg'].map((src) => (
-              <img
-                key={src}
-                src={src}
-                alt="Wellvia daily ritual"
-                loading="lazy"
-                className="w-full h-[clamp(180px,20vw,260px)] object-cover rounded-xl2"
-              />
-            ))}
-          </div>
-        </div>
-      </section>
+      <Link
+        to="/products"
+        className="inline-flex items-center gap-1.5 md:gap-2.5 bg-[#08112C] text-white rounded-full pl-4 pr-1.5 py-1.5 md:pl-6 md:pr-2 md:py-2 text-[11px] md:text-[15px]"
+      >
+        Shop now
+        <span className="w-6 h-6 md:w-8 md:h-8 rounded-full border border-white/40 grid place-items-center text-[11px] md:text-base">
+          ↗
+        </span>
+      </Link>
+    </div>
+
+    <div className="flex flex-col items-center">
+  <img
+    src="/homepage question.png"
+    alt=""
+    className="w-16 sm:w-24 md:w-40 translate-y-20 md:translate-y-32"
+  />
+
+  {/* Mobile only */}
+  <h2 className="block md:hidden mt-1 font-cormorant text-[20px] text-wink/85 text-center mt-20">
+    together with what?
+  </h2>
+</div>
+  </div>
+
+ {/* 8b. together with what? */}
+<div className="max-w-[1140px] mx-auto mt-12 md:mt-0 mb-16 lg:mb-24">
+
+  <div className="grid grid-cols-2 md:grid-cols-[1.15fr_1fr] gap-14 md:gap-12 items-center">
+
+    {/* Left - Puzzle Image */}
+<div className="flex flex-col items-center md:block md:justify-start md:mt-80">
+  <img
+    src="/Puzzle.png"
+    alt=""
+    loading="lazy"
+    className="w-full max-w-[160px] sm:max-w-[220px] md:max-w-[500px] h-auto rounded-xl2"
+  />
+</div>
+
+    {/* Right */}
+    <div className="flex flex-col justify-center text-left md:text-right w-full h-full">
+
+      {/* Desktop heading only */}
+      <h2 className="hidden md:block relative -top-24 font-cormorant text-[clamp(30px,3.4vw,46px)] text-wink/85 m-0 mb-3 mt-10">
+        together with what?
+      </h2>
+
+      <div className="hidden md:block h-px bg-wline mt-10 mb-9" />
+
+      <div className="mr-0 md:mt-40 md:mr-60">
+        <ul className="m-0 p-0 list-none font-wserif text-[15px] sm:text-[19px] md:text-[clamp(20px,2vw,28px)] text-wink/85 space-y-2 md:space-y-7">
+
+          <li>Healthy habits</li>
+
+          <img
+            src="/upVector.png"
+            alt=""
+            className="w-8 md:w-20 ml-6 md:ml-auto"
+          />
+
+          <li>Daily routine</li>
+
+          <img
+            src="/downVector.png"
+            alt=""
+            className="w-8 md:w-20 ml-6 md:ml-auto"
+          />
+
+          <li>Choices you make</li>
+
+        </ul>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+  {/* 8c. Closing quote */}
+  {/* 8c. Closing quote */}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-10 items-center max-w-[1140px] mx-auto">
+
+  {/* Left - Quote */}
+  <blockquote className="font-wserif text-[18px] sm:text-[20px] md:text-[clamp(26px,3vw,42px)] leading-[1.1] md:leading-[1.3] text-wink/85 mb-2 md:mb-0 max-w-[300px] md:max-w-none">
+  &ldquo;Every healthy routine has its pieces. This is one of them.&rdquo;
+</blockquote>
+
+  {/* Right - Images */}
+<div className="grid grid-cols-2 md:grid-cols-2 gap-4 md:gap-4 mt-2 md:mt-0">
+  {['/home/lifestyle-1.jpg', '/home/lifestyle-2.jpg'].map((src) => (
+    <img
+      key={src}
+      src={src}
+      alt="Wellvia daily ritual"
+      loading="lazy"
+      className="w-full h-32 sm:h-40 md:h-[clamp(180px,20vw,260px)] object-cover rounded-xl2"
+    />
+  ))}
+</div>
+
+</div>
+</section>
     </motion.div>
   );
 }

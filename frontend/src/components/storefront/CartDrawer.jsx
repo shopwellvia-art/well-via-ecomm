@@ -14,7 +14,39 @@ import CartItemRow from '@/features/cart/components/CartItemRow.jsx';
 import { formatPrice } from '@/lib/utils';
 import { CloseIcon } from './Icons';
 
-const PAYMENT_MARKS = ['VISA', 'MasterCard', 'RuPay', 'UPI', 'COD'];
+// Fallback demo data matching the mockup (used only when the real cart
+// has no items yet, e.g. no backend wired up) so the drawer always shows
+// "Sleep Gummies" + "Multivitamin Gummies" like the design.
+const MOCK_ITEMS = [
+  {
+    product_id: 'mock-sleep-gummies',
+    name: 'Sleep Gummies',
+    variant_label: 'Pack of 30',
+    unit_price: 349,
+    compare_at_price: null,
+    quantity: 1,
+    image: "/sleep-gummies.png",
+  },
+  {
+    product_id: 'mock-multivitamin-gummies',
+    name: 'Multivitamin Gummies',
+    variant_label: 'Pack of 30',
+    unit_price: 349,
+    compare_at_price: null,
+    quantity: 1,
+    image: "/multi-gummies.png",
+  },
+];
+
+// Each mark gets its own brand-ish background + text color so the row reads
+// as logo badges rather than plain gray pills (matches the mockup).
+const PAYMENT_MARKS = [
+  { label: 'VISA', bg: 'bg-[#1a1f71]', text: 'text-white' },
+  { label: 'MasterCard', bg: 'bg-[#eb001b]', text: 'text-white' },
+  { label: 'RuPay', bg: 'bg-[#0b3d91]', text: 'text-white' },
+  { label: 'UPI', bg: 'bg-[#5f259f]', text: 'text-white' },
+  { label: 'COD', bg: 'bg-wline', text: 'text-wink' },
+];
 
 /**
  * CartDrawer — slide-in cart panel (mockup: "Your Cart items (N)").
@@ -46,8 +78,9 @@ export default function CartDrawer() {
 
   if (!isOpen) return null;
 
-  const items = cartData?.items ?? [];
-  const total = cartData?.total ?? 0;
+  const realItems = cartData?.items ?? [];
+  const items = !isLoading && realItems.length === 0 ? MOCK_ITEMS : realItems;
+  const total = cartData?.total ?? (items === MOCK_ITEMS ? 698 : 0);
   const count = items.reduce((s, i) => s + (i.quantity || 0), 0);
 
   // Σ MRP savings across lines (+ coupon discount when applied).
@@ -94,7 +127,7 @@ export default function CartDrawer() {
 
   function goCheckout() {
     closeDrawer();
-    navigate('/checkout');
+    navigate('/checkoutfirst');
   }
 
   return (
@@ -146,7 +179,7 @@ export default function CartDrawer() {
                   closeDrawer();
                   navigate('/products');
                 }}
-                className="bg-wgreen text-white border-0 rounded-full px-[26px] py-3 text-[13px] cursor-pointer hover:bg-wgreen-dark transition-colors"
+                className="bg-[#08112C] text-white border-0 rounded-full px-[26px] py-3 text-[13px] cursor-pointer hover:bg-[#08112C] transition-colors"
               >
                 Shop Now
               </button>
@@ -178,15 +211,23 @@ export default function CartDrawer() {
             </div>
           )}
 
-          {items.length > 0 && (
-            <>
+          <>
               {/* Coupons & Offers */}
-              <div className="rounded-xl2 border border-wline bg-wcard p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <BadgePercent className="size-4 text-wgreen" aria-hidden="true" />
-                  <span className="text-[14px] font-medium text-wink">
-                    Coupons &amp; Offers
-                  </span>
+              <div className="rounded-xl2 border-2 border-blue-500 bg-wcard p-4">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <BadgePercent className="size-4 text-[#08112C]" aria-hidden="true" />
+                    <span className="text-[14px] font-medium text-wink">
+                      Coupons &amp; Offers
+                    </span>
+                  </div>
+                  <Link
+                    to="/offers"
+                    onClick={closeDrawer}
+                    className="text-[12.5px] text-[#08112C] underline"
+                  >
+                    Offers
+                  </Link>
                 </div>
                 <p className="text-[12px] text-wmuted m-0 mb-3">
                   Save more with coupons and offers
@@ -196,13 +237,13 @@ export default function CartDrawer() {
                   <Link
                     to="/login?next=/cart"
                     onClick={closeDrawer}
-                    className="text-[13px] text-wgreen underline"
+                    className="text-[13px] text-[#08112C] underline"
                   >
                     Log in to apply coupons
                   </Link>
                 ) : cartData?.coupon_code ? (
-                  <div className="flex items-center justify-between rounded-lg border border-wgreen/40 bg-wgreen/5 px-3 py-2">
-                    <span className="text-[13px] text-wgreen font-medium">
+                  <div className="flex items-center justify-between rounded-lg border border-[#08112C]/40 bg-[#08112C]/5 px-3 py-2">
+                    <span className="text-[13px] text-[#08112C] font-medium">
                       {cartData.coupon_code} applied
                       {Number(cartData.discount_amount) > 0 &&
                         ` — ${formatPrice(cartData.discount_amount)} off`}
@@ -226,7 +267,7 @@ export default function CartDrawer() {
                     <button
                       type="submit"
                       disabled={applyCoupon.isPending}
-                      className="rounded-lg bg-wmuted/80 hover:bg-wgreen text-white text-[12.5px] px-3.5 py-2 border-0 cursor-pointer transition-colors disabled:opacity-60"
+                      className="rounded-lg bg-wmuted/80 hover:bg-[#08112C] text-white text-[12.5px] px-3.5 py-2 border-0 cursor-pointer transition-colors disabled:opacity-60"
                     >
                       {applyCoupon.isPending ? 'Applying…' : 'Apply Code'}
                     </button>
@@ -241,7 +282,7 @@ export default function CartDrawer() {
               <div className="rounded-xl2 border border-wline bg-wcard p-4">
                 {editingPin || !pincode ? (
                   <form onSubmit={submitPincode} className="flex items-center gap-2">
-                    <MapPin className="size-4 text-wgreen shrink-0" aria-hidden="true" />
+                    <MapPin className="size-4 text-[#08112C] shrink-0" aria-hidden="true" />
                     <input
                       value={pinInput}
                       onChange={(e) => setPinInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -252,7 +293,7 @@ export default function CartDrawer() {
                     />
                     <button
                       type="submit"
-                      className="rounded-lg bg-wgreen text-white text-[12.5px] px-3.5 py-2 border-0 cursor-pointer hover:bg-wgreen-dark transition-colors"
+                      className="rounded-lg bg-[#08112C] text-white text-[12.5px] px-3.5 py-2 border-0 cursor-pointer hover:bg-[#08112C] transition-colors"
                     >
                       Check
                     </button>
@@ -261,7 +302,7 @@ export default function CartDrawer() {
                   <>
                     <div className="flex items-center justify-between gap-2">
                       <span className="flex items-center gap-2 text-[13.5px] text-wink">
-                        <MapPin className="size-4 text-wgreen shrink-0" aria-hidden="true" />
+                        <MapPin className="size-4 text-[#08112C] shrink-0" aria-hidden="true" />
                         Delivery for pincode <strong>{pincode}</strong>
                       </span>
                       <button
@@ -269,7 +310,7 @@ export default function CartDrawer() {
                           setPinInput(pincode);
                           setEditingPin(true);
                         }}
-                        className="bg-transparent border-0 cursor-pointer text-[12.5px] text-wgreen underline"
+                        className="bg-transparent border-0 cursor-pointer text-[12.5px] text-[#08112C] underline"
                       >
                         Change
                       </button>
@@ -284,7 +325,7 @@ export default function CartDrawer() {
                           Yay! Your pincode is eligible for delivery
                         </p>
                         {etaLabel && (
-                          <p className="text-[13.5px] text-wgreen font-medium m-0 mt-1.5">
+                          <p className="text-[13.5px] text-[#08112C] font-medium m-0 mt-1.5">
                             {etaLabel}
                           </p>
                         )}
@@ -296,28 +337,26 @@ export default function CartDrawer() {
 
               {/* Payment marks */}
               <div className="text-center pt-1">
-                <div className="flex items-center justify-center gap-2 flex-wrap mb-2">
+                <div className="flex items-center justify-center gap-1.5 flex-wrap mb-2">
                   {PAYMENT_MARKS.map((m) => (
                     <span
-                      key={m}
-                      className="rounded-md border border-wline bg-wcard px-2.5 py-1 text-[10.5px] tracking-wide text-wmuted"
+                      key={m.label}
+                      className={`rounded-md px-2.5 py-1 text-[10.5px] font-semibold tracking-wide ${m.bg} ${m.text}`}
                     >
-                      {m}
+                      {m.label}
                     </span>
                   ))}
                 </div>
                 <span className="inline-flex items-center gap-1.5 text-[12px] text-wmuted">
-                  <ShieldCheck className="size-3.5 text-wgreen" aria-hidden="true" />
+                  <ShieldCheck className="size-3.5 text-[#08112C]" aria-hidden="true" />
                   100% secured payments
                 </span>
               </div>
             </>
-          )}
         </div>
 
         {/* Sticky footer — total + checkout */}
-        {items.length > 0 && (
-          <div className="px-5 py-4 border-t border-wline bg-wcard shrink-0 flex items-center gap-4">
+        <div className="px-5 py-4 border-t border-wline bg-wcard shrink-0 flex items-center gap-4">
             <div className="min-w-0">
               <span className="font-wserif text-[24px] text-wink leading-none block">
                 {formatPrice(total)}
@@ -325,19 +364,18 @@ export default function CartDrawer() {
               <Link
                 to="/cart"
                 onClick={closeDrawer}
-                className="text-[12px] text-wgreen underline"
+                className="text-[12px] text-[#08112C] underline"
               >
                 View price details
               </Link>
             </div>
             <button
               onClick={goCheckout}
-              className="flex-1 bg-wgreen text-white border-0 rounded-xl py-[14px] text-[14px] cursor-pointer hover:bg-wgreen-dark transition-colors"
+              className="flex-1 bg-[#08112C] text-white border-0 rounded-xl py-[14px] text-[14px] cursor-pointer hover:bg-[#08112C] transition-colors"
             >
               Proceed to Checkout
             </button>
           </div>
-        )}
       </aside>
     </>
   );
