@@ -13,9 +13,11 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  # Image repositories (lowercase owner). Tags: <git-sha> + latest.
+  # Image repositories (lowercase owner). Tags: <deploy-sha> + latest.
   BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/simple-com-backend
   FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/simple-com-frontend
+  # The commit to build & deploy (github.sha on push/manual runs).
+  DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
   build-and-push:
@@ -26,6 +28,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
 
       - uses: docker/setup-buildx-action@v3
 
@@ -43,7 +47,7 @@ jobs:
           push: true
           tags: |
             ${{ env.BACKEND_IMAGE }}:latest
-            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.BACKEND_IMAGE }}:${{ env.DEPLOY_SHA }}
 
       - name: Build & push frontend
         uses: docker/build-push-action@v6
@@ -52,7 +56,7 @@ jobs:
           push: true
           tags: |
             ${{ env.FRONTEND_IMAGE }}:latest
-            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+            ${{ env.FRONTEND_IMAGE }}:${{ env.DEPLOY_SHA }}
 
   deploy:
     name: Deploy on EC2
@@ -60,6 +64,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Ship the compose file from the exact commit we built/deployed.
+          ref: ${{ env.DEPLOY_SHA }}
 
       # Ship the latest compose file to the host so it stays in sync.
       - name: Copy compose file to EC2
@@ -85,15 +92,17 @@ jobs:
             # Authenticate to GHCR so private images can be pulled.
             echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
-            # IMAGE_TAG is forwarded from the step env (the git SHA).
+            # IMAGE_TAG is forwarded from the step env (the deployed commit SHA).
             docker compose -f docker-compose.deploy.yml pull
             docker compose -f docker-compose.deploy.yml up -d
             # NO automatic `alembic upgrade head` here: the shared remote MySQL
-            # is at a migration lineage this repo does not contain, so schema
-            # changes are applied to it manually from reviewed SQL only.
+            # is at a migration lineage ('conpay001') that this repo does not
+            # contain, and per the project convention (see
+            # backend/alembic/versions/s0t1u2v3w4x5_*.py) schema changes are
+            # applied to it manually from reviewed SQL only.
             # Reclaim space from old image layers.
             docker image prune -f
         env:
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{ env.DEPLOY_SHA }}
           GHCR_USER: ${{ github.repository_owner }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}

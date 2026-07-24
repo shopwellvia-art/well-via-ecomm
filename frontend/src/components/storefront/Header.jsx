@@ -23,9 +23,7 @@ import ShopMegaMenu, { ShopMobileLinks, ChevronIcon } from './ShopMegaMenu.jsx';
 const NAV = [
   { to: '/', label: 'Home', end: true },
   { to: '/products', label: 'Shop', megaMenu: true },
-  { to: '/categories', label: 'Categories' },
-  { to: '/bestsellers', label: 'Best Sellers' },
-  { to: '/new-arrivals', label: 'New Arrivals' },
+  { to: '/about', label: 'About' },
   { to: '/contact', label: 'Contact' },
 ];
 

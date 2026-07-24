@@ -70,45 +70,45 @@ export const SITE_PAGES_DEFAULTS = {
     enabled: true,
     hero: {
       eyebrow: 'Our Story',
-      title: 'We make modern essentials, thoughtfully sourced',
+      title: 'Wellness, made simple and honest',
       subtitle:
-        "Lumen began with a simple idea — beautifully made everyday products shouldn't cost the earth, or the planet.",
+        "Wellvia began with a simple belief — feeling your best shouldn't be complicated. We craft science-backed wellness essentials that fit effortlessly into everyday life.",
     },
     intro: [
-      'Founded in 2007, Lumen set out to reimagine how everyday essentials are designed, made and delivered. What started as a small team obsessing over materials is now a community of makers, designers and customers who care about quality that lasts.',
-      "Today we serve millions of customers across the country, but our promise hasn't changed: thoughtful products, honest pricing, and service from real humans who actually want to help.",
+      'Wellvia was founded to reimagine everyday wellness — nutrition and self-care that actually taste good, work as promised, and are easy to stick with. What started with a handful of thoughtfully formulated gummies is now a community that believes small daily habits create lasting change.',
+      "Today we help people across India take better care of themselves, but our promise hasn't changed: clean, effective formulas, honest labels, and support from real people who genuinely care about your wellbeing.",
     ],
     stats: [
-      { value: '10M+', label: 'Happy customers' },
-      { value: '120+', label: 'Cities served' },
+      { value: '1M+', label: 'Happy customers' },
+      { value: '50+', label: 'Wellness formulas' },
       { value: '4.8/5', label: 'Average rating' },
-      { value: '2007', label: 'Founded' },
+      { value: '100%', label: 'Clean ingredients' },
     ],
     values: [
       {
         icon: 'Heart',
         title: 'Customer obsessed',
-        text: 'Every decision starts with the people we serve. Real support, fair returns, no fine print.',
+        text: 'Every formula starts with the people we serve. Real support, easy returns, and no fine print.',
       },
       {
         icon: 'Leaf',
-        title: 'Sustainably sourced',
-        text: "We choose responsible materials and partners, and we're honest about where we can do better.",
+        title: 'Clean & natural',
+        text: "We choose clean, thoughtfully sourced ingredients — no unnecessary fillers, and we're honest about what goes in.",
       },
       {
         icon: 'ShieldCheck',
-        title: 'Built to last',
-        text: "We'd rather make fewer things well than chase fast, disposable trends.",
+        title: 'Science-backed',
+        text: 'Every product is built on real research and tested for quality and safety you can trust.',
       },
       {
         icon: 'Sparkles',
-        title: 'Thoughtful design',
-        text: 'Form and function in balance — products that feel considered in the hand and in the home.',
+        title: 'Made to enjoy',
+        text: "Wellness should feel like a treat, not a chore — delicious formats you'll actually look forward to.",
       },
     ],
     mission: {
       heading: 'Our mission',
-      body: "To make beautifully designed, responsibly made essentials accessible to everyone — and to treat every customer, maker and community we touch with genuine care.\n\nWe're building a company we'd be proud to buy from ourselves.",
+      body: "To make effective, delightful wellness accessible to everyone — and to treat every customer and community we touch with genuine care.\n\nWe're building a wellness brand we'd be proud to use ourselves, every single day.",
     },
   },
 
@@ -305,6 +305,152 @@ export const SITE_PAGES_DEFAULTS = {
       { label: 'Certificate of Incorporation', url: '' },
       { label: 'Terms of Use', url: '/terms' },
       { label: 'Privacy Policy', url: '/privacy' },
+    ],
+  },
+
+  privacy: {
+    enabled: true,
+    hero: {
+      eyebrow: 'Legal',
+      title: 'Privacy Policy',
+      subtitle:
+        'How Wellvia collects, uses, and protects the personal information you share with us.',
+    },
+    updated: 'Last updated: 11 July 2026',
+    sections: [
+      {
+        heading: 'Information we collect',
+        body: 'We collect information you provide directly — such as your name, email, phone number, shipping address, and payment details — when you create an account, place an order, or contact us. We also automatically collect limited technical data such as your device, browser, and how you use our site.',
+      },
+      {
+        heading: 'How we use your information',
+        body: 'We use your information to process and deliver orders, provide customer support, personalise your experience, send order updates, and — where you have opted in — share offers and wellness content. We never sell your personal data.',
+      },
+      {
+        heading: 'Cookies & tracking',
+        body: 'We use cookies and similar technologies to keep you signed in, remember your cart, and understand how our store is used so we can improve it. You can control cookies through your browser settings.',
+      },
+      {
+        heading: 'Sharing & disclosure',
+        body: 'We share information only with the partners who help us run our business — payment processors, logistics and delivery providers, and analytics services — and only as needed. We may also disclose information where required by law.',
+      },
+      {
+        heading: 'Data security',
+        body: 'We use industry-standard safeguards to protect your data. No method of transmission over the internet is completely secure, but we work hard to protect your information and review our practices regularly.',
+      },
+      {
+        heading: 'Your rights',
+        body: 'You may access, correct, or delete your personal information, and opt out of marketing at any time, by updating your account or contacting us at support@shopwellvia.in.',
+      },
+    ],
+  },
+
+  terms: {
+    enabled: true,
+    hero: {
+      eyebrow: 'Legal',
+      title: 'Terms & Conditions',
+      subtitle:
+        'The terms that govern your use of the Wellvia website and the purchases you make with us.',
+    },
+    updated: 'Last updated: 11 July 2026',
+    sections: [
+      {
+        heading: 'Acceptance of terms',
+        body: 'By accessing or using the Wellvia website and placing an order, you agree to be bound by these Terms & Conditions. If you do not agree, please do not use the site.',
+      },
+      {
+        heading: 'Use of the website',
+        body: 'You agree to use the site only for lawful purposes and not to misuse it, interfere with its operation, or attempt to access it in any unauthorised way. You are responsible for keeping your account credentials secure.',
+      },
+      {
+        heading: 'Products & pricing',
+        body: 'We aim to describe and price every product accurately. Colours, packaging, and availability may vary, and we reserve the right to correct errors, change prices, or update product information at any time before your order is confirmed.',
+      },
+      {
+        heading: 'Health disclaimer',
+        body: 'Wellvia products are dietary supplements and are not intended to diagnose, treat, cure, or prevent any disease. Please read the label and consult a qualified healthcare professional before use, especially if you are pregnant, nursing, or on medication.',
+      },
+      {
+        heading: 'Orders & payment',
+        body: 'All orders are subject to acceptance and availability. Payment must be completed through our approved payment methods before an order is dispatched. We may cancel any order in the event of suspected fraud or pricing errors.',
+      },
+      {
+        heading: 'Limitation of liability',
+        body: 'To the fullest extent permitted by law, Wellvia shall not be liable for any indirect or consequential loss arising from the use of our site or products beyond the value of the order in question.',
+      },
+      {
+        heading: 'Governing law',
+        body: 'These terms are governed by the laws of India, and any disputes shall be subject to the exclusive jurisdiction of the courts at our registered office location.',
+      },
+    ],
+  },
+
+  refund: {
+    enabled: true,
+    hero: {
+      eyebrow: 'Customer Care',
+      title: 'Refund & Cancellation Policy',
+      subtitle: 'How order cancellations, returns, and refunds work at Wellvia.',
+    },
+    updated: 'Last updated: 11 July 2026',
+    sections: [
+      {
+        heading: 'Order cancellation',
+        body: 'You can cancel your order any time before it is dispatched for a full refund. Once an order has shipped, it can no longer be cancelled, but you may be eligible to return it under the terms below.',
+      },
+      {
+        heading: 'Returns & eligibility',
+        body: 'As our products are consumable wellness items, returns are accepted only for products that arrive damaged, defective, expired, or incorrect. Requests must be raised within 7 days of delivery with the item unopened and in its original packaging.',
+      },
+      {
+        heading: 'Non-returnable items',
+        body: 'For hygiene and safety reasons, opened or used products, and items marked as final sale, cannot be returned unless they were received damaged or defective.',
+      },
+      {
+        heading: 'Refund process & timelines',
+        body: 'Once your return is received and inspected, we will notify you of approval. Approved refunds are processed to your original payment method within 5–7 business days.',
+      },
+      {
+        heading: 'Damaged or incorrect items',
+        body: 'If you receive a damaged, defective, or wrong item, contact us at support@shopwellvia.in within 48 hours of delivery with your order number and a photo, and we will arrange a replacement or refund at no extra cost.',
+      },
+    ],
+  },
+
+  shipping: {
+    enabled: true,
+    hero: {
+      eyebrow: 'Customer Care',
+      title: 'Shipping Policy',
+      subtitle: 'Delivery timelines, charges, and coverage for your Wellvia orders.',
+    },
+    updated: 'Last updated: 11 July 2026',
+    sections: [
+      {
+        heading: 'Order processing',
+        body: 'Orders are processed within 1–2 business days. Orders placed on weekends or public holidays are processed on the next business day. You will receive a confirmation once your order is dispatched.',
+      },
+      {
+        heading: 'Delivery timelines',
+        body: 'Once dispatched, orders are typically delivered within 3–7 business days depending on your location. Remote areas may take a little longer.',
+      },
+      {
+        heading: 'Shipping charges',
+        body: 'Shipping charges, if any, are calculated at checkout based on your order value and delivery location. Orders above the eligible value qualify for free shipping.',
+      },
+      {
+        heading: 'Order tracking',
+        body: 'As soon as your order ships, we will email you a tracking link. You can also track your order any time from the "My Orders" section of your account.',
+      },
+      {
+        heading: 'Delivery areas',
+        body: 'We currently ship across India. If we are unable to deliver to your pin code, you will be notified at checkout.',
+      },
+      {
+        heading: 'Delays',
+        body: 'Occasionally, deliveries may be delayed due to weather, logistics, or events beyond our control. We will keep you informed and do our best to get your order to you quickly.',
+      },
     ],
   },
 };

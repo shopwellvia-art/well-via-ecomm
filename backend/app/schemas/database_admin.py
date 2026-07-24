@@ -25,6 +25,9 @@ class TruncateResponse(BaseModel):
     ends_session: bool = False
     # Present only when the bootstrap admin was re-seeded (full wipe).
     reseeded_admin: str | None = None
+    # One-time random password for the re-seeded admin, returned only when no
+    # BOOTSTRAP_ADMIN_PASSWORD was configured. Shown once — not stored anywhere.
+    generated_password: str | None = None
     detail: str
 
 

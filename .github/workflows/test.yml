@@ -15,15 +15,22 @@ jobs:
   payment-tests:
     name: Payment integration tests
     runs-on: ubuntu-latest
+    # The mysql service lives in the CI-only overlay (docker-compose.ci.yml); the
+    # base compose file has no DB (production uses an external remote MySQL).
+    # COMPOSE_FILE makes every `docker compose` step below apply both files, so
+    # we don't have to repeat -f flags. The ":" separator is the Linux default.
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.ci.yml
     steps:
       - uses: actions/checkout@v4
 
       # backend/.env is gitignored; synthesize a CI one. ENVIRONMENT must NOT be
-      # "production" or the mock webhook (used by several tests) is hard-disabled.
+      # "production" or the mock webhook (used by several tests) is hard-disabled;
+      # "ci" is one of the environments the tests/conftest.py DB guard allows.
       - name: Create backend/.env for CI
         run: |
           cat > backend/.env <<'EOF'
-          ENVIRONMENT=test
+          ENVIRONMENT=ci
           DEBUG=true
           SECRET_KEY=ci-only-not-a-real-secret-rotate-me-0123456789abcdef
           ACCESS_TOKEN_EXPIRE_MINUTES=30
@@ -72,20 +79,12 @@ jobs:
       - name: Install test dependencies
         run: docker compose exec -T -u root backend pip install --no-cache-dir -r requirements-dev.txt
 
-      - name: Run payment integration tests
-        run: |
-          docker compose exec -T backend python -m pytest \
-            tests/test_payment_webhook_lifecycle.py \
-            tests/test_payment_status_polling.py \
-            tests/test_cod_and_split_checkout.py \
-            tests/test_payment_events_and_reconcile.py \
-            tests/test_payment_robustness.py \
-            tests/test_payment_methods.py \
-            tests/unit/test_payment_provider_errors.py -v
-
-      # DTDC provider tests are pure unit / httpx-mocked (no DB needed).
-      - name: Run DTDC provider unit tests
-        run: docker compose exec -T backend python -m pytest tests/test_dtdc_provider.py -v
+      # Run the FULL suite rather than a hand-maintained file list, so newly
+      # added tests are picked up automatically. tests/conftest.py hard-fails the
+      # run unless it's pointed at a throwaway local DB (ENVIRONMENT=ci +
+      # MYSQL_HOST=mysql above), so this can never touch the shared remote MySQL.
+      - name: Run test suite
+        run: docker compose exec -T backend python -m pytest tests/ -v
 
       - name: Dump backend logs on failure
         if: failure()
