@@ -18,6 +18,7 @@ import redis
 from sqlalchemy.orm import Session
 
 from app.core.config import settings as env_settings
+from app.db.redis import get_redis
 from app.models.system_setting import SystemSetting
 from app.models.user import User
 from app.repositories.system_setting_repository import SystemSettingRepository
@@ -36,9 +37,7 @@ class SettingsService:
     def __init__(self, db: Session, redis_client: Optional[redis.Redis] = None):
         self.db = db
         self.repo = SystemSettingRepository(db)
-        self.redis = redis_client or redis.Redis.from_url(
-            env_settings.REDIS_URL, decode_responses=True
-        )
+        self.redis = redis_client or get_redis()
 
     # ---- Reads ----
 

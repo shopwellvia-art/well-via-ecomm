@@ -126,6 +126,7 @@ class RazorpayProvider:
         return StatusResponse(
             merchant_transaction_id=mtid,
             status=status_,
+            provider_transaction_id=entity.get("id"),
             amount_minor=amount_minor,
             raw=payload,
         )

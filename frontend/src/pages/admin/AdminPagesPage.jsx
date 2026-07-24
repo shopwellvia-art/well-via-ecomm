@@ -625,6 +625,45 @@ function CorporateEditor({ page, set }) {
   );
 }
 
+/**
+ * Shared editor for the legal / customer-care policy pages (Privacy, Terms,
+ * Refund/Cancellation, Shipping) — a header, a "last updated" label, and a
+ * list of heading + body sections.
+ */
+function PolicyEditor({ page, set }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionCard title="Header" description="Eyebrow, title, subtitle and status.">
+        <EnabledToggle enabled={page.enabled} onChange={(v) => set('enabled', v)} />
+        <div className="mt-4">
+          <HeroEditor hero={page.hero} onChange={(v) => set('hero', v)} />
+        </div>
+        <div className="mt-4">
+          <Input
+            label="Last updated label"
+            value={page.updated ?? ''}
+            onChange={(e) => set('updated', e.target.value)}
+            placeholder="Last updated: 11 July 2026"
+            helper="Optional line shown under the title. Leave blank to hide."
+          />
+        </div>
+      </SectionCard>
+      <SectionCard title="Sections" description="Heading + body blocks shown down the page.">
+        <ObjectList
+          items={page.sections}
+          onChange={(v) => set('sections', v)}
+          fields={[
+            { key: 'heading', label: 'Heading', placeholder: 'Information we collect', full: true },
+            { key: 'body', label: 'Body', type: 'textarea', rows: 4 },
+          ]}
+          template={{ heading: '', body: '' }}
+          addLabel="Add section"
+        />
+      </SectionCard>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Page tabs
 // ---------------------------------------------------------------------------
@@ -636,6 +675,10 @@ const TABS = [
   { key: 'stories', label: 'Lumen Stories', path: '/stories', Editor: StoriesEditor },
   { key: 'press', label: 'Press', path: '/press', Editor: PressEditor },
   { key: 'corporate', label: 'Corporate Information', path: '/corporate', Editor: CorporateEditor },
+  { key: 'privacy', label: 'Privacy Policy', path: '/privacy', Editor: PolicyEditor },
+  { key: 'terms', label: 'Terms & Conditions', path: '/terms', Editor: PolicyEditor },
+  { key: 'refund', label: 'Refund & Cancellation', path: '/refund', Editor: PolicyEditor },
+  { key: 'shipping', label: 'Shipping Policy', path: '/shipping', Editor: PolicyEditor },
 ];
 
 // ---------------------------------------------------------------------------
@@ -720,7 +763,7 @@ export default function AdminPagesPage() {
   return (
     <AdminPage
       title="Company Pages"
-      description="Manage the About, Contact, Careers, Stories, Press and Corporate pages linked from the footer. Changes go live immediately after saving."
+      description="Manage the About, Contact, Careers, Stories, Press, Corporate and policy pages (Privacy, Terms, Refund & Shipping) linked from the footer. Changes go live immediately after saving."
     >
       {/* Sticky save toolbar */}
       <div className="sticky top-0 z-10 -mx-6 mb-6 flex items-center justify-between gap-4 border-b border-line-subtle bg-bg-elevated/95 px-6 py-3 backdrop-blur">

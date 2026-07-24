@@ -31,6 +31,7 @@ import redis
 from sqlalchemy.orm import Session
 
 from app.core.config import settings as env_settings
+from app.db.redis import get_redis
 from app.core.exceptions import ConflictError, ValidationError
 from app.sms import send_sms
 
@@ -68,9 +69,7 @@ def _send_window_key(user_id: int, phone: str) -> str:
 class CodOtpService:
     def __init__(self, db: Session, redis_client: Optional[redis.Redis] = None):
         self.db = db
-        self.redis = redis_client or redis.Redis.from_url(
-            env_settings.REDIS_URL, decode_responses=True
-        )
+        self.redis = redis_client or get_redis()
 
     # ---- public ------------------------------------------------------------
 

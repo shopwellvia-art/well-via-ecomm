@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_admin
 from app.core.config import settings
-from app.core.exceptions import ValidationError
+from app.core.exceptions import ForbiddenError, ValidationError
 from app.core.rate_limit import get_client_ip
 from app.models.audit import AuditEvent
 from app.models.user import User
@@ -37,6 +37,22 @@ from app.services.database_admin_service import (
 )
 
 router = APIRouter()
+
+
+def _guard_destructive() -> None:
+    """Refuse destructive maintenance in production.
+
+    This endpoint can TRUNCATE every table on the shared remote MySQL behind a
+    single admin token, so a compromised or fat-fingered superadmin session
+    could destroy all production data in one request. Reads (GET /groups) stay
+    available everywhere; only the mutating truncate/seed operations are gated.
+    Set DB_ADMIN_OPS_ENABLED=true to re-enable in a controlled environment.
+    """
+    if settings.ENVIRONMENT.lower() == "production" and not settings.DB_ADMIN_OPS_ENABLED:
+        raise ForbiddenError(
+            "Destructive database maintenance is disabled in production. "
+            "Set DB_ADMIN_OPS_ENABLED=true only for a deliberate, supervised operation."
+        )
 
 
 @router.get("/groups", response_model=DatabaseGroupsResponse)
@@ -62,6 +78,7 @@ def truncate_database(
     deleted (then the bootstrap admin is re-seeded), so their session dies and
     the client must clear local auth; scoped wipes leave the session intact.
     """
+    _guard_destructive()
     actor_email = actor.email
     actor_ip = get_client_ip(request)
 
@@ -134,6 +151,7 @@ def seed_database(
 ) -> SeedResponse:
     """Load sample/dummy data into one domain group. Additive and idempotent —
     re-running skips rows that already exist."""
+    _guard_destructive()
     group = get_group(payload.scope)
     if group is None:
         raise ValidationError(f'Unknown scope "{payload.scope}".')

@@ -7,22 +7,28 @@ Run inside the backend container:
         ecom-backend python scripts/seed.py
 """
 import os
+import secrets
 import sys
 from decimal import Decimal
 
 # Make the `app` package importable when run as a script.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app.core.config import settings  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.db.session import SessionLocal  # noqa: E402
 from app.models.customer import Customer  # noqa: E402
 from app.models.product import Category, Product  # noqa: E402
 from app.models.user import User  # noqa: E402
 
+# Admin credentials come from the environment (BOOTSTRAP_ADMIN_*), never from
+# source. With no password configured a strong random one is generated and
+# printed once below — matching the truncate/re-seed behaviour.
+_ADMIN_PW_GENERATED = not settings.BOOTSTRAP_ADMIN_PASSWORD
 ADMIN = {
-    "email": "vinay@gmail.com",
-    "full_name": "Vinay",
-    "password": "vinay@123",
+    "email": settings.BOOTSTRAP_ADMIN_EMAIL,
+    "full_name": settings.BOOTSTRAP_ADMIN_NAME,
+    "password": settings.BOOTSTRAP_ADMIN_PASSWORD or secrets.token_urlsafe(18),
 }
 
 # Fixed storefront account for local/dev testing (quick-login button on /login).
@@ -156,7 +162,12 @@ def seed() -> None:
         f"Seed complete — admin: +{created['admin']}, customer: +{created['customer']}, "
         f"categories: +{created['categories']}, products: +{created['products']}"
     )
-    print(f"Admin login: {ADMIN['email']} / {ADMIN['password']}")
+    if created["admin"] and _ADMIN_PW_GENERATED:
+        print(f"Admin login: {ADMIN['email']} / {ADMIN['password']}  (GENERATED — save it now)")
+    elif created["admin"]:
+        print(f"Admin login: {ADMIN['email']} / (from BOOTSTRAP_ADMIN_PASSWORD)")
+    else:
+        print(f"Admin login: {ADMIN['email']} / (unchanged — account already existed)")
     print(f"Customer login: {CUSTOMER['email']} / {CUSTOMER['password']}")
 
 
