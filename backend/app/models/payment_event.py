@@ -42,6 +42,7 @@ from app.models.base import Base
 class PaymentEventType:
     WEBHOOK_RECEIVED = "webhook_received"
     WEBHOOK_SIGNATURE_INVALID = "webhook_signature_invalid"
+    WEBHOOK_UNCONFIRMED = "webhook_unconfirmed"
     STATUS_POLL = "status_poll"
     STATUS_APPLIED = "status_applied"
     AMOUNT_MISMATCH = "amount_mismatch"

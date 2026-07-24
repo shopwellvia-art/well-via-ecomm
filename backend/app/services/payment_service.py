@@ -300,6 +300,50 @@ class PaymentService:
             provider_ref=result.provider_transaction_id,
         )
         order = self._order_for_mtid(result.merchant_transaction_id)
+        # A valid signature only proves the payload was authored by someone
+        # holding the webhook secret — not that money actually moved. Before
+        # settling, confirm the claimed transition with the gateway itself
+        # (same source of truth the status-poll and reconcile paths use) and
+        # apply the gateway's answer, not the payload's. The ref recorded at
+        # checkout is preferred over the payload's own, so a forged webhook
+        # cannot point the confirmation at a different transaction.
+        if result.status != PaymentStatus.PENDING and order.status == OrderStatus.PENDING:
+            provider_ref = order.payment_provider_ref or result.provider_transaction_id
+            try:
+                confirmed = provider.fetch_status(
+                    result.merchant_transaction_id, provider_ref
+                )
+            except Exception as exc:
+                # Propagate: the endpoint surfaces a 5xx, so the gateway
+                # redelivers the webhook; reconcile_pending is the backstop.
+                record_payment_event(
+                    event_type=PaymentEventType.GATEWAY_ERROR,
+                    order_id=order.id,
+                    merchant_transaction_id=result.merchant_transaction_id,
+                    gateway_code=gateway_code,
+                    provider_ref=provider_ref,
+                    message=f"webhook confirmation fetch failed: {exc}",
+                )
+                raise
+            if confirmed.status != result.status:
+                logger.warning(
+                    "webhook for order %s claimed %s but gateway reports %s — "
+                    "applying the gateway's status",
+                    order.id,
+                    result.status.value,
+                    confirmed.status.value,
+                )
+                record_payment_event(
+                    event_type=PaymentEventType.WEBHOOK_UNCONFIRMED,
+                    order_id=order.id,
+                    merchant_transaction_id=result.merchant_transaction_id,
+                    gateway_code=gateway_code,
+                    payment_status=confirmed.status.value if confirmed.status else None,
+                    provider_ref=provider_ref,
+                    message=f"payload claimed {result.status.value}, gateway reports "
+                    f"{confirmed.status.value}",
+                )
+            result = confirmed
         self._apply_status(
             order,
             result.status,
