@@ -104,6 +104,19 @@ def create_app() -> FastAPI:
         # so an orchestrator can tell "process alive" from "process wedged".
         return {"status": "ok"}
 
+    @app.get("/version", tags=["system"])
+    def version():
+        # Build provenance baked into the image at build time (backend/Dockerfile
+        # ARGs → env). Lets a deploy or operator confirm exactly which commit is
+        # live without shell access:  curl http://localhost:8090/version
+        return {
+            "service": "backend",
+            "version": settings.VERSION,
+            "revision": settings.GIT_SHA,
+            "built": settings.BUILD_TIME,
+            "environment": settings.ENVIRONMENT,
+        }
+
     @app.get("/ready", tags=["system"])
     def ready():
         # Readiness: can we actually serve a request? The likeliest production

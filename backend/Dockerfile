@@ -17,9 +17,23 @@ RUN pip install --user -r requirements.txt
 
 FROM python:3.12-slim AS runtime
 
+# Build provenance — passed by CI (.github/workflows/cicd.yml) and by the
+# emergency local build. Baked in as OCI labels (visible via `docker inspect`)
+# AND as env the app reads to serve GET /version, so the exact commit running on
+# the host is always verifiable. Defaults keep a plain `docker build` working.
+ARG GIT_SHA=unknown
+ARG BUILD_TIME=unknown
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH=/home/app/.local/bin:$PATH
+    PATH=/home/app/.local/bin:$PATH \
+    GIT_SHA=$GIT_SHA \
+    BUILD_TIME=$BUILD_TIME
+
+LABEL org.opencontainers.image.title="simple-com-backend" \
+      org.opencontainers.image.source="https://github.com/shopwellvia-art/well-via-ecomm" \
+      org.opencontainers.image.revision=$GIT_SHA \
+      org.opencontainers.image.created=$BUILD_TIME
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         default-libmysqlclient-dev curl \

@@ -209,6 +209,31 @@ bash ~/app/backend/scripts/backup_db.sh  # writes ./backups/<db>-<ts>.sql.gz
 | Backend can't reach DB | EC2 must reach your MySQL host/port; check the DB firewall/security group and `MYSQL_*` in `backend/.env`. |
 | Port 8090 unreachable | Open inbound 8090 in the EC2 security group. |
 | Deploy never runs after a push | It is gated on the **frontend** and **backend-tests** jobs passing, and only runs on the `production` branch. Check those two jobs in the **CI/CD** run. |
+| **Server shows OLD code / "my changes aren't live"** | Run `bash scripts/deployed-version.sh` on the host. It prints the git SHA baked into each running image and the live `/version` + `/version.json` stamps. If that SHA is behind your commit, the images are stale — usually because the code was **never pushed to `origin/production`** (CI only builds what's on GitHub) or a deploy was skipped. Fix: push to `origin/production` to rebuild via CI, or emergency-rebuild locally (below). |
+
+---
+
+## Emergency: rebuild on the host without CI
+
+The normal path is CI (push to `origin/production`). If you must get the host's
+current working-tree code live **right now** without a pipeline run — build the
+images locally, stamped with the same provenance CI uses, then recreate:
+
+```bash
+cd "$EC2_APP_DIR"            # the checked-out repo on the host
+SHA=$(git rev-parse HEAD)
+BT=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+docker build --build-arg GIT_SHA="$SHA" --build-arg BUILD_TIME="$BT" \
+  -t ghcr.io/shopwellvia-art/simple-com-backend:latest  ./backend
+docker build --build-arg GIT_SHA="$SHA" --build-arg BUILD_TIME="$BT" \
+  -t ghcr.io/shopwellvia-art/simple-com-frontend:latest ./frontend
+docker compose up -d          # recreates onto the new local :latest (no pull)
+bash scripts/deployed-version.sh   # confirm the baked SHA == your commit
+```
+
+> This is a stop-gap. It does NOT update GHCR or GitHub, so a later CI deploy
+> built from an older `origin/production` would overwrite it. Push your commits
+> to `origin/production` to make the fix durable and let CI take over again.
 
 ---
 

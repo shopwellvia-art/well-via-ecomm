@@ -239,6 +239,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Build provenance stamped into both images (OCI labels + /version). The
+      # deploy's verify step reads it back off the LIVE host, so a stale or
+      # skipped recreate can no longer masquerade as a green deploy.
+      - name: Compute build metadata
+        id: meta
+        run: echo "build_time=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+
       # Both images are tagged twice: :latest (what a bare `docker compose up`
       # on the host pulls) and :<sha> (so every deploy is reproducible and
       # rollback is just IMAGE_TAG=<old-sha>).
@@ -249,6 +256,9 @@ jobs:
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            BUILD_TIME=${{ steps.meta.outputs.build_time }}
           tags: |
             ${{ steps.images.outputs.backend }}:latest
             ${{ steps.images.outputs.backend }}:${{ github.sha }}
@@ -260,6 +270,9 @@ jobs:
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            BUILD_TIME=${{ steps.meta.outputs.build_time }}
           tags: |
             ${{ steps.images.outputs.frontend }}:latest
             ${{ steps.images.outputs.frontend }}:${{ github.sha }}
@@ -356,16 +369,32 @@ jobs:
               esac
             done
 
-            # And the site must actually answer through the published port.
+            # The site must actually answer through the published port.
+            ok=""
             for i in $(seq 1 12); do
               if curl -fsS -o /dev/null http://localhost:8090/; then
-                echo "Storefront is serving on :8090"; exit 0
+                ok=1; echo "Storefront is serving on :8090"; break
               fi
               echo "waiting for the storefront ($i)…"; sleep 5
             done
-            echo "FAIL: storefront did not answer on :8090"
-            docker compose logs --tail 50 frontend backend
-            exit 1
+            if [ -z "$ok" ]; then
+              echo "FAIL: storefront did not answer on :8090"
+              docker compose logs --tail 50 frontend backend
+              exit 1
+            fi
+
+            # HTTP-level proof the LIVE frontend really is the commit we just
+            # built. The image-tag check above catches a skipped recreate; this
+            # catches a stale/cached bundle actually being served to browsers.
+            ver="$(curl -fsS http://localhost:8090/version.json || true)"
+            echo "frontend /version.json -> $ver"
+            case "$ver" in
+              *"$IMAGE_TAG"*) echo "frontend build stamp matches $IMAGE_TAG" ;;
+              *) echo "FAIL: /version.json did not report $IMAGE_TAG"; exit 1 ;;
+            esac
+
+            # Backend build stamp (proxied) — confirms /version is wired end to end.
+            echo "backend  /version      -> $(curl -fsS http://localhost:8090/version || echo unreachable)"
         env:
           IMAGE_TAG: ${{ github.sha }}
           APP_DIR: ${{ secrets.EC2_APP_DIR }}

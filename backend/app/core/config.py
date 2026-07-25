@@ -16,6 +16,12 @@ class Settings(BaseSettings):
 
     PROJECT_NAME: str = "Ecommerce API"
     VERSION: str = "0.1.0"
+
+    # Build provenance baked into the image at build time (backend/Dockerfile).
+    # Surfaced at GET /version so the exact deployed commit is verifiable over
+    # HTTP. Default "unknown" for local/dev runs built without the build-args.
+    GIT_SHA: str = "unknown"
+    BUILD_TIME: str = "unknown"
     API_V1_PREFIX: str = "/api/v1"
     ENVIRONMENT: str = Field(default="development")
     DEBUG: bool = False
