@@ -19,7 +19,8 @@ shop with a rich feature set: catalog, cart, checkout, payments (PhonePe + COD),
 ├── scripts/          check_db.py (DB connectivity smoke test)
 ├── xyz/              design/research screenshots (shopflow refs) — not code
 ├── _t-*.{jpg,png,…}  image-upload test fixtures (small/big/bad-format)
-└── docker-compose*.yml
+├── docker-compose.yml       PRODUCTION stack — the only compose file
+└── .github/workflows/cicd.yml   the only CI/CD pipeline
 ```
 
 ## 2. Tech stack
@@ -96,25 +97,25 @@ Admin routes under `/admin/*` gated by permissions.
 
 ## 5. Infra & running it
 
-`docker-compose.yml` services: **mysql** (8.4), **redis** (7), **backend** (8000), **frontend**
-(5173→80), **nginx** (80, reverse proxy: `/api`,`/docs`→backend, `/`→frontend, 20MB upload cap).
-Health-aware deps: backend waits for healthy mysql+redis.
+There is exactly **one compose file** — `docker-compose.yml`, the **production**
+stack that runs on the EC2. Services: **redis** (7), **backend** (prebuilt GHCR
+image, 4 uvicorn workers, `expose: 8000`, no public port), **frontend** (prebuilt
+GHCR image bundling nginx — reverse proxies `/api`,`/media`,`/docs`→backend,
+`/`→SPA, 20MB upload cap, published on host `:8090`) and the
+**payment-reconcile-cron** sidecar. MySQL is **external** (shared remote), so
+there is no mysql service. All services are `restart: always` with log rotation
+and memory caps; frontend and the cron sidecar wait on the backend's healthcheck.
 
-- Dev overlay `docker-compose.dev.yml`: frontend → node:20 Vite dev server w/ HMR, nginx `dev.conf`.
-- Prod overlay `docker-compose.prod.yml`: 4 uvicorn workers, `restart: always`, internal-only db/redis.
-
+Local dev runs **natively**, not in compose (see `README.md`):
 ```bash
-cp .env.example .env
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
-docker compose up --build           # app → http://localhost
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up   # dev w/ HMR
+cd backend  && pip install -r requirements-dev.txt && uvicorn app.main:app --reload
+cd frontend && npm ci && npm run dev        # :5173, proxies /api → :8000
 ```
-First migration:
+First migration (against a LOCAL throwaway DB only — never the shared remote one):
 ```bash
-docker compose exec backend alembic upgrade head
+cd backend && alembic upgrade head
 ```
-Tests: `docker compose exec backend pytest` · `docker compose exec frontend npm test`.
+Tests: `cd backend && python -m pytest tests/ -v` · `cd frontend && npm test -- --run`.
 Backend E2E scripts live in `backend/scripts/test_*_e2e.py`; frontend Playwright `verify-*.mjs`.
 
 ## 6. Config / env keys (values redacted)

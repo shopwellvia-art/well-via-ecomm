@@ -2,9 +2,9 @@
 #
 # These are intentionally NOT in requirements.txt — the production image stays
 # lean and never ships a test runner. CI installs this file into the already-
-# built backend container (see .github/workflows/test.yml), and locally you can
-# run `pip install -r requirements-dev.txt` inside the backend container the
-# same way.
+# CI installs this file on the runner (see the `backend-tests` job in
+# .github/workflows/cicd.yml), and locally you install it into your venv:
+#   cd backend && pip install -r requirements-dev.txt
 -r requirements.txt
 
 pytest==8.3.4

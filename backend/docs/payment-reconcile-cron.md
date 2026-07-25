@@ -46,8 +46,9 @@ remain PENDING and will be retried on the next tick.
 
 Payment settlement is time-sensitive: a customer whose payment succeeded at the
 gateway but whose webhook was dropped should not wait hours to see their order
-confirmed. Run the sweep every **10 minutes**. Drop this into your
-`docker-compose.prod.yml`:
+confirmed. Run the sweep every **10 minutes**. This is already wired up as the
+`payment-reconcile-cron` service in `docker-compose.yml` (the production stack);
+the sketch below shows the shape if you need to adapt it:
 
 ```yaml
 payment-reconcile-cron:

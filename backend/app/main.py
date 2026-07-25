@@ -76,8 +76,8 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(RequestIDMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
-    # NOTE: API-response gzip is done at nginx (docker/nginx/default.conf and
-    # frontend/nginx.conf), which correctly restricts it to text types. An
+    # NOTE: API-response gzip is done at nginx (frontend/nginx.conf, baked into
+    # the frontend image), which correctly restricts it to text types. An
     # app-level GZipMiddleware here would also wrap the /media StaticFiles mount,
     # wastefully re-compressing image originals and breaking HTTP Range/206
     # requests — so compression is intentionally left to the proxy tier.

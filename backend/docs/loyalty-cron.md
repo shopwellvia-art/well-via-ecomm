@@ -26,8 +26,9 @@ Returns:
 
 ## Wiring it from docker-compose
 
-Add a tiny sidecar that calls the endpoint at 3 AM daily. Drop this into your
-`docker-compose.prod.yml`:
+Add a tiny sidecar that calls the endpoint at 3 AM daily. Drop this into
+`docker-compose.yml` (the production stack), alongside the existing
+`payment-reconcile-cron` service:
 
 ```yaml
 loyalty-cron:

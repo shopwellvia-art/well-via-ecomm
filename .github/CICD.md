@@ -5,8 +5,9 @@ and Continuous Deployment (CD) work in this repository, using **GitHub Actions**
 
 > **TL;DR**
 > - Push code → GitHub automatically **checks** it (CI).
-> - Push to the **`production`** branch → GitHub automatically **deploys** it to the EC2 server (CD).
-> - All the recipes live in `.github/workflows/*.yml`.
+> - Push to the **`production`** branch → if the checks pass, GitHub automatically **deploys** it to the EC2 server (CD).
+> - There is exactly **one** recipe: `.github/workflows/cicd.yml`.
+> - There is exactly **one** compose file: `docker-compose.yml` (production).
 
 ---
 
@@ -14,7 +15,7 @@ and Continuous Deployment (CD) work in this repository, using **GitHub Actions**
 
 1. [What is CI/CD?](#1-what-is-cicd)
 2. [The big picture (how a change reaches the live site)](#2-the-big-picture)
-3. [The three workflows in this repo](#3-the-three-workflows-in-this-repo)
+3. [The one workflow in this repo](#3-the-one-workflow-in-this-repo)
 4. [Anatomy of a workflow file (YAML reference)](#4-anatomy-of-a-workflow-file)
 5. [Secrets — the passwords the pipeline needs](#5-secrets)
 6. [⚠️ The #1 gotcha: workflows run from their own branch](#6-the-1-gotcha)
@@ -45,25 +46,29 @@ GitHub's own computers (called **runners**) — you don't need your own server f
 Here is the journey of one code change, from your laptop to real users:
 
 ```
-  You edit code
+  You edit code on a working branch (e.g. vinay)
         │
-        │  git push  (to your working branch, e.g. vinay)
-        ▼
- ┌─────────────────────────────────────────────┐
- │  CI runs automatically:                      │
- │    • ci.yml   → frontend build + py compile  │
- │    • test.yml → backend integration tests    │
- └─────────────────────────────────────────────┘
+        │  Nothing automatic happens here — the pipeline is
+        │  production-only. Run the checks yourself (§9).
         │
-        │  Open a Pull Request → review → merge into `production`
+        │  git merge / PR-merge into `production`, then push
         ▼
- ┌─────────────────────────────────────────────┐
- │  Push to `production` triggers CD (deploy.yml):│
- │    1. Build frontend + backend Docker images │
- │    2. Push images to GHCR (image registry)   │
- │    3. SSH into EC2 → pull images → restart    │
- │    4. Run DB migrations (alembic upgrade)     │
- └─────────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────┐
+ │  A push to `production` runs cicd.yml end to end. │
+ │  First the quality gate:                          │
+ │    • frontend      → npm ci, lint, build, vitest  │
+ │    • backend-tests → mysql+redis, alembic, pytest │
+ └──────────────────────────────────────────────────┘
+        │
+        │  ONLY if both are green:
+        ▼
+ ┌──────────────────────────────────────────────────┐
+ │    1. Build frontend + backend Docker images      │
+ │    2. Push images to GHCR (image registry)        │
+ │    3. SSH into EC2 → pull → recreate containers   │
+ │    4. Verify both run the new SHA + site answers  │
+ │       (NO DB migrations — see DEPLOY.md §6)       │
+ └──────────────────────────────────────────────────┘
         │
         ▼
    🌐 Live site updated
@@ -73,48 +78,82 @@ Here is the journey of one code change, from your laptop to real users:
 
 | Branch | Role | What happens on push |
 |--------|------|----------------------|
-| `vinay` | a developer's working branch | CI runs (`ci.yml` + `test.yml`). No deploy. |
-| `production` | the release branch | CI runs **and** CD deploys to EC2. |
-| `main`, `kavya`, `Zorven` | other branches | `test.yml` runs (it runs on every push). |
+| `production` | the release branch | The **whole** pipeline runs: tests → build → deploy to EC2. |
+| `vinay`, `main`, anything else | working branches | **Nothing.** No CI, no deploy. |
+
+> The pipeline is deliberately **`production`-only** (`on.push.branches:
+> [production]`, no `pull_request` trigger). A merge into `production` *is* a
+> push, so merging is all it takes to ship. Before you merge, run the same
+> checks locally — see [section 9](#9-running-the-same-checks-locally).
 
 ---
 
-## 3. The three workflows in this repo
+## 3. The one workflow in this repo
 
-All three live in `.github/workflows/`.
+Everything lives in a single file: **`.github/workflows/cicd.yml`**. It has four
+jobs, all of which only ever run for `production`. The first two are the quality
+gate; the last two are the delivery half and run **only if the first two pass**.
 
-### 3.1 `ci.yml` — fast "does it still build?" check
+### 3.1 `frontend` — build & test the SPA
 
-- **When:** push to `vinay`, `main`, `production`, or **any** Pull Request.
-- **What:** two jobs run in parallel on fresh Ubuntu machines:
-  - **`frontend`** — install Node 20, `npm ci`, then `npm run build` (the real gate). Lint and unit tests are included but **non-blocking** for now (see notes in the file).
-  - **`backend`** — `python -m compileall backend/app` — fails only if a Python file has a syntax error. It needs **no** database, so it finishes in seconds.
-- **Deploys?** No. It never touches a server. Safe to run anywhere.
-
-### 3.2 `test.yml` — heavy backend integration tests
-
-- **When:** **every** push (no branch filter) + manual run.
-- **What:** brings up a real stack with `docker compose` (MySQL + Redis + backend),
-  applies Alembic migrations, then runs the **payment** integration test suite and
-  the DTDC provider unit tests. Tears everything down at the end.
-- **Why compose (not bare pytest)?** These are *integration* tests that talk to a
-  live DB via `SessionLocal` and the FastAPI `TestClient`, so they need the real
-  services running.
+- **When:** push/merge to `production`, or a manual run on `production`.
+- **What:** Node 20 → `npm ci` → `npm run lint` → `npm run build` → `vitest`.
+- The **build** is the real gate. Lint is **non-blocking** because ESLint v9 needs
+  a flat `eslint.config.js` this repo does not have yet; remove the
+  `continue-on-error` once that lands.
 - **Deploys?** No.
 
-### 3.3 `deploy.yml` — the CD pipeline (build + deploy)
+### 3.2 `backend-tests` — the integration suite
 
-- **When:** push to **`production`** + manual run.
-- **What:** two jobs, run one after the other (`deploy` `needs: build-and-push`):
-  1. **`build-and-push`** — builds the frontend and backend Docker images and
-     pushes them to **GHCR** (GitHub Container Registry) tagged with both `latest`
-     and the exact git commit SHA. Uses build cache to stay fast.
-     - Images: `ghcr.io/<owner>/simple-com-backend` and `.../simple-com-frontend`
-  2. **`deploy`** — copies `docker-compose.deploy.yml` to the EC2 host, then SSHes
-     in and runs: `docker compose pull` → `up -d` → `alembic upgrade head` →
-     `docker image prune -f`.
-- **Deploys?** **Yes — to the live EC2 server.** This is the only workflow that
-  changes production.
+- **When:** same triggers as `frontend`; the two run in parallel.
+- **What:** GitHub spins up **`services:` containers** for MySQL 8 and Redis 7,
+  then on the runner itself: `pip install -r requirements-dev.txt` → wait for
+  MySQL → write a CI `backend/.env` → `alembic upgrade head` → `pytest tests/ -v`.
+- **Why `services:` and not compose?** These *are* integration tests (live DB via
+  `SessionLocal` + FastAPI `TestClient`), so they need real services — but GitHub
+  can supply those directly. That is what lets this repo keep **one** compose file
+  reserved purely for production.
+- The DB here is a **throwaway container** destroyed with the runner.
+  `backend/tests/conftest.py` aborts the whole session if it is ever pointed at a
+  non-local host or a production `ENVIRONMENT`, so it cannot touch the shared
+  remote MySQL.
+- **Deploys?** No.
+
+### 3.3 `build-and-push` — build images, push to GHCR
+
+- **When:** `needs: [frontend, backend-tests]` **and**
+  `github.ref == 'refs/heads/production'`. (The workflow only triggers on
+  `production` anyway; the `if:` also blocks a manual run launched from some
+  other branch in the Actions UI.)
+- **What:** builds both Docker images and pushes them to **GHCR** tagged with both
+  `latest` and the exact git commit SHA, using a GitHub Actions build cache.
+  - Images: `ghcr.io/<owner>/simple-com-backend` and `.../simple-com-frontend`
+- **Deploys?** Not yet — it only publishes images.
+
+### 3.4 `deploy` — restart the containers on the new code
+
+- **When:** `needs: build-and-push`.
+- **What:** copies `docker-compose.yml` to the EC2 host, then SSHes in and:
+  1. `docker login ghcr.io`
+  2. writes `IMAGE_TAG=<sha>` into the compose project's root `.env`, so the tag
+     is pinned for later manual `docker compose` calls on the host too
+  3. `docker compose pull` — fetches the new backend + frontend images
+  4. `docker compose up -d --remove-orphans` — **this is the restart.** Because
+     `IMAGE_TAG` changed, the backend and frontend image references no longer
+     match what is running, so compose stops those two containers and starts
+     fresh ones on the new code. `redis` keeps the same image, so it is left
+     running and its volume is untouched.
+  5. `docker image prune -f` — reclaims disk from the superseded layers
+- Then a separate **verify** step re-SSHes and asserts the deploy really landed:
+  every app container must report `:<sha>` as its image, and
+  `curl http://localhost:8090/` must answer (retried for a minute). If either
+  check fails the job goes **red** and dumps the last 50 log lines — so a
+  silently-skipped recreate can't masquerade as a successful deploy.
+- **No `alembic upgrade head`.** The shared remote MySQL is on a migration lineage
+  this repo does not contain; schema changes are applied manually from reviewed
+  SQL. See `DEPLOY.md` §6.
+- **Deploys?** **Yes — to the live EC2 server.** This is the only job that changes
+  production.
 
 ---
 
@@ -180,7 +219,7 @@ jobs:                           # the work; jobs run in PARALLEL by default
 **GitHub → repo → Settings → Secrets and variables → Actions → "New repository secret"**,
 and the workflow reads them with `${{ secrets.NAME }}`.
 
-### Secrets used by `deploy.yml`
+### Secrets used by the `deploy` job
 
 | Secret | What it is | Example / where to get it |
 |--------|-----------|---------------------------|
@@ -194,7 +233,8 @@ and the workflow reads them with `${{ secrets.NAME }}`.
 > provided **automatically** by GitHub — you do **not** create it. It only needs
 > `packages: write` permission, which the job already declares.
 
-`ci.yml` and `test.yml` need **no secrets** — that's why they're a safe place to start.
+The `frontend` and `backend-tests` jobs need **no secrets** — that's why they're a
+safe place to start.
 
 ### How to add a secret (click-by-click)
 
@@ -213,15 +253,16 @@ and the workflow reads them with `${{ secrets.NAME }}`.
 
 Consequences:
 
-- Editing `deploy.yml` on `vinay` does **nothing** for production until that file
+- Editing `cicd.yml` on `vinay` does **nothing** for production until that file
   is **merged into `production`**.
-- The moment the updated `deploy.yml` (with `branches: [production]`) lands on
-  `production`, the **next push to `production` deploys to the live server**.
+- The moment the updated `cicd.yml` lands on `production`, the **next push to
+  `production` deploys to the live server** (assuming CI is green).
 - If you change a trigger, always ask: *"Is this file on the branch that will
   actually fire it?"*
 
-For **`pull_request`**, GitHub uses the workflow from the PR's **base** branch —
-another reason to keep workflow files consistent across branches.
+Because this pipeline is `production`-only, the gotcha is narrower than usual:
+the only copy of `cicd.yml` that ever runs is the one **on `production`**. Edits
+made anywhere else are inert until they are merged in.
 
 ---
 
@@ -229,32 +270,40 @@ another reason to keep workflow files consistent across branches.
 
 **Prerequisites (do these once):**
 
-1. All five `deploy.yml` secrets from [section 5](#5-secrets) are set.
-2. On the EC2 host, `EC2_APP_DIR` exists and Docker + Docker Compose are installed.
-3. The updated workflow files exist **on the `production` branch** (the gotcha).
+1. All five deploy secrets from [section 5](#5-secrets) are set.
+2. On the EC2 host, `EC2_APP_DIR` exists, holds a filled-in `backend/.env`, and
+   Docker + Docker Compose are installed.
+3. The updated `cicd.yml` exists **on the `production` branch** (the gotcha).
 
 **To release (every time):**
 
 ```bash
-# 1. Make sure your changes are on your working branch and CI is green.
+# 1. Run the checks locally first (see §9) — the pipeline does NOT run on
+#    working branches, so this is your only pre-merge signal.
 git checkout vinay
-git push origin vinay            # CI runs; confirm green tick in Actions tab
+git push origin vinay            # no CI fires; this is just backup/sharing
 
-# 2. Move the reviewed changes onto production.
+# 2. Merge the reviewed changes into production and push.
 git checkout production
 git merge --ff-only vinay        # or open & merge a Pull Request on GitHub
-git push origin production       # ← THIS push triggers deploy.yml (goes live)
+git push origin production       # ← THIS is the deploy trigger
 
 # 3. Back to work.
 git checkout vinay
 ```
 
-Then open **Actions → "Build & Deploy to EC2"** and watch the two jobs. If the
+A **merge is just a push**, so merging a PR into `production` on GitHub triggers
+the exact same pipeline — you don't have to push from the terminal.
+
+Then open **Actions → "CI/CD"** and watch the four jobs. `build-and-push` and
+`deploy` only start once `frontend` and `backend-tests` are both green. If the
 `deploy` job is green, the live site is updated. If it's red, see
 [Troubleshooting](#10-troubleshooting).
 
-> You can also deploy the current `production` code **without a new commit** via
-> **Actions → Build & Deploy to EC2 → Run workflow** (that's what `workflow_dispatch` enables).
+> You can also redeploy the current `production` code **without a new commit** via
+> **Actions → CI/CD → Run workflow** (that's what `workflow_dispatch` enables) —
+> pick the `production` branch. The test gate still applies: a manual run does
+> **not** bypass it.
 
 ---
 
@@ -263,15 +312,22 @@ Then open **Actions → "Build & Deploy to EC2"** and watch the two jobs. If the
 If you ever start a fresh repo, this is the whole process:
 
 1. **Create the folder:** `.github/workflows/` at the repo root.
-2. **Add a CI file**, e.g. `ci.yml`, with:
+2. **Add one workflow file**, e.g. `cicd.yml`, with:
    - an `on:` trigger (`push` + `pull_request`),
    - a job that checks out code, sets up the language, installs deps, and builds/tests.
 3. **Commit and push.** GitHub auto-detects the file — no "enable" button needed.
 4. **Watch it** under the **Actions** tab.
-5. **Add a deploy file** (`deploy.yml`) only when you have a server to deploy to,
-   and store server credentials as **Secrets**.
+5. **Add the deploy jobs to the same file** once you have a server to deploy to.
+   Gate them with `needs:` (so they wait for the checks) and an `if:` on the
+   release branch, and store server credentials as **Secrets**.
 6. **Protect the release branch** (optional but recommended):
    Settings → Branches → add a rule on `production` requiring CI to pass before merge.
+
+> **Why one file rather than several?** Splitting CI and CD across workflows means
+> the deploy has no direct way to depend on the tests — you end up reaching for
+> `workflow_run`, which is easy to get subtly wrong (this repo's old `deploy.yml`
+> claimed to be test-gated but wasn't). Jobs in a *single* workflow can just say
+> `needs:`, which is unambiguous and visible in one graph.
 
 A minimal starter CI (any Node project):
 
@@ -300,7 +356,7 @@ jobs:
 Run the exact commands the pipeline runs, **before** you push — it's faster than
 waiting for the runner.
 
-**Frontend (mirrors `ci.yml`):**
+**Frontend (mirrors the `frontend` job):**
 ```bash
 cd frontend
 npm ci
@@ -309,19 +365,26 @@ npm run lint           # optional (needs an ESLint v9 config to pass)
 npm test -- --run --passWithNoTests
 ```
 
-**Backend syntax check (mirrors `ci.yml`):**
+**Backend integration tests (mirrors the `backend-tests` job):**
 ```bash
-python -m compileall backend/app
-```
+# 1. Throwaway services, same images/credentials the CI job uses.
+docker run -d --name ci-mysql -p 3306:3306 \
+  -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=ecommerce \
+  -e MYSQL_USER=ecom -e MYSQL_PASSWORD=ecom_password mysql:8
+docker run -d --name ci-redis -p 6379:6379 redis:7-alpine
 
-**Backend integration tests (mirrors `test.yml`):**
-```bash
-# from repo root — needs Docker running
-docker compose up -d --build mysql redis backend
-docker compose exec -T backend alembic upgrade head
-docker compose exec -T -u root backend pip install --no-cache-dir -r requirements-dev.txt
-docker compose exec -T backend python -m pytest -v
-docker compose down -v   # clean up
+# 2. Point backend/.env at them — NEVER at the shared remote MySQL.
+#    (conftest.py aborts the run if you do.) Use MYSQL_HOST=127.0.0.1,
+#    REDIS_URL=redis://127.0.0.1:6379/0, ENVIRONMENT=ci.
+
+# 3. Run it.
+cd backend
+pip install -r requirements-dev.txt
+alembic upgrade head
+python -m pytest tests/ -v
+
+# 4. Clean up.
+docker rm -f ci-mysql ci-redis
 ```
 
 ---
@@ -330,14 +393,18 @@ docker compose down -v   # clean up
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| CI never starts after a push | Branch not in `ci.yml`'s `on.push.branches`, or the file isn't on that branch | Add the branch to `ci.yml`; ensure the file is committed on that branch. |
-| Frontend job red at "Build the app" | Real build error (bad import, syntax) | Reproduce with `npm run build` locally; fix the error. |
+| Nothing runs after a push | You pushed to a branch other than `production` | Expected — the pipeline is `production`-only by design. Run the checks locally (§9), then merge. |
+| Nothing runs after a push **to `production`** | The `cicd.yml` on `production` is an older copy without the `production` trigger | Merge the current `cicd.yml` into `production`. |
+| Frontend job red at "Build" | Real build error (bad import, syntax) | Reproduce with `npm run build` locally; fix the error. |
 | Lint step red | ESLint v9 needs a flat `eslint.config.js` | It's currently `continue-on-error` (non-blocking). Add the config to make it a real gate. |
-| `test.yml` red at "Wait for MySQL" | DB container didn't become healthy | Check `docker compose logs mysql`; the workflow dumps logs on failure. |
+| `backend-tests` red at "Wait for MySQL to accept connections" | The MySQL service container never came up | Open the job's **Set up job** log → the mysql service section; usually a bad `services:` env or an image pull failure. |
+| `backend-tests` red at "Apply migrations" | Migration error against a clean DB | Reproduce locally with the throwaway container in section 9. |
+| `build-and-push`/`deploy` skipped | Not on `production`, or a quality job failed | Both are gated on `needs: [frontend, backend-tests]` **and** `github.ref == 'refs/heads/production'`. Fix the red job or push to `production`. |
 | Deploy red at "Copy compose file"/SSH step | Missing/wrong secret (`EC2_HOST`, `SSH_PRIVATE_KEY`, …) | Re-check the 5 secrets in section 5; confirm the key can SSH manually. |
 | Deploy red at "Pull images" | EC2 can't authenticate to GHCR | `GHCR_PAT` invalid or lacks `read:packages`; regenerate it. |
-| Pushed to `production` but nothing deployed | `deploy.yml` on `production` still triggers on `main` (the gotcha) | Merge the updated `deploy.yml` into `production`. |
-| Deploy succeeds but site unchanged | Browser/CDN cache, or migrations pending | Hard refresh; check `alembic upgrade head` output in the deploy log. |
+| Pushed to `production` but nothing deployed | The `cicd.yml` on `production` is an older copy (the gotcha) | Merge the updated `cicd.yml` into `production`. |
+| Deploy red at "Verify the new code is live" | Containers didn't come back on the new SHA, or the site didn't answer on `:8090` | The step prints each container's actual image and dumps 50 log lines. Usually a crash-looping backend (bad `backend/.env`) or an unreachable DB. |
+| Deploy succeeds but site unchanged | Browser cache — the verify step already proved the new SHA is running | Hard refresh (Ctrl/Cmd-Shift-R). Note the pipeline runs **no** migrations — pending schema changes are applied manually (`DEPLOY.md` §6). |
 
 **Where to read logs:** repo → **Actions** tab → click the run → click a job →
 expand any step to see its full output. Failed steps are marked red ❌.
@@ -360,5 +427,6 @@ expand any step to see its full output. Failed steps are marked red ❌.
 
 ---
 
-*Files referenced:* `.github/workflows/ci.yml`, `.github/workflows/test.yml`,
-`.github/workflows/deploy.yml`, `docker-compose.deploy.yml`.
+*Files referenced:* `.github/workflows/cicd.yml` (the only workflow),
+`docker-compose.yml` (the only compose file, production). For host setup,
+secrets, rollback and migrations, see `DEPLOY.md`.

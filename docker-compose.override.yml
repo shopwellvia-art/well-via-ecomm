@@ -1,5 +1,0 @@
-services:
-  frontend:
-    # Replace (not append to) the base ports list so the conflicting 5173 is dropped.
-    ports: !override
-      - "5174:80"

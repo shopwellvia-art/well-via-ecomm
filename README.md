@@ -14,43 +14,57 @@ Production-ready ecommerce starter: FastAPI + React + MySQL + Redis, orchestrate
 
 ```
 .
-├── backend/         FastAPI service (clean architecture: api → service → repo → model)
-├── frontend/        React SPA (feature-sliced)
-├── docker/          Shared Docker assets (nginx, mysql init)
-├── docker-compose.yml
-├── docker-compose.prod.yml
-└── .env.example
+├── backend/            FastAPI service (clean architecture: api → service → repo → model)
+├── frontend/           React SPA (feature-sliced); its image bundles nginx
+├── loadtest/           Isolated k6 load-test stack (own compose file)
+├── docker-compose.yml  PRODUCTION stack — the only compose file
+└── .github/workflows/cicd.yml   The only CI/CD pipeline
 ```
 
-## Quick start
+`docker-compose.yml` is **production only** (it pulls prebuilt GHCR images and
+talks to the external MySQL). Do not run it locally — see below.
+
+## Local development
+
+Run the two services natively; there is no local Docker stack.
 
 ```bash
-cp .env.example .env
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
+# --- backend (needs a MySQL + Redis you can reach) ---
+cd backend
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+cp .env.example .env          # point MYSQL_* at a LOCAL throwaway DB
+alembic upgrade head
+uvicorn app.main:app --reload --port 8000
 
-docker compose up --build
+# --- frontend ---
+cd frontend
+npm ci
+npm run dev                   # http://localhost:5173, proxies /api → :8000
 ```
 
-Then:
-
-- App:        http://localhost (via nginx)
-- API docs:   http://localhost/docs
-- Frontend:   http://localhost:5173
-- Backend:    http://localhost:8000
-
-## First-time DB migration
+Need throwaway MySQL/Redis containers? Run them directly:
 
 ```bash
-docker compose exec backend alembic revision --autogenerate -m "init"
-docker compose exec backend alembic upgrade head
+docker run -d --name dev-mysql -p 3306:3306 \
+  -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=ecommerce \
+  -e MYSQL_USER=ecom -e MYSQL_PASSWORD=ecom_password mysql:8
+docker run -d --name dev-redis -p 6379:6379 redis:7-alpine
+```
+
+> Never point local work or tests at the shared remote MySQL.
+> `backend/tests/conftest.py` aborts the run if you do.
+
+## Tests
+
+```bash
+cd backend && python -m pytest tests/ -v     # needs the throwaway DB above
+cd frontend && npm test -- --run
 ```
 
 ## Production
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-```
+Deployment is automated — push to the `production` branch. See **DEPLOY.md**.
 
 ## Architecture
 

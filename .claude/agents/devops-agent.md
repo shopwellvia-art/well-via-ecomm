@@ -13,38 +13,43 @@ Specialist for containerization, orchestration, and deployment.
 
 OWNS:
 - `backend/Dockerfile`, `frontend/Dockerfile`, `.dockerignore` files
-- `docker-compose.yml`, `docker-compose.prod.yml`
-- `docker/nginx/`, `docker/mysql/`
+- `docker-compose.yml` (production stack — the ONLY compose file)
 - `frontend/nginx.conf`
 - `.env.example` files and environment configuration
-- CI/CD workflows (`.github/workflows/`)
+- `.github/workflows/cicd.yml` (the ONLY workflow)
 
 ## Conventions
 
+- **One compose file, one workflow.** Do not add `docker-compose.<anything>.yml`
+  or a second workflow — consolidate into the existing ones instead.
+- `docker-compose.yml` is **production only**: it pulls prebuilt GHCR images
+  (`ghcr.io/shopwellvia-art/simple-com-{backend,frontend}:${IMAGE_TAG:-latest}`),
+  never builds. `restart: always`, log rotation and `mem_limit` on every service.
+- It has **no top-level `name:`** on purpose — the compose project name must stay
+  the EC2 directory basename or the running stack's named volumes are orphaned.
+- MySQL is **external** (shared remote); there is no mysql service and the
+  pipeline never runs `alembic upgrade head` against it. See `DEPLOY.md` §6.
+- Local dev runs natively (uvicorn + vite), not in compose. CI gets its
+  throwaway MySQL/Redis from GitHub Actions `services:` containers.
 - Dockerfiles are multi-stage: a `builder` stage and a slim `runtime` stage.
 - Containers run as a non-root user; include a `HEALTHCHECK`.
-- `docker-compose.yml` is for local dev (hot reload, exposed ports, local
-  mysql + redis). `docker-compose.prod.yml` overlays prod settings
-  (no bind mounts, sealed ports, 4 workers, `restart: always`).
-- Per-service env lives in `backend/.env` and `frontend/.env`; compose-level
-  env in the root `.env`. All are gitignored — only `.env.example` is tracked.
-- nginx (`docker/nginx/default.conf`) is the single public entrypoint:
-  `/api → backend:8000`, `/ → frontend:80`.
+- Per-service env lives in `backend/.env` and `frontend/.env`, gitignored —
+  only `.env.example` is tracked.
+- `frontend/nginx.conf` (baked into the frontend image) is the single public
+  entrypoint: `/api`,`/media`,`/docs → backend:8000`, `/ → the SPA`.
 
 ## Common commands
 
-```powershell
-# Build backend image
+```bash
+# Build backend image locally
 docker build -t ecom-backend ./backend
 
-# One-shot run (e.g. migrations) against remote DB
-docker run --rm --env-file ./backend/.env -v ${PWD}/backend:/app -w /app ecom-backend alembic upgrade head
+# Validate the production compose file without a daemon
+docker compose config
 
-# Dev stack (skip local mysql when using a remote DB)
-docker compose up --build backend redis frontend nginx
-
-# Production
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# On the EC2: deploy / roll back
+docker compose pull && docker compose up -d
+IMAGE_TAG=<git-sha> docker compose up -d      # rollback to a specific build
 ```
 
 ## Recipe
