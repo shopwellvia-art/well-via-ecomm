@@ -6,12 +6,18 @@ Covers the following scenarios from the payment test matrix:
   3_duplicate_webhook – duplicate success settle is idempotent (one loyalty row, one coupon-usage, one notification)
   4_wrong_amount      – SUCCESS settle with mismatched gateway amount leaves order PENDING
   5_invalid_signature – webhook POST with bad signature returns 403 (razorpay)
+  6_gateway_confirm   – a validly-signed webhook settles only when the gateway
+                        itself confirms the transition via fetch_status; an
+                        unconfirmed claim leaves the order PENDING and records
+                        a webhook_unconfirmed audit event
 
 Run inside the backend container:
     docker compose exec -T backend pytest tests/test_payment_webhook_lifecycle.py -v
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import uuid
 from decimal import Decimal
@@ -20,17 +26,18 @@ from unittest.mock import patch
 import pytest
 import redis
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.session import SessionLocal
-from app.integrations.payments.base import PaymentStatus
+from app.integrations.payments.base import PaymentStatus, StatusResponse
 from app.main import app
 from app.models.coupon import DiscountType
 from app.models.loyalty import PointsReason
 from app.models.order import Order, OrderStatus
+from app.models.payment_event import PaymentEvent, PaymentEventType
 from app.models.product import Product
 from app.models.user import User
 from app.repositories.coupon_repository import CouponUsageRepository
@@ -551,3 +558,246 @@ class TestInvalidSignature:
                 _reset_razorpay(db2)
             finally:
                 db2.close()
+
+
+# ---------------------------------------------------------------------------
+# Scenario 6: gateway confirmation — signed webhook alone must not settle
+# ---------------------------------------------------------------------------
+
+_WHSEC = "whsec_test"
+
+
+def _signed_paid_webhook(mtid: str, provider_ref: str, amount_minor: int) -> tuple[bytes, str]:
+    """Build a payment_link.paid body and its valid HMAC signature."""
+    body = json.dumps(
+        {
+            "event": "payment_link.paid",
+            "payload": {
+                "payment_link": {
+                    "entity": {
+                        "id": provider_ref,
+                        "reference_id": mtid,
+                        "status": "paid",
+                        "amount": amount_minor,
+                        "amount_paid": amount_minor,
+                        "currency": "INR",
+                    }
+                }
+            },
+        }
+    ).encode()
+    signature = hmac.new(_WHSEC.encode(), body, hashlib.sha256).hexdigest()
+    return body, signature
+
+
+class TestGatewayConfirmation:
+    """6_gateway_confirm: handle_webhook must confirm the claimed transition
+    with the gateway (fetch_status) before applying it. A validly-signed
+    'paid' webhook that the gateway does not corroborate leaves the order
+    PENDING; one the gateway confirms settles normally."""
+
+    PROVIDER_REF = "plink_TESTCONF1"
+
+    def _pending_razorpay_order(
+        self,
+        db: Session,
+        user_ids: list[int],
+        product_ids: list[int],
+        order_ids: list[int],
+    ) -> tuple[Order, str, int]:
+        """Checkout through mock (no network), then re-route the order to
+        razorpay with a known provider ref so the razorpay webhook path
+        picks it up without ever calling the real API at initiate time."""
+        _enable_mock(db)
+        user = _make_user(db)
+        user_ids.append(user.id)
+        prod = _make_product(db, price=Decimal("100.00"), stock=50)
+        product_ids.append(prod.id)
+        db.commit()
+
+        req = CheckoutRequest(
+            items=[OrderItemCreate(product_id=prod.id, quantity=1)],
+            address=_addr_create(),
+            gateway_code="mock",
+            payment_method="prepaid",
+        )
+        order, mtid, _redirect = PaymentService(db).checkout(user, req)
+        order_ids.append(order.id)
+        order.gateway_code = "razorpay"
+        order.payment_provider_ref = self.PROVIDER_REF
+        db.commit()
+        expected_minor = int(
+            (Decimal(str(order.total_amount)) * 100).to_integral_value()
+        )
+        return order, mtid, expected_minor
+
+    @staticmethod
+    def _enable_razorpay() -> None:
+        db = SessionLocal()
+        try:
+            svc = PaymentMethodConfigService(db)
+            svc.update(
+                "razorpay",
+                PaymentMethodUpdate(
+                    credentials={
+                        "key_id": "rzp_test_x",
+                        "key_secret": "sec_x",
+                        "webhook_secret": _WHSEC,
+                    }
+                ),
+            )
+            svc.update("razorpay", PaymentMethodUpdate(enabled=True))
+        finally:
+            db.close()
+
+    @staticmethod
+    def _events_for(db: Session, order_id: int, event_type: str) -> list[PaymentEvent]:
+        return list(
+            db.execute(
+                select(PaymentEvent).where(
+                    PaymentEvent.order_id == order_id,
+                    PaymentEvent.event_type == event_type,
+                )
+            ).scalars()
+        )
+
+    def _cleanup_events(self, mtid: str) -> None:
+        with SessionLocal() as s:
+            s.execute(
+                text("DELETE FROM payment_events WHERE merchant_transaction_id = :mtid"),
+                {"mtid": mtid},
+            )
+            s.commit()
+
+    def test_unconfirmed_paid_webhook_leaves_order_pending(self) -> None:
+        """A correctly-signed payment_link.paid webhook must NOT settle the
+        order while the gateway still reports the link as unpaid."""
+        user_ids: list[int] = []
+        product_ids: list[int] = []
+        order_ids: list[int] = []
+        mtid: str | None = None
+
+        db = SessionLocal()
+        try:
+            order, mtid, expected_minor = self._pending_razorpay_order(
+                db, user_ids, product_ids, order_ids
+            )
+            db.close()
+            self._enable_razorpay()
+
+            body, signature = _signed_paid_webhook(mtid, self.PROVIDER_REF, expected_minor)
+            client = TestClient(app, raise_server_exceptions=False)
+            with patch(
+                "app.integrations.payments.razorpay.RazorpayProvider.fetch_status"
+            ) as fetch_mock:
+                # Gateway says: still unpaid.
+                fetch_mock.return_value = StatusResponse(
+                    merchant_transaction_id=mtid,
+                    status=PaymentStatus.PENDING,
+                    provider_transaction_id=self.PROVIDER_REF,
+                )
+                resp = client.post(
+                    "/api/v1/payments/webhook/razorpay",
+                    content=body,
+                    headers={"X-Razorpay-Signature": signature},
+                )
+
+            assert resp.status_code == 200, (
+                f"Unconfirmed webhook should be accepted (200), got {resp.status_code}: {resp.text}"
+            )
+            # Confirmation must target the ref recorded at checkout, not
+            # anything the payload claims.
+            fetch_mock.assert_called_once_with(mtid, self.PROVIDER_REF)
+
+            db = SessionLocal()
+            fresh = db.get(Order, order_ids[0])
+            assert fresh.status == OrderStatus.PENDING, (
+                f"Order must stay PENDING when the gateway does not confirm, got {fresh.status}"
+            )
+            assert fresh.paid_at is None, "paid_at must not be set on an unconfirmed webhook"
+
+            unconfirmed = self._events_for(
+                db, order_ids[0], PaymentEventType.WEBHOOK_UNCONFIRMED
+            )
+            assert len(unconfirmed) == 1, (
+                f"Exactly one webhook_unconfirmed audit event expected, got {len(unconfirmed)}"
+            )
+        finally:
+            db.close()
+            db2 = SessionLocal()
+            try:
+                _reset_razorpay(db2)
+                _disable_mock(db2)
+            finally:
+                db2.close()
+            _cleanup(user_ids, product_ids, order_ids)
+            if mtid:
+                self._cleanup_events(mtid)
+
+    def test_gateway_confirmed_paid_webhook_settles_order(self) -> None:
+        """The same signed webhook settles the order once the gateway
+        corroborates it — the happy path still works through confirmation."""
+        user_ids: list[int] = []
+        product_ids: list[int] = []
+        order_ids: list[int] = []
+        mtid: str | None = None
+        r = _redis_client()
+
+        db = SessionLocal()
+        try:
+            order, mtid, expected_minor = self._pending_razorpay_order(
+                db, user_ids, product_ids, order_ids
+            )
+            db.close()
+            self._enable_razorpay()
+
+            body, signature = _signed_paid_webhook(mtid, self.PROVIDER_REF, expected_minor)
+            client = TestClient(app, raise_server_exceptions=False)
+            with patch(
+                "app.integrations.payments.razorpay.RazorpayProvider.fetch_status"
+            ) as fetch_mock:
+                # Gateway says: genuinely paid, correct amount.
+                fetch_mock.return_value = StatusResponse(
+                    merchant_transaction_id=mtid,
+                    status=PaymentStatus.SUCCESS,
+                    provider_transaction_id=self.PROVIDER_REF,
+                    amount_minor=expected_minor,
+                )
+                resp = client.post(
+                    "/api/v1/payments/webhook/razorpay",
+                    content=body,
+                    headers={"X-Razorpay-Signature": signature},
+                )
+
+            assert resp.status_code == 200, (
+                f"Confirmed webhook should return 200, got {resp.status_code}: {resp.text}"
+            )
+            fetch_mock.assert_called_once_with(mtid, self.PROVIDER_REF)
+
+            db = SessionLocal()
+            fresh = db.get(Order, order_ids[0])
+            assert fresh.status == OrderStatus.PAID, (
+                f"Order must be PAID after gateway-confirmed webhook, got {fresh.status}"
+            )
+            assert fresh.paid_at is not None, "paid_at must be set on gateway-confirmed settle"
+
+            unconfirmed = self._events_for(
+                db, order_ids[0], PaymentEventType.WEBHOOK_UNCONFIRMED
+            )
+            assert not unconfirmed, (
+                "No webhook_unconfirmed event should be recorded when gateway agrees"
+            )
+        finally:
+            db.close()
+            db2 = SessionLocal()
+            try:
+                _reset_razorpay(db2)
+                _disable_mock(db2)
+            finally:
+                db2.close()
+            _cleanup(user_ids, product_ids, order_ids)
+            if mtid:
+                self._cleanup_events(mtid)
+                r.delete(f"payment:mock:{mtid}")
+            if user_ids:
+                r.delete(f"cart:{user_ids[0]}")

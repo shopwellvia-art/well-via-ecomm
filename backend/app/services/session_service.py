@@ -21,6 +21,7 @@ from typing import Optional
 import redis
 
 from app.core.config import settings
+from app.db.redis import get_redis
 from app.core.exceptions import UnauthorizedError
 from app.core.security import new_jti, new_session_id
 
@@ -56,9 +57,7 @@ class SessionService:
     triggered the change."""
 
     def __init__(self, client: Optional[redis.Redis] = None):
-        self.redis = client or redis.Redis.from_url(
-            settings.REDIS_URL, decode_responses=True
-        )
+        self.redis = client or get_redis()
 
     # ---- Create / rotate ----
 

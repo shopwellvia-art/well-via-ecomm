@@ -8,6 +8,7 @@ import redis
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.db.redis import get_redis
 from app.core.exceptions import ConflictError, TooManyRequestsError, UnauthorizedError
 from app.core.rate_limit import RateLimiter
 from app.core.security import (
@@ -69,9 +70,7 @@ class AuthService:
     def __init__(self, db: Session, redis_client: redis.Redis | None = None):
         self.db = db
         self.users = UserRepository(db)
-        self.redis = redis_client or redis.Redis.from_url(
-            settings.REDIS_URL, decode_responses=True
-        )
+        self.redis = redis_client or get_redis()
         # Share the Redis client with the rate limiter so we don't open two
         # connections per request.
         self.rl = RateLimiter(self.redis)

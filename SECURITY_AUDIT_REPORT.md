@@ -62,8 +62,9 @@
 2. **Firewall port 3306** to the backend host only (not the public internet).
 3. **Purge secrets from git history**: BFG / `git filter-repo` to strip the password, host IP, and old `check_db.py` literals, then force-push. *(Deliberately not automated — destructive/irreversible.)*
 4. Deploy the new `SECRET_KEY` to the server `.env`; users re-authenticate; re-enroll TOTP users.
-5. Stand up TLS (nginx/ALB), switch URLs to `https://`, and uncomment HSTS in `docker/nginx/default.conf`.
-6. Review/remove the stray `docker-compose.override.yml` (a fix-agent created it; remaps frontend → :5174).
+5. Stand up TLS (nginx/ALB), switch URLs to `https://`, and uncomment HSTS in `frontend/nginx.conf`.
+6. ~~Review/remove the stray `docker-compose.override.yml`~~ — **done**: the repo
+   was consolidated to a single production `docker-compose.yml`.
 
 ## Files changed
 37 tracked files modified + new `SECURITY_AUDIT_REPORT.md`, `backend/app/schemas/_validators.py`, `frontend/src/lib/safeUrl.js`. Review with `git diff`.

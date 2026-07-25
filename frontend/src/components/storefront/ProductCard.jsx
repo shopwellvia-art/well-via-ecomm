@@ -9,6 +9,7 @@ import {
   useAddToWishlist,
   useRemoveFromWishlist,
 } from '@/features/wishlist/hooks';
+import { toast } from '@/components/ui/Toaster.jsx';
 
 /** Badge chip styling by kind; free-form strings fall back to 'default'. */
 const BADGE_STYLES = {
@@ -92,16 +93,30 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
       navigate(`/login?next=${encodeURIComponent(location.pathname + location.search)}`);
       return;
     }
+    const onError = (err) =>
+      toast.error(
+        err?.response?.data?.error?.message ||
+          'Could not update your wishlist. Please try again.',
+      );
     if (inWishlist) {
-      removeWishlist.mutate(id);
+      removeWishlist.mutate(id, { onError });
     } else {
-      addWishlist.mutate(id);
+      addWishlist.mutate(id, { onError });
     }
   };
 
   const handleAddToCart = () => {
     if (outOfStock) return;
-    addToCart.mutate({ productId: id, quantity: 1 });
+    addToCart.mutate(
+      { productId: id, quantity: 1 },
+      {
+        onError: (err) =>
+          toast.error(
+            err?.response?.data?.error?.message ||
+              'Could not add to cart. Please try again.',
+          ),
+      },
+    );
   };
 
   return (
@@ -112,14 +127,18 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
         className="relative block"
         style={{ background: 'linear-gradient(160deg,#efe9df,#e4dccd)' }}
       >
-        <WImage src={image_url} alt={name} className="w-full h-[200px]" />
+        <WImage
+  src={image_url}
+  alt={name}
+  className="w-full h-[180px] sm:h-[220px] lg:h-[260px] object-contain p-3"
+/>
 
         {badgeText && (
           <span
-            className={cn(
-              'absolute top-3 left-3 text-[9.5px] tracking-[0.14em] uppercase px-[11px] py-[5px] rounded-full border',
-              badgeStyle,
-            )}
+           className={cn(
+  'absolute top-2 left-2 lg:top-3 lg:left-3 text-[6px] lg:text-[9.5px] tracking-[0.08em] uppercase px-2 lg:px-[11px] py-1 lg:py-[5px] rounded-full border',
+  badgeStyle,
+)}
           >
             {badgeText}
           </span>
@@ -140,49 +159,49 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
         </button>
       </Link>
 
-      {/* Body */}
-      <div className="p-[18px] pb-5 flex flex-col flex-1">
+      {/* Body */} 
+
+      {/* here here */}
+      <div className="p-2.5 lg:p-[18px] pb-3 lg:pb-5 flex flex-col flex-1">
         {/* Rating pill — only when rating_count > 0 */}
         {rating_count > 0 && (
-          <div className="flex items-center gap-1.5 text-[11.5px] text-wgold mb-[7px]">
-            <Stars />
-            <span className="text-wmuted">{Number(rating_avg).toFixed(1)}</span>
-            <span className="text-wmuted text-[11px]">
-              ({Number(rating_count).toLocaleString('en-IN')})
-            </span>
-          </div>
-        )}
+  <div className="mb-2 text-[16px] leading-none">
+    <Stars count={5} />
+  </div>
+)}
 
         {/* Product name */}
+        {/* here here */}
         <Link
           to={`/products/${id}`}
-          className="font-wserif font-semibold text-[21px] m-0 mb-[5px] leading-[1.15] no-underline text-wink hover:text-wgreen transition-colors"
+          className="font-inter font-bold text-[14px] lg:text-[18px] leading-tight mb-1 lg:mb-[5px] no-underline text-wink hover:text-wgreen transition-colors"
         >
           {name}
         </Link>
 
         {/* Flavour tag */}
-        {flavour && (
+        {/* {flavour && (
           <span className="self-start rounded-full border border-wgold/40 bg-wgold/10 px-2.5 py-0.5 text-[10.5px] tracking-wide text-wgold mb-2">
             {flavour}
           </span>
-        )}
+        )} */}
 
         {/* Subtitle; flex-1 so price row stays at bottom */}
-        {subtitle ? (
+        {/* {subtitle ? (
           <p className="text-[12.5px] text-wmuted leading-[1.5] m-0 mb-3.5 font-light flex-1 line-clamp-2">
             {subtitle}
           </p>
         ) : (
           <div className="flex-1 min-h-[14px]" />
-        )}
+        )} */}
 
         {/* Price row */}
+        {/* here here */}
         <div className="flex items-baseline gap-2.5 mb-[13px] flex-wrap">
-          <span className="font-wserif text-[20px] text-wink">
+          <span className="font-inter text-[16px] lg:text-[20px] text-wink">
             {formatPrice(price)}
           </span>
-          {isDiscounted && (
+          {/* {isDiscounted && (
             <>
               <span className="text-[13px] text-wmuted line-through">
                 {formatPrice(compare_at_price)}
@@ -191,7 +210,7 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
                 {discountPct}% off
               </span>
             </>
-          )}
+          )} */}
         </div>
 
         {/* CTA */}
@@ -206,7 +225,7 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
           <button
             onClick={handleAddToCart}
             disabled={addToCart.isPending}
-            className="w-full bg-wgreen text-white border-0 rounded-[6px] py-3 text-[13px] font-semibold tracking-[0.4px] cursor-pointer hover:bg-wgreen-dark disabled:opacity-60 disabled:cursor-wait transition-colors"
+            className="w-full bg-[#08112C] text-white border-0 rounded-md lg:rounded-lg py-2 lg:py-3 text-[12px] lg:text-[13px] font-semibold transition-colors"
           >
             {addToCart.isPending ? 'Adding…' : buttonLabel}
           </button>

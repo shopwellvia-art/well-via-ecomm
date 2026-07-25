@@ -12,9 +12,8 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
-    // When running inside Docker, VITE_API_PROXY is set to http://backend:8000
-    // by docker-compose.dev.yml. On bare-metal `npm run dev` it falls back to
-    // localhost — covering both ways of running the dev server.
+    // Local dev runs bare-metal (`npm run dev`), so this falls back to
+    // localhost. Set VITE_API_PROXY if your backend listens elsewhere.
     proxy: {
       '/api': {
         target: process.env.VITE_API_PROXY || 'http://localhost:8000',

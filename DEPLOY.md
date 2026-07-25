@@ -1,18 +1,50 @@
 # Deployment — CI/CD to AWS EC2 (GitHub Actions + GHCR)
 
-Push to `main` → GitHub Actions builds the backend & frontend Docker images,
-pushes them to **GHCR**, then SSHes into your **EC2** to pull the new images,
-restart the stack, and run DB migrations. The app is served over **HTTP on the
-EC2's public IP**.
+There is exactly **one workflow** (`.github/workflows/cicd.yml`) and exactly
+**one compose file** (`docker-compose.yml`, the production stack).
+
+The pipeline runs for the **`production` branch only** — no other branch, no Pull
+Requests. Push or merge into `production` and the whole thing runs end to end:
+the frontend build and the backend test suite go first, and **only if both pass**
+does it build the backend & frontend Docker images, push them to **GHCR**, then
+SSH into your **EC2** to pull the new images and **restart both containers on the
+new code**. The app is served over **plain HTTP on port 8090** of the EC2's public
+IP (see [TLS termination](#tls-termination-required-before-go-live)).
+
+Database schema changes are **NOT** applied by the pipeline — they are done
+manually from reviewed SQL (see [§6](#6-migrations)).
 
 ```
-GitHub push (main)
-   └─ Actions: build backend img ─┐
-                build frontend img ┘→ push to ghcr.io
-   └─ Actions: ssh → EC2 → docker compose pull + up -d + alembic upgrade head
-EC2 host:  [frontend+nginx :80] ──proxy──> [backend :8000] ──> existing MySQL
-                                              [redis]            (external)
+push / merge → `production`   (nothing runs on any other branch)
+   ├─ frontend         ─┐
+   │  npm ci/build/test │
+   ├─ backend-tests    ─┤ BOTH must pass
+   │  mysql+redis svc   │
+   │  alembic+pytest    │
+   │                    ▼
+   ├─── build-and-push → ghcr.io  (:latest and :<git-sha>)
+   │                    │
+   └─── deploy → ssh EC2 → compose pull → up -d  (recreates backend+frontend)
+                         → verify both run :<git-sha> and :8090 answers
+                         (no alembic — see §6)
+
+EC2 host:  [frontend+nginx :8090→:80] ─proxy─> [backend :8000] ─> shared MySQL
+                                                 [redis]           (external)
+                                       [payment-reconcile-cron] ──┘ (every ~10m)
 ```
+
+**Why the containers pick up the new code:** every deploy tags the images with
+the commit SHA and pins `IMAGE_TAG=<sha>` on the host, so the running containers'
+image references no longer match after a pull — `docker compose up -d` therefore
+recreates the `backend` and `frontend` containers rather than leaving them alone.
+`redis` keeps the same image, so it stays up and its volume is untouched. A final
+verify step asserts both containers really report the new SHA and that the
+storefront answers on `:8090`, and fails the deploy if not.
+
+The backend suite runs against a **throwaway MySQL 8 + Redis 7** provided as
+GitHub Actions `services:` containers — never against the shared remote DB
+(`backend/tests/conftest.py` hard-fails the run if it is pointed anywhere but a
+local host on a non-production `ENVIRONMENT`).
 
 The database stays **external** (your current MySQL) — configured only in
 `backend/.env` on the EC2. There is no MySQL container in production.
@@ -27,7 +59,7 @@ In the repo: **Settings → Secrets and variables → Actions → New repository
 |--------|-------|
 | `EC2_HOST` | EC2 public IP (e.g. `1.2.3.4`) |
 | `EC2_USER` | SSH user — `ubuntu` (Ubuntu AMI) or `ec2-user` (Amazon Linux) |
-| `EC2_SSH_KEY` | **Full contents** of the private key (`.pem`) you SSH in with |
+| `SSH_PRIVATE_KEY` | **Full contents** of the private key (`.pem`) you SSH in with |
 | `EC2_APP_DIR` | App directory on the host, e.g. `/home/ubuntu/app` |
 | `GHCR_PAT` | A GitHub **classic PAT** with the `read:packages` scope (used by the EC2 to pull images) |
 
@@ -51,18 +83,20 @@ sudo usermod -aG docker $USER      # then log out & back in (or: newgrp docker)
 mkdir -p ~/app/backend
 cd ~/app
 # Create backend/.env from the template in the repo and FILL IT IN:
-nano backend/.env        # paste backend/.env.production.example, set real values
+nano backend/.env        # start from backend/.env.example, set real values
 ```
 
-Fill `backend/.env` (see `backend/.env.production.example`). Critical values:
+Fill `backend/.env` (see `backend/.env.example`). Critical values:
 - `SECRET_KEY` → run `openssl rand -hex 32` and paste the result
 - `MYSQL_*` → **your existing DB connection** (keep current values)
-- `MEDIA_BASE_URL`, `CORS_ORIGINS`, `FRONTEND_URL` → `http://<EC2-public-IP>`
+- `MEDIA_BASE_URL`, `CORS_ORIGINS`, `FRONTEND_URL` → `http://<EC2-public-IP>:8090`
+- `PAYMENT_RECONCILE_TOKEN` → a random secret shared with the reconcile-cron
+  sidecar; run `openssl rand -hex 32`. (Blank disables machine-auth reconcile.)
 
 > Make sure `EC2_APP_DIR` (the secret) matches this directory (`/home/ubuntu/app`).
 
 ### Security group
-- **Inbound 80/tcp** open to `0.0.0.0/0` (public web).
+- **Inbound 8090/tcp** open to `0.0.0.0/0` (public web — the published app port).
 - **Inbound 22/tcp** open to your IP (SSH).
 - The EC2 must be able to reach your MySQL host/port (it already is —
   you're "already connected").
@@ -79,14 +113,29 @@ Packages → each package → Package settings → Change visibility.
 ## 3. Deploy
 
 ```bash
-git push origin main      # or run "Build & Deploy to EC2" from the Actions tab
+# From the terminal:
+git checkout production
+git merge --ff-only vinay    # bring in the reviewed work
+git push origin production   # tests run first; deploy only fires if they pass
 ```
+
+Merging a Pull Request into `production` on GitHub does exactly the same thing —
+a merge *is* a push, so it triggers the pipeline with no extra step.
+
+> **Working branches no longer run CI.** The pipeline is `production`-only, so a
+> push to `vinay`/`main`/anything else does nothing at all. Run the checks
+> yourself before merging — see `.github/CICD.md` §9 for the exact commands.
+
+You can also run **CI/CD** manually from the Actions tab (`workflow_dispatch`).
+A manual run is gated exactly like a push: it only builds and deploys when it is
+run **on the `production` branch** and **both quality jobs pass**. There is no
+test-bypass path — to ship, make the tests green.
 
 Watch progress in the repo's **Actions** tab. On success the site is live at:
 
 ```
-http://<EC2-public-IP>/          # storefront
-http://<EC2-public-IP>/docs      # API docs
+http://<EC2-public-IP>:8090/          # storefront
+http://<EC2-public-IP>:8090/docs      # API docs
 ```
 
 Every deploy is tagged by git SHA in GHCR, so deploys are reproducible.
@@ -98,9 +147,9 @@ Every deploy is tagged by git SHA in GHCR, so deploys are reproducible.
 ```bash
 ssh <user>@<EC2-IP>
 cd ~/app
-docker compose -f docker-compose.deploy.yml ps          # all "Up"/"healthy"
-docker compose -f docker-compose.deploy.yml logs -f backend
-curl -fsS http://localhost/api/v1/footer | head -c 200   # API reachable
+docker compose ps                                       # all "Up"/"healthy"
+docker compose logs -f backend
+curl -fsS http://localhost:8090/api/v1/footer | head -c 200   # API reachable
 ```
 
 ---
@@ -111,41 +160,73 @@ Images are tagged by commit SHA. To roll back to a previous good commit:
 
 ```bash
 ssh <user>@<EC2-IP> && cd ~/app
-IMAGE_TAG=<previous-git-sha> docker compose -f docker-compose.deploy.yml up -d
+IMAGE_TAG=<previous-git-sha> docker compose up -d
 ```
 
-(Or revert the commit on `main` and let the pipeline redeploy.)
+(Or revert the commit on `production` and let the pipeline redeploy.)
 
 ---
 
 ## 6. Migrations
 
-The pipeline runs `alembic upgrade head` automatically each deploy (idempotent).
-To run manually:
+**The pipeline does NOT run migrations, and you must NOT run `alembic upgrade
+head` against the production database.** The shared remote MySQL is on a
+migration lineage (`conpay001`) that this repo does not contain, so Alembic
+would try to apply the wrong revisions and corrupt the schema.
+
+Schema changes are applied **manually, from reviewed SQL only**:
+
+1. Write the change as plain SQL and get it reviewed (see the examples under
+   `backend/scripts/sql/`).
+2. Take a backup first — `backend/scripts/backup_db.sh` (see [§7](#7-database-backups)).
+3. Apply it against the DB with a MySQL client during a maintenance window.
+
+---
+
+## 7. Database backups
+
+There is no managed backup yet. `backend/scripts/backup_db.sh` is a starting
+point: a timestamped, compressed `mysqldump` that reads `MYSQL_*` from the
+environment. **A backup that only lives on the EC2 is not a backup** — configure
+the S3 upload stub at the bottom of the script and run it on a cron/timer so a
+copy survives the instance.
 
 ```bash
-cd ~/app
-docker compose -f docker-compose.deploy.yml exec -T backend alembic upgrade head
+set -a; . ~/app/backend/.env; set +a     # load MYSQL_* (never printed)
+bash ~/app/backend/scripts/backup_db.sh  # writes ./backups/<db>-<ts>.sql.gz
 ```
 
 ---
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
-| Actions deploy step: `permission denied (publickey)` | `EC2_SSH_KEY` must be the **entire** private key incl. `-----BEGIN/END-----`. `EC2_USER` correct (`ubuntu` vs `ec2-user`). |
+| Actions deploy step: `permission denied (publickey)` | `SSH_PRIVATE_KEY` must be the **entire** private key incl. `-----BEGIN/END-----`. `EC2_USER` correct (`ubuntu` vs `ec2-user`). |
 | EC2 `docker login` / pull fails | `GHCR_PAT` needs `read:packages`; or make the packages Public. |
-| Site loads but images 404 | `MEDIA_BASE_URL` in `backend/.env` must equal `http://<EC2-IP>`; re-`up -d` the backend. |
+| Site loads but images 404 | `MEDIA_BASE_URL` in `backend/.env` must equal `http://<EC2-IP>:8090`; re-`up -d` the backend. |
 | 413 on upload | Already handled (`client_max_body_size 20m` in the frontend nginx) — rebuild/pull the frontend image. |
 | Backend can't reach DB | EC2 must reach your MySQL host/port; check the DB firewall/security group and `MYSQL_*` in `backend/.env`. |
-| Port 80 unreachable | Open inbound 80 in the EC2 security group. |
+| Port 8090 unreachable | Open inbound 8090 in the EC2 security group. |
+| Deploy never runs after a push | It is gated on the **frontend** and **backend-tests** jobs passing, and only runs on the `production` branch. Check those two jobs in the **CI/CD** run. |
 
 ---
 
-## Adding a domain + HTTPS later
+## TLS termination (required before go-live)
 
-When you have a domain: point its DNS A-record at the EC2 IP, then either add
-Caddy (automatic Let's Encrypt) in front, or run certbot with nginx. Update
-`MEDIA_BASE_URL`, `CORS_ORIGINS`, `FRONTEND_URL` to `https://<domain>` and
-redeploy. Ask and I'll wire it up.
+**The app currently serves plain HTTP on port 8090 — there is no TLS anywhere in
+this stack.** That is acceptable for staging/testing but MUST be fixed before any
+real traffic: login credentials, session tokens and payment return URLs would
+otherwise cross the network in cleartext. Until TLS is in place, the HSTS header
+in the nginx configs stays commented out (never send HSTS over plain HTTP).
+
+Before go-live, front the app with TLS — do NOT expose 8090 to the public
+directly. Options:
+
+- Put a TLS-terminating reverse proxy (Caddy with automatic Let's Encrypt, or
+  nginx + certbot) in front, proxying `https://<domain>` → `127.0.0.1:8090`.
+- Or terminate TLS at an AWS ALB / CloudFront in front of the instance.
+
+Then point the domain's DNS A-record at the EC2 IP, update `MEDIA_BASE_URL`,
+`CORS_ORIGINS`, `FRONTEND_URL` to `https://<domain>`, uncomment the
+`Strict-Transport-Security` header in the nginx configs, and redeploy.

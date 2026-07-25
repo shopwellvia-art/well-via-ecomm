@@ -300,6 +300,50 @@ class PaymentService:
             provider_ref=result.provider_transaction_id,
         )
         order = self._order_for_mtid(result.merchant_transaction_id)
+        # A valid signature only proves the payload was authored by someone
+        # holding the webhook secret — not that money actually moved. Before
+        # settling, confirm the claimed transition with the gateway itself
+        # (same source of truth the status-poll and reconcile paths use) and
+        # apply the gateway's answer, not the payload's. The ref recorded at
+        # checkout is preferred over the payload's own, so a forged webhook
+        # cannot point the confirmation at a different transaction.
+        if result.status != PaymentStatus.PENDING and order.status == OrderStatus.PENDING:
+            provider_ref = order.payment_provider_ref or result.provider_transaction_id
+            try:
+                confirmed = provider.fetch_status(
+                    result.merchant_transaction_id, provider_ref
+                )
+            except Exception as exc:
+                # Propagate: the endpoint surfaces a 5xx, so the gateway
+                # redelivers the webhook; reconcile_pending is the backstop.
+                record_payment_event(
+                    event_type=PaymentEventType.GATEWAY_ERROR,
+                    order_id=order.id,
+                    merchant_transaction_id=result.merchant_transaction_id,
+                    gateway_code=gateway_code,
+                    provider_ref=provider_ref,
+                    message=f"webhook confirmation fetch failed: {exc}",
+                )
+                raise
+            if confirmed.status != result.status:
+                logger.warning(
+                    "webhook for order %s claimed %s but gateway reports %s — "
+                    "applying the gateway's status",
+                    order.id,
+                    result.status.value,
+                    confirmed.status.value,
+                )
+                record_payment_event(
+                    event_type=PaymentEventType.WEBHOOK_UNCONFIRMED,
+                    order_id=order.id,
+                    merchant_transaction_id=result.merchant_transaction_id,
+                    gateway_code=gateway_code,
+                    payment_status=confirmed.status.value if confirmed.status else None,
+                    provider_ref=provider_ref,
+                    message=f"payload claimed {result.status.value}, gateway reports "
+                    f"{confirmed.status.value}",
+                )
+            result = confirmed
         self._apply_status(
             order,
             result.status,
@@ -760,9 +804,32 @@ class PaymentService:
         provider_ref: str | None = None,
         raw: dict | None = None,
     ) -> None:
+        # Serialize settlement across the three concurrent callers — the gateway
+        # webhook, the user's return-page status poll, and the reconcile cron —
+        # which routinely race (the user returns from the gateway at the same
+        # moment the S2S webhook lands, on different workers). Take a row lock and
+        # re-read status under it: the second settler blocks here, then sees a
+        # non-PENDING status and returns, so mark-paid / coupon usage / stock
+        # restore / notifications each run exactly once. The lock is held until
+        # the commit below. Without it two SUCCESS settlements both saw PENDING
+        # and double-applied; a FAILED+SUCCESS pair corrupted stock.
+        # populate_existing=True is essential: the order was already loaded
+        # earlier in this session (_order_for_mtid / the reconcile batch), so
+        # without it SQLAlchemy returns the cached identity-map instance and
+        # `locked.status` would be the STALE pre-lock value — defeating the
+        # recheck. With it, attributes are refreshed from this locking read,
+        # which in InnoDB sees the latest committed row, so a second settler
+        # observes the first's committed PAID/CANCELLED and returns.
+        locked = self.db.execute(
+            select(Order)
+            .where(Order.id == order.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
         # Idempotent: only PENDING orders move. Webhooks can fire twice.
-        if order.status != OrderStatus.PENDING:
+        if locked is None or locked.status != OrderStatus.PENDING:
             return
+        order = locked
         # Stamp the gateway's own transaction id onto the order. PhonePe (and
         # several others) only return it at settlement, not at initiation, so
         # this is our first chance to record it. Write-once: a replayed
@@ -943,8 +1010,9 @@ class PaymentService:
 
     def _restore_stock(self, order: Order) -> None:
         # We decremented stock at checkout to *reserve* it. On failure, give
-        # it back so the next shopper can buy the unit.
+        # it back so the next shopper can buy the unit. Use the atomic
+        # increment so a concurrent sale's decrement is never clobbered.
         for item in order.items:
             product = self.products.get(item.product_id)
             if product:
-                product.stock += item.quantity
+                self.products.increment_stock(product, item.quantity)

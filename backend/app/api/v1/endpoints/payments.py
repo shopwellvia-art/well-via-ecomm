@@ -9,10 +9,12 @@ Routes:
 """
 from __future__ import annotations
 
+import secrets
+
 from fastapi import APIRouter, Depends, Header, Request, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db, require_permission
+from app.api.deps import get_current_user, get_db, optional_current_user
 from app.core.config import settings
 from app.core.exceptions import ForbiddenError, NotFoundError, ValidationError
 from app.integrations.payments.registry import get_gateway
@@ -31,6 +33,38 @@ from app.services.payment_service import PaymentService
 
 checkout_router = APIRouter()
 payments_router = APIRouter()
+
+
+async def get_raw_body(request: Request) -> bytes:
+    """Read the raw request body in the async context so the webhook handlers
+    themselves can be plain `def` — FastAPI then runs their blocking DB / SMTP /
+    SMS / carrier work in the threadpool instead of on the event loop."""
+    return await request.body()
+
+
+def reconcile_auth(
+    x_reconcile_token: str | None = Header(default=None, alias="X-Reconcile-Token"),
+    user: User | None = Depends(optional_current_user),
+) -> None:
+    """Authenticate the reconcile endpoint for a machine OR a human.
+
+    A scheduler can't hold a 30-minute human access token, so it presents a
+    shared secret (X-Reconcile-Token == settings.PAYMENT_RECONCILE_TOKEN),
+    compared in constant time. A signed-in user with payments.manage may also
+    trigger it manually. Everything else is refused.
+    """
+    configured = settings.PAYMENT_RECONCILE_TOKEN
+    if (
+        configured
+        and x_reconcile_token
+        and secrets.compare_digest(x_reconcile_token, configured)
+    ):
+        return
+    if user is not None and user.has_permission("payments.manage"):
+        return
+    raise ForbiddenError(
+        "Reconcile requires a valid service token or the payments.manage permission."
+    )
 
 
 @checkout_router.post(
@@ -95,12 +129,13 @@ def order_for_payment(
 
 
 @payments_router.post("/webhook/phonepe", status_code=status.HTTP_200_OK)
-async def phonepe_webhook(
-    request: Request,
+def phonepe_webhook(
+    body: bytes = Depends(get_raw_body),
     x_verify: str | None = Header(default=None, alias="X-VERIFY"),
     db: Session = Depends(get_db),
 ):
-    body = await request.body()
+    # Sync def: runs in the threadpool so the blocking settlement chain (DB +
+    # SMTP + SMS + carrier push, each up to 15s) never stalls the event loop.
     PaymentService(db).handle_webhook(body, x_verify, gateway_code="phonepe")
     return {"ok": True}
 
@@ -128,9 +163,10 @@ def mock_webhook(
 
 
 @payments_router.post("/webhook/{gateway_code}", status_code=status.HTTP_200_OK)
-async def generic_webhook(
+def generic_webhook(
     gateway_code: str,
     request: Request,
+    body: bytes = Depends(get_raw_body),
     db: Session = Depends(get_db),
 ):
     """Generic signed webhook endpoint for any implemented gateway.
@@ -161,8 +197,6 @@ async def generic_webhook(
             f"Gateway '{gateway_code}' is not enabled."
         )
 
-    body = await request.body()
-
     # Pick the most relevant signature header for each gateway.
     signature: str | None = None
     if gateway_code == "razorpay":
@@ -184,7 +218,7 @@ async def generic_webhook(
     "/admin/reconcile-pending",
     response_model=ReconcilePendingResponse,
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(require_permission("payments.manage"))],
+    dependencies=[Depends(reconcile_auth)],
     summary="Reconcile stale PENDING gateway orders against the provider",
 )
 def reconcile_pending(

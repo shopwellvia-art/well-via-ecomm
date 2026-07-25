@@ -36,6 +36,7 @@ import httpx
 import redis
 
 from app.core.config import settings
+from app.db.redis import get_redis
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +60,7 @@ _BIGDATACLOUD_URL = (
 
 class GeocodeService:
     def __init__(self) -> None:
-        self._redis = redis.Redis.from_url(
-            settings.REDIS_URL, decode_responses=True
-        )
+        self._redis = get_redis()
 
     def reverse(self, lat: float, lng: float) -> dict:
         """Return ``{found, pincode, city, state, area, road}`` for the given coordinates.

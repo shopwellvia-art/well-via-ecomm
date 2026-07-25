@@ -17,9 +17,13 @@ import FilterSidebar, {
 import { useProducts, useBestsellers } from '@/features/products/hooks.js';
 import { useCategories } from '@/features/categories/hooks.js';
 import { cn } from '@/lib/utils.js';
+import { BESTSELLERS } from '../../public/products';
+import { NEW_ARRIVALS } from '../../public/products';
+import { ALL_PRODUCTS } from '../../public/products';
 
 const PAGE_SIZE = 12;
 const NEW_WINDOW_DAYS = 30;
+
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest First' },
@@ -35,19 +39,24 @@ const MODES = {
     sub: 'From better sleep to daily immunity, discover gummies crafted for every goal.',
     badge: undefined,
     heroBg: 'linear-gradient(115deg,#eef3e4 0%,#f7f4ea 55%,#e9efdc 100%)',
+    heroImage: '/product-hero.png',
   },
+  // best
   bestsellers: {
     title: 'Customer Favorites, For a Reason.',
     sub: 'Discover the gummies our customers keep coming back for.',
     badge: 'bestseller',
     heroBg: 'linear-gradient(115deg,#efe4f0 0%,#f7f0f4 55%,#e7dcEC 100%)',
+    heroImage: '/bestseller-hero.png',
     chips: ['Science Backed Ingredients', 'Safe & Effective', 'Delicious & Easy to Enjoy', 'Loved by Thousands'],
   },
+
   'new-arrivals': {
     title: 'Fresh Drops, Feel Good Finds.',
     sub: 'Be the first to discover our latest wellness gummies.',
     badge: 'new',
     heroBg: 'linear-gradient(115deg,#e7efe0 0%,#f6f3e9 55%,#eae4d4 100%)',
+    heroImage: '/product-hero.png',
   },
 };
 
@@ -62,6 +71,7 @@ function parseFilters(sp) {
     categoryIds: [...new Set([...csv('category_ids').map(Number), ...legacyId])].filter(
       Number.isFinite,
     ),
+    goals: csv('goals'),
     flavours: csv('flavours'),
     minPrice: sp.get('min_price') ? Number(sp.get('min_price')) : null,
     maxPrice: sp.get('max_price') ? Number(sp.get('max_price')) : null,
@@ -77,6 +87,7 @@ function filtersToParams(f) {
   const sp = {};
   if (f.q) sp.q = f.q;
   if (f.categoryIds.length) sp.category_ids = f.categoryIds.join(',');
+  if (f.goals.length) sp.goals = f.goals.join(',');
   if (f.flavours.length) sp.flavours = f.flavours.join(',');
   if (f.minPrice != null) sp.min_price = String(f.minPrice);
   if (f.maxPrice != null) sp.max_price = String(f.maxPrice);
@@ -113,6 +124,7 @@ function applyFiltersLocally(items, f) {
   let out = items.filter((p) => {
     if (f.q && !p.name.toLowerCase().includes(f.q.toLowerCase())) return false;
     if (f.categoryIds.length && !f.categoryIds.includes(p.category_id)) return false;
+    if (f.goals.length && !f.goals.includes(p.goal)) return false;
     if (f.flavours.length && !f.flavours.includes(p.flavour)) return false;
     if (f.minPrice != null && Number(p.price) < f.minPrice) return false;
     if (f.maxPrice != null && Number(p.price) > f.maxPrice) return false;
@@ -148,6 +160,7 @@ const isNewProduct = (p) =>
  * All filter/sort/page state lives in the URL search params.
  */
 export default function ProductListPage({ mode = 'all' }) {
+  const [showSidebar, setShowSidebar] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
   const modeCfg = MODES[mode] ?? MODES.all;
@@ -193,22 +206,47 @@ export default function ProductListPage({ mode = 'all' }) {
   }, [filterOpen]);
 
   /* ── Data ── */
+  //BESTSELLERSSSSSSSSSSSSSSSSSSS
   const serverQuery = useProducts(toApiParams(filters));
   const bestsellersQuery = useBestsellers(24);
 
   const isBestsellers = mode === 'bestsellers';
-  const { isLoading, isError, refetch } = isBestsellers ? bestsellersQuery : serverQuery;
+  const isNewArrivals = mode === "new-arrivals";
+  const isLoading = false;
+const isError = false;
+const refetch = () => {};
 
   let products, total, totalPages;
   if (isBestsellers) {
-    const filtered = applyFiltersLocally(bestsellersQuery.data ?? [], filters);
-    total = filtered.length;
-    totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-    products = filtered.slice((filters.page - 1) * PAGE_SIZE, filters.page * PAGE_SIZE);
-  } else {
-    products = serverQuery.data?.items ?? [];
-    total = serverQuery.data?.total ?? 0;
-    totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const filtered = applyFiltersLocally(BESTSELLERS, filters);
+
+  total = filtered.length;
+  totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  products = filtered.slice(
+    (filters.page - 1) * PAGE_SIZE,
+    filters.page * PAGE_SIZE
+  );
+} else if (isNewArrivals) {
+  const filtered = applyFiltersLocally(NEW_ARRIVALS, filters);
+
+  total = filtered.length;
+  totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  products = filtered.slice(
+    (filters.page - 1) * PAGE_SIZE,
+    filters.page * PAGE_SIZE
+  );
+} else {
+    const filtered = applyFiltersLocally(ALL_PRODUCTS, filters);
+
+total = filtered.length;
+totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+products = filtered.slice(
+  (filters.page - 1) * PAGE_SIZE,
+  filters.page * PAGE_SIZE
+);
   }
 
   const shown = products.length;
@@ -263,36 +301,97 @@ export default function ProductListPage({ mode = 'all' }) {
   );
 
   return (
+    // HERO BANNER OF ALL 3 PAGES
     <Page bleed>
       {/* ── HERO BAND ── */}
-      <section
-        className="border-b border-wline"
-        style={{ background: modeCfg.heroBg }}
-        aria-label={modeCfg.title}
-      >
-        <div className="max-w-[1320px] mx-auto px-5 sm:px-10 lg:px-16 py-12 lg:py-16">
-          <h1 className="font-wserif font-medium text-[clamp(30px,4.2vw,50px)] text-wink m-0 mb-2 leading-[1.05] max-w-xl">
-            {modeCfg.title}
-          </h1>
-          <p className="text-[14.5px] text-wmuted m-0 font-light max-w-md">{modeCfg.sub}</p>
-          {modeCfg.chips && (
-            <div className="mt-5 flex flex-wrap gap-2">
-              {modeCfg.chips.map((c) => (
-                <span
-                  key={c}
-                  className="rounded-full border border-wline bg-wpaper/70 px-3.5 py-1.5 text-[11.5px] tracking-wide text-wink"
-                >
-                  {c}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
+     {/* ── HERO BAND ── */}
+<section
+  className="border-b border-wline"
+  style={{ background: modeCfg.heroBg }}
+  aria-label={modeCfg.title}
+>
 
-      <div className="max-w-[1320px] mx-auto px-5 sm:px-10 lg:px-16 py-7 lg:py-10">
+  {/* BESTSELLERS */}
+  {mode === "bestsellers" && (
+    <div className="relative">
+      <img
+        src={modeCfg.heroImage}
+        alt="Best Sellers"
+        className="w-full block"
+      />
+
+      <Link
+        to="/bestsellers"
+        className="absolute left-4 bottom-2 md:bottom-12 md:left-36 md:bottom-12 bg-[#08112C] text-white px-1.5 py-1.5 md:px-6 md:py-3 rounded-full font-serif text-[8px] md:text-base leading-none"
+      >
+        Shop for Bestsellers
+      </Link>
+    </div>
+  )}
+
+
+ {/* ALL PRODUCTS */}
+{mode === "all" && (
+  <div className="relative">
+    <img
+      src={modeCfg.heroImage}
+      alt="Products"
+      className="w-full block"
+    />
+
+    <div className="absolute left-4 top-6 max-w-[55%] md:left-12 md:top-1/2 md:-translate-y-1/2 md:max-w-none">
+      <h1 className="font-cormorant font-medium text-[clamp(16px,4.5vw,22px)] md:text-[clamp(30px,4.2vw,50px)] text-[#133F30] m-0 mb-0.5 md:mb-2 leading-[1.2] md:leading-[1.35] max-w-[220px] md:max-w-[420px]">
+        {modeCfg.title}
+      </h1>
+
+      <p className="font-cormorant text-[10.5px] md:text-[14.5px] text-black m-0 font-light max-w-[140px] md:max-w-[380px] mb-3 md:mb-5 leading-[1.3] md:leading-normal">
+        {modeCfg.sub}
+      </p>
+
+      <Link
+        to="/products"
+         className="absolute left-4 -bottom-4 md:static md:translate-y-0 md:ml-0 bg-[#08112C] text-white px-1.5 py-1.5 md:px-6 md:py-3 rounded-full font-serif text-[8px] md:text-base leading-none"
+      >
+        Shop All Products
+      </Link>
+    </div>
+  </div>
+)}
+
+{/* NEW ARRIVALS */}
+{mode === "new-arrivals" && (
+  <div className="relative">
+    <img
+      src={modeCfg.heroImage}
+      alt="New Arrivals"
+      className="w-full block"
+    />
+
+    <div className="absolute left-4 top-6 max-w-[55%] md:left-12 md:top-1/2 md:-translate-y-1/2 md:max-w-none">
+      <h1 className="font-cormorant font-medium text-[clamp(16px,4.5vw,22px)] md:text-[clamp(30px,4.2vw,50px)] text-[#133F30] m-0 mb-1 md:mb-2 leading-[1.2] md:leading-[1.35] max-w-[140px] md:max-w-[380px]">
+        {modeCfg.title}
+      </h1>
+
+      <p className="font-cormorant text-[10.5px] md:text-[14.5px] text-black m-0 font-light max-w-[130px] md:max-w-[380px] mb-3 md:mb-5 leading-[1.3] md:leading-normal">
+        {modeCfg.sub}
+      </p>
+
+      <Link
+        to="/new-arrivals"
+      className="absolute left-4 -bottom-4 md:static md:translate-y-0 md:ml-0 bg-[#08112C] text-white px-1.5 py-1.5 md:px-6 md:py-3 rounded-full font-serif text-[8px] md:text-base leading-none"
+>
+        Shop New Arrivals
+      </Link>
+    </div>
+  </div>
+)}
+
+
+</section>
+
+      <div className="max-w-[1320px] mx-auto px-5 sm:px-10 lg:px-16 pt-3 pb-7 lg:py-10">
         {/* ── TOOLBAR: count + chips + sort ── */}
-        <div className="flex flex-wrap items-center gap-3 mb-6">
+        <div className="flex items-center justify-between -mb-4 mt-6">
           {/* Mobile filter button */}
           <button
             ref={filterTriggerRef}
@@ -305,12 +404,22 @@ export default function ProductListPage({ mode = 'all' }) {
             <SlidersHorizontal className="size-3.5" aria-hidden="true" />
             Filters
           </button>
+          <div className="hidden lg:flex items-center gap-2">
+        <button
+  type="button"
+  onClick={() => setShowSidebar(!showSidebar)}
+  className="inline-flex items-center gap-2 rounded-full border border-wline px-4 py-2.5 text-[13px] text-wink hover:border-wgreen"
+>
+  <SlidersHorizontal className="size-4" />
+  Filter
+</button>
+</div>
 
-          <p className="text-[13.5px] text-wmuted m-0">
+          <p className="ml-auto text-[13.5px] text-wmuted m-0">
             {isLoading ? 'Loading…' : `Showing ${shown} of ${total.toLocaleString('en-IN')}`}
           </p>
-
-          <div className="flex flex-wrap items-center gap-2">
+</div>
+          <div className="mt-2 mb-4 flex flex-wrap items-center gap-2">
             {chips.map((chip) => (
               <button
                 key={chip.label}
@@ -342,7 +451,7 @@ export default function ProductListPage({ mode = 'all' }) {
                 Clear all
               </button>
             )}
-          </div>
+          
 
           <div className="ml-auto flex items-center gap-2.5 text-[13px] text-wmuted">
             <span className="hidden sm:inline">Sort by</span>
@@ -361,25 +470,34 @@ export default function ProductListPage({ mode = 'all' }) {
         </div>
 
         {/* ── SIDEBAR + GRID ── */}
-        <div className="lg:grid lg:grid-cols-[260px_1fr] lg:gap-8 items-start">
-          {/* Desktop sidebar */}
-          <aside className="hidden lg:block sticky top-24" aria-label="Product filters">
-            {/* Search within listing */}
-            <div className="relative mb-4">
-              <Search
-                className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-wmuted pointer-events-none"
-                aria-hidden="true"
-              />
-              <input
-                type="search"
-                placeholder="Search products…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-wcard border border-wline rounded-full pl-10 pr-4 py-2.5 text-[13px] text-wink placeholder:text-wmuted focus:outline-none focus:border-wgreen transition-colors"
-              />
-            </div>
-            {sidebar}
-          </aside>
+       <div
+  className={cn(
+    showSidebar
+      ? "lg:grid lg:grid-cols-[260px_1fr] lg:gap-8 items-start"
+      : ""
+  )}
+>
+  {/* Desktop sidebar */}
+  {showSidebar && (
+    <aside className="hidden lg:block sticky top-24" aria-label="Product filters">
+      {/* Search within listing */}
+      <div className="relative mb-2">
+        <Search
+          className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-wmuted pointer-events-none"
+          aria-hidden="true"
+        />
+        <input
+          type="search"
+          placeholder="Search products…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full bg-wcard border border-wline rounded-full pl-10 pr-4 py-2.5 text-[13px] text-wink placeholder:text-wmuted focus:outline-none focus:border-wgreen transition-colors"
+        />
+      </div>
+
+      {sidebar}
+    </aside>
+  )}
 
           {/* Grid + states */}
           <div>
@@ -434,7 +552,7 @@ export default function ProductListPage({ mode = 'all' }) {
               <ProductGrid products={products} cols={3} badge={gridBadge} />
             ) : (
               /* /products: per-card "New" ribbon inside the freshness window */
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5 lg:gap-[22px]">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 lg:gap-5">
                 {products.map((p) => (
                   <ProductCardWithDerivedBadge key={p.id} product={p} />
                 ))}

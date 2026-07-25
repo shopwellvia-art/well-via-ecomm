@@ -43,8 +43,12 @@ The volume mount makes generated files (new migration scripts) persist to the ho
 
 ## Production
 
-```powershell
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+`docker-compose.yml` IS the production stack (the only compose file). It pulls
+prebuilt GHCR images and is normally driven by the pipeline, not by hand.
+
+```bash
+docker compose pull && docker compose up -d    # on the EC2
+IMAGE_TAG=<git-sha> docker compose up -d       # roll back to a specific build
 ```
 
 ## Inspect & troubleshoot

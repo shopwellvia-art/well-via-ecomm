@@ -1,0 +1,87 @@
+# ISOLATED load-test stack — throwaway MySQL + Redis + the backend image.
+#
+# SAFETY: MYSQL_HOST is the local `lt-mysql` container. The shared production
+# database (13.204.184.41) is NEVER referenced here. Never point a load test at
+# production — the writes would corrupt real data and the reads would exhaust
+# the shared connection limit and take down co-tenant apps.
+#
+# Usage (from this directory):
+#   export SECRET_KEY=$(python3 -c "import secrets;print(secrets.token_hex(32))")
+#   docker compose -f docker-compose.loadtest.yml up -d lt-mysql lt-redis
+#   docker compose -f docker-compose.loadtest.yml run --rm --no-deps lt-backend alembic upgrade head
+#   docker compose -f docker-compose.loadtest.yml run --rm --no-deps lt-backend python /loadtest/bootstrap_lt.py
+#   docker compose -f docker-compose.loadtest.yml up -d lt-backend
+#   k6 run -e BASE_URL=http://localhost:8001 browse.js      # steady browse
+#   k6 run -e BASE_URL=http://localhost:8001 stress.js      # ramp to the knee
+#   docker compose -f docker-compose.loadtest.yml down -v
+name: wellvia-lt
+services:
+  lt-mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: wellvia_lt
+      MYSQL_USER: ltuser
+      MYSQL_PASSWORD: ltpass
+    tmpfs:
+      - /var/lib/mysql            # throwaway + fast; nothing persists
+    command: ["--max_connections=300"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  lt-redis:
+    image: redis:7-alpine
+
+  lt-backend:
+    image: well-via-ecomm-backend:latest    # build first: docker build -t well-via-ecomm-backend:latest ../backend
+    depends_on:
+      lt-mysql:
+        condition: service_healthy
+      lt-redis:
+        condition: service_started
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "false"
+      SECRET_KEY: "${SECRET_KEY:?set SECRET_KEY to a 64-hex string}"
+      MYSQL_HOST: lt-mysql               # <-- local throwaway, never the remote host
+      MYSQL_PORT: "3306"
+      MYSQL_USER: ltuser
+      MYSQL_PASSWORD: ltpass
+      MYSQL_DB: wellvia_lt
+      REDIS_URL: redis://lt-redis:6379/0
+      RATE_LIMIT_ENABLED: "false"        # measure raw capacity, not the limiter
+      EMAIL_BACKEND: console             # never send real mail during a test
+      STORAGE_BACKEND: local
+      CORS_ORIGINS: '["http://localhost:5173", "http://localhost:5175"]'
+      OBS_ENABLED: "true"
+      # Deterministic admin login for the lt-frontend observability dashboard.
+      # Throwaway stack + throwaway DB, so a fixed password is fine here.
+      BOOTSTRAP_ADMIN_EMAIL: admin@lt.local
+      BOOTSTRAP_ADMIN_PASSWORD: "${LT_ADMIN_PASSWORD:-lt-admin-pass}"
+    volumes:
+      # Directory mount (not single-file): file bind-mounts break on Docker
+      # Desktop for macOS when the host file changes identity (inode).
+      - ./:/loadtest:ro
+    ports:
+      - "8001:8000"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+    networks:
+      default:
+        # The frontend image's nginx proxies /api/ to `backend:8000`; alias the
+        # lt backend to that name so the stock image works unmodified.
+        aliases:
+          - backend
+
+  # Observability dashboard for the load test — the same static frontend image,
+  # proxying /api/ to lt-backend (NOT the main stack's backend). Open
+  # http://localhost:5175/admin/observability and log in with the bootstrap
+  # admin above to watch request logs / slow queries live during a k6 run.
+  lt-frontend:
+    image: well-via-ecomm-frontend:latest   # build first: docker build -t well-via-ecomm-frontend:latest ../frontend
+    depends_on:
+      - lt-backend
+    ports:
+      - "5175:80"

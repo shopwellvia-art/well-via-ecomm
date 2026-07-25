@@ -119,7 +119,11 @@ export default function LoginPage() {
     staleTime: Infinity,
   });
   const googleEnabled = Boolean(authConfig?.google_login);
-  const showTestLogins = env.appEnv !== 'production';
+  // Gate on Vite's compile-time DEV flag, not a runtime env value: `false` in
+  // any production build lets Vite dead-code-eliminate the block below AND the
+  // TEST_ACCOUNTS credentials, so they never ship in the bundle. (The old
+  // runtime check still compiled the passwords into the shipped JS.)
+  const showTestLogins = import.meta.env.DEV;
 
   const isRegister = mode === 'register';
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -346,7 +350,7 @@ export default function LoginPage() {
                     className={cn(
                       'flex-1 py-2.5 text-[13px] font-medium transition-all duration-200 focus:outline-none rounded-full',
                       mode === key
-                        ? 'bg-wgreen text-white shadow-sm'
+                        ? 'bg-[#08112C] text-white shadow-sm'
                         : 'text-wmuted hover:text-wink',
                     )}
                   >
@@ -442,7 +446,7 @@ export default function LoginPage() {
                   {!isRegister && (
                     <Link
                       to="/forgot-password"
-                      className="text-wgreen no-underline hover:underline hover:underline-offset-2 transition-colors"
+                      className="text-[#08112C] no-underline hover:underline hover:underline-offset-2 transition-colors"
                     >
                       Forgot password?
                     </Link>
@@ -474,7 +478,7 @@ export default function LoginPage() {
                   type="submit"
                   disabled={busy}
                   aria-busy={busy}
-                  className="w-full bg-wgreen text-white border-0 rounded-full py-4 text-[14.5px] tracking-wide cursor-pointer hover:bg-wgreen-dark transition-colors disabled:opacity-60 disabled:pointer-events-none flex items-center justify-center gap-2 mt-1"
+                  className="w-full bg-[#08112C] text-white border-0 rounded-full py-4 text-[14.5px] tracking-wide cursor-pointer hover:bg-[#08112C] transition-colors disabled:opacity-60 disabled:pointer-events-none flex items-center justify-center gap-2 mt-1"
                 >
                   {busy ? (
                     <svg className="size-4 animate-spin360" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -560,7 +564,7 @@ export default function LoginPage() {
                     setMode(isRegister ? 'login' : 'register');
                     setError(null);
                   }}
-                  className="text-wgreen underline underline-offset-[3px] hover:text-wgreen-dark focus:outline-none transition-colors"
+                  className="text-[#08112C] underline underline-offset-[3px] hover:text-[#08112C] focus:outline-none transition-colors"
                 >
                   {isRegister ? 'Sign in' : 'Create an account'}
                 </button>

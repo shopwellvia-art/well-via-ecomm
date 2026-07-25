@@ -76,6 +76,11 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(RequestIDMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
+    # NOTE: API-response gzip is done at nginx (frontend/nginx.conf, baked into
+    # the frontend image), which correctly restricts it to text types. An
+    # app-level GZipMiddleware here would also wrap the /media StaticFiles mount,
+    # wastefully re-compressing image originals and breaking HTTP Range/206
+    # requests — so compression is intentionally left to the proxy tier.
 
     # Observability: instrument the engine for per-query timing and add the
     # timing middleware last so it's outermost and measures the full request.
@@ -95,11 +100,42 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["system"])
     def health():
+        # Liveness only: the process is up and serving. Cheap and dependency-free
+        # so an orchestrator can tell "process alive" from "process wedged".
         return {"status": "ok"}
 
     @app.get("/ready", tags=["system"])
     def ready():
-        return {"status": "ready"}
+        # Readiness: can we actually serve a request? The likeliest production
+        # failure is losing the network path to the remote MySQL, in which case
+        # a static 200 would keep routing traffic to a backend that 500s every
+        # request. Check MySQL and Redis with short timeouts; 503 on failure so
+        # health-gated automation (compose/nginx/LB) can drain this instance.
+        from fastapi.responses import JSONResponse
+        from sqlalchemy import text
+
+        checks: dict[str, str] = {}
+        ok = True
+
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            checks["database"] = "ok"
+        except Exception as exc:  # noqa: BLE001
+            checks["database"] = f"error: {type(exc).__name__}"
+            ok = False
+
+        try:
+            from app.db.redis import get_redis
+
+            get_redis().ping()
+            checks["redis"] = "ok"
+        except Exception as exc:  # noqa: BLE001
+            checks["redis"] = f"error: {type(exc).__name__}"
+            ok = False
+
+        body = {"status": "ready" if ok else "not_ready", "checks": checks}
+        return JSONResponse(body, status_code=200 if ok else 503)
 
     return app
 

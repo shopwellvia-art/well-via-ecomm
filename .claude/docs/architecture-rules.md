@@ -83,8 +83,10 @@ This improves AI UI quality MASSIVELY.
 ## 6. Docker
 
 - Multi-stage builds; slim runtime; non-root user; `HEALTHCHECK` present.
-- `docker-compose.yml` = dev; `docker-compose.prod.yml` = prod overlay.
-- nginx is the single public entrypoint.
+- Exactly ONE compose file (`docker-compose.yml` = production, pulls GHCR
+  images) and ONE workflow (`.github/workflows/cicd.yml`). Never add overlays.
+- Local dev runs natively (uvicorn + vite); CI uses GH Actions `services:`.
+- nginx, baked into the frontend image, is the single public entrypoint.
 
 ## 7. Testing
 

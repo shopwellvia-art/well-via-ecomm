@@ -24,6 +24,7 @@ import {
   friendlyGeoError,
 } from '@/features/addresses/hooks.js';
 import AddressSelectDrawer from '@/features/addresses/components/AddressSelectDrawer.jsx';
+import { toast } from '@/components/ui/Toaster.jsx';
 import { useAuthStore } from '@/features/auth/store.js';
 import FreeShippingNudge from '@/features/shipping/components/FreeShippingNudge.jsx';
 import { useRateQuote, useServiceability } from '@/features/shipping/hooks.js';
@@ -330,6 +331,11 @@ export default function CartPage() {
         await addToWishlist.mutateAsync(item.product_id);
       }
       await removeItem.mutateAsync(item.product_id);
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.error?.message ||
+          'Could not save this item for later. Please try again.',
+      );
     } finally {
       setSavingForLater(null);
     }
@@ -337,12 +343,29 @@ export default function CartPage() {
 
   function handleRemoveItem(productId) {
     setRemovingId(productId);
-    removeItem.mutate(productId, { onSettled: () => setRemovingId(null) });
+    removeItem.mutate(productId, {
+      onError: (err) =>
+        toast.error(
+          err?.response?.data?.error?.message ||
+            'Could not remove this item. Please try again.',
+        ),
+      onSettled: () => setRemovingId(null),
+    });
   }
 
   function handleUpdateQty(productId, quantity) {
     setUpdatingId(productId);
-    updateQty.mutate({ productId, quantity }, { onSettled: () => setUpdatingId(null) });
+    updateQty.mutate(
+      { productId, quantity },
+      {
+        onError: (err) =>
+          toast.error(
+            err?.response?.data?.error?.message ||
+              'Could not update the quantity. Please try again.',
+          ),
+        onSettled: () => setUpdatingId(null),
+      },
+    );
   }
 
   function handleDetectLocation() {

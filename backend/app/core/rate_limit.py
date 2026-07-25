@@ -11,16 +11,46 @@ than locking out every customer — a tradeoff we accept for an auth surface.
 """
 from __future__ import annotations
 
+import ipaddress
 import logging
 import time
+from functools import lru_cache
 from typing import Optional
 
 import redis
 
 from app.core.config import settings
+from app.db.redis import get_redis
 from app.core.exceptions import TooManyRequestsError
 
 logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=1)
+def _trusted_networks() -> tuple[ipaddress._BaseNetwork, ...]:
+    """Parse settings.TRUSTED_PROXIES into networks once.
+
+    Each entry may be a bare IP ("127.0.0.1") or CIDR ("172.16.0.0/12"); a bare
+    IP becomes a /32 (or /128) host network. Behind Docker the nginx container's
+    bridge IP is dynamic, so the deployment trusts the bridge subnet as a CIDR —
+    without this every request collapses to the proxy IP and all per-IP limits
+    share one global bucket. Invalid entries are skipped with a warning.
+    """
+    nets: list[ipaddress._BaseNetwork] = []
+    for entry in settings.TRUSTED_PROXIES:
+        try:
+            nets.append(ipaddress.ip_network(entry, strict=False))
+        except ValueError:
+            logger.warning("ignoring invalid TRUSTED_PROXIES entry: %r", entry)
+    return tuple(nets)
+
+
+def _is_trusted_proxy(peer: str) -> bool:
+    try:
+        addr = ipaddress.ip_address(peer)
+    except ValueError:
+        return False
+    return any(addr in net for net in _trusted_networks())
 
 
 class RateLimiter:
@@ -28,9 +58,7 @@ class RateLimiter:
     keeps one instance around per request to share the connection."""
 
     def __init__(self, client: Optional[redis.Redis] = None):
-        self.redis = client or redis.Redis.from_url(
-            settings.REDIS_URL, decode_responses=True
-        )
+        self.redis = client or get_redis()
 
     def enforce(
         self,
@@ -120,12 +148,13 @@ def get_client_ip(request) -> str:
     """Extract the originating client IP.
 
     Trusts `X-Forwarded-For` only when the connecting peer is in
-    `settings.TRUSTED_PROXIES` (nginx in this stack). Otherwise falls back to
-    the raw connection peer. This blocks spoofed headers from arbitrary clients
-    while still giving us the real IP behind the reverse proxy.
+    `settings.TRUSTED_PROXIES` (nginx in this stack), matched by IP or CIDR.
+    Otherwise falls back to the raw connection peer. This blocks spoofed headers
+    from arbitrary clients while still giving us the real IP behind the reverse
+    proxy.
     """
     peer = (request.client.host if request.client else "") or "unknown"
-    if peer in settings.TRUSTED_PROXIES:
+    if _is_trusted_proxy(peer):
         xff = request.headers.get("x-forwarded-for")
         if xff:
             # First entry is the original client; the rest are intermediate
