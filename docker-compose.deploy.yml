@@ -46,8 +46,21 @@ services:
     depends_on:
       - backend
     ports:
-      # pg_360 owns :80 on this host; simple-com is published on :8080.
-      - "8080:80"
+      # The standalone edge nginx (/home/ubuntu/reverse-proxy) owns :80/:443 and
+      # all TLS on this host; it proxies shopwellvia.in to this container's
+      # published port. Keep this in sync with reverse-proxy/conf.d/shopwellvia.in.conf
+      # — changing it here without changing there takes the site down.
+      - "8090:80"
+    # Overrides the image's baked-in HEALTHCHECK. The image built before
+    # 2026-07-24 probes http://localhost/, which busybox wget resolves to ::1
+    # and gets refused, so the container reports unhealthy while serving fine.
+    # Pinning 127.0.0.1 here fixes it without waiting on an image rebuild.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   redis_data:
