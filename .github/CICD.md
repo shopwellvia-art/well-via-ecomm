@@ -253,7 +253,8 @@ and the workflow reads them with `${{ secrets.NAME }}`.
 | `EC2_USER` | SSH username on that server | `ubuntu` or `ec2-user` |
 | `EC2_APP_DIR` | Folder on EC2 that holds the compose file | `/home/ubuntu/well-via` |
 | `SSH_PRIVATE_KEY` | Private key that can SSH into EC2 | contents of your `.pem` / `id_ed25519` |
-| `GHCR_PAT` | GitHub token used **on the EC2** to pull private images | a Personal Access Token with `read:packages` |
+| `GHCR_USER` | GitHub **username** that owns `GHCR_PAT` — **not** the org name | `9741Prajwalj` |
+| `GHCR_PAT` | GitHub token used **on the EC2** to pull private images | a **classic** PAT with `read:packages` (SSO-authorised if the org requires it) |
 
 > `GITHUB_TOKEN` (used to **push** images to GHCR inside the Actions runner) is
 > provided **automatically** by GitHub — you do **not** create it. It only needs
@@ -436,7 +437,7 @@ docker rm -f ci-mysql ci-redis
 | A broken test reached production | **Expected — CI runs no tests.** | Nothing in the pipeline will catch this. Run §9 locally before merging. |
 | `build-and-push`/`deploy` skipped | Not on `production`, or the `frontend` job failed | Gated on `needs: [frontend]` **and** `github.ref == 'refs/heads/production'`. Fix the red job or push to `production`. |
 | Deploy red at "Copy compose file"/SSH step | Missing/wrong secret (`EC2_HOST`, `SSH_PRIVATE_KEY`, …) | Re-check the 5 secrets in section 5; confirm the key can SSH manually. |
-| Deploy red at the pull/recreate step | EC2 can't authenticate to GHCR | `GHCR_PAT` invalid or lacks `read:packages`; regenerate it. |
+| Deploy red at the pull/recreate step with `Get "https://ghcr.io/v2/": denied: denied` | EC2 can't authenticate to GHCR | `GHCR_USER` must be a GitHub **username** (not the org `shopwellvia-art`). `GHCR_PAT` must be a **classic** PAT with `read:packages`, and SSO-authorised for the org if SSO is on. `unauthorized` instead of `denied` means the token is wrong/expired — regenerate it. |
 | Deploy log says `keeping <id> (still in use)` | **Not an error.** The old image is still backing a running container, so Docker declined to delete it | Normal, e.g. when redeploying the same SHA. The following `docker image prune -af` cleans up whatever is genuinely unreferenced. |
 | An unrelated image vanished from the EC2 | `docker image prune -af` is **host-wide** — it removes any image with no container attached | Re-pull it. If that host holds images worth keeping, scope the cleanup to the two GHCR repos by tag instead of a blanket prune. |
 | Rollback is slow now | Old `:<sha>` images are deleted from the host after each deploy | Expected. The images are still in GHCR: `IMAGE_TAG=<old-sha> docker compose pull backend frontend && docker compose up -d` — it just has to download first. |

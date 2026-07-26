@@ -61,11 +61,15 @@ In the repo: **Settings → Secrets and variables → Actions → New repository
 | `EC2_USER` | SSH user — `ubuntu` (Ubuntu AMI) or `ec2-user` (Amazon Linux) |
 | `SSH_PRIVATE_KEY` | **Full contents** of the private key (`.pem`) you SSH in with |
 | `EC2_APP_DIR` | App directory on the host, e.g. `/home/ubuntu/app` |
+| `GHCR_USER` | The GitHub **username** that owns `GHCR_PAT` (e.g. `9741Prajwalj`) — **not** the org `shopwellvia-art` |
 | `GHCR_PAT` | A GitHub **classic PAT** with the `read:packages` scope (used by the EC2 to pull images) |
 
 > `GHCR_PAT`: GitHub → Settings → Developer settings → Personal access tokens →
-> Tokens (classic) → Generate, tick **`read:packages`**. (Pushing from Actions
-> uses the built-in `GITHUB_TOKEN`; the PAT is only for the EC2 to pull.)
+> Tokens (classic) → Generate, tick **`read:packages`**. If the
+> `shopwellvia-art` org has SSO enabled, click **Configure SSO → Authorize** on
+> the token afterwards or GHCR answers `denied`. Fine-grained PATs do **not**
+> work here — it must be a classic token. (Pushing from Actions uses the
+> built-in `GITHUB_TOKEN`; the PAT is only for the EC2 to pull.)
 
 ---
 
@@ -203,7 +207,7 @@ bash ~/app/backend/scripts/backup_db.sh  # writes ./backups/<db>-<ts>.sql.gz
 | Symptom | Fix |
 |---------|-----|
 | Actions deploy step: `permission denied (publickey)` | `SSH_PRIVATE_KEY` must be the **entire** private key incl. `-----BEGIN/END-----`. `EC2_USER` correct (`ubuntu` vs `ec2-user`). |
-| EC2 `docker login` / pull fails | `GHCR_PAT` needs `read:packages`; or make the packages Public. |
+| EC2 `docker login` / pull fails with `denied: denied` | `GHCR_USER` must be a GitHub **username**, not the org. `GHCR_PAT` must be a **classic** PAT with `read:packages`, SSO-authorised for the org. Or make both packages Public and drop the login. |
 | Site loads but images 404 | `MEDIA_BASE_URL` in `backend/.env` must equal `http://<EC2-IP>:8090`; re-`up -d` the backend. |
 | 413 on upload | Already handled (`client_max_body_size 20m` in the frontend nginx) — rebuild/pull the frontend image. |
 | Backend can't reach DB | EC2 must reach your MySQL host/port; check the DB firewall/security group and `MYSQL_*` in `backend/.env`. |

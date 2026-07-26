@@ -196,8 +196,26 @@ jobs:
             set -euo pipefail
             cd "$APP_DIR"
 
-            # Authenticate so the private GHCR packages can be pulled.
-            echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            # Authenticate so the private GHCR packages can be pulled. Both
+            # packages are Private, so this is NOT optional — without it the
+            # `docker compose pull` below dies with "denied: denied".
+            #
+            # GHCR_USER must be the GitHub *user account* that owns GHCR_PAT,
+            # NOT the org (`shopwellvia-art`) — an org name cannot log in.
+            if [ -z "${GHCR_USER:-}" ] || [ -z "${GHCR_PAT:-}" ]; then
+              echo "FAIL: GHCR_USER and/or GHCR_PAT repo secret is empty."
+              echo "  GHCR_USER = your GitHub username (e.g. 9741Prajwalj)"
+              echo "  GHCR_PAT  = classic PAT with read:packages"
+              exit 1
+            fi
+            if ! echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin; then
+              echo "FAIL: GHCR rejected the login for user '$GHCR_USER'."
+              echo "  'denied'      -> PAT is missing the read:packages scope,"
+              echo "                   is a fine-grained PAT, or was never"
+              echo "                   SSO-authorised for the shopwellvia-art org."
+              echo "  'unauthorized'-> PAT is wrong or expired. Regenerate it."
+              exit 1
+            fi
 
             # Leftover from the old multi-file layout; this repo now ships a
             # single docker-compose.yml. Harmless if already gone.
@@ -254,7 +272,9 @@ jobs:
             docker images
         env:
           IMAGE_TAG: ${{ github.sha }}
-          GHCR_USER: ${{ github.repository_owner }}
+          # NOT github.repository_owner — that resolves to the ORG name
+          # (shopwellvia-art), which GHCR will not accept as a login user.
+          GHCR_USER: ${{ secrets.GHCR_USER }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
           APP_DIR: ${{ secrets.EC2_APP_DIR }}
 
