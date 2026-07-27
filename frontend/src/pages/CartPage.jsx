@@ -390,8 +390,9 @@ export default function CartPage() {
     navigate('/checkout');
   }
 
-  /* ── Auth gate ── */
-  if (!user || status === 401) {
+  /* ── Auth gate — only for stale signed-in sessions (server cart 401).
+        Guests get the client-side cart, matching the drawer's guest flow. ── */
+  if (status === 401) {
     return (
       <div className="mx-auto flex min-h-[60vh] max-w-[1320px] flex-col items-center justify-center px-4 py-20 text-center">
         <div className="mb-5 grid size-16 place-items-center rounded-full bg-wgold/10 text-wgold">
@@ -525,7 +526,9 @@ export default function CartPage() {
                 address={selectedAddress}
                 detectedPincode={detectedPincode}
                 serviceability={serviceability}
-                onChange={() => setDrawerOpen(true)}
+                onChange={() =>
+                  user ? setDrawerOpen(true) : navigate('/login?next=/cart')
+                }
                 onDetect={handleDetectLocation}
                 detectPending={detectLocation.isPending}
                 detectError={detectError}
@@ -663,18 +666,20 @@ export default function CartPage() {
                             </button>
                           </div>
 
-                          {/* Save for later */}
-                          <button
-                            type="button"
-                            disabled={busy}
-                            aria-label={`Save ${item.name} for later`}
-                            onClick={() => handleSaveForLater(item)}
-                            className="text-sm font-medium text-wmuted transition-colors hover:text-wgreen disabled:opacity-50"
-                          >
-                            {savingForLater === item.product_id
-                              ? 'Saving…'
-                              : 'Save for later'}
-                          </button>
+                          {/* Save for later — wishlist is per-account, so signed-in only */}
+                          {user && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              aria-label={`Save ${item.name} for later`}
+                              onClick={() => handleSaveForLater(item)}
+                              className="text-sm font-medium text-wmuted transition-colors hover:text-wgreen disabled:opacity-50"
+                            >
+                              {savingForLater === item.product_id
+                                ? 'Saving…'
+                                : 'Save for later'}
+                            </button>
+                          )}
 
                           {/* Remove */}
                           <button
@@ -829,9 +834,21 @@ export default function CartPage() {
               </div>
             </div>
 
-            {/* Coupon card */}
+            {/* Coupon card — coupons apply to server carts only (drawer parity) */}
             <div className="mt-4 rounded-xl2 border border-wline bg-wcard p-5">
-              <CouponBlock appliedCode={couponCode} discount={discountAmount} />
+              {user ? (
+                <CouponBlock appliedCode={couponCode} discount={discountAmount} />
+              ) : (
+                <div>
+                  <p className="mb-2 text-sm font-medium text-wmuted">Have a coupon?</p>
+                  <Link
+                    to="/login?next=/cart"
+                    className="text-sm font-semibold text-wgreen underline underline-offset-4 hover:text-wgreen-dark"
+                  >
+                    Log in to apply coupons
+                  </Link>
+                </div>
+              )}
             </div>
 
             {/* Continue shopping link */}

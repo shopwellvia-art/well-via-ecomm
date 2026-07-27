@@ -37,6 +37,11 @@ PERMISSIONS: tuple[PermissionDef, ...] = (
     # Users / RBAC
     PermissionDef("users.view", "View users", "Users"),
     PermissionDef("users.update", "Update users (activate/deactivate)", "Users"),
+    PermissionDef(
+        "users.manage",
+        "Edit user accounts (name, active status) and trigger password resets",
+        "Users",
+    ),
     PermissionDef("users.assign_role", "Assign roles to users", "Users"),
     PermissionDef("roles.view", "View roles & permissions", "RBAC"),
     PermissionDef("roles.create", "Create roles", "RBAC"),

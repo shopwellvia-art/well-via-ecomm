@@ -55,7 +55,8 @@ export function useCancelOrder() {
 export function useRefundOrder() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: ({ id, reason }) => adminOrdersApi.refund(id, reason),
+    mutationFn: ({ id, reason, force_manual = false }) =>
+      adminOrdersApi.refund(id, { reason, force_manual }),
     onSuccess: (_d, vars) => invalidate(vars.id),
   });
 }

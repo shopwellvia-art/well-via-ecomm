@@ -278,5 +278,23 @@ class RefundOrCancelRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=255)
 
 
+class AdminRefundRequest(RefundOrCancelRequest):
+    """Body of POST /orders/admin/{id}/refund.
+
+    `force_manual` skips the gateway call entirely and records the refund for
+    offline/manual processing (e.g. the operator already reversed it in the
+    gateway dashboard, or wants to settle by bank transfer).
+    """
+
+    force_manual: bool = False
+
+
+class CustomerCancelRequest(BaseModel):
+    """Optional body of POST /orders/{id}/cancel (customer self-service).
+    Omitted/blank reason falls back to "Cancelled by customer"."""
+
+    reason: str | None = Field(default=None, max_length=255)
+
+
 class NotesRequest(BaseModel):
     internal_notes: str | None = Field(default=None, max_length=4000)

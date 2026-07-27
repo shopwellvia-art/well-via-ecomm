@@ -1,11 +1,18 @@
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { apiClient } from '@/services/apiClient.js';
+import { FileDown, XCircle } from 'lucide-react';
 import AccountLayout from '@/components/storefront/AccountLayout.jsx';
 import WImage from '@/components/storefront/WImage.jsx';
 import { TruckIcon, Check } from '@/components/storefront/Icons.jsx';
+import { toast } from '@/components/ui/Toaster.jsx';
 import { useAuthStore } from '@/features/auth/store.js';
+import { useOrderDetail, useDownloadInvoice } from '@/features/orders/hooks.js';
+import {
+  hasInvoice,
+  isOrderCancellable,
+  readApiErrorMessage,
+} from '@/features/orders/api.js';
+import CancelOrderModal from '@/features/orders/components/CancelOrderModal.jsx';
 import { formatPrice, cn } from '@/lib/utils.js';
 
 // ── Status pill styles (no @/components/ui/Badge) ────────────────────────────
@@ -351,18 +358,6 @@ function TrackingDisclosure({ awb, events }) {
   );
 }
 
-// ── Data hook ────────────────────────────────────────────────────────────────
-
-function useOrderDetail(id) {
-  const token = useAuthStore((s) => s.accessToken);
-  return useQuery({
-    queryKey: ['order', id],
-    queryFn: () => apiClient.get(`/orders/${id}`).then((r) => r.data),
-    enabled: !!token && !!id,
-    retry: false,
-  });
-}
-
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function OrderDetailPage() {
@@ -370,6 +365,8 @@ export default function OrderDetailPage() {
   const user = useAuthStore((s) => s.user);
 
   const { data: order, isLoading, isError, error } = useOrderDetail(id);
+  const downloadInvoice = useDownloadInvoice();
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   if (!user) return <Navigate to="/login" replace />;
 
@@ -446,6 +443,22 @@ export default function OrderDetailPage() {
 
   const statusPillCls = STATUS_PILL[order.status] || 'bg-wcanvas text-wmuted border border-wline';
 
+  // Invoice exists only once there's a real supply behind the order
+  // (backend 409s for PENDING/CANCELLED); cancel only while we can still
+  // stop fulfilment (PENDING, or PAID with no carrier engagement yet).
+  const canDownloadInvoice = hasInvoice(order);
+  const canCancel = isOrderCancellable(order);
+
+  async function handleDownloadInvoice() {
+    try {
+      await downloadInvoice.mutateAsync(order.id);
+    } catch (err) {
+      toast.error(
+        await readApiErrorMessage(err, 'Could not download the invoice.'),
+      );
+    }
+  }
+
   return (
     <AccountLayout active="orders">
       {/* Back link */}
@@ -485,6 +498,33 @@ export default function OrderDetailPage() {
           </span>
         </div>
       </div>
+
+      {/* ── Actions row (invoice download / self-service cancel) ─────────── */}
+      {(canDownloadInvoice || canCancel) && (
+        <div className="mb-4 flex flex-wrap items-center justify-end gap-2.5">
+          {canDownloadInvoice && (
+            <button
+              type="button"
+              onClick={handleDownloadInvoice}
+              disabled={downloadInvoice.isPending}
+              className="flex items-center gap-1.5 rounded-full border border-wline bg-transparent px-5 py-2 text-[13px] text-wink transition-colors hover:border-wgreen hover:text-wgreen disabled:pointer-events-none disabled:opacity-50"
+            >
+              <FileDown className="size-3.5" aria-hidden="true" />
+              {downloadInvoice.isPending ? 'Preparing…' : 'Download invoice'}
+            </button>
+          )}
+          {canCancel && (
+            <button
+              type="button"
+              onClick={() => setShowCancelModal(true)}
+              className="flex items-center gap-1.5 rounded-full border border-wline bg-transparent px-5 py-2 text-[13px] text-wink transition-colors hover:border-red-400 hover:text-red-600"
+            >
+              <XCircle className="size-3.5" aria-hidden="true" />
+              Cancel order
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── b) Status timeline ───────────────────────────────────────────── */}
       <OrderProgress order={order} />
@@ -777,6 +817,14 @@ export default function OrderDetailPage() {
 
         </div>
       </div>
+
+      {/* Cancel-order confirm modal */}
+      {showCancelModal && (
+        <CancelOrderModal
+          order={order}
+          onClose={() => setShowCancelModal(false)}
+        />
+      )}
     </AccountLayout>
   );
 }

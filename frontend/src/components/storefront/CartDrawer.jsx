@@ -14,30 +14,6 @@ import CartItemRow from '@/features/cart/components/CartItemRow.jsx';
 import { formatPrice } from '@/lib/utils';
 import { CloseIcon } from './Icons';
 
-// Fallback demo data matching the mockup (used only when the real cart
-// has no items yet, e.g. no backend wired up) so the drawer always shows
-// "Sleep Gummies" + "Multivitamin Gummies" like the design.
-const MOCK_ITEMS = [
-  {
-    product_id: 'mock-sleep-gummies',
-    name: 'Sleep Gummies',
-    variant_label: 'Pack of 30',
-    unit_price: 349,
-    compare_at_price: null,
-    quantity: 1,
-    image: "/sleep-gummies.png",
-  },
-  {
-    product_id: 'mock-multivitamin-gummies',
-    name: 'Multivitamin Gummies',
-    variant_label: 'Pack of 30',
-    unit_price: 349,
-    compare_at_price: null,
-    quantity: 1,
-    image: "/multi-gummies.png",
-  },
-];
-
 // Each mark gets its own brand-ish background + text color so the row reads
 // as logo badges rather than plain gray pills (matches the mockup).
 const PAYMENT_MARKS = [
@@ -78,9 +54,8 @@ export default function CartDrawer() {
 
   if (!isOpen) return null;
 
-  const realItems = cartData?.items ?? [];
-  const items = !isLoading && realItems.length === 0 ? MOCK_ITEMS : realItems;
-  const total = cartData?.total ?? (items === MOCK_ITEMS ? 698 : 0);
+  const items = cartData?.items ?? [];
+  const total = cartData?.total ?? 0;
   const count = items.reduce((s, i) => s + (i.quantity || 0), 0);
 
   // Σ MRP savings across lines (+ coupon discount when applied).
@@ -127,7 +102,7 @@ export default function CartDrawer() {
 
   function goCheckout() {
     closeDrawer();
-    navigate('/checkoutfirst');
+    navigate('/checkout');
   }
 
   return (
@@ -211,7 +186,8 @@ export default function CartDrawer() {
             </div>
           )}
 
-          <>
+          {!isLoading && items.length > 0 && (
+            <>
               {/* Coupons & Offers */}
               <div className="rounded-xl2 border-2 border-blue-500 bg-wcard p-4">
                 <div className="flex items-center justify-between mb-1">
@@ -222,7 +198,7 @@ export default function CartDrawer() {
                     </span>
                   </div>
                   <Link
-                    to="/offers"
+                    to="/products"
                     onClick={closeDrawer}
                     className="text-[12.5px] text-[#08112C] underline"
                   >
@@ -353,10 +329,12 @@ export default function CartDrawer() {
                 </span>
               </div>
             </>
+          )}
         </div>
 
         {/* Sticky footer — total + checkout */}
-        <div className="px-5 py-4 border-t border-wline bg-wcard shrink-0 flex items-center gap-4">
+        {!isLoading && items.length > 0 && (
+          <div className="px-5 py-4 border-t border-wline bg-wcard shrink-0 flex items-center gap-4">
             <div className="min-w-0">
               <span className="font-wserif text-[24px] text-wink leading-none block">
                 {formatPrice(total)}
@@ -376,6 +354,7 @@ export default function CartDrawer() {
               Proceed to Checkout
             </button>
           </div>
+        )}
       </aside>
     </>
   );

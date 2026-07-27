@@ -1,82 +1,73 @@
 import { useEffect, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { cn } from '@/lib/utils';
+import { cn, mediaUrl } from '@/lib/utils';
 import { safeUrl } from '@/lib/safeUrl';
 import { useFooterConfig } from '@/features/footer/hooks';
 import { FOOTER_DEFAULTS, resolveIcon } from '@/features/footer/defaults';
+import { useStorefrontConfigWithDefaults } from '@/features/storefront-config/hooks.js';
 import { useSubscribeNewsletter } from '@/features/contact/hooks.js';
 import { LeafMark } from './Logo';
 
 /**
  * Storefront footer — dark-green Wellvia band (redesign mockups).
  *
- * Left: logo block + tagline + newsletter signup (real POST /newsletter/subscribe).
- * Right: Shop / Explore / Customer Care link columns + social icons.
- * Bottom: divider + copyright.
+ * Left: brand block + tagline + newsletter signup (real POST /newsletter/subscribe).
+ * Right: admin-managed link columns + social icons.
+ * Bottom: optional address blocks, payment badges, divider + copyright.
  *
  * Wiring:
- *   - useFooterConfig(): social_links + newsletter.enabled flag + the existing
- *     policy links (Help / Consumer Policy columns), which are reorganized
- *     under "Customer Care". Brand copy is pinned to the Wellvia mockup —
- *     the stored config still carries placeholder branding.
+ *   - useFooterConfig(): link_columns, social_links, newsletter.enabled,
+ *     mail_us / registered_office, payment_methods and copyright.
+ *   - useStorefrontConfigWithDefaults(): canonical brand identity (logo,
+ *     brand name, tagline) shared with the header.
  *   - Newsletter: useSubscribeNewsletter() with success/error states.
  */
 
 const TAGLINE =
   'Delicious wellness gummies crafted to support your everyday goals — from better sleep to daily vitality.';
 
-const SHOP_LINKS = [
-  { label: 'All Products', to: '/products' },
-  { label: 'Best Sellers', to: '/bestsellers' },
-  { label: 'New Arrivals', to: '/new-arrivals' },
-  { label: 'Combos', to: '/categories' },
-  { label: 'Shop by Goal', to: '/products' },
-];
-
-const EXPLORE_LINKS = [
-  { label: 'About Us', to: '/about' },
-  { label: 'Blog', to: '/stories' },
-  { label: 'FAQs', to: '/contact' },
-  { label: 'Contact Us', to: '/contact' },
-  { label: 'Track Order', to: '/orders' },
-];
-
-// Fallback when the footer config carries no policy/help columns.
-const CARE_FALLBACK = [
-  { label: 'Shipping Policy', to: '/shipping' },
-  { label: 'Refund & Cancellation', to: '/refund' },
-  { label: 'Terms & Conditions', to: '/terms' },
-  { label: 'Privacy Policy', to: '/privacy' },
-  { label: 'Contact Us', to: '/contact' },
-];
-
-/** Existing policy/help links from the config, reorganized under one heading. */
-function customerCareLinks(linkColumns) {
-  const links = [];
-  const seen = new Set();
-  for (const col of linkColumns ?? []) {
-    if (!/policy|help|care/i.test(col?.title || '')) continue;
-    for (const l of col.links ?? []) {
-      const key = (l?.label || '').trim().toLowerCase();
-      if (!l?.to || !key || seen.has(key)) continue;
-      seen.add(key);
-      links.push(l);
-    }
+/** Internal targets use client-side routing; anything else goes through safeUrl. */
+function FooterLink({ link, className }) {
+  const target = link.to ?? link.href ?? '';
+  if (target.startsWith('/')) {
+    return (
+      <Link to={target} className={className}>
+        {link.label}
+      </Link>
+    );
   }
-  return (links.length > 0 ? links : CARE_FALLBACK).slice(0, 6);
+  return (
+    <a href={safeUrl(target)} target="_blank" rel="noreferrer" className={className}>
+      {link.label}
+    </a>
+  );
+}
+
+/** True when an admin-editable address block has at least one non-empty line. */
+function hasLines(block) {
+  return (block?.lines ?? []).some((l) => typeof l === 'string' && l.trim() !== '');
 }
 
 export default function Footer() {
   const { data } = useFooterConfig();
   const cfg = { ...FOOTER_DEFAULTS, ...data };
+  const { config: brand } = useStorefrontConfigWithDefaults();
   const year = new Date().getFullYear();
 
   const socialLinks = cfg.social_links ?? [];
-  const columns = [
-    { title: 'Shop', links: SHOP_LINKS },
-    { title: 'Explore', links: EXPLORE_LINKS },
-    { title: 'Customer Care', links: customerCareLinks(cfg.link_columns) },
-  ];
+  const columns = (cfg.link_columns ?? []).filter(
+    (col) => (col?.links ?? []).length > 0,
+  );
+  const paymentMethods = (cfg.payment_methods ?? []).filter(Boolean);
+  const showMailUs = hasLines(cfg.mail_us);
+  const showRegisteredOffice = hasLines(cfg.registered_office);
+
+  // "{year}" token → computed year; without the token the year is inserted
+  // after the © sign so the bottom bar keeps reading "© 2026 …".
+  const copyrightRaw = cfg.copyright || FOOTER_DEFAULTS.copyright;
+  const copyright = copyrightRaw.includes('{year}')
+    ? copyrightRaw.replace('{year}', String(year))
+    : copyrightRaw.replace(/^©\s*/, `© ${year} `);
 
   return (
     <footer className="bg-[#08112C] text-wpaper">
@@ -84,15 +75,25 @@ export default function Footer() {
         <div className="flex flex-wrap gap-x-14 gap-y-12 justify-between">
           {/* ── Brand + newsletter ─────────────────────────────────────── */}
           <div className="flex-1 basis-[340px] min-w-[270px] max-w-[430px]">
-            <div className="mb-1.5">
-              <LeafMark size={52} color="#D9C9A6" />
-            </div>
-            <div className="font-display tracking-[0.3em] text-[clamp(26px,2.6vw,34px)] font-medium text-[#E9DDC0]">
-              WELLVIA
-              <span className="text-[11px] align-super tracking-normal ml-0.5">™</span>
-            </div>
+            {brand.logo_url ? (
+              <img
+                src={mediaUrl(brand.logo_url)}
+                alt={brand.brand_name}
+                className="max-h-[64px] w-auto object-contain mb-1.5"
+              />
+            ) : (
+              <>
+                <div className="mb-1.5">
+                  <LeafMark size={52} color="#D9C9A6" />
+                </div>
+                <div className="font-display tracking-[0.3em] text-[clamp(26px,2.6vw,34px)] font-medium text-[#E9DDC0]">
+                  {brand.brand_name}
+                  <span className="text-[11px] align-super tracking-normal ml-0.5">™</span>
+                </div>
+              </>
+            )}
             <div className="text-[10px] tracking-[0.42em] uppercase text-wpaper/60 mt-1 mb-6">
-              Wellness Redefined
+              {brand.tagline}
             </div>
 
             <p className="font-wserif text-[17px] leading-[1.55] text-wpaper/90 m-0 mb-7 max-w-[360px]">
@@ -105,20 +106,18 @@ export default function Footer() {
           {/* ── Link columns ───────────────────────────────────────────── */}
           <div className="flex-[2] basis-[520px] min-w-[260px]">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-8 gap-y-10">
-              {columns.map((col) => (
-                <nav key={col.title} aria-label={col.title}>
+              {columns.map((col, i) => (
+                <nav key={`${col.title}-${i}`} aria-label={col.title}>
                   <h3 className="font-wserif font-semibold text-[20px] text-wpaper m-0 mb-5 underline underline-offset-[7px] decoration-1 decoration-wpaper/70">
                     {col.title}
                   </h3>
                   <ul className="m-0 p-0 list-none flex flex-col gap-3.5">
                     {col.links.map((l) => (
-                      <li key={`${l.label}-${l.to}`}>
-                        <Link
-                          to={l.to}
+                      <li key={`${l.label}-${l.to ?? l.href}`}>
+                        <FooterLink
+                          link={l}
                           className="font-wserif text-[17px] text-wpaper/90 no-underline hover:text-wgold transition-colors"
-                        >
-                          {l.label}
-                        </Link>
+                        />
                       </li>
                     ))}
                   </ul>
@@ -150,11 +149,74 @@ export default function Footer() {
           </div>
         </div>
 
+        {/* ── Address blocks (admin-editable, hidden while empty) ──────── */}
+        {(showMailUs || showRegisteredOffice) && (
+          <div className="flex flex-wrap gap-x-14 gap-y-8 mt-12">
+            {showMailUs && (
+              <div className="flex-1 basis-[280px] min-w-[240px]">
+                <h3 className="font-wserif font-semibold text-[17px] text-wpaper m-0 mb-3">
+                  {cfg.mail_us.heading || 'Mail Us'}
+                </h3>
+                <address className="not-italic text-[13.5px] leading-[1.7] text-wpaper/75 m-0">
+                  {cfg.mail_us.lines
+                    .filter((l) => l && l.trim())
+                    .map((line) => (
+                      <span key={line} className="block">
+                        {line}
+                      </span>
+                    ))}
+                </address>
+              </div>
+            )}
+            {showRegisteredOffice && (
+              <div className="flex-1 basis-[280px] min-w-[240px]">
+                <h3 className="font-wserif font-semibold text-[17px] text-wpaper m-0 mb-3">
+                  {cfg.registered_office.heading || 'Registered Office Address'}
+                </h3>
+                <address className="not-italic text-[13.5px] leading-[1.7] text-wpaper/75 m-0">
+                  {cfg.registered_office.lines
+                    .filter((l) => l && l.trim())
+                    .map((line) => (
+                      <span key={line} className="block">
+                        {line}
+                      </span>
+                    ))}
+                  {cfg.registered_office.cin && (
+                    <span className="block mt-2">CIN: {cfg.registered_office.cin}</span>
+                  )}
+                  {(cfg.registered_office.phones ?? []).map((p) => (
+                    <a
+                      key={p.tel || p.display}
+                      href={safeUrl(`tel:${p.tel}`)}
+                      className="block text-wpaper/75 no-underline hover:text-wgold transition-colors"
+                    >
+                      {p.display}
+                    </a>
+                  ))}
+                </address>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Bottom bar ───────────────────────────────────────────────── */}
         <div className="border-t border-wpaper/25 mt-10 pt-6 text-center">
-          <p className="font-wserif text-[16px] text-wpaper/90 m-0">
-            © {year} Wellvia. All rights reserved.
-          </p>
+          {paymentMethods.length > 0 && (
+            <ul
+              className="m-0 mb-4 p-0 list-none flex flex-wrap items-center justify-center gap-2.5"
+              aria-label="Accepted payment methods"
+            >
+              {paymentMethods.map((m) => (
+                <li
+                  key={m}
+                  className="rounded-[6px] border border-wpaper/30 px-2.5 py-1 text-[11px] tracking-[0.08em] text-wpaper/80"
+                >
+                  {m}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="font-wserif text-[16px] text-wpaper/90 m-0">{copyright}</p>
         </div>
       </div>
     </footer>

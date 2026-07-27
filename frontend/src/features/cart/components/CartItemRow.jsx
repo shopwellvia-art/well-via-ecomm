@@ -8,8 +8,8 @@ import { formatPrice } from '@/lib/utils.js';
  * chip, qty stepper, trash). Shared by the CartDrawer and CartPage; owns its
  * own quantity/remove mutations so callers just pass the item.
  *
- * `item` is a server CartItemRead (guest carts compose the same shape and
- * add image_url).
+ * `item` is a cart line from useCart — guest carts compose image_url from
+ * product data and useCart backfills it onto server carts the same way.
  */
 export default function CartItemRow({ item }) {
   const updateQty = useUpdateCartQuantity();
@@ -25,7 +25,7 @@ export default function CartItemRow({ item }) {
   return (
     <div className="flex gap-3.5 rounded-xl2 border border-wline bg-wcard p-3.5 shadow-sm">
       <WImage
-        src={item.image}
+        src={item.image_url}
         alt={item.name}
         shape="rounded"
         className="w-[72px] h-[84px] shrink-0 border border-wline"

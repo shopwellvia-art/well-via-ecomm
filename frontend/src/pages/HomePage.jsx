@@ -1,12 +1,22 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useProducts, useBestsellers } from '@/features/products/hooks.js';
 import HeroSection from '@/components/storefront/HeroSection';
-import ProductCard from '@/components/storefront/ProductCard';
+import WImage from '@/components/storefront/WImage';
 import { Stars } from '@/components/storefront/Icons';
 import { Heart } from "lucide-react";
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { AnimatePresence } from "framer-motion";
+import { formatPrice } from '@/lib/utils';
+import { useStorefrontConfigWithDefaults } from '@/features/storefront-config/hooks.js';
+import { useAuthStore } from '@/features/auth/store.js';
+import { useAddToCart } from '@/features/cart/hooks';
+import {
+  useIsInWishlist,
+  useAddToWishlist,
+  useRemoveFromWishlist,
+} from '@/features/wishlist/hooks';
+import { toast } from '@/components/ui/Toaster.jsx';
 
 /* ── Static content (no blog/review backends exist — copy from the mockup) ── */
 
@@ -27,33 +37,6 @@ const BLOG_POSTS = [
     image: '/home/blog-habits.jpg',
   },
 ];
-const DEMO_PRODUCTS = [
-  {
-    id: 1,
-    name: "Sleep Gummies",
-    price: "₹349",
-    image: "/sleep-gummies.png",
-  },
-  {
-    id: 2,
-    name: "Multivitamin Gummies",
-    price: "₹349",
-    image: "/multi-gummies.png",
-  },
-  {
-    id: 3,
-    name: "Immunity Gummies",
-    price: "₹349",
-    image: "/immunity-gummies.png",
-  },
-  {
-    id: 4,
-    name: "Omega Gummies",
-    price: "₹349",
-    image: "/omega-gummies.png",
-  },
-];
-
 const REVIEWS = [
   {
     quote:
@@ -144,6 +127,119 @@ function InlineError({ onRetry }) {
   );
 }
 
+/**
+ * BestsellerCard — homepage rail card over a real API product.
+ * Same wiring as ProductCard (cart, wishlist, guest behaviour) with the
+ * homepage's own card design.
+ */
+function BestsellerCard({ product }) {
+  const addToCart = useAddToCart();
+  const inWishlist = useIsInWishlist(product.id);
+  const addWishlist = useAddToWishlist();
+  const removeWishlist = useRemoveFromWishlist();
+  const isSignedIn = useAuthStore((s) => !!s.accessToken);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const { id, name, price, compare_at_price, image_url, stock } = product;
+  const isDiscounted =
+    compare_at_price != null && Number(compare_at_price) > Number(price);
+  const outOfStock = stock <= 0;
+
+  const handleWishlist = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Wishlist is server-only by design — guests are sent to sign in.
+    if (!isSignedIn) {
+      navigate(`/login?next=${encodeURIComponent(location.pathname + location.search)}`);
+      return;
+    }
+    const onError = (err) =>
+      toast.error(
+        err?.response?.data?.error?.message ||
+          'Could not update your wishlist. Please try again.',
+      );
+    if (inWishlist) {
+      removeWishlist.mutate(id, { onError });
+    } else {
+      addWishlist.mutate(id, { onError });
+    }
+  };
+
+  const handleAddToCart = () => {
+    if (outOfStock) return;
+    addToCart.mutate(
+      { productId: id, quantity: 1 },
+      {
+        onError: (err) =>
+          toast.error(
+            err?.response?.data?.error?.message ||
+              'Could not add to cart. Please try again.',
+          ),
+      },
+    );
+  };
+
+  return (
+    <div className="shrink-0 w-[46%] sm:w-[42%] md:w-auto snap-start rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+      <div className="relative">
+        <Link to={`/products/${id}`} className="block">
+          <WImage
+            src={image_url}
+            alt={name}
+            className="w-full h-40 sm:h-52 md:h-64 object-cover"
+          />
+        </Link>
+
+        {/* Wishlist */}
+        <button
+          onClick={handleWishlist}
+          aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+          className={`absolute top-3 right-3 w-8 h-8 md:w-10 md:h-10 rounded-full bg-white shadow flex items-center justify-center hover:bg-gray-100 transition ${
+            inWishlist ? 'text-red-500' : 'text-wink'
+          }`}
+        >
+          <Heart size={14} fill={inWishlist ? 'currentColor' : 'none'} />
+        </button>
+      </div>
+
+      <div className="p-3 md:p-4">
+        <Link to={`/products/${id}`} className="no-underline text-wink">
+          <h3 className="font-semibold text-[13px] sm:text-base md:text-lg m-0">
+            {name}
+          </h3>
+        </Link>
+
+        <p className="text-[#2B5E3B] font-semibold mt-1 text-[12px] sm:text-sm md:text-base">
+          {formatPrice(price)}
+          {isDiscounted && (
+            <span className="ml-2 text-wmuted font-normal line-through">
+              {formatPrice(compare_at_price)}
+            </span>
+          )}
+        </p>
+
+        {outOfStock ? (
+          <button
+            disabled
+            className="mt-3 md:mt-4 w-full bg-wline/60 text-wmuted rounded-lg py-2 md:py-3 text-[12px] sm:text-sm md:text-base cursor-not-allowed"
+          >
+            Out of Stock
+          </button>
+        ) : (
+          <button
+            onClick={handleAddToCart}
+            disabled={addToCart.isPending}
+            className="mt-3 md:mt-4 w-full bg-[#08112C] text-white rounded-lg py-2 md:py-3 text-[12px] sm:text-sm md:text-base hover:bg-[#08112C] transition disabled:opacity-60"
+          >
+            {addToCart.isPending ? 'Adding…' : 'Add to Cart'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── Page ────────────────────────────────────────────────────────────────── */
 
 export default function HomePage() {
@@ -173,19 +269,21 @@ useEffect(() => {
   });
   const combos = combosData?.items ?? [];
 
-  return (
-    <motion.div
-      initial={reduce ? false : { opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-      className="overflow-hidden"
-    >
-      {/* 1. Hero */}
-      <HeroSection />
+  /* Admin-managed section order/visibility. A non-empty cfg title overrides a
+     section's heading (hero copy comes from hero-slides instead). */
+  const { config } = useStorefrontConfigWithDefaults();
+  const sections = (config.homepage_sections ?? []).filter(
+    (s) => s.visible !== false,
+  );
+  const whyWeExistVisible = sections.some((s) => s.key === 'why-we-exist');
 
-      {/* 2. Why we Exist — spilled-gummies visual left, right-aligned copy */}
-      {/* 2. Why we Exist — spilled-gummies visual left, right-aligned copy */}
-<section
+  const sectionRenderers = {
+    /* 1. Hero */
+    hero: () => <HeroSection showWhyButton={whyWeExistVisible} />,
+
+    /* 2. Why we Exist — spilled-gummies visual left, right-aligned copy */
+    'why-we-exist': (title) => (
+      <section
   id="why-we-exist"
   className="grid grid-cols-[0.85fr_1.15fr] md:grid-cols-[1fr_1.05fr] gap-4 lg:gap-16 items-center pr-5 sm:pr-10 lg:pr-16 py-6 lg:py-[40px]"
 >
@@ -201,7 +299,7 @@ useEffect(() => {
 
   <div className="text-left md:text-right pl-5 sm:pl-10 lg:pl-16">
     <h2 className="font-cormorant font-semibold text-[22px] sm:text-[28px] md:text-[clamp(28px,3vw,40px)] text-[#08112C] m-0 mb-3 md:mb-5">
-      Why we Exist?
+      {title || 'Why we Exist?'}
     </h2>
     <p className="font-cormorant font-semibold text-[16px] sm:text-[20px] md:text-[clamp(22px,2.2vw,30px)] text-wink m-0 mb-2 md:mb-4">
       It started with one belief.
@@ -214,64 +312,42 @@ useEffect(() => {
     </p>
   </div>
 </section>
+    ),
 
-      {/* 3. Product rail — bestsellers */}
-      <section className="px-5 sm:px-10 lg:px-16 py-10 lg:py-[64px]">
-        <h2 className="font-wserif font-semibold text-[clamp(28px,3.2vw,42px)] leading-[1.15] text-wink m-0 mb-8 lg:mb-10 max-w-[520px]">
-          Your body works hard.
-          <br />
-          Help it a little.
-        </h2>
+    /* 3. Product rail — bestsellers (hidden entirely when the API returns none) */
+    'bestsellers-rail': (title) =>
+      (bestsellersLoading || bestsellersError || bestsellers.length > 0) && (
+        <section className="px-5 sm:px-10 lg:px-16 py-10 lg:py-[64px]">
+          <h2 className="font-wserif font-semibold text-[clamp(28px,3.2vw,42px)] leading-[1.15] text-wink m-0 mb-8 lg:mb-10 max-w-[520px]">
+            {title || (
+              <>
+                Your body works hard.
+                <br />
+                Help it a little.
+              </>
+            )}
+          </h2>
 
-      {bestsellersLoading ? (
-  <RailSkeleton />
-) : (
-  <div className="flex md:grid md:grid-cols-4 gap-4 md:gap-6 overflow-x-auto md:overflow-visible snap-x snap-mandatory md:snap-none -mx-5 px-5 md:mx-0 md:px-0 pb-2 scrollbar-hide">
-    {DEMO_PRODUCTS.map((p) => (
-      <div
-        key={p.id}
-        className="shrink-0 w-[46%] sm:w-[42%] md:w-auto snap-start rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm"
-      >
-        <div className="relative">
-          <img
-            src={p.image}
-            alt={p.name}
-            className="w-full h-40 sm:h-52 md:h-64 object-cover"
-          />
+          {bestsellersLoading ? (
+            <RailSkeleton />
+          ) : bestsellersError ? (
+            <InlineError onRetry={refetchBestsellers} />
+          ) : (
+            <div className="flex md:grid md:grid-cols-4 gap-4 md:gap-6 overflow-x-auto md:overflow-visible snap-x snap-mandatory md:snap-none -mx-5 px-5 md:mx-0 md:px-0 pb-2 scrollbar-hide">
+              {bestsellers.map((p) => (
+                <BestsellerCard key={p.id} product={p} />
+              ))}
+            </div>
+          )}
+        </section>
+      ),
 
-          {/* Wishlist */}
-          <button
-            className="absolute top-3 right-3 w-8 h-8 md:w-10 md:h-10 rounded-full bg-white shadow flex items-center justify-center hover:bg-gray-100 transition"
-          >
-            <Heart size={14} />
-          </button>
-        </div>
-
-        <div className="p-3 md:p-4">
-          <h3 className="font-semibold text-[13px] sm:text-base md:text-lg">{p.name}</h3>
-
-          <p className="text-[#2B5E3B] font-semibold mt-1 text-[12px] sm:text-sm md:text-base">
-            {p.price}
-          </p>
-
-          <button
-            onClick={() => console.log("Add to cart:", p.name)}
-            className="mt-3 md:mt-4 w-full bg-[#08112C] text-white rounded-lg py-2 md:py-3 text-[12px] sm:text-sm md:text-base hover:bg-[#08112C] transition"
-          >
-            Add to Cart
-          </button>
-        </div>
-      </div>
-    ))}
-  </div>
-)}
-      </section>
-
-      {/* 4. New Launches — pale-green band (frontend-3) */}
+    /* 4. New Launches — pale-green band (frontend-3) */
+    'new-launches': (title) => (
       <section className="px-5 sm:px-10 lg:px-16 py-12 lg:py-[76px]">
         <div className="text-center mb-6 md:mb-10">
           <h2 className="font-wserif font-semibold text-[26px] sm:text-[32px] md:text-[clamp(30px,3.6vw,46px)] text-wink m-0 mb-3 md:mb-5">
-            New Launches
+            {title || 'New Launches'}
           </h2>
           <Link
             to="/new-arrivals"
@@ -309,14 +385,16 @@ useEffect(() => {
     </div>
   </div>
 </section>
+    ),
 
-      {/* 5. Build Your Daily Routine — brand imagery from the design file;
-             each card links to its real combo product when one exists,
-             falling back to /categories until combos are added in admin. */}
+    /* 5. Build Your Daily Routine — brand imagery from the design file;
+           each card links to its real combo product when one exists,
+           falling back to /categories until combos are added in admin. */
+    'daily-routine': (title) => (
       <section className="px-5 sm:px-10 lg:px-16 py-12 lg:py-[76px]">
         <div className="text-center mb-10 lg:mb-14">
           <h2 className="font-wserif font-semibold text-[clamp(30px,3.6vw,46px)] text-wink m-0 mb-3">
-            Build Your Daily Routine
+            {title || 'Build Your Daily Routine'}
           </h2>
           <p className="font-wserif text-[clamp(18px,1.9vw,26px)] text-wink/80 m-0">
             Choose a bundle crafted for the way you live.
@@ -380,16 +458,22 @@ useEffect(() => {
   })}
 </div>
       </section>
+    ),
 
-     {/* 6. Wellness, without the confusion — static blog cards */}
-<section className="px-5 sm:px-10 lg:px-16 py-12 lg:py-[84px]">
+    /* 6. Wellness, without the confusion — static blog cards */
+    blog: (title) => (
+      <section className="px-5 sm:px-10 lg:px-16 py-12 lg:py-[84px]">
   <div className="grid grid-cols-2 gap-4 md:gap-8 items-start max-w-[1140px] mx-auto mb-6 lg:mb-14">
     <h2 className="font-cormorant text-[18px] sm:text-[24px] md:text-[clamp(26px,3vw,40px)] leading-[1.3] tracking-[0.04em] text-wink m-0">
-            WELLNESS,
-            <br />
-            <span className="text-[#08112C]">WITHOUT</span> THE
-            <br />
-            CONFUSION.
+            {title || (
+              <>
+                WELLNESS,
+                <br />
+                <span className="text-[#08112C]">WITHOUT</span> THE
+                <br />
+                CONFUSION.
+              </>
+            )}
           </h2>
           <p className="font-cormorant text-[12px] sm:text-[15px] md:text-[clamp(18px,1.8vw,25px)] leading-[1.4] md:leading-[1.6] text-wink/85 m-0 text-right md:text-right max-w-full md:max-w-[360px] ml-auto">
             No complicated jargon. No wellness myths. Just simple insights to
@@ -420,11 +504,13 @@ useEffect(() => {
           ))}
         </div>
       </section>
+    ),
 
-      {/* 7. The Reviews Behind the Routine — static testimonial */}
+    /* 7. The Reviews Behind the Routine — static testimonial */
+    reviews: (title) => (
       <section className="px-5 sm:px-10 lg:px-16 py-12 lg:py-[76px]">
         <h2 className="font-wserif font-semibold text-[clamp(28px,3.4vw,44px)] text-wink text-center m-0 mb-10">
-          The Reviews Behind the Routine
+          {title || 'The Reviews Behind the Routine'}
         </h2>
 
         <div className="max-w-[1080px] mx-auto border border-wgreen/40 rounded-xl3 bg-wcard/40 p-4 sm:p-6 md:p-10 grid grid-cols-[0.8fr_1.2fr] md:grid-cols-[1fr_1.25fr] gap-3 sm:gap-6 md:gap-8 items-center">
@@ -486,16 +572,22 @@ useEffect(() => {
           </Link>
         </div>
       </section>
+    ),
 
-      {/* 8. Brand philosophy — the puzzle piece */}
-    <section className="px-5 sm:px-10 lg:px-16 pt-2 pb-12 lg:pt-8 lg:pb-[60px]">
+    /* 8. Brand philosophy — the puzzle piece */
+    'brand-philosophy': (title) => (
+      <section className="px-5 sm:px-10 lg:px-16 pt-2 pb-12 lg:pt-8 lg:pb-[60px]">
   {/* 8a. the piece that brings it all together */}
   <div className="grid grid-cols-2 md:grid-cols-2 gap-4 md:gap-10 items-center max-w-[1140px] mx-auto mb-8 md:mb-16 lg:mb-24">
     <div>
       <h2 className="font-wserif text-[18px] sm:text-[26px] md:text-[clamp(32px,3.8vw,52px)] leading-[1.2] md:leading-[1.15] text-wink/85 m-0 mb-2 md:mb-5">
-        the piece that brings
-        <br />
-        it all together.
+        {title || (
+          <>
+            the piece that brings
+            <br />
+            it all together.
+          </>
+        )}
       </h2>
       <p className="font-wserif text-[11px] sm:text-[15px] md:text-[clamp(17px,1.6vw,22px)] leading-[1.4] md:leading-[1.5] text-wmuted m-0 max-w-[340px]">
         &ldquo;sometimes, the smallest things make the biggest
@@ -629,6 +721,21 @@ useEffect(() => {
 
 </div>
 </section>
+    ),
+  };
+
+  return (
+    <motion.div
+      initial={reduce ? false : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+      className="overflow-hidden"
+    >
+      {sections.map((s) => {
+        const render = sectionRenderers[s.key];
+        if (!render) return null;
+        return <Fragment key={s.key}>{render((s.title || '').trim())}</Fragment>;
+      })}
     </motion.div>
   );
 }

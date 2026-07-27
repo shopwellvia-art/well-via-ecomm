@@ -1,19 +1,11 @@
 import { Stars } from '@/components/storefront/Icons';
-import { FLAVOURS } from '@/lib/catalogOptions.js';
+import { FLAVOURS, GOALS } from '@/lib/catalogOptions.js';
 import { cn } from '@/lib/utils.js';
 
 export const PRICE_MIN = 100;
 export const PRICE_MAX = 2000;
 
 /** Rating filter rows — mockup shows 5★ / 4★+ / 3★+. */
-const GOALS = [
-  "Immunity Support",
-  "Gut Health",
-  "Beauty & Glow",
-  "Better Sleep",
-  "Daily Wellness",
-  "Energy & Vitality",
-];
 const RATING_OPTIONS = [
   { value: '5', label: '' },
   { value: '4', label: '& above' },
@@ -53,7 +45,6 @@ function CheckRow({ checked, onChange, children }) {
 }
 
 export default function FilterSidebar({ filters, onChange, categories = [] }) {
-  console.log(categories);
   const toggleIn = (list, value) =>
     list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
 
@@ -65,22 +56,17 @@ export default function FilterSidebar({ filters, onChange, categories = [] }) {
   return (
     <div className="bg-wcard border border-wline rounded-xl2 p-5">
       {/* ── Goal (categories) ── */}
-      {/* ── Goal ── */}
-    <Section title="Goal">
-  {GOALS.map((goal) => (
-    <CheckRow
-      key={goal}
-      checked={filters.goals.includes(goal)}
-      onChange={() =>
-        onChange({
-          goals: toggleIn(filters.goals, goal),
-        })
-      }
-    >
-      {goal}
-    </CheckRow>
-  ))}
-</Section>
+      <Section title="Goal">
+        {GOALS.map((goal) => (
+          <CheckRow
+            key={goal.slug}
+            checked={filters.goals.includes(goal.slug)}
+            onChange={() => onChange({ goals: toggleIn(filters.goals, goal.slug) })}
+          >
+            {goal.label}
+          </CheckRow>
+        ))}
+      </Section>
 
       {/* ── Flavour ── */}
       <Section title="Flavour">

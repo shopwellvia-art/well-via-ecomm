@@ -10,4 +10,13 @@ export const usersApi = {
   },
 
   get: (id) => apiClient.get(`/users/${id}`).then((r) => r.data),
+
+  // PATCH semantics — send only the fields being changed:
+  // { full_name?: string|null, is_active?: boolean }. Requires users.manage.
+  update: (id, data) => apiClient.patch(`/users/${id}`, data).then((r) => r.data),
+
+  // Sends the standard forgot-password OTP email to the user. 202 {detail}.
+  // The response never contains the code. Requires users.manage.
+  triggerPasswordReset: (id) =>
+    apiClient.post(`/users/${id}/password-reset`).then((r) => r.data),
 };

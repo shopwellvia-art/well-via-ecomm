@@ -15,6 +15,7 @@ from app.api.v1.endpoints import (
     email_templates,
     footer,
     hero_slides,
+    invoices,
     loyalty,
     observability,
     orders,
@@ -29,6 +30,7 @@ from app.api.v1.endpoints import (
     settings,
     shipping,
     site_pages,
+    storefront,
     taxes,
     users,
     wishlist,
@@ -41,6 +43,11 @@ api_router.include_router(products.router, prefix="/products", tags=["products"]
 api_router.include_router(hero_slides.router, prefix="/hero-slides", tags=["hero-slides"])
 api_router.include_router(cart.router, prefix="/cart", tags=["cart"])
 api_router.include_router(orders.router, prefix="/orders", tags=["orders"])
+# Derived GST invoices: GET /orders/{id}/invoice (owner) and
+# GET /orders/admin/{id}/invoice (staff). Separate module so orders.py stays
+# focused on order lifecycle; the paths can't shadow the orders routes above
+# (different segment shapes).
+api_router.include_router(invoices.router, prefix="/orders", tags=["invoices"])
 api_router.include_router(payments.checkout_router, prefix="/checkout", tags=["checkout"])
 api_router.include_router(payments.payments_router, prefix="/payments", tags=["payments"])
 api_router.include_router(payment_instruments.router, prefix="/payments", tags=["payments"])
@@ -81,6 +88,9 @@ api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboar
 api_router.include_router(database.router, prefix="/admin/database", tags=["database"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(footer.router, prefix="/footer", tags=["footer"])
+api_router.include_router(
+    storefront.router, prefix="/storefront-config", tags=["storefront-config"]
+)
 api_router.include_router(observability.router, prefix="/observability", tags=["observability"])
 api_router.include_router(site_pages.router, prefix="/site-pages", tags=["site-pages"])
 # Public contact-form + newsletter intake: POST /contact, POST /newsletter/subscribe

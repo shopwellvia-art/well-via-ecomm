@@ -52,6 +52,10 @@ services:
     image: ghcr.io/shopwellvia-art/simple-com-backend:${IMAGE_TAG:-latest}
     restart: always
     env_file: ./backend/.env
+    environment:
+      # backend/.env.example defaults REDIS_URL to localhost for bare-metal dev;
+      # inside compose the Redis service is reachable only by its service name.
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       redis:
         condition: service_healthy
@@ -113,6 +117,45 @@ services:
             http://backend:8000/api/v1/payments/admin/reconcile-pending \
             || echo "reconcile POST failed; will retry next cycle";
           sleep 600;
+        done
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    mem_limit: 64m
+
+  # Loyalty points-expiry sidecar (backend/docs/loyalty-cron.md). The sweep is
+  # an idempotent HTTP endpoint — the (reason, ref_type, ref_id) unique index
+  # makes same-day re-runs a no-op — so this loop just calls it once a day. The
+  # doc's snippet (alpine + apk-install curl + GNU-date "sleep until 3 AM UTC")
+  # is adapted to match payment-reconcile-cron: same curl image (no runtime
+  # package install), restart: always instead of unless-stopped, healthy-backend
+  # gating, and a plain sleep interval instead of 3 AM anchoring (the GNU
+  # `date -d 'tomorrow 03:00'` in the doc wouldn't work in busybox anyway).
+  # Auth differs from the reconcile sidecar by design: this endpoint checks a
+  # Bearer token carrying `loyalty.configure` (a long-lived service-account
+  # token), not a machine-auth header.
+  loyalty-cron:
+    image: curlimages/curl:8.11.1
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    # Same env file as the backend, so LOYALTY_CRON_TOKEN lives next to the
+    # other secrets (single source of truth). The container shell reads it from
+    # its own environment — $$ escapes compose interpolation so the value is
+    # expanded at runtime, not baked into the compose file.
+    env_file: ./backend/.env
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $${LOYALTY_CRON_TOKEN}" \
+            http://backend:8000/api/v1/loyalty/admin/expire-points \
+            || echo "expire-points POST failed; will retry next cycle";
+          sleep 86400;
         done
     logging:
       driver: json-file

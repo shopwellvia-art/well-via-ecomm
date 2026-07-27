@@ -166,6 +166,19 @@ DEFAULT_SETTINGS: list[tuple[str, str, str, str, bool]] = [
     ("costs.monthly_ad_spend", "0", "costs",
      "Total monthly advertising / marketing spend (₹). Pro-rated to the analytics window for C3.", False),
 
+    # ---- Store identity / GST invoices (seeded at boot only — no migration;
+    #      consumed by app/services/invoice_service.py) ----
+    ("store.legal_name", "", "store",
+     "Registered legal name of the seller, printed on GST tax invoices", False),
+    ("store.address", "", "store",
+     "Registered address of the seller, printed on GST tax invoices", False),
+    ("store.gstin", "", "store",
+     "Seller GSTIN (15 characters), printed on GST tax invoices. "
+     "Leave blank if not GST-registered.", False),
+    ("store.state_code", "", "store",
+     "Seller GST state code (e.g. 29 for Karnataka). Drives the CGST/SGST "
+     "vs IGST split on invoices; blank renders a single GST line.", False),
+
     # ---- Storage (l3m4n5o6p7q8, n5o6p7q8r9s0) ----
     # Credentials/endpoint rows are blank so the env fallback stays in effect.
     # Two rows ship with a concrete default on purpose: s3_root_prefix is
@@ -188,6 +201,24 @@ DEFAULT_SETTINGS: list[tuple[str, str, str, str, bool]] = [
      "Object ACL on upload — blank for modern buckets (Object Ownership = "
      "Bucket owner enforced / ACLs disabled); 'public-read' only for legacy "
      "ACL-enabled buckets.", False),
+
+    # ---- Storefront identity / layout (seeded at boot only — no migration;
+    #      consumed by app/services/storefront_service.py; blank = the shipped
+    #      DEFAULT_STOREFRONT value) ----
+    ("storefront.site_title", "", "storefront",
+     "Browser tab / document title of the storefront", False),
+    ("storefront.brand_name", "", "storefront",
+     "Brand wordmark shown in the navbar and footer", False),
+    ("storefront.tagline", "", "storefront",
+     "Short brand tagline shown next to the wordmark", False),
+    ("storefront.logo_url", "", "storefront",
+     "Uploaded logo URL rendered in place of the wordmark", False),
+    ("storefront.favicon_url", "", "storefront",
+     "Uploaded favicon URL", False),
+    ("storefront.nav_items", "", "storefront",
+     "JSON array of navbar links (label/to/visibility)", False),
+    ("storefront.homepage_sections", "", "storefront",
+     "JSON array of homepage sections (order/visibility/title)", False),
 ]
 
 

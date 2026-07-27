@@ -24,7 +24,7 @@ export const SHOP_CATEGORIES = [
  * instead of navigating away immediately. "All Products →" inside the
  * panel is the actual link to the full catalog.
  */
-export default function ShopMegaMenu({ linkClassName }) {
+export default function ShopMegaMenu({ linkClassName, label = 'Shop' }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
   const location = useLocation();
@@ -69,7 +69,7 @@ export default function ShopMegaMenu({ linkClassName }) {
         aria-expanded={open}
         className={cn(triggerCls, 'bg-transparent border-0 p-0 cursor-pointer font-[inherit]')}
       >
-        Shop
+        {label}
       </button>
 
       <AnimatePresence>

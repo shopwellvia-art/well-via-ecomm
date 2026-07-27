@@ -3,13 +3,20 @@ import hmac
 import logging
 import secrets
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 import redis
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.redis import get_redis
-from app.core.exceptions import ConflictError, TooManyRequestsError, UnauthorizedError
+from app.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    TooManyRequestsError,
+    UnauthorizedError,
+)
 from app.core.rate_limit import RateLimiter
 from app.core.security import (
     create_access_token,
@@ -23,7 +30,7 @@ from app.models.customer import AccountStatus, Customer
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import Token
-from app.schemas.user import UserCreate
+from app.schemas.user import AdminUserUpdate, UserCreate
 from app.services.loyalty_service import LoyaltyService
 from app.services.referral_service import ReferralService
 from app.services.session_service import SessionService
@@ -442,3 +449,93 @@ class AuthService:
         elif not user.is_active:
             raise UnauthorizedError("Account disabled")
         return self._issue_tokens(user)
+
+    # ------------------------------------------------------------------
+    # Admin user management (staff actions from /api/v1/users).
+    #
+    # Deliberately separate from the self-service flows above: these run on
+    # a *target* user chosen by a staff actor, never on the caller. Both are
+    # guarded by the same superadmin shield — a non-superadmin staff member
+    # (RBAC-granted users.manage) can never touch an is_admin account, the
+    # same way role assignment shields privileged accounts.
+    # ------------------------------------------------------------------
+
+    def _get_managed_target(self, actor: User, user_id: int) -> User:
+        """Resolve + authorize the target of an admin user-management action.
+
+        Raises NotFoundError for an unknown id and ForbiddenError when a
+        non-superadmin targets a superadmin (is_admin=True) account.
+        """
+        target = self.users.get(user_id)
+        if not target:
+            raise NotFoundError("User not found")
+        if target.is_admin and not actor.is_admin:
+            raise ForbiddenError(
+                "Only a superadmin can modify a superadmin account"
+            )
+        return target
+
+    def admin_update_user(
+        self, actor: User, user_id: int, data: AdminUserUpdate
+    ) -> tuple[User, dict]:
+        """PATCH /users/{id}: display-name edit and activate/deactivate.
+
+        Deactivation also revokes every session via SessionService so a
+        disabled user is logged out everywhere immediately; reactivation
+        restores the login gates (is_active + customer.account_status).
+
+        Flushes but does NOT commit — the endpoint owns the commit so its
+        audit row lands in the same transaction (same shape as the roles
+        endpoints). Returns (user, changes-dict-for-audit).
+        """
+        target = self._get_managed_target(actor, user_id)
+        fields = data.model_dump(exclude_unset=True)
+        changes: dict = {}
+
+        if "full_name" in fields:
+            before_name = target.full_name
+            first, last = _split_name(fields["full_name"])
+            customer = self.users.get_or_create_customer(target.id)
+            customer.first_name = first
+            customer.last_name = last
+            if target.full_name != before_name:
+                changes["full_name"] = {
+                    "before": before_name,
+                    "after": target.full_name,
+                }
+
+        new_active = fields.get("is_active")
+        if new_active is not None and new_active != target.is_active:
+            customer = self.users.get_or_create_customer(target.id)
+            if new_active:
+                # Mirror of deactivation below — restore every gate the login
+                # path checks so the account actually works again.
+                target.is_active = True
+                customer.account_status = AccountStatus.ACTIVE
+                customer.deactivated_at = None
+                customer.deleted_at = None
+                changes["is_active"] = {"before": False, "after": True}
+            else:
+                # Mirror of the self-service deactivate flow, plus a forced
+                # logout everywhere: get_current_user already rejects
+                # is_active=False, revoking sessions kills refresh too.
+                target.is_active = False
+                customer.account_status = AccountStatus.DEACTIVATED
+                customer.deactivated_at = datetime.now(timezone.utc)
+                revoked = self.revoke_all_sessions(target.id)
+                changes["is_active"] = {"before": True, "after": False}
+                changes["sessions_revoked"] = revoked
+
+        self.db.flush()
+        return target, changes
+
+    def admin_trigger_password_reset(self, actor: User, user_id: int) -> User:
+        """POST /users/{id}/password-reset: email the user a one-time reset
+        code, reusing the self-service forgot-password machinery unchanged
+        (same OTP store, hashing, TTL, template, and per-email rate limit).
+        The code is emailed to the target only — never returned to the
+        caller, so a staff account can't capture it.
+        """
+        target = self._get_managed_target(actor, user_id)
+        self.request_password_reset(target.email)
+        return target

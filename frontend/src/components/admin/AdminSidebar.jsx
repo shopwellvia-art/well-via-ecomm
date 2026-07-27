@@ -61,6 +61,7 @@ const FRONTEND_GROUP = {
   label: 'Frontend',
   icon: LayoutPanelTop,
   children: [
+    { to: '/admin/storefront', label: 'Storefront', icon: Store, end: false, permission: 'frontend.manage' },
     { to: '/admin/hero', label: 'Hero slides', icon: GalleryHorizontal, end: false, permission: 'hero_slides.manage' },
     { to: '/admin/footer', label: 'Footer', icon: LayoutTemplate, end: false, permission: 'frontend.manage' },
     { to: '/admin/pages', label: 'Company pages', icon: FileText, end: false, permission: 'frontend.manage' },

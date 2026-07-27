@@ -97,6 +97,26 @@ class ResetPasswordRequest(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class AdminUserUpdate(BaseModel):
+    """Body of PATCH /users/{id} — the staff-facing user editor.
+
+    Partial update: only the fields actually provided change (PATCH
+    semantics via exclude_unset). Setting `is_active=false` also revokes
+    every session for the user so a disabled account is logged out
+    everywhere immediately.
+    """
+
+    full_name: str | None = Field(default=None, max_length=255)
+    is_active: bool | None = None
+
+
+class AdminPasswordResetResponse(BaseModel):
+    """Ack for POST /users/{id}/password-reset. Deliberately carries no
+    token/OTP — the reset code goes to the user's email only."""
+
+    detail: str
+
+
 class UserRead(UserBase):
     model_config = ConfigDict(from_attributes=True)
 

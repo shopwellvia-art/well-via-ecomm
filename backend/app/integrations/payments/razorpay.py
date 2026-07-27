@@ -18,6 +18,8 @@ from app.integrations.payments.base import (
     InitiateResponse,
     PaymentGatewayError,
     PaymentStatus,
+    RefundRequest,
+    RefundResult,
     StatusResponse,
     provider_rejection,
 )
@@ -31,6 +33,13 @@ _STATUS_MAP = {
     "paid": PaymentStatus.SUCCESS,
     "cancelled": PaymentStatus.FAILED,
     "expired": PaymentStatus.FAILED,
+}
+
+# Razorpay refund-entity status strings. Refunds commonly settle
+# asynchronously — "pending"/"created" means accepted, funds in flight.
+_REFUND_STATUS_MAP = {
+    "processed": PaymentStatus.SUCCESS,
+    "failed": PaymentStatus.FAILED,
 }
 
 
@@ -98,6 +107,64 @@ class RazorpayProvider:
             raw=resp,
         )
 
+    def refund(self, req: RefundRequest) -> RefundResult:
+        """Reverse (part of) a captured Payment-Links payment back to the
+        customer's original instrument.
+
+        The Payment Links flow never hands us the captured ``pay_...`` id at
+        checkout — we store the link id (``plink_...``) as the provider ref —
+        so the refund first resolves the captured payment id via the REST API
+        (fetch the payment link, falling back to the underlying order's
+        payments), then POSTs ``/payments/{payment_id}/refund`` with the
+        amount in paise.
+
+        NEVER raises: any resolution/HTTP failure (link not paid, partial
+        capture, missing payment, gateway rejection, network error) is
+        returned as a FAILED RefundResult so callers fall back to a manual
+        refund instead of aborting their own state transition.
+        """
+        try:
+            payment_id = self._resolve_captured_payment_id(req)
+            if not payment_id:
+                logger.warning(
+                    "razorpay refund order=%s ref=%s: no captured payment "
+                    "found for %r — falling back to manual",
+                    req.order_id, req.refund_reference, req.original_transaction_id,
+                )
+                return RefundResult(
+                    refund_id=req.refund_reference,
+                    status=PaymentStatus.FAILED,
+                    raw={
+                        "error": "no captured payment found",
+                        "original_transaction_id": req.original_transaction_id,
+                    },
+                )
+            payload: dict = {
+                "amount": req.amount_minor,  # paise
+                "receipt": req.refund_reference,
+                "notes": {"reference": req.refund_reference},
+            }
+            if req.reason:
+                payload["notes"]["reason"] = req.reason[:255]
+            resp = self._post(f"/payments/{payment_id}/refund", payload)
+        except RazorpayError as exc:
+            logger.warning(
+                "razorpay refund order=%s ref=%s failed: %s — falling back to manual",
+                req.order_id, req.refund_reference, exc.message,
+            )
+            return RefundResult(
+                refund_id=req.refund_reference,
+                status=PaymentStatus.FAILED,
+                raw={"error": exc.message, "details": exc.details},
+            )
+        rzp_status = (resp.get("status") or "").lower()
+        status_ = _REFUND_STATUS_MAP.get(rzp_status, PaymentStatus.PENDING)
+        return RefundResult(
+            refund_id=resp.get("id") or req.refund_reference,
+            status=status_,
+            raw=resp,
+        )
+
     def verify_webhook(self, body: bytes, signature: str | None) -> bool:
         if not self._webhook_secret or not signature:
             return False
@@ -134,6 +201,43 @@ class RazorpayProvider:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    def _resolve_captured_payment_id(self, req: RefundRequest) -> str | None:
+        """Resolve the captured ``pay_...`` id for a refund request.
+
+        ``req.original_transaction_id`` is whatever we recorded at settlement:
+        ideally the captured payment id itself, but for the Payment Links flow
+        it is usually the ``plink_...`` id. Resolution order:
+
+          1. Already a ``pay_...`` id → use it directly.
+          2. ``plink_...`` → GET the payment link; scan its ``payments`` array
+             for a captured entry.
+          3. Still nothing → GET the link's underlying order's payments
+             (``/orders/{order_id}/payments``) and pick the captured one.
+
+        Returns None when no captured payment exists (unpaid/expired link,
+        authorized-but-never-captured, refunded already under a different id)
+        so the caller can return the failure shape. May raise RazorpayError on
+        HTTP failure — ``refund()`` catches it.
+        """
+        ref = (req.original_transaction_id or "").strip()
+        if ref.startswith("pay_"):
+            return ref
+        if not ref.startswith("plink_"):
+            return None
+
+        link = self._get(f"/payment_links/{ref}")
+        for p in link.get("payments") or []:
+            if (p.get("status") or "").lower() == "captured":
+                return p.get("payment_id") or p.get("id")
+
+        order_id = link.get("order_id")
+        if order_id:
+            resp = self._get(f"/orders/{order_id}/payments")
+            for p in resp.get("items") or []:
+                if (p.get("status") or "").lower() == "captured":
+                    return p.get("id")
+        return None
 
     def _post(self, path: str, body: dict) -> dict:
         url = _BASE + path

@@ -20,7 +20,9 @@ function scrollToWhy() {
     ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-export default function HeroSection() {
+// showWhyButton — hidden when the "Why We Exist" section itself is hidden, so
+// the scroll CTA never points at a section that is not on the page.
+export default function HeroSection({ showWhyButton = true }) {
   const { data: slides = [] } = useHeroSlides();
 
   const slide = slides[0] ?? null;
@@ -58,13 +60,15 @@ export default function HeroSection() {
 >
             {primaryLabel}
           </Link>
-          <button
+          {showWhyButton && (
+            <button
   type="button"
   onClick={scrollToWhy}
   className="bg-transparent text-[#08112C] cursor-pointer border border-[#08112C]/50 rounded-[8px] lg:rounded-[10px] px-4 sm:px-6 lg:px-12 py-[8px] lg:py-[13px] font-wserif text-[12px] sm:text-[14px] lg:text-[18px] tracking-wide hover:border-[#010E37] hover:bg-[#010E37]/5 transition-colors whitespace-nowrap"
 >
   Why Wellvia
 </button>
+          )}
         </div>
 
         {/* Trust chips — single row on mobile too, per the mockup */}

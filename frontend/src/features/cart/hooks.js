@@ -68,8 +68,17 @@ export function useCart() {
     retry: false,
   });
 
-  const ids = useMemo(() => guestLines.map((l) => l.product_id), [guestLines]);
-  const productsQuery = useProductsByIds(!token && ids.length ? ids : []);
+  // Product lookup: composes the guest cart when signed out; backfills
+  // image_url onto server cart lines when signed in (CartItemRead carries
+  // no image field).
+  const ids = useMemo(
+    () =>
+      token
+        ? (serverQuery.data?.items ?? []).map((i) => i.product_id)
+        : guestLines.map((l) => l.product_id),
+    [token, serverQuery.data, guestLines],
+  );
+  const productsQuery = useProductsByIds(ids.length ? ids : []);
 
   const guestData = useMemo(() => {
     if (token) return undefined;
@@ -78,7 +87,19 @@ export function useCart() {
     return buildGuestCart(guestLines, productsQuery.data);
   }, [token, guestLines, productsQuery.data]);
 
-  if (token) return serverQuery;
+  const serverData = useMemo(() => {
+    if (!token || !serverQuery.data) return serverQuery.data;
+    const byId = new Map((productsQuery.data ?? []).map((p) => [p.id, p]));
+    return {
+      ...serverQuery.data,
+      items: (serverQuery.data.items ?? []).map((i) => ({
+        ...i,
+        image_url: i.image_url ?? byId.get(i.product_id)?.image_url ?? null,
+      })),
+    };
+  }, [token, serverQuery.data, productsQuery.data]);
+
+  if (token) return { ...serverQuery, data: serverData };
   return {
     ...productsQuery,
     data: guestData,

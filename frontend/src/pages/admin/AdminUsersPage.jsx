@@ -1,16 +1,32 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Pencil, X, ShieldCheck, Users as UsersIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Search,
+  Pencil,
+  X,
+  ShieldCheck,
+  Users as UsersIcon,
+  ChevronLeft,
+  ChevronRight,
+  KeyRound,
+  Loader2,
+} from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Input } from '@/components/ui/Input.jsx';
 import { Badge } from '@/components/ui/Badge.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
+import { toast } from '@/components/ui/Toaster.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { cn } from '@/lib/utils.js';
-import { fadeUp, listStagger, staggerContainer } from '@/lib/motion.js';
-import { useUsers } from '@/features/users/hooks.js';
+import { fadeUp, staggerContainer } from '@/lib/motion.js';
+import {
+  useUsers,
+  useUpdateUser,
+  useTriggerPasswordReset,
+} from '@/features/users/hooks.js';
 import { useRoles, useAssignUserRoles } from '@/features/roles/hooks.js';
+import { useAuthStore, useHasPermission } from '@/features/auth/store.js';
 
 const PAGE_SIZE = 25;
 
@@ -142,15 +158,200 @@ function RoleAssignForm({ user, roles, onClose }) {
   );
 }
 
-function UserRow({ user, roles, isEditing, onToggleEdit }) {
+/** Inline full-name editor — same expand-a-row affordance as RoleAssignForm. */
+function NameEditForm({ user, onClose }) {
+  const [name, setName] = useState(user.full_name || '');
+  const update = useUpdateUser();
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (trimmed === (user.full_name || '')) {
+      onClose();
+      return;
+    }
+    try {
+      await update.mutateAsync({
+        userId: user.id,
+        data: { full_name: trimmed || null },
+      });
+      toast.success(trimmed ? 'Name updated.' : 'Name cleared.');
+      onClose();
+    } catch (err) {
+      toast.error(
+        err.response?.data?.error?.message || 'Could not update the name.',
+      );
+    }
+  }
+
+  return (
+    <tr className="bg-bg-sunken">
+      <td colSpan={4} className="px-4 py-4">
+        <motion.form
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+          onSubmit={handleSubmit}
+          className="rounded-lg border border-line-subtle bg-bg-elevated p-5 shadow-md"
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-ink-primary">Edit name</p>
+              <p className="mt-0.5 font-mono text-xs text-ink-tertiary">{user.email}</p>
+            </div>
+            <button
+              type="button"
+              aria-label="Cancel"
+              onClick={onClose}
+              className="grid size-8 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+
+          <div className="max-w-sm">
+            <Input
+              label="Full name"
+              placeholder="Priya Sharma"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={255}
+              helper="Leave blank to clear the name."
+            />
+          </div>
+
+          <div className="mt-5 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onClose}
+              disabled={update.isPending}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={update.isPending}>
+              Save name
+            </Button>
+          </div>
+        </motion.form>
+      </td>
+    </tr>
+  );
+}
+
+/** Confirm step for enabling/disabling an account, with the session-revocation
+ *  consequence spelled out. Rendered as an expansion row below the user. */
+function StatusConfirmRow({ user, onClose }) {
+  const update = useUpdateUser();
+  const disabling = user.is_active;
+
+  async function handleConfirm() {
+    try {
+      await update.mutateAsync({
+        userId: user.id,
+        data: { is_active: !user.is_active },
+      });
+      toast.success(
+        disabling
+          ? `${user.email} has been disabled and signed out of all devices.`
+          : `${user.email} has been re-enabled and can log in again.`,
+      );
+      onClose();
+    } catch (err) {
+      toast.error(
+        err.response?.data?.error?.message || 'Could not update the account.',
+      );
+    }
+  }
+
+  return (
+    <tr className="bg-bg-sunken">
+      <td colSpan={4} className="px-4 py-4">
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+          role="alertdialog"
+          aria-label={
+            disabling ? `Disable ${user.email}` : `Re-enable ${user.email}`
+          }
+          className="rounded-lg border border-line-subtle bg-bg-elevated p-5 shadow-md"
+        >
+          <p className="text-sm font-semibold text-ink-primary">
+            {disabling ? 'Disable this account?' : 'Re-enable this account?'}
+          </p>
+          <p className="mt-1.5 max-w-2xl text-sm text-ink-secondary">
+            {disabling ? (
+              <>
+                <span className="font-medium text-ink-primary">{user.email}</span>{' '}
+                will be signed out of every device immediately — all active
+                sessions are revoked — and will not be able to log in until the
+                account is re-enabled.
+              </>
+            ) : (
+              <>
+                <span className="font-medium text-ink-primary">{user.email}</span>{' '}
+                will be able to log in again. Sessions revoked while the account
+                was disabled stay signed out, so a fresh login is required.
+              </>
+            )}
+          </p>
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="ghost" onClick={onClose} disabled={update.isPending}>
+              Cancel
+            </Button>
+            <Button
+              variant={disabling ? 'destructive' : 'primary'}
+              loading={update.isPending}
+              onClick={handleConfirm}
+            >
+              {disabling ? 'Disable account' : 'Re-enable account'}
+            </Button>
+          </div>
+        </motion.div>
+      </td>
+    </tr>
+  );
+}
+
+function UserRow({
+  user,
+  roles,
+  canManage,
+  canAssignRoles,
+  actorIsSuperadmin,
+  expandedMode,
+  onExpand,
+}) {
   const initial = (user.email || '?').charAt(0).toUpperCase();
+  const reset = useTriggerPasswordReset();
+
+  // The backend only lets a superadmin modify another superadmin account —
+  // mirror that shield here so we don't offer controls that guarantee a 403.
+  const targetLocked = user.is_admin && !actorIsSuperadmin;
+  const showManage = canManage && !targetLocked;
+
+  function handlePasswordReset() {
+    reset.mutate(user.id, {
+      onSuccess: (res) =>
+        toast.success(
+          res?.detail || "Password reset code sent to the user's email.",
+        ),
+      onError: (err) =>
+        toast.error(
+          err.response?.data?.error?.message ||
+            'Could not send the password reset email.',
+        ),
+    });
+  }
+
   return (
     <>
       <motion.tr
         variants={fadeUp}
         className={cn(
           'group border-t border-line-subtle transition-colors duration-150',
-          isEditing ? 'bg-accent/4' : 'hover:bg-fill/60',
+          expandedMode ? 'bg-accent/4' : 'hover:bg-fill/60',
         )}
       >
         <td className="px-5 py-3.5">
@@ -178,28 +379,97 @@ function UserRow({ user, roles, isEditing, onToggleEdit }) {
           </div>
         </td>
         <td className="px-5 py-3.5">
-          <Badge tone={user.is_active ? 'success' : 'neutral'} dot>
-            {user.is_active ? 'Active' : 'Disabled'}
-          </Badge>
-        </td>
-        <td className="px-5 py-3.5 text-right">
-          <button
-            type="button"
-            aria-label={`Edit roles for ${user.email}`}
-            onClick={onToggleEdit}
-            className={cn(
-              'grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors focus-visible:focus-ring',
-              isEditing
-                ? 'bg-accent/12 text-accent'
-                : 'hover:bg-fill hover:text-ink-primary',
+          <div className="flex items-center gap-2">
+            {showManage && (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={user.is_active}
+                aria-label={
+                  user.is_active
+                    ? `Disable ${user.email}`
+                    : `Enable ${user.email}`
+                }
+                onClick={() => onExpand('status')}
+                className={cn(
+                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
+                  'focus-visible:focus-ring',
+                  user.is_active ? 'bg-accent' : 'bg-fill-strong',
+                )}
+              >
+                <span
+                  className={cn(
+                    'pointer-events-none block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200',
+                    user.is_active ? 'translate-x-4' : 'translate-x-0',
+                  )}
+                />
+              </button>
             )}
-          >
-            <Pencil className="size-4" />
-          </button>
+            <Badge tone={user.is_active ? 'success' : 'neutral'} dot>
+              {user.is_active ? 'Active' : 'Disabled'}
+            </Badge>
+          </div>
+        </td>
+        <td className="px-5 py-3.5">
+          <div className="flex items-center justify-end gap-1">
+            {showManage && (
+              <>
+                <button
+                  type="button"
+                  aria-label={`Edit name for ${user.email}`}
+                  onClick={() => onExpand('name')}
+                  className={cn(
+                    'grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors focus-visible:focus-ring',
+                    expandedMode === 'name'
+                      ? 'bg-accent/12 text-accent'
+                      : 'hover:bg-fill hover:text-ink-primary',
+                  )}
+                >
+                  <Pencil className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Send password reset email to ${user.email}`}
+                  title="Send password reset email"
+                  disabled={reset.isPending}
+                  onClick={handlePasswordReset}
+                  className="grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-40"
+                >
+                  {reset.isPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <KeyRound className="size-4" />
+                  )}
+                </button>
+              </>
+            )}
+            {canAssignRoles && (
+              <button
+                type="button"
+                aria-label={`Edit roles for ${user.email}`}
+                title="Assign roles"
+                onClick={() => onExpand('roles')}
+                className={cn(
+                  'grid size-9 place-items-center rounded-md text-ink-tertiary transition-colors focus-visible:focus-ring',
+                  expandedMode === 'roles'
+                    ? 'bg-accent/12 text-accent'
+                    : 'hover:bg-fill hover:text-ink-primary',
+                )}
+              >
+                <ShieldCheck className="size-4" />
+              </button>
+            )}
+          </div>
         </td>
       </motion.tr>
-      {isEditing && (
-        <RoleAssignForm user={user} roles={roles} onClose={onToggleEdit} />
+      {expandedMode === 'roles' && (
+        <RoleAssignForm user={user} roles={roles} onClose={() => onExpand(null)} />
+      )}
+      {expandedMode === 'name' && (
+        <NameEditForm user={user} onClose={() => onExpand(null)} />
+      )}
+      {expandedMode === 'status' && (
+        <StatusConfirmRow user={user} onClose={() => onExpand(null)} />
       )}
     </>
   );
@@ -209,7 +479,14 @@ export default function AdminUsersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounced(search, 250);
-  const [editingId, setEditingId] = useState(null);
+  // { id, mode: 'roles' | 'name' | 'status' } — at most one expansion open.
+  const [expanded, setExpanded] = useState(null);
+
+  // Route is gated at users.view; finer-grained controls are gated per action.
+  // UX only — the API re-checks every permission server-side.
+  const canManage = useHasPermission('users.manage');
+  const canAssignRoles = useHasPermission('users.assign_role');
+  const actorIsSuperadmin = useAuthStore((s) => !!s.user?.is_admin);
 
   useEffect(() => {
     setPage(1);
@@ -316,9 +593,16 @@ export default function AdminUsersPage() {
                     key={u.id}
                     user={u}
                     roles={roles}
-                    isEditing={editingId === u.id}
-                    onToggleEdit={() =>
-                      setEditingId((cur) => (cur === u.id ? null : u.id))
+                    canManage={canManage}
+                    canAssignRoles={canAssignRoles}
+                    actorIsSuperadmin={actorIsSuperadmin}
+                    expandedMode={expanded?.id === u.id ? expanded.mode : null}
+                    onExpand={(mode) =>
+                      setExpanded((cur) =>
+                        !mode || (cur?.id === u.id && cur.mode === mode)
+                          ? null
+                          : { id: u.id, mode },
+                      )
                     }
                   />
                 ))}

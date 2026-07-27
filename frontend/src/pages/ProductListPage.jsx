@@ -16,10 +16,8 @@ import FilterSidebar, {
 } from '@/features/products/components/FilterSidebar.jsx';
 import { useProducts, useBestsellers } from '@/features/products/hooks.js';
 import { useCategories } from '@/features/categories/hooks.js';
+import { GOALS } from '@/lib/catalogOptions.js';
 import { cn } from '@/lib/utils.js';
-import { BESTSELLERS } from '../../public/products';
-import { NEW_ARRIVALS } from '../../public/products';
-import { ALL_PRODUCTS } from '../../public/products';
 
 const PAGE_SIZE = 12;
 const NEW_WINDOW_DAYS = 30;
@@ -99,11 +97,14 @@ function filtersToParams(f) {
   return sp;
 }
 
-/** Map UI filters → GET /products query params. */
-function toApiParams(f) {
+/** Map UI filters → GET /products query params. Goal slugs resolve to
+ * category ids (goals ARE categories — see catalogOptions.js) and merge
+ * into the `category_ids` param. */
+function toApiParams(f, goalCategoryIds = []) {
+  const categoryIds = [...new Set([...f.categoryIds, ...goalCategoryIds])];
   return {
     q: f.q || undefined,
-    category_ids: f.categoryIds.length ? f.categoryIds.join(',') : undefined,
+    category_ids: categoryIds.length ? categoryIds.join(',') : undefined,
     flavours: f.flavours.length ? f.flavours.join(',') : undefined,
     min_price: f.minPrice ?? undefined,
     max_price: f.maxPrice ?? undefined,
@@ -119,12 +120,13 @@ function toApiParams(f) {
   };
 }
 
-/** Same predicates applied client-side (bestsellers mode fetches a plain list). */
-function applyFiltersLocally(items, f) {
+/** Same predicates applied client-side (bestsellers mode fetches a plain list).
+ * Goals compare via the same slug→category-id resolution as toApiParams. */
+function applyFiltersLocally(items, f, goalCategoryIds = []) {
+  const categoryIds = [...new Set([...f.categoryIds, ...goalCategoryIds])];
   let out = items.filter((p) => {
     if (f.q && !p.name.toLowerCase().includes(f.q.toLowerCase())) return false;
-    if (f.categoryIds.length && !f.categoryIds.includes(p.category_id)) return false;
-    if (f.goals.length && !f.goals.includes(p.goal)) return false;
+    if (categoryIds.length && !categoryIds.includes(p.category_id)) return false;
     if (f.flavours.length && !f.flavours.includes(p.flavour)) return false;
     if (f.minPrice != null && Number(p.price) < f.minPrice) return false;
     if (f.maxPrice != null && Number(p.price) > f.maxPrice) return false;
@@ -206,47 +208,51 @@ export default function ProductListPage({ mode = 'all' }) {
   }, [filterOpen]);
 
   /* ── Data ── */
-  //BESTSELLERSSSSSSSSSSSSSSSSSSS
-  const serverQuery = useProducts(toApiParams(filters));
-  const bestsellersQuery = useBestsellers(24);
+  // Goal filters resolve to category ids once categories load (goals ARE
+  // category slugs — no separate backend field).
+  const goalCategoryIds = useMemo(
+    () =>
+      filters.goals
+        .map((slug) => categories.find((c) => c.slug === slug)?.id)
+        .filter((id) => id != null),
+    [filters.goals, categories],
+  );
 
   const isBestsellers = mode === 'bestsellers';
-  const isNewArrivals = mode === "new-arrivals";
-  const isLoading = false;
-const isError = false;
-const refetch = () => {};
+  const isNewArrivals = mode === 'new-arrivals';
+
+  // /products paginates server-side; /new-arrivals pulls one newest-first
+  // page and applies the freshness window + local pagination client-side.
+  const serverQuery = useProducts(
+    isNewArrivals
+      ? {
+          ...toApiParams(filters, goalCategoryIds),
+          sort_by: 'newest',
+          page: 1,
+          page_size: 100,
+        }
+      : toApiParams(filters, goalCategoryIds),
+  );
+  const bestsellersQuery = useBestsellers(24);
+
+  const { isLoading, isError, refetch } = isBestsellers ? bestsellersQuery : serverQuery;
 
   let products, total, totalPages;
   if (isBestsellers) {
-  const filtered = applyFiltersLocally(BESTSELLERS, filters);
-
-  total = filtered.length;
-  totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  products = filtered.slice(
-    (filters.page - 1) * PAGE_SIZE,
-    filters.page * PAGE_SIZE
-  );
-} else if (isNewArrivals) {
-  const filtered = applyFiltersLocally(NEW_ARRIVALS, filters);
-
-  total = filtered.length;
-  totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  products = filtered.slice(
-    (filters.page - 1) * PAGE_SIZE,
-    filters.page * PAGE_SIZE
-  );
-} else {
-    const filtered = applyFiltersLocally(ALL_PRODUCTS, filters);
-
-total = filtered.length;
-totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-products = filtered.slice(
-  (filters.page - 1) * PAGE_SIZE,
-  filters.page * PAGE_SIZE
-);
+    const filtered = applyFiltersLocally(bestsellersQuery.data ?? [], filters, goalCategoryIds);
+    total = filtered.length;
+    totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    products = filtered.slice((filters.page - 1) * PAGE_SIZE, filters.page * PAGE_SIZE);
+  } else if (isNewArrivals) {
+    const fresh = (serverQuery.data?.items ?? []).filter(isNewProduct);
+    const filtered = applyFiltersLocally(fresh, filters, goalCategoryIds);
+    total = filtered.length;
+    totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    products = filtered.slice((filters.page - 1) * PAGE_SIZE, filters.page * PAGE_SIZE);
+  } else {
+    products = serverQuery.data?.items ?? [];
+    total = serverQuery.data?.total ?? 0;
+    totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   }
 
   const shown = products.length;
@@ -257,6 +263,10 @@ products = filtered.slice(
     ...filters.categoryIds.map((id) => ({
       label: catName(id),
       clear: () => update({ categoryIds: filters.categoryIds.filter((x) => x !== id) }),
+    })),
+    ...filters.goals.map((slug) => ({
+      label: GOALS.find((g) => g.slug === slug)?.label ?? slug,
+      clear: () => update({ goals: filters.goals.filter((x) => x !== slug) }),
     })),
     ...filters.flavours.map((fl) => ({
       label: fl,
@@ -438,6 +448,7 @@ products = filtered.slice(
                   update({
                     q: '',
                     categoryIds: [],
+                    goals: [],
                     flavours: [],
                     minPrice: null,
                     maxPrice: null,

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { cn } from '@/lib/utils';
+import { cn, mediaUrl } from '@/lib/utils';
+import { useStorefrontConfigWithDefaults } from '@/features/storefront-config/hooks.js';
 import { useAuthStore } from '@/features/auth/store';
 import { authApi } from '@/features/auth/api';
 import { useCart } from '@/features/cart/hooks';
@@ -17,18 +18,6 @@ import {
   CloseIcon,
 } from './Icons';
 import ShopMegaMenu, { ShopMobileLinks, ChevronIcon } from './ShopMegaMenu.jsx';
-
-/** Primary nav links — real app routes (mockup order). "Shop" is rendered
- *  via ShopMegaMenu on desktop and as an accordion toggle on mobile. */
-const NAV = [
-  { to: '/', label: 'Home', end: true },
-  { to: '/products', label: 'Shop', megaMenu: true },
-  { to: '/categories', label: 'Categories' },
-  { to: '/bestsellers', label: 'Best Sellers' },
-  { to: '/new-arrivals', label: 'New Arrivals' },
-  { to: '/contact', label: 'Contact' },
-  { to: '/about', label: 'About' },
-];
 
 /** Account dropdown items — signed-in users. */
 const ACCOUNT_LINKS = [
@@ -74,6 +63,11 @@ export default function Header() {
   const navigate = useNavigate();
   const location = useLocation();
   const reduce = useReducedMotion();
+
+  // Admin-managed nav + brand identity. The item flagged `megaMenu` renders
+  // via ShopMegaMenu on desktop and as an accordion toggle on mobile.
+  const { config } = useStorefrontConfigWithDefaults();
+  const navItems = (config.nav_items ?? []).filter((n) => n.visible !== false);
 
   const isShopSection = location.pathname.startsWith('/products');
 
@@ -257,17 +251,17 @@ export default function Header() {
           className="flex items-center gap-4 lg:gap-6 font-wserif text-[16px] lg:text-[18px] flex-1"
           aria-label="Main navigation"
         >
-          {NAV.map((n) => {
+          {navItems.map((n) => {
             const linkCls = ({ isActive }) =>
               cn(
                 'no-underline transition-colors flex items-center gap-1.5 whitespace-nowrap',
                 isActive ? 'text-white' : 'text-[#c9d4cc] hover:text-white',
               );
             if (n.megaMenu) {
-              return <ShopMegaMenu key={n.to} linkClassName={linkCls} />;
+              return <ShopMegaMenu key={`${n.label}-${n.to}`} linkClassName={linkCls} label={n.label} />;
             }
             return (
-              <NavLink key={n.to} to={n.to} end={n.end} className={linkCls}>
+              <NavLink key={`${n.label}-${n.to}`} to={n.to} end={n.end} className={linkCls}>
                 {n.label}
               </NavLink>
             );
@@ -455,11 +449,25 @@ export default function Header() {
         </button>
 
         {/* Centre: inline logo */}
-        <Link to="/" className="flex items-center gap-1.5 no-underline" aria-label="Wellvia — home">
-          <LeafMark size={22} dot={false} color="#E9DDC0" />
-          <span className="font-display text-[17px] tracking-[0.2em] font-medium text-[#F1EAD8] pl-[0.2em]">
-            WELLVIA
-          </span>
+        <Link
+          to="/"
+          className="flex items-center gap-1.5 no-underline"
+          aria-label={`${config.brand_name} — home`}
+        >
+          {config.logo_url ? (
+            <img
+              src={mediaUrl(config.logo_url)}
+              alt={config.brand_name}
+              className="max-h-7 w-auto object-contain"
+            />
+          ) : (
+            <>
+              <LeafMark size={22} dot={false} color="#E9DDC0" />
+              <span className="font-display text-[17px] tracking-[0.2em] font-medium text-[#F1EAD8] pl-[0.2em]">
+                {config.brand_name}
+              </span>
+            </>
+          )}
         </Link>
 
         {/* Right: wishlist + cart */}
@@ -558,10 +566,20 @@ export default function Header() {
               {/* Menu header */}
               <div className="flex items-center justify-between px-5 py-[18px] border-b border-wline shrink-0">
                 <div className="flex items-center gap-1.5">
-                  <LeafMark size={20} dot={false} />
-                  <span className="font-display text-[15px] tracking-[0.18em] font-medium text-wgreen pl-[0.18em]">
-                    WELLVIA
-                  </span>
+                  {config.logo_url ? (
+                    <img
+                      src={mediaUrl(config.logo_url)}
+                      alt={config.brand_name}
+                      className="max-h-6 w-auto object-contain"
+                    />
+                  ) : (
+                    <>
+                      <LeafMark size={20} dot={false} />
+                      <span className="font-display text-[15px] tracking-[0.18em] font-medium text-wgreen pl-[0.18em]">
+                        {config.brand_name}
+                      </span>
+                    </>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -602,14 +620,14 @@ export default function Header() {
                 className="flex flex-col px-5 py-4 gap-1 overflow-y-auto flex-1"
                 aria-label="Mobile navigation"
               >
-                {NAV.map((n) => {
+                {navItems.map((n) => {
                   if (n.megaMenu) {
                     // "Shop" row is an accordion trigger on mobile — it toggles
                     // the category list open/closed instead of navigating away.
                     // The "All Products →" link inside the panel is what
                     // actually navigates to /products.
                     return (
-                      <div key={n.to}>
+                      <div key={`${n.label}-${n.to}`}>
                         <button
                           type="button"
                           onClick={() => setMobileShopOpen((v) => !v)}
@@ -654,7 +672,7 @@ export default function Header() {
                   }
                   return (
                     <NavLink
-                      key={n.to}
+                      key={`${n.label}-${n.to}`}
                       to={n.to}
                       end={n.end}
                       onClick={() => {

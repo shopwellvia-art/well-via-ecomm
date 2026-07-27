@@ -4,14 +4,13 @@ import { Routes, Route } from 'react-router-dom';
 import Layout from '@/components/layout/Layout.jsx';
 import AdminLayout from '@/components/admin/AdminLayout.jsx';
 import RequireAdmin from './RequireAdmin.jsx';
+import RequireAuth from './RequireAuth.jsx';
 import RequirePermission from './RequirePermission.jsx';
 import RequireSuperadmin from './RequireSuperadmin.jsx';
 import ScrollToTop from './ScrollToTop.jsx';
 import AuthBootstrap from './AuthBootstrap.jsx';
+import SiteMeta from '@/components/storefront/SiteMeta.jsx';
 import { PageFallback } from '@/components/feedback/PageFallback.jsx';
-import ProductDemoPage from '../pages/ProductDemoPage.jsx';
-import CheckoutFirst from '../pages/CheckoutFirst.jsx';
-import CheckoutAddress from '../pages/Address.jsx';
 
 // Route-based code splitting — each page is its own chunk.
 const HomePage = lazy(() => import('@/pages/HomePage.jsx'));
@@ -19,7 +18,7 @@ const ProductListPage = lazy(() => import('@/pages/ProductListPage.jsx'));
 const CategoriesPage = lazy(() => import('@/pages/CategoriesPage.jsx'));
 const ProductDetailPage = lazy(() => import('@/pages/ProductDetailPage.jsx'));
 const CartPage = lazy(() => import('@/pages/CartPage.jsx'));
-const CheckoutPageFinal = lazy(() => import('@/pages/CheckoutPageFinal.jsx'));
+const CheckoutPage = lazy(() => import('@/pages/CheckoutPage.jsx'));
 const PaymentMockPage = lazy(() => import('@/pages/PaymentMockPage.jsx'));
 const PaymentReturnPage = lazy(() => import('@/pages/PaymentReturnPage.jsx'));
 const OrdersPage = lazy(() => import('@/pages/OrdersPage.jsx'));
@@ -61,6 +60,7 @@ const AdminAuditPage = lazy(() => import('@/pages/admin/AdminAuditPage.jsx'));
 const AdminSettingsPage = lazy(() => import('@/pages/admin/AdminSettingsPage.jsx'));
 const AdminPaymentMethodsPage = lazy(() => import('@/pages/admin/AdminPaymentMethodsPage.jsx'));
 const AdminFooterPage = lazy(() => import('@/pages/admin/AdminFooterPage.jsx'));
+const AdminStorefrontPage = lazy(() => import('@/pages/admin/AdminStorefrontPage.jsx'));
 const AdminPagesPage = lazy(() => import('@/pages/admin/AdminPagesPage.jsx'));
 const AdminOrdersPage = lazy(() => import('@/pages/admin/AdminOrdersPage.jsx'));
 const AdminOrderDetailPage = lazy(() => import('@/pages/admin/AdminOrderDetailPage.jsx'));
@@ -75,6 +75,7 @@ export default function App() {
     <>
       <ScrollToTop />
       <AuthBootstrap />
+      <SiteMeta />
       <Suspense fallback={<PageFallback />}>
         <Routes>
           {/* Storefront */}
@@ -87,14 +88,48 @@ export default function App() {
             <Route path="products/:id" element={<ProductDetailPage />} />
             <Route path="cart" element={<CartPage />} />
             <Route path="wishlist" element={<WishlistPage />} />
-            <Route path="rewards" element={<RewardsPage />} />
-            <Route path="account/security" element={<AccountSecurityPage />} />
-            <Route path="account/addresses" element={<AddressesPage />} />
-            <Route path="checkoutfirst" element={<CheckoutFirst/>}/>
-            <Route path="checkoutfinal" element={<CheckoutPageFinal />} />
-            <Route path='address' element={<CheckoutAddress/>}/>
-            <Route path="orders" element={<OrdersPage />} />
-            <Route path="orders/:id" element={<OrderDetailPage />} />
+            {/* Customer-only pages — /checkout stays unguarded (inline LoginPanel) */}
+            <Route
+              path="rewards"
+              element={
+                <RequireAuth>
+                  <RewardsPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="account/security"
+              element={
+                <RequireAuth>
+                  <AccountSecurityPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="account/addresses"
+              element={
+                <RequireAuth>
+                  <AddressesPage />
+                </RequireAuth>
+              }
+            />
+            <Route path="checkout" element={<CheckoutPage />} />
+            <Route
+              path="orders"
+              element={
+                <RequireAuth>
+                  <OrdersPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="orders/:id"
+              element={
+                <RequireAuth>
+                  <OrderDetailPage />
+                </RequireAuth>
+              }
+            />
             <Route path="payments/mock/:txnId" element={<PaymentMockPage />} />
             <Route path="payments/return" element={<PaymentReturnPage />} />
             <Route path="login" element={<LoginPage />} />
@@ -107,7 +142,6 @@ export default function App() {
             <Route path="stories" element={<StoriesPage />} />
             <Route path="press" element={<PressPage />} />
             <Route path="corporate" element={<CorporatePage />} />
-            <Route path='product' element={<ProductDemoPage/>}/>
             {/* Legal / customer-care policy pages (admin-editable) */}
             <Route path="privacy" element={<PrivacyPage />} />
             <Route path="terms" element={<TermsPage />} />
@@ -235,6 +269,14 @@ export default function App() {
               element={
                 <RequirePermission permission="frontend.manage">
                   <AdminFooterPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="admin/storefront"
+              element={
+                <RequirePermission permission="frontend.manage">
+                  <AdminStorefrontPage />
                 </RequirePermission>
               }
             />

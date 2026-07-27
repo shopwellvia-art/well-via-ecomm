@@ -16,6 +16,8 @@ from app.schemas.order import (
     AdminOrderListPage,
     AdminOrderRead,
     AdminOrderRow,
+    AdminRefundRequest,
+    CustomerCancelRequest,
     NotesRequest,
     OrderAddressRead,
     OrderItemRead,
@@ -245,12 +247,18 @@ def admin_cancel_order(
 @router.post("/admin/{order_id}/refund", response_model=AdminOrderRead)
 def admin_refund_order(
     order_id: int,
-    payload: RefundOrCancelRequest,
+    payload: AdminRefundRequest,
     request: Request,
     actor: User = Depends(require_permission("orders.refund")),
     db: Session = Depends(get_db),
 ):
-    order = OrderService(db).refund(order_id, reason=payload.reason)
+    """Refund an order. Attempts the reversal through the original payment
+    gateway first; falls back to a manual (operator-completed) refund when the
+    gateway can't do it or `force_manual` is set. The gateway-vs-manual outcome
+    is recorded in payment_events and appended to the order's internal notes."""
+    order = OrderService(db).refund(
+        order_id, reason=payload.reason, force_manual=payload.force_manual
+    )
     _audit_order(
         db,
         actor,
@@ -258,7 +266,11 @@ def admin_refund_order(
         "order.refund",
         order,
         summary=f"Refunded order #{order.id}: {payload.reason}",
-        extra={"reason": payload.reason, "total": float(order.total_amount)},
+        extra={
+            "reason": payload.reason,
+            "total": float(order.total_amount),
+            "force_manual": payload.force_manual,
+        },
     )
     db.commit()
     return _detail(order)
@@ -480,3 +492,22 @@ def get_order(
     db: Session = Depends(get_db),
 ):
     return OrderService(db).get_for_user(user.id, order_id)
+
+
+@router.post("/{order_id}/cancel", response_model=OrderRead)
+def cancel_order(
+    order_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    payload: CustomerCancelRequest | None = None,
+):
+    """Customer self-service cancellation. Allowed while the order is PENDING,
+    or PAID but not yet handed to a carrier. Prepaid captures are refunded
+    through the original gateway when possible; otherwise the cancellation
+    still goes through and the refund is queued for manual processing.
+    404 (not 403) for orders the caller doesn't own."""
+    order = OrderService(db).cancel_for_customer(
+        user.id, order_id, reason=(payload.reason if payload else None)
+    )
+    db.commit()
+    return order

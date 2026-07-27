@@ -19,7 +19,9 @@ export function usePaymentStatus(mtid, { enabled = true, refetchInterval } = {})
     queryFn: () => paymentsApi.status(mtid),
     enabled: !!mtid && enabled,
     refetchInterval,
-    retry: false,
+    // Bounded retry so a single network blip doesn't permanently strand the
+    // post-payment page; polling via refetchInterval continues regardless.
+    retry: 3,
   });
 }
 
