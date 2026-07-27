@@ -6,7 +6,7 @@ import { Button } from '@/components/storefront/ui/Button.jsx';
 import { Skeleton } from '@/components/storefront/ui/Skeleton.jsx';
 import { cn } from '@/lib/utils.js';
 import { useAuthStore } from '@/features/auth/store.js';
-import { listStagger, fadeUp, fadeIn } from '@/lib/motion.js';
+import { listStagger, fadeIn } from '@/lib/motion.js';
 import { useProductReviews } from './hooks.js';
 import { StarRating } from './StarRating.jsx';
 import { RatingHistogram } from './RatingHistogram.jsx';

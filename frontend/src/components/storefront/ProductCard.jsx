@@ -56,21 +56,11 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
     compare_at_price,
     image_url,
     stock,
-    rating_avg,
     rating_count,
-    flavour,
-    short_description,
   } = product;
 
   const isDiscounted =
     compare_at_price != null && Number(compare_at_price) > Number(price);
-  const discountPct = isDiscounted
-    ? Math.round(
-        ((Number(compare_at_price) - Number(price)) /
-          Number(compare_at_price)) *
-          100
-      )
-    : 0;
   const outOfStock = stock <= 0;
 
   // Ribbon: listing context wins, then the admin's free-form product.badge,
@@ -82,8 +72,6 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
   const badgeStyle =
     BADGE_STYLES[(badge || product.badge || 'sale').toLowerCase()] ||
     BADGE_STYLES.default;
-
-  const subtitle = short_description || null;
 
   const handleWishlist = (e) => {
     e.preventDefault();

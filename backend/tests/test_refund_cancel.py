@@ -12,6 +12,9 @@ Covers:
   6. `force_manual` skips the gateway call entirely.
   7. Customer cancellation of a PAID-but-unshipped prepaid order attempts the
      refund; on failure the order still cancels, marked for manual refund.
+  8. Settle-after-cancel: a SUCCESS gateway settlement landing on an already-
+     CANCELLED order writes a SETTLED_AFTER_CANCEL event and refunds the
+     captured money (manual fallback on gateway failure); replays are no-ops.
 
 The payments factory is patched to deterministic providers and the email
 sender is patched (no real SMTP). Uses the shared dev DB and cleans up after
@@ -39,6 +42,7 @@ from app.models.payment_event import PaymentEvent, PaymentEventType
 from app.models.product import Product
 from app.models.user import User
 from app.services.order_service import OrderService
+from app.services.payment_service import PaymentService
 
 _SEND_EMAIL = "app.services.notifications.service.send_email"
 _GET_PROVIDER = "app.integrations.payments.factory.get_provider_for_order"
@@ -162,6 +166,15 @@ def _refund_events(db, order_id: int) -> list[PaymentEvent]:
         select(PaymentEvent).where(
             PaymentEvent.order_id == order_id,
             PaymentEvent.event_type == PaymentEventType.REFUND_ATTEMPT,
+        )
+    ).scalars().all())
+
+
+def _events_of(db, order_id: int, event_type: str) -> list[PaymentEvent]:
+    return list(db.execute(
+        select(PaymentEvent).where(
+            PaymentEvent.order_id == order_id,
+            PaymentEvent.event_type == event_type,
         )
     ).scalars().all())
 
@@ -369,6 +382,116 @@ def test_admin_refund_via_gateway_succeeds() -> None:
         assert "via mock" in events[0].message
         assert events[0].provider_ref.startswith("GWREFUND-")
         assert "issued via mock" in (order.internal_notes or "")
+    finally:
+        db.rollback()
+        db.close()
+        if ids:
+            _cleanup(*ids)
+
+
+# ---------------------------------------------------------------------------
+# Settle-after-cancel (gateway captured money for an already-CANCELLED order)
+# ---------------------------------------------------------------------------
+
+
+def test_settlement_after_cancel_refunds_via_gateway() -> None:
+    """A SUCCESS settlement landing on an already-CANCELLED order must not
+    silently keep the captured money: a SETTLED_AFTER_CANCEL audit row is
+    written, the amount goes back through the gateway, and the leg is
+    reversed on the books. A replayed settlement changes nothing."""
+    ids = None
+    db = SessionLocal()
+    try:
+        # stock=100: the cancel already restored the units; settle-after-cancel
+        # must NOT restock again.
+        user, prod, order = _build_order(
+            db, status=OrderStatus.CANCELLED,
+            leg_status=PaymentTxnStatus.CANCELLED, stock=100,
+        )
+        ids = (user.id, prod.id, order.id)
+        leg_id = order.payments[0].id
+        db.commit()
+
+        fake = _FakeRefundProvider()
+        with patch(_GET_PROVIDER, return_value=fake), patch(_SEND_EMAIL):
+            PaymentService(db)._apply_status(
+                order, PaymentStatus.SUCCESS,
+                gateway_amount_minor=20000,
+                provider_ref="pay_LATECAPTURE",
+            )
+
+        order = db.get(Order, order.id)
+        assert order.status == OrderStatus.CANCELLED  # stays cancelled
+        assert len(fake.calls) == 1
+        assert fake.calls[0].amount_minor == 20000
+        assert db.get(OrderPayment, leg_id).payment_status == PaymentTxnStatus.REFUNDED
+        assert db.get(Product, prod.id).stock == 100  # no double restock
+
+        settled = _events_of(db, order.id, PaymentEventType.SETTLED_AFTER_CANCEL)
+        assert len(settled) == 1
+        assert settled[0].amount_reported_minor == 20000
+
+        refunds = _refund_events(db, order.id)
+        assert len(refunds) == 1
+        assert "via mock" in refunds[0].message
+        assert refunds[0].provider_ref.startswith("GWREFUND-")
+        assert "issued via mock" in (order.internal_notes or "")
+
+        # Redelivered webhook: the leg is already REFUNDED — full no-op.
+        with patch(_GET_PROVIDER, return_value=fake), patch(_SEND_EMAIL):
+            PaymentService(db)._apply_status(
+                order, PaymentStatus.SUCCESS,
+                gateway_amount_minor=20000,
+                provider_ref="pay_LATECAPTURE",
+            )
+        assert len(fake.calls) == 1
+        assert len(_refund_events(db, order.id)) == 1
+        assert len(
+            _events_of(db, order.id, PaymentEventType.SETTLED_AFTER_CANCEL)
+        ) == 1
+    finally:
+        db.rollback()
+        db.close()
+        if ids:
+            _cleanup(*ids)
+
+
+def test_settlement_after_cancel_marks_manual_when_gateway_fails() -> None:
+    """Same scenario but the gateway declines the refund: the order stays
+    CANCELLED and the money is flagged for manual processing where admins
+    look (REFUND_ATTEMPT 'via manual' event + internal note)."""
+    ids = None
+    db = SessionLocal()
+    try:
+        user, prod, order = _build_order(
+            db, status=OrderStatus.CANCELLED,
+            leg_status=PaymentTxnStatus.CANCELLED, stock=100,
+        )
+        ids = (user.id, prod.id, order.id)
+        leg_id = order.payments[0].id
+        db.commit()
+
+        failing = _FailingRefundProvider()
+        with patch(_GET_PROVIDER, return_value=failing), patch(_SEND_EMAIL):
+            PaymentService(db)._apply_status(
+                order, PaymentStatus.SUCCESS, gateway_amount_minor=20000,
+            )
+
+        order = db.get(Order, order.id)
+        assert order.status == OrderStatus.CANCELLED
+        assert len(failing.calls) == 1
+
+        settled = _events_of(db, order.id, PaymentEventType.SETTLED_AFTER_CANCEL)
+        assert len(settled) == 1
+
+        refunds = _refund_events(db, order.id)
+        assert len(refunds) == 1
+        assert "via manual" in refunds[0].message
+        assert "NEEDS MANUAL PROCESSING" in (order.internal_notes or "")
+        # Reversed on the books (same convention as a declined cancel-refund);
+        # the note tracks the operator-side gateway action.
+        assert db.get(OrderPayment, leg_id).payment_status == PaymentTxnStatus.REFUNDED
+        assert db.get(Product, prod.id).stock == 100
     finally:
         db.rollback()
         db.close()

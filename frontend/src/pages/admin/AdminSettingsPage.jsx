@@ -399,7 +399,7 @@ function SaveBar({ dirty, saving, savedAt, onSave }) {
 
 // ─── CategoryEditor ───────────────────────────────────────────────────────────
 
-function CategoryEditor({ category, items, draft, dirty, onChange, onSave, saving, savedAt, extras }) {
+function CategoryEditor({ items, draft, dirty, onChange, onSave, saving, savedAt, extras }) {
   // Separate bool fields from input fields — bools span full width in their own group
   const boolItems = items.filter((it) => fieldType(it.key) === 'bool');
   const inputItems = items.filter((it) => fieldType(it.key) !== 'bool');

@@ -5,7 +5,8 @@ There is exactly **one workflow** (`.github/workflows/cicd.yml`) and exactly
 
 The pipeline runs for the **`production` branch only** — no other branch, no Pull
 Requests. Push or merge into `production` and the whole thing runs end to end:
-the frontend build and the backend test suite go first, and **only if both pass**
+the frontend checks (lint, Vitest, build) and the backend pytest suite go first,
+and **only if both pass**
 does it build the backend & frontend Docker images, push them to **GHCR**, then
 SSH into your **EC2** to pull the new images and **restart both containers on the
 new code**. The app is served over **plain HTTP on port 8090** of the EC2's public
@@ -17,14 +18,16 @@ manually from reviewed SQL (see [§6](#6-migrations)).
 ```
 push / merge → `production`   (nothing runs on any other branch)
    ├─ frontend         ─┐
-   │  npm ci/build/test │
+   │  npm ci/lint/      │
+   │  vitest/build      │
    ├─ backend-tests    ─┤ BOTH must pass
    │  mysql+redis svc   │
    │  alembic+pytest    │
    │                    ▼
-   ├─── build-and-push → ghcr.io  (:latest and :<git-sha>)
+   ├─── build-and-push → ghcr.io  (:latest and :<git-sha>, full no-cache rebuild)
    │                    │
-   └─── deploy → ssh EC2 → compose pull → up -d  (recreates backend+frontend)
+   └─── deploy → ssh EC2 → compose pull → up -d --force-recreate backend+frontend
+                         → delete the superseded images from the host
                          → verify both run :<git-sha> and :8090 answers
                          (no alembic — see §6)
 
@@ -34,12 +37,15 @@ EC2 host:  [frontend+nginx :8090→:80] ─proxy─> [backend :8000] ─> shared
 ```
 
 **Why the containers pick up the new code:** every deploy tags the images with
-the commit SHA and pins `IMAGE_TAG=<sha>` on the host, so the running containers'
-image references no longer match after a pull — `docker compose up -d` therefore
-recreates the `backend` and `frontend` containers rather than leaving them alone.
-`redis` keeps the same image, so it stays up and its volume is untouched. A final
-verify step asserts both containers really report the new SHA and that the
-storefront answers on `:8090`, and fails the deploy if not.
+the commit SHA, pins `IMAGE_TAG=<sha>` on the host, and runs
+`docker compose up -d --force-recreate backend frontend` — the two app
+containers are destroyed and rebuilt from the new images on *every* deploy,
+without relying on the image reference having changed. `redis` is never named in
+the `pull`/`up` commands, so it stays up and its volume is untouched. The
+superseded backend/frontend images are then deleted from the host
+(`docker rmi` + `docker image prune -af`) to reclaim disk. A final verify step
+asserts both containers really report the new SHA and that the storefront
+answers on `:8090`, and fails the deploy if not.
 
 The backend suite runs against a **throwaway MySQL 8 + Redis 7** provided as
 GitHub Actions `services:` containers — never against the shared remote DB
@@ -139,8 +145,13 @@ Watch progress in the repo's **Actions** tab. On success the site is live at:
 
 ```
 http://<EC2-public-IP>:8090/          # storefront
-http://<EC2-public-IP>:8090/docs      # API docs
+http://<EC2-public-IP>:8090/version   # backend build stamp (verify the deploy)
 ```
+
+> There is **no `/docs` in production**: interactive API docs (Swagger/ReDoc and
+> the OpenAPI JSON) are disabled whenever `ENVIRONMENT=production` in
+> `backend/.env`. Use `/version` or `/health` to check the API is up; browse
+> `/docs` on a local dev run instead.
 
 Every deploy is tagged by git SHA in GHCR, so deploys are reproducible.
 
@@ -164,8 +175,13 @@ Images are tagged by commit SHA. To roll back to a previous good commit:
 
 ```bash
 ssh <user>@<EC2-IP> && cd ~/app
+IMAGE_TAG=<previous-git-sha> docker compose pull backend frontend   # re-download
 IMAGE_TAG=<previous-git-sha> docker compose up -d
 ```
+
+The explicit `pull` is required: each deploy deletes the superseded images from
+the host, so the old `:<sha>` is no longer cached locally — but it is still in
+GHCR, it just has to download again first.
 
 (Or revert the commit on `production` and let the pipeline redeploy.)
 
@@ -208,7 +224,7 @@ bash ~/app/backend/scripts/backup_db.sh  # writes ./backups/<db>-<ts>.sql.gz
 |---------|-----|
 | Actions deploy step: `permission denied (publickey)` | `SSH_PRIVATE_KEY` must be the **entire** private key incl. `-----BEGIN/END-----`. `EC2_USER` correct (`ubuntu` vs `ec2-user`). |
 | EC2 `docker login` / pull fails with `denied: denied` | `GHCR_USER` must be a GitHub **username**, not the org. `GHCR_PAT` must be a **classic** PAT with `read:packages`, SSO-authorised for the org. Or make both packages Public and drop the login. |
-| Site loads but images 404 | `MEDIA_BASE_URL` in `backend/.env` must equal `http://<EC2-IP>:8090`; re-`up -d` the backend. |
+| Site loads but images 404 | Two known causes. **(1)** `MEDIA_BASE_URL` in `backend/.env` must equal `http://<EC2-IP>:8090`; re-`up -d` the backend. **(2) Legacy flat-layout uploads:** files uploaded before the structured media layout landed live *directly* in the uploads root (`uploads/<uuid>.jpg`), while newer uploads go under `uploads/products/<YYYY>/<MM>/…`, `uploads/categories/…`, etc. Old DB rows still reference the flat `/media/<uuid>.jpg` URLs, so if the uploads volume was recreated or only the new subfolders were copied over, exactly those older images 404. Fix: restore the flat files into the uploads root (or re-upload the affected images so the DB points at new structured paths). |
 | 413 on upload | Already handled (`client_max_body_size 20m` in the frontend nginx) — rebuild/pull the frontend image. |
 | Backend can't reach DB | EC2 must reach your MySQL host/port; check the DB firewall/security group and `MYSQL_*` in `backend/.env`. |
 | Port 8090 unreachable | Open inbound 8090 in the EC2 security group. |

@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   Plus,
   Trash2,
-  GripVertical,
   ChevronDown,
   ChevronUp,
   Upload,
@@ -16,12 +15,11 @@ import {
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Input } from '@/components/ui/Input.jsx';
-import { Select } from '@/components/ui/Select.jsx';
 import { Textarea } from '@/components/ui/Textarea.jsx';
 import { Card, CardBody } from '@/components/ui/Card.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { cn } from '@/lib/utils.js';
-import { fadeIn, fadeUp } from '@/lib/motion.js';
+import { fadeIn } from '@/lib/motion.js';
 import {
   useFooterConfig,
   useUpdateFooterConfig,

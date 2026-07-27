@@ -105,7 +105,7 @@ const inputCls =
  * "/\host" to it); react-router's pushState fails cross-origin and falls back
  * to window.location.assign(), which would make this an open redirect.
  */
-function sanitizeNext(raw) {
+export function sanitizeNext(raw) {
   return raw && /^\/(?![/\\])/.test(raw) ? raw : null;
 }
 

@@ -218,19 +218,31 @@ def mark_cod_collected(order: Order, *, when: datetime | None = None) -> None:
 
 
 def mark_payments_refunded(order: Order) -> None:
-    """Captured legs become REFUNDED; not-yet-captured legs CANCELLED."""
+    """Captured legs become REFUNDED; not-yet-captured legs CANCELLED.
+
+    PARTIALLY_REFUNDED counts as captured — real money moved and part of it
+    already went back via a return-refund; the closing full refund completes
+    the reversal. Letting it fall into the CANCELLED branch would record
+    captured-and-partially-reversed money as a never-captured/voided leg."""
     for p in order.payments:
-        if p.payment_status == PaymentTxnStatus.PAID:
+        if p.payment_status in (
+            PaymentTxnStatus.PAID,
+            PaymentTxnStatus.PARTIALLY_REFUNDED,
+        ):
             p.payment_status = PaymentTxnStatus.REFUNDED
         elif p.payment_status not in (PaymentTxnStatus.REFUNDED, PaymentTxnStatus.CANCELLED):
             p.payment_status = PaymentTxnStatus.CANCELLED
 
 
 def mark_payments_cancelled(order: Order) -> None:
-    """Cancel uncaptured legs; a captured leg being cancelled is really a
-    refund, so mark it REFUNDED for honest reporting."""
+    """Cancel uncaptured legs; a captured (fully or partially reversed)
+    leg being cancelled is really a refund, so mark it REFUNDED for honest
+    reporting."""
     for p in order.payments:
-        if p.payment_status == PaymentTxnStatus.PAID:
+        if p.payment_status in (
+            PaymentTxnStatus.PAID,
+            PaymentTxnStatus.PARTIALLY_REFUNDED,
+        ):
             p.payment_status = PaymentTxnStatus.REFUNDED
         elif p.payment_status != PaymentTxnStatus.CANCELLED:
             p.payment_status = PaymentTxnStatus.CANCELLED

@@ -49,6 +49,10 @@ class PaymentEventType:
     GATEWAY_ERROR = "gateway_error"
     RECONCILE = "reconcile"
     REFUND_ATTEMPT = "refund_attempt"
+    # A SUCCESS settlement arrived for an order that was already CANCELLED —
+    # the gateway captured money for a dead order (customer cancelled while
+    # the payment was in flight); the amount must be refunded, not kept.
+    SETTLED_AFTER_CANCEL = "settled_after_cancel"
 
 
 class PaymentEvent(Base):

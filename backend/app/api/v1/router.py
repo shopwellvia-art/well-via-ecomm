@@ -19,7 +19,6 @@ from app.api.v1.endpoints import (
     loyalty,
     observability,
     orders,
-    payment_gateway,
     payment_instruments,
     payment_methods,
     payments,
@@ -51,7 +50,6 @@ api_router.include_router(invoices.router, prefix="/orders", tags=["invoices"])
 api_router.include_router(payments.checkout_router, prefix="/checkout", tags=["checkout"])
 api_router.include_router(payments.payments_router, prefix="/payments", tags=["payments"])
 api_router.include_router(payment_instruments.router, prefix="/payments", tags=["payments"])
-api_router.include_router(payment_gateway.router, prefix="/payment-gateway", tags=["payments"])
 # Admin payment-method config: GET/PUT /admin/payment-methods[/{code}]
 api_router.include_router(
     payment_methods.admin_router,

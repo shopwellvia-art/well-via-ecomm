@@ -1,16 +1,14 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
-  Package,
   Truck,
   CheckCircle2,
   XCircle,
   RotateCcw,
   Mail,
   ShieldCheck,
-  Clock,
   CreditCard,
   TicketPercent,
   AlertTriangle,

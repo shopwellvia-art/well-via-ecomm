@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/Badge.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { cn } from '@/lib/utils.js';
-import { fadeUp, scaleIn, listStagger, staggerContainer } from '@/lib/motion.js';
+import { fadeUp, scaleIn, listStagger } from '@/lib/motion.js';
 import {
   useRoles,
   usePermissions,

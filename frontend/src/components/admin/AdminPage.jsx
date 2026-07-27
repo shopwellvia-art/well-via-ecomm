@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion';
-import { duration, ease, staggerContainer, fadeUp } from '@/lib/motion.js';
+import { duration, ease, staggerContainer } from '@/lib/motion.js';
 
 /**
  * Consistent admin page shell.

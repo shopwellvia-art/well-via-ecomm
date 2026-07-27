@@ -16,7 +16,7 @@ import FilterSidebar, {
 } from '@/features/products/components/FilterSidebar.jsx';
 import { useProducts, useBestsellers } from '@/features/products/hooks.js';
 import { useCategories } from '@/features/categories/hooks.js';
-import { GOALS } from '@/lib/catalogOptions.js';
+import { GOALS, resolveGoalCategoryIds } from '@/lib/catalogOptions.js';
 import { cn } from '@/lib/utils.js';
 
 const PAGE_SIZE = 12;
@@ -211,10 +211,7 @@ export default function ProductListPage({ mode = 'all' }) {
   // Goal filters resolve to category ids once categories load (goals ARE
   // category slugs — no separate backend field).
   const goalCategoryIds = useMemo(
-    () =>
-      filters.goals
-        .map((slug) => categories.find((c) => c.slug === slug)?.id)
-        .filter((id) => id != null),
+    () => resolveGoalCategoryIds(filters.goals, categories),
     [filters.goals, categories],
   );
 

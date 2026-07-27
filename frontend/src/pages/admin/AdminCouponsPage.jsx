@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/Badge.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { cn } from '@/lib/utils.js';
-import { fadeUp, staggerContainer, listStagger, scaleIn } from '@/lib/motion.js';
+import { fadeUp, listStagger, scaleIn } from '@/lib/motion.js';
 import {
   useCoupons,
   useCreateCoupon,

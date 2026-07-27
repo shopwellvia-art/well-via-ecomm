@@ -263,7 +263,7 @@ useEffect(() => {
   } = useBestsellers(8);
   const bestsellers = bestsellersData ?? [];
 
-  const { data: combosData, isLoading: combosLoading } = useProducts({
+  const { data: combosData } = useProducts({
     is_combo: true,
     page_size: 8,
   });

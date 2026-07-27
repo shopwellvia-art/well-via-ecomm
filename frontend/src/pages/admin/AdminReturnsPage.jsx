@@ -58,15 +58,6 @@ function formatDateTime(iso) {
   });
 }
 
-function SectionLabel({ icon: Icon, children }) {
-  return (
-    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-tertiary">
-      {Icon && <Icon className="size-3.5 shrink-0" aria-hidden="true" />}
-      {children}
-    </p>
-  );
-}
-
 function ApprovePanel({ ret, onClose }) {
   const [refund, setRefund] = useState('');
   const [notes, setNotes] = useState('');

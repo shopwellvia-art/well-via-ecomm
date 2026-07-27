@@ -80,7 +80,7 @@ export function useAdminUpdateReview() {
 export function useAdminDeleteReview() {
   const invalidate = useInvalidateAll();
   return useMutation({
-    mutationFn: ({ reviewId, productId }) => reviewsApi.adminRemove(reviewId),
+    mutationFn: ({ reviewId }) => reviewsApi.adminRemove(reviewId),
     onSuccess: (_data, vars) => invalidate(vars.productId),
   });
 }

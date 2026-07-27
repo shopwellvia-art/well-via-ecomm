@@ -106,7 +106,7 @@ export function useCancelShipment() {
 export function useMockSimulate() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: ({ id, awb, status, note }) =>
+    mutationFn: ({ awb, status, note }) =>
       adminOrdersApi.mockSimulate(awb, status, note),
     onSuccess: (_d, vars) => invalidate(vars.id),
   });

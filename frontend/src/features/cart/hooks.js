@@ -18,7 +18,7 @@ function useInvalidateCart() {
  * signed-out visitors. Lines whose product no longer exists are dropped.
  * Guest carts have no tax/coupon — those apply after login.
  */
-function buildGuestCart(lines, products) {
+export function buildGuestCart(lines, products) {
   const byId = new Map((products ?? []).map((p) => [p.id, p]));
   const items = lines
     .filter((l) => byId.has(l.product_id))

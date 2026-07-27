@@ -8,47 +8,6 @@ import { useSubmitContactMessage } from '@/features/contact/hooks.js';
 import { toast } from '@/components/ui/Toaster.jsx';
 import { cn } from '@/lib/utils.js';
 
-// ── Decorative hero leaves (inline SVG, no image asset required) ───────────
-
-function HeroLeaves({ className, flip = false }) {
-  return (
-    <svg
-      viewBox="0 0 160 160"
-      className={className}
-      style={flip ? { transform: 'scaleX(-1)' } : undefined}
-      aria-hidden="true"
-      focusable="false"
-    >
-      <g opacity="0.5">
-        <path
-          d="M0 20 C 40 10, 70 35, 75 80 C 78 110, 65 135, 40 155"
-          fill="none"
-          stroke="#5F7A52"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        {[
-          { x: 20, y: 40, rot: 25 },
-          { x: 45, y: 65, rot: -20 },
-          { x: 30, y: 95, rot: 40 },
-          { x: 55, y: 115, rot: -10 },
-        ].map((l, i) => (
-          <ellipse
-            key={i}
-            cx={l.x}
-            cy={l.y}
-            rx="14"
-            ry="6"
-            fill="#7C9A6C"
-            opacity="0.55"
-            transform={`rotate(${l.rot} ${l.x} ${l.y})`}
-          />
-        ))}
-      </g>
-    </svg>
-  );
-}
-
 // ── Message form ─────────────────────────────────────────────────────────────
 
 // Shared input style — wellness skin, matches LoginPage (no @/components/ui dependency).

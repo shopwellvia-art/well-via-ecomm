@@ -122,6 +122,14 @@ class RazorpayProvider:
         capture, missing payment, gateway rejection, network error) is
         returned as a FAILED RefundResult so callers fall back to a manual
         refund instead of aborting their own state transition.
+
+        Idempotent per ``req.refund_reference``: before POSTing, the payment's
+        existing refunds are checked for one already issued under this
+        reference (receipt / notes.reference) and returned as-is when found.
+        Callers mint DETERMINISTIC references (e.g. RFNDORD{order}-{leg}), so
+        a retry after "gateway refund succeeded but our DB commit failed"
+        re-presents the same reference and short-circuits here instead of
+        paying the customer twice.
         """
         try:
             payment_id = self._resolve_captured_payment_id(req)
@@ -139,6 +147,19 @@ class RazorpayProvider:
                         "original_transaction_id": req.original_transaction_id,
                     },
                 )
+            existing = self._find_existing_refund(payment_id, req.refund_reference)
+            if existing is not None:
+                logger.info(
+                    "razorpay refund order=%s ref=%s: refund %s already issued "
+                    "under this reference — returning it instead of re-refunding",
+                    req.order_id, req.refund_reference, existing.get("id"),
+                )
+                rzp_status = (existing.get("status") or "").lower()
+                return RefundResult(
+                    refund_id=existing.get("id") or req.refund_reference,
+                    status=_REFUND_STATUS_MAP.get(rzp_status, PaymentStatus.PENDING),
+                    raw=existing,
+                )
             payload: dict = {
                 "amount": req.amount_minor,  # paise
                 "receipt": req.refund_reference,
@@ -147,6 +168,13 @@ class RazorpayProvider:
             if req.reason:
                 payload["notes"]["reason"] = req.reason[:255]
             resp = self._post(f"/payments/{payment_id}/refund", payload)
+            rzp_status = (resp.get("status") or "").lower()
+            status_ = _REFUND_STATUS_MAP.get(rzp_status, PaymentStatus.PENDING)
+            return RefundResult(
+                refund_id=resp.get("id") or req.refund_reference,
+                status=status_,
+                raw=resp,
+            )
         except RazorpayError as exc:
             logger.warning(
                 "razorpay refund order=%s ref=%s failed: %s — falling back to manual",
@@ -157,13 +185,22 @@ class RazorpayProvider:
                 status=PaymentStatus.FAILED,
                 raw={"error": exc.message, "details": exc.details},
             )
-        rzp_status = (resp.get("status") or "").lower()
-        status_ = _REFUND_STATUS_MAP.get(rzp_status, PaymentStatus.PENDING)
-        return RefundResult(
-            refund_id=resp.get("id") or req.refund_reference,
-            status=status_,
-            raw=resp,
-        )
+        except Exception as exc:  # noqa: BLE001 — never-raise contract
+            # _post/_get only wrap httpx errors as RazorpayError; anything
+            # else (a non-JSON 2xx body from r.json(), an unexpected payload
+            # shape, ...) must still come back as a FAILED result so callers
+            # fall back to a manual refund instead of aborting their own
+            # state transition.
+            logger.warning(
+                "razorpay refund order=%s ref=%s raised %s: %s — falling back "
+                "to manual",
+                req.order_id, req.refund_reference, type(exc).__name__, exc,
+            )
+            return RefundResult(
+                refund_id=req.refund_reference,
+                status=PaymentStatus.FAILED,
+                raw={"error": str(exc)},
+            )
 
     def verify_webhook(self, body: bytes, signature: str | None) -> bool:
         if not self._webhook_secret or not signature:
@@ -237,6 +274,27 @@ class RazorpayProvider:
             for p in resp.get("items") or []:
                 if (p.get("status") or "").lower() == "captured":
                     return p.get("id")
+        return None
+
+    def _find_existing_refund(self, payment_id: str, reference: str) -> dict | None:
+        """The refund already issued against ``payment_id`` under our merchant
+        ``reference``, or None.
+
+        GET /payments/{id}/refunds and match on ``receipt`` or
+        ``notes.reference`` (both are stamped with the reference at POST time).
+        Razorpay's receipt/notes are plain metadata — NOT a gateway-side
+        idempotency mechanism — so this pre-check is what makes a refund retry
+        safe. May raise RazorpayError on HTTP failure; ``refund()`` catches it
+        and falls back to manual (never blind-POST when we can't rule out an
+        existing refund).
+        """
+        resp = self._get(f"/payments/{payment_id}/refunds")
+        for r in resp.get("items") or []:
+            notes = r.get("notes") or {}
+            if reference and (
+                r.get("receipt") == reference or notes.get("reference") == reference
+            ):
+                return r
         return None
 
     def _post(self, path: str, body: dict) -> dict:

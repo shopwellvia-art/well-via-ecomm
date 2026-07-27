@@ -19,6 +19,14 @@ class Category(Base, IDMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(120), unique=True, index=True, nullable=False)
     slug: Mapped[str] = mapped_column(String(140), unique=True, index=True, nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(512))
+    # One level of nesting only: a parent must itself be top-level. Enforced in
+    # CategoryService; the self-referential FK is the integrity safety net.
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), index=True)
+
+    parent: Mapped[Category | None] = relationship(
+        back_populates="children", remote_side="Category.id"
+    )
+    children: Mapped[list["Category"]] = relationship(back_populates="parent")
 
     products: Mapped[list["Product"]] = relationship(back_populates="category")
 

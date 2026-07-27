@@ -44,7 +44,7 @@ function CheckRow({ checked, onChange, children }) {
   );
 }
 
-export default function FilterSidebar({ filters, onChange, categories = [] }) {
+export default function FilterSidebar({ filters, onChange }) {
   const toggleIn = (list, value) =>
     list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
 

@@ -129,12 +129,33 @@ class ReviewService:
         review = self._must_get(review_id)
         if review.user_id != user.id and not user.is_admin:
             raise ForbiddenError("You can only edit your own review")
+        changed = False
         if rating is not None:
+            changed = changed or review.rating != rating
             review.rating = rating
         if title is not None:
+            changed = changed or review.title != title
             review.title = title
         if body is not None:
+            changed = changed or review.body != body
             review.body = body
+        # Moderation gate on edits: when auto-approve is OFF, an author's edit
+        # to an already-published review must re-enter the admin queue rather
+        # than re-publish instantly — otherwise "submit something innocuous,
+        # wait for approval, edit it into spam" bypasses moderation entirely.
+        # Admin edits skip the gate (admins ARE the moderators), and a no-op
+        # PATCH never dequeues a published review. The recompute below then
+        # drops the review from the product's public aggregates until an
+        # admin re-approves it.
+        if (
+            changed
+            and review.is_approved
+            and not user.is_admin
+            and not SettingsService(self.db).get_bool(
+                _AUTO_APPROVE_KEY, default=True
+            )
+        ):
+            review.is_approved = False
         self._recompute(self.products.get(review.product_id))
         self.db.commit()
         return self.reviews.get(review_id)  # type: ignore[return-value]

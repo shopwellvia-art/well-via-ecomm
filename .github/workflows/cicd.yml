@@ -7,9 +7,10 @@
 #  whole thing end to end and the live EC2 stack comes back up on the new code.
 #
 #      push / merge to `production`
-#         └─ frontend        (npm ci, lint, build — NO unit tests)
+#         ├─ frontend        (npm ci, lint, vitest, build)
+#         └─ backend-tests   (mysql 8 + redis 7 services, alembic, pytest)
 #                    │
-#                    ▼  must be green
+#                    ▼  BOTH must be green
 #              build-and-push (GHCR: :latest + :<sha>, FULL no-cache rebuild)
 #                    │
 #                    ▼
@@ -17,10 +18,8 @@
 #                             backend+frontend, delete the superseded images,
 #                             then verify both really run the new :<sha>)
 #
-#  NO TEST SUITES RUN HERE. Vitest and the pytest/MySQL integration job were
-#  removed deliberately — `npm run build` is the only pre-flight gate, and the
-#  Docker builds themselves are the second gate (a broken install/compile fails
-#  build-and-push). Run pytest locally before merging to `production`.
+#  A red test run BLOCKS the deploy — including manual `workflow_dispatch` runs.
+#  There is no test-bypass path: to ship, make the tests green.
 #
 #  IMAGES ARE REBUILT FROM SCRATCH every run: `no-cache: true` + `pull: true`,
 #  and no GHA layer cache. Slower (~6-10 min) but guarantees a fresh `npm ci` /
@@ -49,14 +48,14 @@ permissions:
 
 jobs:
   # ===========================================================================
-  #  QUALITY GATE — the React/Vite app must install, lint and BUILD.
+  #  QUALITY GATE 1 — the React/Vite app must install, lint, test and BUILD.
   #
-  #  This is a cheap pre-flight only: it fails a broken frontend in ~2 min
-  #  instead of ~8 min into the no-cache Docker build. Unit tests (Vitest) are
-  #  intentionally NOT run here.
+  #  All four steps are blocking. This also doubles as the cheap pre-flight:
+  #  it fails a broken frontend in ~2 min instead of ~8 min into the no-cache
+  #  Docker build.
   # ===========================================================================
   frontend:
-    name: Frontend build
+    name: Frontend lint, tests & build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -73,20 +72,153 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # The real gate: if it doesn't build, nothing ships.
+      # A real, blocking gate (no continue-on-error).
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      # `vitest run` = single pass, no watch mode. Called via npx rather than
+      # the package.json `test` script so a script change can never silently
+      # re-enable watch mode on the runner.
+      - name: Unit tests (Vitest)
+        run: npx vitest run
+
+      # If it doesn't build, nothing ships.
       - name: Build
         run: npm run build
 
   # ===========================================================================
+  #  QUALITY GATE 2 — the backend integration suite.
+  #
+  #  These are real integration tests (live DB via SessionLocal + FastAPI
+  #  TestClient), so they need an actual MySQL + Redis. We use GitHub Actions
+  #  `services:` containers rather than a compose overlay, which is why this
+  #  repo needs only ONE compose file (the production one).
+  #
+  #  The database here is a THROWAWAY container that is destroyed with the
+  #  runner. backend/tests/conftest.py hard-fails the session unless it is
+  #  pointed at a local host + a non-production ENVIRONMENT, so this can never
+  #  touch the shared remote MySQL.
+  # ===========================================================================
+  backend-tests:
+    name: Backend tests (MySQL + Redis)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      mysql:
+        image: mysql:8
+        # Throwaway CI credentials — must match the backend/.env written below.
+        # mysql:8 auto-grants this user full rights on MYSQL_DATABASE, which the
+        # Alembic migrations need for DDL.
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ecommerce
+          MYSQL_USER: ecom
+          MYSQL_PASSWORD: ecom_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      # requirements-dev.txt pulls in requirements.txt plus the test tooling.
+      # The DB driver is PyMySQL (pure Python), so no system build deps needed.
+      - name: Install dependencies
+        run: pip install --no-cache-dir -r requirements-dev.txt
+
+      # The service's healthcheck can go green a moment before MySQL is really
+      # accepting application connections. Poll with the same driver the app
+      # uses so we fail fast with a clear message instead of mid-migration.
+      - name: Wait for MySQL to accept connections
+        run: |
+          python - <<'PY'
+          import sys, time
+          import pymysql
+          for attempt in range(1, 41):
+              try:
+                  pymysql.connect(host="127.0.0.1", port=3306, user="ecom",
+                                  password="ecom_password", database="ecommerce",
+                                  connect_timeout=3).close()
+                  print(f"MySQL ready after {attempt} attempt(s)")
+                  sys.exit(0)
+              except Exception as exc:
+                  print(f"attempt {attempt}: {exc}")
+                  time.sleep(3)
+          sys.exit("MySQL did not become reachable in time")
+          PY
+
+      # backend/.env is gitignored, so synthesize a CI one. The values must
+      # satisfy the conftest.py guard: ENVIRONMENT must be one of
+      # test/development/ci (NOT "production") and MYSQL_HOST must be a
+      # known-local host (127.0.0.1 here) — otherwise the whole session aborts
+      # before a single query runs.
+      - name: Write CI backend/.env
+        run: |
+          cat > .env <<'EOF'
+          ENVIRONMENT=ci
+          DEBUG=true
+          SECRET_KEY=ci-only-not-a-real-secret-rotate-me-0123456789abcdef
+          ACCESS_TOKEN_EXPIRE_MINUTES=30
+          REFRESH_TOKEN_EXPIRE_DAYS=7
+          MYSQL_HOST=127.0.0.1
+          MYSQL_PORT=3306
+          MYSQL_USER=ecom
+          MYSQL_PASSWORD=ecom_password
+          MYSQL_DB=ecommerce
+          REDIS_URL=redis://127.0.0.1:6379/0
+          CORS_ORIGINS=["http://localhost:5173"]
+          EMAIL_BACKEND=console
+          STORAGE_BACKEND=local
+          FRONTEND_URL=http://localhost:5173
+          PAYMENT_RETURN_URL=http://localhost:5173/payments/return
+          EOF
+
+      # Safe here (and ONLY here): this MySQL is an empty throwaway container
+      # destroyed with the runner. Never run this against the shared remote DB
+      # — see DEPLOY.md §6.
+      - name: Apply migrations
+        run: alembic upgrade head
+
+      # Run the FULL suite rather than a hand-maintained file list, so newly
+      # added tests are picked up automatically.
+      - name: Run test suite
+        run: python -m pytest tests/ -v
+
+  # ===========================================================================
   #  DELIVERY 1 — build both images FROM SCRATCH and push them to GHCR.
   #
-  #  Gated on the frontend build. The `if:` is belt-and-braces: the workflow only
+  #  Gated on BOTH quality jobs. The `if:` is belt-and-braces: the workflow only
   #  triggers on `production` anyway, but a `workflow_dispatch` can be launched
   #  from any branch in the Actions UI, and that must never reach the live host.
   # ===========================================================================
   build-and-push:
     name: Build & push images to GHCR (no cache)
-    needs: [frontend]
+    needs: [frontend, backend-tests]
     if: github.ref == 'refs/heads/production'
     runs-on: ubuntu-latest
     permissions:

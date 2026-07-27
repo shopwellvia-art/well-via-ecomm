@@ -1,6 +1,6 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { usePaymentStatus } from '@/features/payments/hooks.js';
-import { formatPrice, cn } from '@/lib/utils.js';
+import { formatPrice } from '@/lib/utils.js';
 import { Check, CloseIcon } from '@/components/storefront/Icons.jsx';
 import Logo from '@/components/storefront/Logo.jsx';
 

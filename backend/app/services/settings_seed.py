@@ -102,6 +102,12 @@ DEFAULT_SETTINGS: list[tuple[str, str, str, str, bool]] = [
     ("returns.refund_timeline_days", "7", "returns",
      "Business days quoted to the customer for a refund to reflect in their account", False),
 
+    # ---- Reviews (seeded at boot only — no migration;
+    #      consumed by app/services/review_service.py) ----
+    ("reviews.auto_approve", "true", "reviews",
+     "Publish user reviews immediately; 'false' holds new and edited reviews "
+     "in the admin moderation queue until approved", False),
+
     # ---- COD (q2l3m4n5o6p7) ----
     ("cod.enabled", "true", "cod", "Allow Cash on Delivery as a checkout option", False),
     ("cod.flat_surcharge", "40", "cod", "Flat fee in INR added when the customer picks COD", False),

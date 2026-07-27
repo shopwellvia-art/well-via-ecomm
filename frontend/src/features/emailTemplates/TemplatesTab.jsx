@@ -73,17 +73,8 @@ function EnabledDot({ enabled }) {
 // ─── TemplateList (left pane) ─────────────────────────────────────────────────
 
 function TemplateList({ items, selectedKey, onSelect, isLoading }) {
-  if (isLoading) {
-    return (
-      <div className="flex flex-col gap-2 p-3">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <Skeleton key={i} className="h-14 rounded-sm" />
-        ))}
-      </div>
-    );
-  }
-
-  // Group items by group_name preserving GROUP_ORDER.
+  // Group items by group_name preserving GROUP_ORDER. Hooks must run
+  // unconditionally, so this sits above the isLoading early return.
   const grouped = useMemo(() => {
     const map = {};
     for (const t of items || []) {
@@ -93,6 +84,16 @@ function TemplateList({ items, selectedKey, onSelect, isLoading }) {
       .filter((g) => map[g]?.length > 0)
       .map((g) => ({ group: g, templates: map[g] }));
   }, [items]);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-2 p-3">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <Skeleton key={i} className="h-14 rounded-sm" />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <nav aria-label="Email templates" className="flex flex-col gap-4 p-3">

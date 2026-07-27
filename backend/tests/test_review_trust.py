@@ -9,6 +9,10 @@ Covers:
      moderation queue (is_approved=False) — hidden from the public listing
      and excluded from the product's rating aggregates until an admin
      approves; absent/"true" preserves today's publish-immediately behavior.
+  3. Moderation gate on edits: with auto-approve off, an author editing an
+     already-approved review sends it back into the moderation queue (and the
+     product aggregates are recomputed without it); with auto-approve on, an
+     edit re-publishes immediately as before.
 
 Hermetic: everything runs in-process against in-memory SQLite with a
 FakeRedis injected into SettingsService — no live MySQL or Redis needed.
@@ -305,6 +309,82 @@ def test_admin_approval_publishes_and_counts_in_aggregates(db: Session):
     assert product.rating_count == 1
     assert product.rating_avg == Decimal("4.00")
     assert product.rating_distribution == {"1": 0, "2": 0, "3": 0, "4": 1, "5": 0}
+
+
+# ---------------------------------------------------------------------------
+# 3. Moderation gate on edits (update_own)
+# ---------------------------------------------------------------------------
+
+
+def test_edit_approved_review_reenters_moderation_when_auto_approve_off(db: Session):
+    """Author edits a published review while moderation is on → the edit must
+    NOT re-publish instantly: back to the admin queue, hidden from the public
+    listing, dropped from the aggregates."""
+    user = _make_user(db)
+    product = _make_product(db)
+    review = _create_review(db, user, product, rating=5)  # auto-approve default
+    assert review.is_approved is True
+    _set_auto_approve(db, "false")
+
+    updated = ReviewService(db).update_own(
+        user, review.id, rating=1, title="Actually terrible", body=None
+    )
+
+    assert updated.is_approved is False
+    assert updated.rating == 1
+
+    # Hidden from the public listing again.
+    items, total = ReviewService(db).list_for_product(
+        product.id, offset=0, limit=10, sort="newest", approved_only=True
+    )
+    assert total == 0
+    assert items == []
+
+    # Aggregates recomputed without it.
+    db.refresh(product)
+    assert product.rating_count == 0
+    assert product.rating_avg == Decimal("0.00")
+    assert product.rating_distribution is None
+
+    # Waiting where admins look (the existing approved=False queue).
+    pending, pending_total = ReviewService(db).list_admin(
+        q=None, product_id=product.id, rating=None, approved=False, offset=0, limit=10
+    )
+    assert pending_total == 1
+    assert pending[0].id == review.id
+
+
+def test_edit_approved_review_stays_published_when_auto_approve_on(db: Session):
+    """Auto-approve on (today's behavior): an author edit re-publishes
+    immediately and the aggregates track the new rating."""
+    user = _make_user(db)
+    product = _make_product(db)
+    review = _create_review(db, user, product, rating=5)
+    _set_auto_approve(db, "true")
+
+    updated = ReviewService(db).update_own(
+        user, review.id, rating=3, title=None, body=None
+    )
+
+    assert updated.is_approved is True
+    db.refresh(product)
+    assert product.rating_count == 1
+    assert product.rating_avg == Decimal("3.00")
+
+
+def test_noop_edit_does_not_dequeue_approved_review(db: Session):
+    """An update_own call that changes nothing (same values re-submitted)
+    must not knock an approved review back into the moderation queue."""
+    user = _make_user(db)
+    product = _make_product(db)
+    review = _create_review(db, user, product, rating=5)
+    _set_auto_approve(db, "false")
+
+    updated = ReviewService(db).update_own(
+        user, review.id, rating=5, title="Nice", body="Works as advertised."
+    )
+
+    assert updated.is_approved is True
 
 
 def test_auto_approve_false_does_not_gate_admin_created_reviews(db: Session):

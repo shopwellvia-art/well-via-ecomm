@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Page } from '@/components/layout/Page.jsx';
 import ProductGrid from '@/components/storefront/ProductGrid.jsx';
@@ -21,6 +21,30 @@ export default function CategoriesPage() {
   const { data: categories = [], isLoading: catsLoading } = useCategories();
   const combosQuery = useProducts(tab === 'combos' ? { is_combo: true, page_size: 24 } : undefined);
   const combos = combosQuery.data?.items ?? [];
+
+  // One-level grouping: parents keep their card, children list beneath it.
+  // A child whose parent is missing from the list — or is itself a subcategory
+  // — renders as top-level so no category can ever disappear from the grid.
+  const categoryGroups = useMemo(() => {
+    const rootIds = new Set(
+      categories.filter((c) => c.parent_id == null).map((c) => c.id),
+    );
+    const childrenOf = new Map();
+    const parents = [];
+    for (const c of categories) {
+      if (c.parent_id != null && rootIds.has(c.parent_id)) {
+        const siblings = childrenOf.get(c.parent_id) ?? [];
+        siblings.push(c);
+        childrenOf.set(c.parent_id, siblings);
+      } else {
+        parents.push(c);
+      }
+    }
+    return parents.map((parent) => ({
+      parent,
+      children: childrenOf.get(parent.id) ?? [],
+    }));
+  }, [categories]);
 
   return (
    <Page bleed>
@@ -93,25 +117,39 @@ export default function CategoriesPage() {
               Categories are being set up. Check back shortly.
             </p>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-5">
-              {categories.map((c) => (
-                <Link
-                  key={c.id}
-                  to={`/products?category_ids=${c.id}`}
-                  className="group bg-wcard border border-wline rounded-xl2 overflow-hidden no-underline transition-transform duration-200 hover:-translate-y-[4px] hover:shadow-[0_24px_50px_-28px_rgba(40,30,10,0.42)]"
-                >
-                  <div
-                    className="relative"
-                    style={{ background: 'linear-gradient(160deg,#efe9df,#e4dccd)' }}
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-5 items-start">
+              {categoryGroups.map(({ parent, children }) => (
+                <div key={parent.id} className="flex flex-col gap-3">
+                  <Link
+                    to={`/products?category_ids=${parent.id}`}
+                    className="group bg-wcard border border-wline rounded-xl2 overflow-hidden no-underline transition-transform duration-200 hover:-translate-y-[4px] hover:shadow-[0_24px_50px_-28px_rgba(40,30,10,0.42)]"
                   >
-                    <WImage src={c.image_url} alt="" className="w-full h-[220px]" />
-                  </div>
-                  <div className="p-4 text-center">
-                    <p className="font-wserif text-[19px] text-wink m-0 group-hover:text-wgreen transition-colors">
-                      {c.name}
-                    </p>
-                  </div>
-                </Link>
+                    <div
+                      className="relative"
+                      style={{ background: 'linear-gradient(160deg,#efe9df,#e4dccd)' }}
+                    >
+                      <WImage src={parent.image_url} alt="" className="w-full h-[220px]" />
+                    </div>
+                    <div className="p-4 text-center">
+                      <p className="font-wserif text-[19px] text-wink m-0 group-hover:text-wgreen transition-colors">
+                        {parent.name}
+                      </p>
+                    </div>
+                  </Link>
+                  {children.length > 0 && (
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {children.map((child) => (
+                        <Link
+                          key={child.id}
+                          to={`/products?category_ids=${child.id}`}
+                          className="font-outfit bg-wcard border border-wline rounded-full px-3.5 py-1.5 text-[13px] text-wink no-underline transition-colors hover:text-wgreen hover:border-wgreen/60"
+                        >
+                          {child.name}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           ))}

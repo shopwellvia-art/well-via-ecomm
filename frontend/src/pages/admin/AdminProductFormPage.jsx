@@ -10,7 +10,6 @@ import {
   Package,
   Tag,
   Boxes,
-  Scale,
   ShieldOff,
 } from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
@@ -89,6 +88,33 @@ export default function AdminProductFormPage() {
   const [selectedTaxIds, setSelectedTaxIds] = useState([]);
 
   const activeTaxes = useMemo(() => taxes.filter((t) => t.is_active), [taxes]);
+
+  // Flat option list in tree order: each top-level category followed by its
+  // children labeled "Parent › Child". A child whose parent is missing or is
+  // itself a subcategory renders top-level so no option can ever disappear.
+  const categoryOptions = useMemo(() => {
+    const rootIds = new Set(
+      categories.filter((c) => c.parent_id == null).map((c) => c.id),
+    );
+    const childrenOf = new Map();
+    const roots = [];
+    for (const c of categories) {
+      if (c.parent_id != null && rootIds.has(c.parent_id)) {
+        const siblings = childrenOf.get(c.parent_id) ?? [];
+        siblings.push(c);
+        childrenOf.set(c.parent_id, siblings);
+      } else {
+        roots.push(c);
+      }
+    }
+    return roots.flatMap((root) => [
+      { id: root.id, label: root.name },
+      ...(childrenOf.get(root.id) ?? []).map((child) => ({
+        id: child.id,
+        label: `${root.name} › ${child.name}`,
+      })),
+    ]);
+  }, [categories]);
 
   useEffect(() => {
     if (isEdit && product) {
@@ -442,9 +468,9 @@ export default function AdminProductFormPage() {
                 helper="Optional — used for browsing and filtering."
               >
                 <option value="">Uncategorized</option>
-                {categories.map((c) => (
+                {categoryOptions.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name}
+                    {c.label}
                   </option>
                 ))}
               </Select>

@@ -5,10 +5,8 @@ PaymentMethodConfigService) and builds the appropriate provider instance.
 Each request that needs a provider calls `get_payment_provider(db, ...)` and
 receives a fresh instance — no caching, no restart required.
 
-The legacy `PaymentGatewayConfig` table / `PaymentGatewayService` is no longer
-consulted by this factory. The admin endpoints in
-`app/api/v1/endpoints/payment_gateway.py` and `payment_gateway_service.py`
-continue to exist but are DEPRECATED and will be removed in a future release.
+The legacy `PaymentGatewayConfig` table is no longer consulted by this
+factory; its deprecated admin endpoint (`/payment-gateway`) has been removed.
 
 Deployment-specific URLs (return URL, webhook callback URL) stay in `.env`
 via `app.core.config.settings`.

@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/Badge.jsx';
 import { Card, CardBody } from '@/components/ui/Card.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { cn } from '@/lib/utils.js';
-import { fadeUp, fadeIn, scaleIn } from '@/lib/motion.js';
+import { fadeUp, fadeIn } from '@/lib/motion.js';
 import { useSitePages, useUpdateSitePages } from '@/features/site-pages/hooks.js';
 import { SITE_PAGES_DEFAULTS, PAGE_ICON_NAMES } from '@/features/site-pages/defaults.js';
 

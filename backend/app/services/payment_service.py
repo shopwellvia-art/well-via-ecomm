@@ -30,7 +30,8 @@ from app.integrations.payments import (
 )
 from app.models.coupon import Coupon
 from app.models.order import Order, OrderItem, OrderStatus
-from app.models.payment_event import PaymentEventType
+from app.models.order_payment import OrderPayment, PaymentTxnStatus
+from app.models.payment_event import PaymentEvent, PaymentEventType
 from app.services.payment_audit import record_payment_event
 from app.models.user import User
 from app.repositories.coupon_repository import CouponRepository
@@ -827,7 +828,30 @@ class PaymentService:
             .execution_options(populate_existing=True)
         ).scalar_one_or_none()
         # Idempotent: only PENDING orders move. Webhooks can fire twice.
-        if locked is None or locked.status != OrderStatus.PENDING:
+        if locked is None:
+            return
+        if locked.status != OrderStatus.PENDING:
+            # One non-PENDING case DOES need work: a SUCCESSFUL settlement for
+            # an order that is already CANCELLED means the gateway captured
+            # money for a dead order (the customer cancelled while the payment
+            # was in flight). Silently keeping it is not an option — refund it
+            # (or flag it for manual action) before returning.
+            if (
+                locked.status == OrderStatus.CANCELLED
+                and payment_status == PaymentStatus.SUCCESS
+            ):
+                self._refund_settled_after_cancel(
+                    locked,
+                    gateway_amount_minor=gateway_amount_minor,
+                    provider_ref=provider_ref,
+                )
+            # Commit to release the FOR UPDATE lock taken above (and persist
+            # the settle-after-cancel work, when any). Returning with the
+            # transaction open would hold the X lock on the orders row until
+            # request teardown, so any independent-session payment_events
+            # INSERT for this order (e.g. reconcile's RECONCILE row) would
+            # block on the payment_events→orders FK check for ~30s.
+            self.db.commit()
             return
         order = locked
         # Stamp the gateway's own transaction id onto the order. PhonePe (and
@@ -853,14 +877,24 @@ class PaymentService:
                         expected_minor,
                         gateway_amount_minor,
                     )
-                    record_payment_event(
-                        event_type=PaymentEventType.AMOUNT_MISMATCH,
-                        order_id=order.id,
-                        merchant_transaction_id=order.payment_intent_id,
-                        gateway_code=order.gateway_code,
-                        payment_status=PaymentStatus.SUCCESS.value,
-                        amount_reported_minor=gateway_amount_minor,
-                        amount_expected_minor=expected_minor,
+                    # Written through THIS session, not record_payment_event's
+                    # independent one: we hold the FOR UPDATE lock on the
+                    # orders row, so an independent-session INSERT would block
+                    # on the payment_events→orders FK check against our own
+                    # uncommitted lock (~30s lock-wait timeout) and the audit
+                    # row would be lost. In-session, the commit below lands it
+                    # atomically with the guard decision. (Same pattern as
+                    # OrderService._record_refund_outcome.)
+                    self.db.add(
+                        PaymentEvent(
+                            event_type=PaymentEventType.AMOUNT_MISMATCH,
+                            order_id=order.id,
+                            merchant_transaction_id=order.payment_intent_id,
+                            gateway_code=order.gateway_code,
+                            payment_status=PaymentStatus.SUCCESS.value,
+                            amount_reported_minor=gateway_amount_minor,
+                            amount_expected_minor=expected_minor,
+                        )
                     )
                     self.db.commit()
                     return
@@ -889,6 +923,120 @@ class PaymentService:
         if notify_paid:
             self._send_notification(order, "order_paid")
             self._maybe_auto_push_shipment(order)
+
+    def _refund_settled_after_cancel(
+        self,
+        order: Order,
+        *,
+        gateway_amount_minor: int | None,
+        provider_ref: str | None,
+    ) -> None:
+        """Send back money the gateway captured for an already-CANCELLED order.
+
+        Records a SETTLED_AFTER_CANCEL audit row, then reverses the captured
+        amount through the original gateway (reusing OrderService's refund
+        helpers). When the provider is missing/unsupported or the refund
+        fails, the outcome is recorded as a ``manual`` refund — REFUND_ATTEMPT
+        event + "NEEDS MANUAL PROCESSING" internal note — so admins see the
+        money still has to move.
+
+        Runs inside _apply_status's transaction, under its FOR UPDATE lock on
+        the orders row, so every payment_events row here is written through
+        THIS session: an independent-session INSERT would block on the
+        payment_events→orders FK check against our own uncommitted lock (see
+        OrderService._record_refund_outcome). The caller commits.
+
+        Idempotent: the prepaid leg is flipped to REFUNDED on the books (same
+        convention as order_sync.mark_payments_cancelled — the reversal is
+        owed regardless of how the money moves), so a redelivered settlement
+        webhook finds the leg already REFUNDED and does nothing.
+        """
+        # Lazy import — mirrors the other cross-service imports in this module.
+        from app.services.order_service import OrderService
+
+        # Lock + refresh the payment legs before the check-then-act on leg
+        # status (mirrors OrderService._lock_order's discipline).
+        self.db.execute(
+            select(OrderPayment)
+            .where(OrderPayment.order_id == order.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalars().all()
+        leg = next(
+            (
+                p
+                for p in order.payments
+                if (p.payment_method or "").lower() != "cod"
+            ),
+            None,
+        )
+        if leg is not None and leg.payment_status in (
+            PaymentTxnStatus.REFUNDED,
+            PaymentTxnStatus.PARTIALLY_REFUNDED,
+        ):
+            return  # replayed settlement — the refund was already handled
+
+        if gateway_amount_minor is not None:
+            amount = (Decimal(gateway_amount_minor) / 100).quantize(
+                Decimal("0.01")
+            )
+        else:
+            amount = Decimal(leg.amount if leg is not None else order.total_amount)
+
+        logger.error(
+            "order %s: gateway settled %s after the order was CANCELLED — "
+            "attempting refund",
+            order.id,
+            amount,
+        )
+        # Stamp the provider's transaction id (write-once, same as the PENDING
+        # path) so the refund below can target the captured payment.
+        if provider_ref and not order.payment_provider_ref:
+            order.payment_provider_ref = provider_ref
+        self.db.add(
+            PaymentEvent(
+                event_type=PaymentEventType.SETTLED_AFTER_CANCEL,
+                order_id=order.id,
+                merchant_transaction_id=order.payment_intent_id,
+                gateway_code=order.gateway_code,
+                payment_status=PaymentStatus.SUCCESS.value,
+                amount_reported_minor=gateway_amount_minor,
+                provider_ref=provider_ref,
+                message=(
+                    f"gateway captured {amount} for order #{order.id} after "
+                    "it was cancelled — refunding"
+                ),
+            )
+        )
+
+        osvc = OrderService(self.db)
+        if leg is not None:
+            refund_method, refund_reference, raw = osvc._attempt_gateway_refund(
+                order,
+                leg,
+                amount=amount,
+                refund_reference=osvc._refund_reference(order, leg),
+                reason=f"Payment captured after order #{order.id} was cancelled",
+            )
+            # Books first: the captured money is owed back regardless of how
+            # it moves (mirrors order_sync.mark_payments_cancelled flipping
+            # captured legs to REFUNDED even when the gateway declines).
+            leg.payment_status = PaymentTxnStatus.REFUNDED
+        else:
+            # No gateway leg to reverse against — operator action required.
+            refund_method, refund_reference, raw = (
+                "manual",
+                f"RFNDORD{order.id}",
+                None,
+            )
+        osvc._record_refund_outcome(
+            order,
+            amount=amount,
+            refund_method=refund_method,
+            refund_reference=refund_reference,
+            raw=raw,
+            context="settled after cancel",
+        )
 
     def _mark_paid(
         self,

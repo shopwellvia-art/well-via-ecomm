@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview --port 5173",
     "lint": "eslint src --ext .js,.jsx",
-    "test": "vitest"
+    "test": "vitest",
+    "test:e2e": "node --test \"e2e/*.test.mjs\""
   },
   "dependencies": {
     "@fontsource/cinzel": "^5.2.8",

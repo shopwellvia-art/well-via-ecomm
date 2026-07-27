@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Plus, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
+import { MapPin, Plus, ChevronUp, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/storefront/ui/Button.jsx';
 import { Skeleton } from '@/components/storefront/ui/Skeleton.jsx';
 import { cn } from '@/lib/utils.js';

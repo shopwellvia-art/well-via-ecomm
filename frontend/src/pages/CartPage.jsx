@@ -276,7 +276,7 @@ export default function CartPage() {
     );
   }, [addresses, pickedAddressId]);
 
-  const items = data?.items ?? [];
+  const items = useMemo(() => data?.items ?? [], [data]);
   const subtotal = Number(data?.subtotal ?? 0);
   const taxAmount = Number(data?.tax_amount ?? 0);
   const discountAmount = Number(data?.discount_amount ?? 0);
