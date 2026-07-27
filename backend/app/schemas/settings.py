@@ -32,4 +32,4 @@ class TestSmsRequest(BaseModel):
     # Loose validation — Twilio accepts E.164 or pre-formatted numbers; we
     # don't try to second-guess.
     to: str
-    body: str = "Test SMS from your Lumen admin panel."
+    body: str = "Test SMS from your Wellvia admin panel."

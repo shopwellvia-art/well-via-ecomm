@@ -26,7 +26,7 @@ export default function AdminLayout() {
 
           {/* Wordmark */}
           <span className="text-sm font-semibold tracking-tight text-ink-primary">
-            Lumen Admin
+            Wellvia Admin
           </span>
 
           {/* Right-side spacer — future quick actions can slot here */}

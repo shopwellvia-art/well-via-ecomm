@@ -137,12 +137,14 @@ export default function CorporatePage() {
               {/* Card body */}
               <div className="p-5">
                 <dl className="space-y-3 text-sm">
-                  <div>
-                    <dt className="text-[11px] font-semibold uppercase tracking-widest text-wmuted">
-                      Legal name
-                    </dt>
-                    <dd className="mt-0.5 text-wmuted">{entity.name}</dd>
-                  </div>
+                  {entity.name && (
+                    <div>
+                      <dt className="text-[11px] font-semibold uppercase tracking-widest text-wmuted">
+                        Legal name
+                      </dt>
+                      <dd className="mt-0.5 text-wmuted">{entity.name}</dd>
+                    </div>
+                  )}
                   {entity.cin && (
                     <div>
                       <dt className="text-[11px] font-semibold uppercase tracking-widest text-wmuted">

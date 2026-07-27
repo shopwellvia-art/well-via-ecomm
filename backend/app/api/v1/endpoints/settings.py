@@ -128,7 +128,7 @@ def send_test_email(
     try:
         send_email(
             to=payload.to,
-            subject="Lumen — test email",
+            subject="Wellvia — test email",
             body=(
                 "If you're reading this, your SMTP settings are working.\n\n"
                 f"Sent by: {actor.email}\n"

@@ -351,8 +351,12 @@ function ContactEditor({ page, set }) {
           fields={[
             { key: 'icon', label: 'Icon', type: 'icon' },
             { key: 'title', label: 'Title', placeholder: 'Email us' },
-            { key: 'detail', label: 'Detail', placeholder: 'support@lumen.com' },
-            { key: 'href', label: 'Link (mailto:/tel:/https:)', placeholder: 'mailto:support@lumen.com' },
+            { key: 'detail', label: 'Detail', placeholder: 'support@shopwellvia.in' },
+            {
+              key: 'href',
+              label: 'Link (mailto:/tel:/https:)',
+              placeholder: 'mailto:support@shopwellvia.in',
+            },
           ]}
           template={{ icon: 'Mail', title: '', detail: '', href: '' }}
           addLabel="Add method"
@@ -432,7 +436,12 @@ function CareersEditor({ page, set }) {
             { key: 'department', label: 'Department', placeholder: 'Engineering' },
             { key: 'location', label: 'Location', placeholder: 'Bengaluru / Remote' },
             { key: 'type', label: 'Type', placeholder: 'Full-time' },
-            { key: 'url', label: 'Apply link', placeholder: 'mailto:careers@lumen.com', full: true },
+            {
+              key: 'url',
+              label: 'Apply link',
+              placeholder: 'mailto:careers@shopwellvia.in',
+              full: true,
+            },
           ]}
           template={{ title: '', department: '', location: '', type: 'Full-time', url: '' }}
           addLabel="Add role"
@@ -672,7 +681,7 @@ const TABS = [
   { key: 'about', label: 'About Us', path: '/about', Editor: AboutEditor },
   { key: 'contact', label: 'Contact Us', path: '/contact', Editor: ContactEditor },
   { key: 'careers', label: 'Careers', path: '/careers', Editor: CareersEditor },
-  { key: 'stories', label: 'Lumen Stories', path: '/stories', Editor: StoriesEditor },
+  { key: 'stories', label: 'Wellvia Stories', path: '/stories', Editor: StoriesEditor },
   { key: 'press', label: 'Press', path: '/press', Editor: PressEditor },
   { key: 'corporate', label: 'Corporate Information', path: '/corporate', Editor: CorporateEditor },
   { key: 'privacy', label: 'Privacy Policy', path: '/privacy', Editor: PolicyEditor },

@@ -102,7 +102,7 @@ class CodOtpService:
         # nothing about COD verification.
         send_sms(
             to=clean,
-            body=f"Your Lumen verification code is {code}. Valid 10 minutes.",
+            body=f"Your Wellvia verification code is {code}. Valid 10 minutes.",
             db=self.db,
         )
         logger.info("cod otp sent user=%s phone=%s", user_id, clean[-4:])

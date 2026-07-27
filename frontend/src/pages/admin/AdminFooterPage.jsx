@@ -236,7 +236,7 @@ function BrandEditor({ brand, onChange }) {
         label="Brand name"
         value={brand.name}
         onChange={(e) => onChange({ ...brand, name: e.target.value })}
-        placeholder="Lumen"
+        placeholder="Wellvia"
         helper="Used as alt text / fallback when no logo is uploaded."
       />
       <div className="sm:col-span-2">
@@ -289,7 +289,7 @@ function NewsletterEditor({ newsletter, onChange }) {
           label="Success message"
           value={newsletter.success}
           onChange={(e) => onChange({ ...newsletter, success: e.target.value })}
-          placeholder="You're on the list. Welcome to Lumen."
+          placeholder="You're on the list. Welcome to Wellvia."
           helper="Shown after a valid email is submitted."
         />
       </div>
@@ -613,7 +613,7 @@ function SocialLinksEditor({ links, onChange }) {
                 type="url"
                 value={link.href}
                 onChange={(e) => updateRow(i, 'href', e.target.value)}
-                placeholder="https://facebook.com/lumen"
+                placeholder="https://facebook.com/wellvia"
                 className={rowInput}
               />
             </div>
@@ -887,7 +887,7 @@ export default function AdminFooterPage() {
             label="Copyright text"
             value={draft.copyright}
             onChange={(e) => set('copyright', e.target.value)}
-            placeholder="© 2007–{year} Lumen.com"
+            placeholder="© {year} shopwellvia.in"
             helper="Use {year} as a token — replaced with the current year at render time."
           />
         </SectionCard>

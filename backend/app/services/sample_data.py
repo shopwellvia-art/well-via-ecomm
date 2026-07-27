@@ -36,7 +36,7 @@ from app.models.user import User
 # non-admin user exists. Mirrors scripts/seed.py CUSTOMER.
 _SAMPLE_CUSTOMER = {
     "email": "customer@lumen.store",
-    "first_name": "Lumen",
+    "first_name": "Wellvia",
     "last_name": "Customer",
     "password": "Customer123!",
 }
@@ -62,7 +62,7 @@ _PRODUCTS = [
      "Hot-swappable switches and a machined aluminium deck built to last."),
     ("WRK-GLIDE-02", "Glide Wireless Mouse", "workspace", "79.00", 15,
      "Silent, precise, and contoured for all-day comfort."),
-    ("LGT-LUMEN-01", "Lumen Desk Lamp", "lighting", "139.00", 16,
+    ("LGT-GLOW-01", "Glow Desk Lamp", "lighting", "139.00", 16,
      "Tunable warm-to-cool light with a whisper-quiet dimmer."),
     ("LGT-NOVA-02", "Nova Ambient Light Bar", "lighting", "99.00", 8,
      "Reactive ambient lighting that follows the mood of your room."),
@@ -174,7 +174,7 @@ def seed_orders(db: Session) -> dict[str, int]:
         (OrderStatus.PENDING, [(1, 1)]),
     ]
     snapshot = {
-        "full_name": "Lumen Customer",
+        "full_name": "Wellvia Customer",
         "line1": "12 Residency Road",
         "city": "Bengaluru",
         "state": "Karnataka",

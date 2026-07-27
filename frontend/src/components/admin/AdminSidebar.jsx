@@ -222,7 +222,7 @@ function SidebarContent({ onNavigate }) {
         <span className="grid size-8 place-items-center rounded-sm bg-accent text-ink-inverse">
           <Sparkles className="size-4" aria-hidden="true" />
         </span>
-        <span className="text-h3">Lumen</span>
+        <span className="text-h3">Wellvia</span>
         <span className="rounded-full bg-fill-strong px-2 py-0.5 text-xs text-ink-secondary">
           Admin
         </span>

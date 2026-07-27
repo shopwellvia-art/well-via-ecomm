@@ -1,6 +1,6 @@
 """Pydantic schemas for the storefront company/content pages.
 
-The six footer "About" links (Contact Us, About Us, Careers, Lumen Stories,
+The six footer "About" links (Contact Us, About Us, Careers, Wellvia Stories,
 Press, Corporate Information) are backed by a single JSON document stored in
 the `site_pages` table. DEFAULT_SITE_PAGES is the single source of truth for
 factory content — the service falls back to it when no row exists or when a
@@ -259,12 +259,9 @@ class PolicyPage(BaseModel):
 # Canonical defaults — single source of truth used by SitePagesService
 # ---------------------------------------------------------------------------
 
-_REGISTERED_ADDRESS = [
-    "Lumen Internet Pvt. Ltd.,",
-    "Buildings Alyssa, Begonia & Clove Embassy Tech Village,",
-    "Outer Ring Road, Devarabeesanahalli Village,",
-    "Bengaluru, 560103, Karnataka, India",
-]
+# Registered-office lines are statutory details — left empty on purpose so an
+# admin fills in the real address via Admin → Pages → Corporate Information.
+_REGISTERED_ADDRESS: list[str] = []
 
 DEFAULT_SITE_PAGES: dict = {
     "about": {
@@ -342,14 +339,15 @@ DEFAULT_SITE_PAGES: dict = {
             {
                 "icon": "Mail",
                 "title": "Email us",
-                "detail": "support@lumen.com",
-                "href": "mailto:support@lumen.com",
+                "detail": "support@shopwellvia.in",
+                "href": "mailto:support@shopwellvia.in",
             },
+            # Phone and office address are left blank for an admin to fill in.
             {
                 "icon": "Phone",
                 "title": "Call us",
-                "detail": "044-4561 4700",
-                "href": "tel:+914445614700",
+                "detail": "",
+                "href": "",
             },
             {
                 "icon": "MessageCircle",
@@ -360,7 +358,7 @@ DEFAULT_SITE_PAGES: dict = {
             {
                 "icon": "MapPin",
                 "title": "Visit us",
-                "detail": "Embassy Tech Village, Bengaluru",
+                "detail": "",
                 "href": "",
             },
         ],
@@ -369,31 +367,15 @@ DEFAULT_SITE_PAGES: dict = {
             "note": "We typically reply within one business day.",
             "success": "Thanks for reaching out — we'll be in touch shortly.",
         },
-        "offices": [
-            {
-                "city": "Bengaluru (HQ)",
-                "lines": [
-                    "Buildings Alyssa, Begonia & Clove",
-                    "Embassy Tech Village, Outer Ring Road,",
-                    "Devarabeesanahalli, Bengaluru 560103",
-                ],
-            },
-            {
-                "city": "Mumbai",
-                "lines": [
-                    "Level 12, Trade Centre,",
-                    "Bandra Kurla Complex,",
-                    "Mumbai 400051",
-                ],
-            },
-        ],
+        # Office addresses are left empty on purpose — an admin adds the real ones.
+        "offices": [],
     },
     "careers": {
         "enabled": True,
         "hero": {
             "eyebrow": "Careers",
-            "title": "Build the future of everyday essentials",
-            "subtitle": "Join a team that cares deeply about craft, customers and each other.",
+            "title": "Build the future of everyday wellness",
+            "subtitle": "Join a team that cares deeply about formulation, customers and each other.",
         },
         "intro": (
             "We're a curious, kind and ambitious bunch. If you want to do the "
@@ -428,25 +410,25 @@ DEFAULT_SITE_PAGES: dict = {
                 "department": "Engineering",
                 "location": "Bengaluru / Remote",
                 "type": "Full-time",
-                "url": "mailto:careers@lumen.com?subject=Senior%20Frontend%20Engineer",
+                "url": "mailto:careers@shopwellvia.in?subject=Senior%20Frontend%20Engineer",
             },
             {
                 "title": "Product Designer",
                 "department": "Design",
                 "location": "Bengaluru",
                 "type": "Full-time",
-                "url": "mailto:careers@lumen.com?subject=Product%20Designer",
+                "url": "mailto:careers@shopwellvia.in?subject=Product%20Designer",
             },
             {
                 "title": "Customer Experience Lead",
                 "department": "Operations",
                 "location": "Remote",
                 "type": "Full-time",
-                "url": "mailto:careers@lumen.com?subject=Customer%20Experience%20Lead",
+                "url": "mailto:careers@shopwellvia.in?subject=Customer%20Experience%20Lead",
             },
         ],
         "culture": {
-            "heading": "Life at Lumen",
+            "heading": "Life at Wellvia",
             "body": (
                 "We move quickly without losing the plot. We disagree openly, "
                 "decide clearly, and back each other once we commit.\n\n"
@@ -459,23 +441,23 @@ DEFAULT_SITE_PAGES: dict = {
     "stories": {
         "enabled": True,
         "hero": {
-            "eyebrow": "Lumen Stories",
+            "eyebrow": "Wellvia Stories",
             "title": "Ideas, people and behind-the-scenes",
-            "subtitle": "Notes from our makers, customers and the journey of building Lumen.",
+            "subtitle": "Notes from our formulators, customers and the journey of building Wellvia.",
         },
         "intro": "Long reads, short notes and everything in between.",
         "posts": [
             {
-                "title": "How we source materials we're proud of",
-                "excerpt": "A look inside the trips, tests and tough calls behind every Lumen product.",
+                "title": "How we choose ingredients we're proud of",
+                "excerpt": "A look inside the sourcing, testing and tough calls behind every Wellvia gummy.",
                 "image": "",
                 "category": "Behind the scenes",
                 "date": "2026-05-12",
                 "url": "",
             },
             {
-                "title": "Meet the makers: the Aura collection",
-                "excerpt": "The designers and craftspeople who brought our flagship line to life.",
+                "title": "Meet the formulators behind our sleep gummies",
+                "excerpt": "The nutritionists and food scientists who shaped our bestselling routine.",
                 "image": "",
                 "category": "People",
                 "date": "2026-04-28",
@@ -483,7 +465,7 @@ DEFAULT_SITE_PAGES: dict = {
             },
             {
                 "title": "Small changes, big impact: our packaging redesign",
-                "excerpt": "How we cut plastic by 60% without compromising on the unboxing.",
+                "excerpt": "How we rethought our jars and cartons without compromising on the unboxing.",
                 "image": "",
                 "category": "Sustainability",
                 "date": "2026-03-09",
@@ -495,34 +477,35 @@ DEFAULT_SITE_PAGES: dict = {
         "enabled": True,
         "hero": {
             "eyebrow": "Press",
-            "title": "Lumen in the news",
+            "title": "Wellvia in the news",
             "subtitle": "Announcements, media coverage and resources for journalists.",
         },
         "intro": "For interviews, assets or comment, reach our communications team below.",
+        # Placeholder announcements — replace with real coverage via Admin -> Pages.
         "releases": [
             {
-                "date": "2026-05-20",
-                "title": "Lumen crosses 10 million customers",
+                "date": "",
+                "title": "Announcement title",
                 "source": "Company announcement",
                 "url": "",
             },
             {
-                "date": "2026-02-14",
-                "title": "Lumen launches its most sustainable collection yet",
-                "source": "Business Standard",
+                "date": "",
+                "title": "Product launch announcement",
+                "source": "Company announcement",
                 "url": "",
             },
             {
-                "date": "2025-11-02",
-                "title": "Lumen named among the year's fastest-growing D2C brands",
-                "source": "The Economic Times",
+                "date": "",
+                "title": "Media coverage headline",
+                "source": "",
                 "url": "",
             },
         ],
         "contact": {
             "heading": "Media enquiries",
-            "email": "press@lumen.com",
-            "phone": "044-6741 5800",
+            "email": "press@shopwellvia.in",
+            "phone": "",
         },
         "kit_url": "",
     },
@@ -530,16 +513,17 @@ DEFAULT_SITE_PAGES: dict = {
         "enabled": True,
         "hero": {
             "eyebrow": "Corporate Information",
-            "title": "About the company behind Lumen",
+            "title": "About the company behind Wellvia",
             "subtitle": "Governance, leadership and statutory details.",
         },
         "sections": [
             {
                 "heading": "Company overview",
                 "body": (
-                    "Lumen Internet Pvt. Ltd. operates the Lumen.com storefront and "
-                    "associated brands. We are a private limited company incorporated "
-                    "in India.\n\n"
+                    "Wellvia is a direct-to-consumer wellness brand based in India, "
+                    "operating the shopwellvia.in storefront. We make wellness gummies "
+                    "across sleep, immunity, beauty, gut health, multivitamin and "
+                    "omega ranges.\n\n"
                     "This page brings together the statutory and governance "
                     "information required under applicable law."
                 ),
@@ -548,23 +532,22 @@ DEFAULT_SITE_PAGES: dict = {
                 "heading": "Compliance & grievance",
                 "body": (
                     "In accordance with the Consumer Protection (E-Commerce) Rules, "
-                    "our Grievance Officer can be reached at grievance@lumen.com. "
+                    "our Grievance Officer can be reached at grievance@shopwellvia.in. "
                     "We endeavour to acknowledge complaints within 48 hours and "
                     "resolve them within one month."
                 ),
             },
         ],
-        "leadership": [
-            {"name": "A. Sharma", "title": "Chief Executive Officer", "image": ""},
-            {"name": "R. Mehta", "title": "Chief Operating Officer", "image": ""},
-            {"name": "K. Iyer", "title": "Chief Financial Officer", "image": ""},
-        ],
+        # Leadership is left empty on purpose — an admin adds real names/photos.
+        "leadership": [],
+        # Statutory identifiers are intentionally blank: an admin fills in the
+        # registered legal name, CIN, office address and phone via Admin -> Pages.
         "entity": {
-            "name": "Lumen Internet Pvt. Ltd.",
-            "cin": "U51109KA2026PTC066107",
+            "name": "",
+            "cin": "",
             "address_lines": _REGISTERED_ADDRESS,
-            "email": "compliance@lumen.com",
-            "phone": "044-4561 4700",
+            "email": "compliance@shopwellvia.in",
+            "phone": "",
         },
         "downloads": [
             {"label": "Certificate of Incorporation", "url": ""},

@@ -1,7 +1,7 @@
 """Storefront company/content pages — a single-row JSON document table.
 
 One row holds the entire "company pages" document (About, Contact, Careers,
-Lumen Stories, Press, Corporate Information). The service layer reads this row
+Wellvia Stories, Press, Corporate Information). The service layer reads this row
 and merges in application defaults when the row is absent, so the table starts
 empty — exactly like `footer_config`.
 """
