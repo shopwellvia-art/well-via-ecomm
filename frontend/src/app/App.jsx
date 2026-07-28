@@ -10,7 +10,9 @@ import RequireSuperadmin from './RequireSuperadmin.jsx';
 import ScrollToTop from './ScrollToTop.jsx';
 import AuthBootstrap from './AuthBootstrap.jsx';
 import SiteMeta from '@/components/storefront/SiteMeta.jsx';
+import ConsentGate from '@/components/consent/ConsentGate.jsx';
 import { PageFallback } from '@/components/feedback/PageFallback.jsx';
+import { useTracking } from '@/features/tracking/index.js';
 
 // Route-based code splitting — each page is its own chunk.
 const HomePage = lazy(() => import('@/pages/HomePage.jsx'));
@@ -67,15 +69,33 @@ const AdminOrderDetailPage = lazy(() => import('@/pages/admin/AdminOrderDetailPa
 const AdminReturnsPage = lazy(() => import('@/pages/admin/AdminReturnsPage.jsx'));
 const AdminSalesAnalyticsPage = lazy(() => import('@/pages/admin/AdminSalesAnalyticsPage.jsx'));
 const AdminProfitAnalyticsPage = lazy(() => import('@/pages/admin/AdminProfitAnalyticsPage.jsx'));
+// Analytics v2. Two pages serve all 12 modules and 73 views — everything that
+// varies between them comes from the generated registry contract.
+const AdminAnalyticsPage = lazy(() => import('@/pages/admin/AdminAnalyticsPage.jsx'));
+const AdminAnalyticsModulePage = lazy(() => import('@/pages/admin/AdminAnalyticsModulePage.jsx'));
+const AdminAnalyticsSettingsPage = lazy(
+  () => import('@/pages/admin/AdminAnalyticsSettingsPage.jsx'),
+);
 const AdminObservabilityPage = lazy(() => import('@/pages/admin/AdminObservabilityPage.jsx'));
 const AdminDangerZonePage = lazy(() => import('@/pages/admin/AdminDangerZonePage.jsx'));
 
 export default function App() {
+  // Mounted here — inside the router — so every navigation re-runs the gates
+  // rather than trusting the decision made on the first page. The hook is
+  // already gated internally on setting-enabled AND consent-granted AND
+  // not-an-/admin-route; do not re-check any of that out here, and do not
+  // relax it. Its return value is deliberately unused: nothing in the app
+  // should branch on whether a customer is being tracked.
+  useTracking();
+
   return (
     <>
       <ScrollToTop />
       <AuthBootstrap />
       <SiteMeta />
+      {/* Consent dialog. Outside <Routes> so it survives navigation, inside the
+          router so it can see the path (it hides itself on /admin/*). */}
+      <ConsentGate />
       <Suspense fallback={<PageFallback />}>
         <Routes>
           {/* Storefront */}
@@ -301,6 +321,57 @@ export default function App() {
               element={
                 <RequirePermission permission="dashboard.view">
                   <AdminProfitAnalyticsPage />
+                </RequirePermission>
+              }
+            />
+            {/* Analytics v2. Declared AFTER the two legacy routes above, but the
+                order is not what protects them: React Router 6 ranks static
+                segments above dynamic ones, so /analytics/sales keeps hitting
+                AdminSalesAnalyticsPage regardless. Neither "sales" nor "profit"
+                is a module slug, so there is no collision either way — the
+                legacy pages stay reachable until shadow-mode reconciliation
+                signs off on retiring them.
+
+                Three routes serve all 73 views. The per-view permission is
+                enforced server-side (403 with the view's own permission), so the
+                route guard only checks the base grant — duplicating the 73
+                per-view checks in the router would be a second source of truth
+                that silently drifts from the registry. */}
+            <Route
+              path="admin/analytics"
+              element={
+                <RequirePermission permission="analytics.view">
+                  <AdminAnalyticsPage />
+                </RequirePermission>
+              }
+            />
+            {/* Declared BEFORE the :moduleSlug route on purpose. React Router 6
+                ranks static segments above dynamic ones, so "settings" would
+                win the match either way — but this is the one route the module
+                page would otherwise swallow whole, and leaving that to implicit
+                ranking means a future reorder breaks it silently, with a module
+                page rendering "settings" as a slug instead of a 404. */}
+            <Route
+              path="admin/analytics/settings"
+              element={
+                <RequirePermission permission="analytics.integrations.manage">
+                  <AdminAnalyticsSettingsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="admin/analytics/:moduleSlug"
+              element={
+                <RequirePermission permission="analytics.view">
+                  <AdminAnalyticsModulePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="admin/analytics/:moduleSlug/:viewSlug"
+              element={
+                <RequirePermission permission="analytics.view">
+                  <AdminAnalyticsModulePage />
                 </RequirePermission>
               }
             />

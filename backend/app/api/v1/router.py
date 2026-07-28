@@ -1,8 +1,13 @@
 from fastapi import APIRouter
 
+# Aliased: `settings` is also the name of the settings ENDPOINT module
+# imported below, which would shadow this one.
+from app.core.config import settings as app_settings
 from app.api.v1.endpoints import (
     addresses,
     analytics,
+    analytics_admin,
+    analytics_views,
     audit,
     auth,
     cart,
@@ -10,6 +15,7 @@ from app.api.v1.endpoints import (
     cod,
     contact,
     coupons,
+    csp_report,
     dashboard,
     database,
     email_templates,
@@ -84,7 +90,40 @@ api_router.include_router(returns.customer_router, prefix="/returns", tags=["ret
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 # Superadmin-only destructive maintenance: POST /admin/database/truncate
 api_router.include_router(database.router, prefix="/admin/database", tags=["database"])
+# CSP violation collector. Anonymous and always mounted: the browser posts it
+# with no credentials, and it must accept reports the moment the Report-Only
+# policy ships — before ANALYTICS_V2_ENABLED, since the point is to collect
+# evidence while everything else is still off.
+api_router.include_router(csp_report.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+# Analytics v2 job control. Enqueue-and-report only — the heavy aggregation runs
+# in the analytics-worker container, never in a request worker. Mounted under the
+# same /analytics prefix but on /admin/* paths, which cannot shadow the two legacy
+# static routes above (/analytics/sales, /analytics/profit).
+api_router.include_router(
+    analytics_admin.router, prefix="/analytics", tags=["analytics-admin"]
+)
+# Analytics v2 read surface: navigation, the single view endpoint, the KPI
+# catalogue and CSV export. Paths start /modules, /kpis, /exports, so none of
+# them can shadow the two legacy static routes registered above.
+# Mounted ONLY when the flag is on.
+#
+# This was mounted unconditionally until a performance audit noticed the flag
+# gated nothing. That is not a cosmetic bug: the entire staged rollout in
+# docs/analytics/DEPLOYMENT.md rests on "deploy with all three flags off and
+# confirm zero behaviour change", and an unconditionally-mounted read surface
+# makes that step a no-op that reads as a pass. It also means turning the flag
+# off — the documented primary rollback, the one that needs no deploy — would
+# not have rolled anything back.
+#
+# Read at import, so flipping the flag needs a restart. That is deliberate:
+# a per-request check would let a half-enabled state exist across four uvicorn
+# workers, and the flag's job is to make the subsystem wholly present or
+# wholly absent.
+if app_settings.ANALYTICS_V2_ENABLED:
+    api_router.include_router(
+        analytics_views.router, prefix="/analytics", tags=["analytics-views"]
+    )
 api_router.include_router(footer.router, prefix="/footer", tags=["footer"])
 api_router.include_router(
     storefront.router, prefix="/storefront-config", tags=["storefront-config"]

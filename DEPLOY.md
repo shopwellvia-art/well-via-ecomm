@@ -201,6 +201,25 @@ Schema changes are applied **manually, from reviewed SQL only**:
 2. Take a backup first — `backend/scripts/backup_db.sh` (see [§7](#7-database-backups)).
 3. Apply it against the DB with a MySQL client during a maintenance window.
 
+> **Analytics v2** adds 23 tables, two worker containers and four environment
+> variables, and its schema step must be applied **one deploy before** the code
+> that reads it. It has its own runbook — read it first:
+> **[`docs/analytics/DEPLOYMENT.md`](docs/analytics/DEPLOYMENT.md)**.
+>
+> Two things worth knowing before you touch it: everything ships behind three
+> feature flags that default to `false`, so deploying it changes nothing until
+> you say so; and `backend/scripts/sql/2026-07-28_analytics_v2_schema.sql` was
+> *generated from* its Alembic revision rather than written alongside it, so the
+> two artifacts cannot drift (verified identical — 355 columns, 164 index rows).
+>
+> ⚠️ **Do not run `alembic revision --autogenerate` on this repo without reading
+> every line of the output.** The ORM models and the migration history have
+> drifted, so autogenerate currently proposes 23 destructive operations against
+> existing tables — including dropping the `orders` hot-path indexes that
+> revision `p1e2r3f4i5x6` exists to create, and the `uq_coupon_usages_coupon_order`
+> integrity constraint. Those were stripped by hand from the analytics migration;
+> the underlying drift is still unfixed.
+
 ---
 
 ## 7. Database backups

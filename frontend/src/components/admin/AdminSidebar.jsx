@@ -30,8 +30,10 @@ import {
   PiggyBank,
   Activity,
   AlertOctagon,
+  Plug,
 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
+import { analyticsNavItems } from '@/features/analytics/registry.icons.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { authApi } from '@/features/auth/api.js';
 import { ThemeToggle } from '@/components/ui/ThemeToggle.jsx';
@@ -68,12 +70,28 @@ const FRONTEND_GROUP = {
   ],
 };
 
+// ONE Analytics parent with exactly 12 module links — never 73. The 73 detailed
+// views are reached by tabs inside a module, not by the sidebar.
+//
+// The children are GENERATED from the registry contract rather than listed
+// here, so the sidebar cannot drift from the backend: renaming a module or
+// changing its permission is a backend edit that regenerates the contract, and
+// this file needs no change at all.
+//
+// The two legacy entries stay until shadow-mode reconciliation signs off on
+// retiring them, so an admin can compare old and new side by side. They are
+// marked so nobody mistakes them for part of the new section.
 const ANALYTICS_GROUP = {
   label: 'Analytics',
   icon: BarChart3,
   children: [
-    { to: '/admin/analytics/sales', label: 'Sales & Revenue', icon: TrendingUp, end: false, permission: 'dashboard.view' },
-    { to: '/admin/analytics/profit', label: 'Profitability', icon: PiggyBank, end: false, permission: 'dashboard.view' },
+    ...analyticsNavItems(),
+    // Not generated: this is the container/consent configuration, not a module.
+    // It carries the manage permission rather than analytics.view, so a viewer
+    // who may read every report still never sees the link to change the tags.
+    { to: '/admin/analytics/settings', label: 'Tracking settings', icon: Plug, end: true, permission: 'analytics.integrations.manage' },
+    { to: '/admin/analytics/sales', label: 'Sales & Revenue (legacy)', icon: TrendingUp, end: true, permission: 'dashboard.view' },
+    { to: '/admin/analytics/profit', label: 'Profitability (legacy)', icon: PiggyBank, end: true, permission: 'dashboard.view' },
   ],
 };
 

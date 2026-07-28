@@ -31,6 +31,7 @@ from app.db.session import SessionLocal
 from app.schemas.storefront import DEFAULT_STOREFRONT
 from app.services.settings_seed import seed_settings
 from app.services.settings_service import SettingsService
+from tests.conftest import TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD
 
 _STOREFRONT_KEYS = [
     "storefront.site_title",
@@ -75,7 +76,7 @@ def _get_admin_token(client: TestClient) -> str:
     try:
         resp = client.post(
             "/api/v1/auth/login",
-            json={"email": "vinay@gmail.com", "password": "vinay@123"},
+            json={"email": TEST_ADMIN_EMAIL, "password": TEST_ADMIN_PASSWORD},
         )
         assert resp.status_code == 200, f"Login failed: {resp.text}"
         return resp.json()["access_token"]

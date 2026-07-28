@@ -25,6 +25,14 @@ class OrderItemRead(BaseModel):
     # itself doesn't snapshot them). Optional so edge rows still validate.
     name: str | None = None
     image_url: str | None = None
+    # Exposed so the browser's GA4 `purchase` event can use the SAME `item_id`
+    # the server-side event uses. The tracking contract defines `item_id` as the
+    # SKU (what a merchandiser recognises in a GA4 report, and stable across a
+    # database migration). Without this the browser would fall back to the
+    # numeric product_id: GA4 dedupes purchases on `transaction_id` so revenue
+    # would stay correct, but item-level reports would silently split into two
+    # populations for the same product.
+    sku: str | None = None
 
 
 # ---- Normalized children (order-table normalization, 2026-06-21) ----

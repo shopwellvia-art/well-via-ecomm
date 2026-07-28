@@ -1,4 +1,37 @@
 from app.models.address import Address  # noqa: F401
+# Analytics v2 schema. Imported here purely so Alembic autogenerate sees the
+# tables — nothing in the request path touches them while the analytics feature
+# flags are off. Facts and rollups carry NO foreign keys by design so they stay
+# independently truncatable and rebuildable (see app/models/analytics_base.py).
+from app.models.analytics_control import (  # noqa: F401
+    AnalyticsAlert,
+    AnalyticsBudget,
+    AnalyticsCostRule,
+    AnalyticsEventOutbox,
+    AnalyticsRecomputeQueue,
+    AnalyticsSyncRun,
+    AnalyticsTzGeneration,
+)
+from app.models.analytics_facts import (  # noqa: F401
+    AnalyticsOrderAdjustment,
+    AnalyticsOrderLine,
+    CartEvent,
+    InventoryMovement,
+)
+from app.models.analytics_rollups import (  # noqa: F401
+    AggCustomerCohortMonthly,
+    AggCustomerDaily,
+    AggCustomerSnapshot,
+    AggFunnelDaily,
+    AggGeoDaily,
+    AggInventoryDaily,
+    AggOrderDaily,
+    AggOrderHourly,
+    AggPaymentDaily,
+    AggProductDaily,
+    AggPromoDaily,
+    AggShipmentDaily,
+)
 from app.models.observability import RequestLog, SlowQuery  # noqa: F401
 from app.models.audit import AuditEvent  # noqa: F401
 from app.models.email_template import EmailTemplate  # noqa: F401

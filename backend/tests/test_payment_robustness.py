@@ -34,6 +34,7 @@ from app.integrations.payments.stripe import StripeError
 from app.main import app
 from app.models.payment_method import PaymentMethod
 from app.models.product import Product
+from tests.conftest import TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD
 
 
 def _uid() -> str:
@@ -122,7 +123,7 @@ def _admin_token(client: TestClient) -> str:
     try:
         resp = client.post(
             "/api/v1/auth/login",
-            json={"email": "vinay@gmail.com", "password": "vinay@123"},
+            json={"email": TEST_ADMIN_EMAIL, "password": TEST_ADMIN_PASSWORD},
         )
         assert resp.status_code == 200, f"Login failed: {resp.text}"
         return resp.json()["access_token"]

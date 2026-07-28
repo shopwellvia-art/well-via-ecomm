@@ -75,6 +75,74 @@ services:
     # generation need headroom; 512m risked OOM-kills under restart: always.
     mem_limit: 1g
 
+  # Analytics rollup worker. Runs the SAME backend image with a different
+  # command, so there is no new build target, no broker, and rollback is the
+  # existing IMAGE_TAG rollback.
+  #
+  # Why a dedicated process rather than an in-process scheduler: the backend runs
+  # 4 uvicorn workers, so an in-process scheduler would fire 4x and race on the
+  # same buckets. And heavy GROUP BY work inside a request worker competes with
+  # checkout for the connection pool.
+  #
+  # It exits 0 immediately unless ANALYTICS_ROLLUPS_ENABLED=true, so shipping
+  # this service while the flag is off costs one container start and nothing
+  # else — and turning the flag off is a rollback that needs no deploy.
+  analytics-rollup-worker:
+    image: ghcr.io/shopwellvia-art/simple-com-backend:${IMAGE_TAG:-latest}
+    command: ["python", "-m", "app.services.analytics.worker"]
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    env_file: ./backend/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      ANALYTICS_WORKER_ROLE: rollup
+    # Exactly one replica. A Redis lease plus a DB status guard makes a second
+    # one a no-op rather than a double-write, but there is no reason to pay for
+    # the contention.
+    deploy:
+      replicas: 1
+    # Aggregation holds result sets in memory while building rollup rows; it is
+    # heavier than the curl sidecars but much lighter than the API.
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Analytics delivery worker. Drains the GA4 outbox in near-real-time (~15-30s)
+  # rather than daily, so server-side purchase events land close to the browser
+  # session they belong to.
+  #
+  # Separate from the rollup worker on purpose: this one is network-bound with
+  # third-party retries, that one is database-bound. Sharing a process would let
+  # a GA4 outage stall rollups, and a slow rebuild delay conversion delivery.
+  #
+  # NOTE: delivery is a documented no-op until P8 wires the Measurement Protocol
+  # client. It does NOT mark outbox rows delivered in the meantime — a stub that
+  # discharged the debt without paying it would silently lose conversions.
+  analytics-delivery-worker:
+    image: ghcr.io/shopwellvia-art/simple-com-backend:${IMAGE_TAG:-latest}
+    command: ["python", "-m", "app.services.analytics.worker"]
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    env_file: ./backend/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      ANALYTICS_WORKER_ROLE: delivery
+    deploy:
+      replicas: 1
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   frontend:
     image: ghcr.io/shopwellvia-art/simple-com-frontend:${IMAGE_TAG:-latest}
     restart: always

@@ -164,6 +164,27 @@ class Settings(BaseSettings):
     # than blocking the request.
     OBS_BUFFER_MAX: int = 5000
 
+    # Analytics v2. Three independent kill switches, all OFF by default so the
+    # subsystem ships inert and is enabled deliberately, in this order:
+    #   ROLLUPS  — the analytics-worker container, the recompute queue, and every
+    #              write to an agg_* table. Write-only; nothing reads it yet, so
+    #              turning this on first is safe and lets rollups warm up.
+    #   V2       — the v2 API surface, the /admin/analytics routes and the
+    #              12-module sidebar group. The legacy Sales/Profit pages stay
+    #              primary while shadow-mode reconciliation runs.
+    #   TRACKING — data layer, GTM, GA4, Clarity and outbox delivery. Gated
+    #              separately because it also needs the relaxed CSP.
+    # Turning a flag off is the primary rollback and needs no deploy.
+    ANALYTICS_ROLLUPS_ENABLED: bool = False
+    ANALYTICS_V2_ENABLED: bool = False
+    ANALYTICS_TRACKING_ENABLED: bool = False
+    # Shared secret for machine-triggered analytics jobs, sent as X-Analytics-Token
+    # (same pattern as PAYMENT_RECONCILE_TOKEN). Blank disables machine auth; a
+    # human with analytics.jobs.run can still trigger runs. Note the normal path
+    # is the analytics-worker container, which calls the runner in-process and
+    # needs no token — this is for manual/admin-UI triggers and external cron.
+    ANALYTICS_CRON_TOKEN: str = ""
+
     @model_validator(mode="after")
     def _validate_secret_key_in_production(self) -> "Settings":
         """Refuse to boot in production with an insecure SECRET_KEY."""

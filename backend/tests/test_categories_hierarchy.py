@@ -32,6 +32,7 @@ from httpx import Response
 
 from app.db.session import SessionLocal
 from app.models.product import Category
+from tests.conftest import TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +52,7 @@ def _get_admin_token(client: TestClient) -> str:
     try:
         resp = client.post(
             "/api/v1/auth/login",
-            json={"email": "vinay@gmail.com", "password": "vinay@123"},
+            json={"email": TEST_ADMIN_EMAIL, "password": TEST_ADMIN_PASSWORD},
         )
         assert resp.status_code == 200, f"Login failed: {resp.text}"
         return resp.json()["access_token"]

@@ -95,6 +95,107 @@ PERMISSIONS: tuple[PermissionDef, ...] = (
         "Manage storefront UI (footer, hero, etc.)",
         "Frontend",
     ),
+    # Analytics (v2) — one gate per sidebar module, plus action perms.
+    # Granting a module perm does NOT imply the others: finance and customers
+    # are deliberately separate tiers so an ops user can see operations without
+    # seeing margin or a named customer's purchase history.
+    PermissionDef(
+        "analytics.view",
+        "Open the analytics section (base access; each module still needs its own permission)",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.executive.view",
+        "View executive summary, business health, forecasting and budget-vs-actual views",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.sales.view",
+        "View sales, revenue, order and discount performance views",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.finance.view",
+        "SENSITIVE: view margin, COGS, contribution, unit economics, cash flow, tax and "
+        "settlement figures",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.products.view",
+        "View product, category, SKU and merchandising performance views",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.customers.view",
+        "SENSITIVE: view customer-level analytics including personal drill-down "
+        "(lifetime value, segments, cohorts, RFM)",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.marketing.view",
+        "View marketing channel, campaign, SEO and attribution views",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.website.view",
+        "View website traffic, funnel, checkout and on-site conversion views",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.inventory.view",
+        "View inventory, stock availability and supply-chain views",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.orders.view",
+        "View order fulfilment, shipping, returns and cancellation views",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.payments.view",
+        "View payment success, failure, COD and fraud-risk views",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.marketplace.view",
+        "View marketplace, store/branch and B2B account views",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.cx.view",
+        "View customer experience, support, review and UX views",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.control_centre.view",
+        "View the analytics control centre (tracking health, reconciliation, experiments, alerts)",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.export",
+        "Export analytics tables to CSV/XLSX (still limited to views the user can open)",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.integrations.manage",
+        "Connect and configure analytics integrations (GA4, Search Console, ads, Clarity)",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.budgets.manage",
+        "Create and edit analytics budgets and targets used by budget-vs-actual",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.alerts.manage",
+        "Create and edit analytics alert rules, thresholds and anomaly settings",
+        "Analytics",
+    ),
+    PermissionDef(
+        "analytics.jobs.run",
+        "Manually trigger analytics rollup, backfill and reconciliation jobs",
+        "Analytics",
+    ),
 )
 
 

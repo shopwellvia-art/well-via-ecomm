@@ -48,6 +48,7 @@ from app.schemas.payment import CheckoutRequest
 from app.schemas.payment_method import PaymentMethodUpdate
 from app.services.payment_method_config_service import PaymentMethodConfigService
 from app.services.payment_service import PaymentService
+from tests.conftest import TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +165,7 @@ def _get_admin_token(client: TestClient) -> str:
     try:
         resp = client.post(
             "/api/v1/auth/login",
-            json={"email": "vinay@gmail.com", "password": "vinay@123"},
+            json={"email": TEST_ADMIN_EMAIL, "password": TEST_ADMIN_PASSWORD},
         )
         assert resp.status_code == 200, f"Login failed: {resp.text}"
         return resp.json()["access_token"]

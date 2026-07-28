@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_permission
-from app.core.exceptions import AppError
+from app.core.exceptions import AppError, ForbiddenError
 from app.core.rate_limit import get_client_ip
 from app.email import send_email
 from app.models.user import User
@@ -21,6 +21,46 @@ router = APIRouter()
 
 _SECRET_KEYS_FOR_AUDIT_LOG = {"smtp.password", "twilio.auth_token"}
 
+
+def _analytics_public_keys() -> frozenset[str]:
+    """Analytics keys safe for anonymous readers, DERIVED from the field schema.
+
+    Imported lazily and defensively: this endpoint must keep serving the
+    storefront's other public settings even if the analytics module fails to
+    import, and a hard import here would turn an analytics bug into a
+    site-wide outage on a page every visitor loads.
+    """
+    try:
+        from app.services.analytics.integrations import PUBLIC_KEYS
+
+        return frozenset(PUBLIC_KEYS)
+    except Exception:  # noqa: BLE001 - never break /settings/public
+        return frozenset()
+
+
+def _analytics_managed_keys() -> frozenset[str]:
+    """EVERY analytics integration key, whatever its visibility.
+
+    All of them — public ids included, not just the credentials — are refused by
+    the generic update path. A measurement id is not secret, but it is still
+    validated against a per-field pattern, audited under its own action, and
+    paired with an enable flag by the integrations service. Letting half the
+    group through here would mean an admin could set a malformed container id
+    that silently never loads, with nothing in the audit trail naming what
+    changed it.
+
+    Fails OPEN on import error: if the analytics module cannot load, this returns
+    empty and the generic endpoint behaves exactly as it did before analytics
+    existed. Failing closed would let an unrelated analytics bug lock an operator
+    out of SMTP settings during an incident.
+    """
+    try:
+        from app.services.analytics.integrations import FIELD_BY_KEY
+
+        return frozenset(FIELD_BY_KEY)
+    except Exception:  # noqa: BLE001 - never break ordinary settings management
+        return frozenset()
+
 # Settings keys safe to expose to anonymous customers. Anything not in this
 # allowlist is admin-only — the public endpoint is a curated, hard-coded
 # view onto the system_settings table.
@@ -35,6 +75,27 @@ _PUBLIC_KEYS: frozenset[str] = frozenset({
     # Whether the COD checkout flow needs to gate on an OTP — drives
     # the conditional OTP modal on CheckoutPage.
     "cod.require_otp",
+
+    # ---- Analytics tracking -------------------------------------------------
+    # Every value here is a PUBLIC identifier that ends up in the page source
+    # the moment the tag loads — a GTM container id, a GA4 measurement id and a
+    # Clarity project id are all visible to anyone who opens devtools. Exposing
+    # them here is not a leak; it is how the browser learns which container to
+    # load, and the storefront must be able to read them anonymously because a
+    # logged-out visitor is exactly who tracking is for.
+    #
+    # NOTHING SECRET GOES IN THIS LIST. The GA4 Measurement Protocol api_secret
+    # and any Data API service-account credentials are Fernet-encrypted,
+    # backend-only, and must never appear here — they authorise WRITING events
+    # as this property, which a browser has no business being able to do.
+    # The exact keys are NOT written out here. They are DERIVED from each field's
+    # declared visibility in `analytics/integrations.py`, so a newly added secret
+    # cannot become anonymously readable because someone copied a stale list.
+    # `analytics.ga4_purchase_delivery` in particular must be public: the
+    # duplicate-purchase suppression happens in the BROWSER, at the push
+    # boundary, and a client that cannot read the setting would send a second
+    # purchase and inflate GA4 revenue in a way that looks like growth.
+    *_analytics_public_keys(),
 })
 
 
@@ -78,6 +139,29 @@ def update_settings(
     actor: User = Depends(require_permission("settings.manage")),
     db: Session = Depends(get_db),
 ):
+    # Analytics integration keys are OFF LIMITS to this endpoint, even for a
+    # holder of settings.manage.
+    #
+    # They are not ordinary settings: the GA4 credentials are Fernet-encrypted
+    # by `analytics/integrations.py`, validated against a per-field schema, and
+    # audited under their own action. Writing them through the generic path
+    # would store a plaintext credential where ciphertext is expected, skip
+    # validation entirely, and log the change as a plain `settings.update` —
+    # so a rotation of a live analytics credential would be indistinguishable
+    # from someone editing the SMTP port.
+    #
+    # It also collapses two permission tiers into one: `analytics.integrations.
+    # manage` exists precisely so that managing store settings does not imply
+    # managing tracking credentials.
+    rejected = sorted(set(payload.updates) & _analytics_managed_keys())
+    if rejected:
+        raise ForbiddenError(
+            "Analytics integration settings cannot be changed here. Use "
+            "Admin → Analytics → Integrations, which encrypts credentials, "
+            "validates each field and audits the change under its own action.",
+            {"rejected_keys": rejected},
+        )
+
     svc = SettingsService(db)
     changed = svc.set_many(payload.updates, actor=actor)
     if changed:

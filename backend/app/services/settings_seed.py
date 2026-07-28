@@ -185,6 +185,26 @@ DEFAULT_SETTINGS: list[tuple[str, str, str, str, bool]] = [
      "Seller GST state code (e.g. 29 for Karnataka). Drives the CGST/SGST "
      "vs IGST split on invoices; blank renders a single GST line.", False),
 
+    # ---- Reporting configuration (seeded at boot only — no migration) ----
+    # Read by the analytics subsystem to bucket rollups on store-local calendar
+    # days instead of UTC. Containers run UTC and the only other timezone in the
+    # codebase is the hardcoded IST constant in invoice_service.py, so without
+    # these an evening-IST order lands in the next UTC day and "yesterday's
+    # sales" is wrong by 5.5 hours.
+    #
+    # store.timezone is NOT freely editable once rollups exist: changing it
+    # opens a new row in analytics_tz_generations and requires a full rebuild
+    # before the new generation goes active, because buckets built under two
+    # different zones must never be mixed. Edit it through the analytics
+    # integrations screen, which runs that procedure — not by hand.
+    ("store.timezone", "Asia/Kolkata", "store",
+     "IANA timezone used to bucket analytics reporting days (e.g. Asia/Kolkata). "
+     "Changing this requires a full analytics rollup rebuild.", False),
+    ("store.currency", "INR", "store",
+     "ISO-4217 reporting currency for analytics and exports (e.g. INR).", False),
+    ("store.week_start", "monday", "store",
+     "First day of the reporting week for weekly analytics buckets: monday | sunday.", False),
+
     # ---- Storage (l3m4n5o6p7q8, n5o6p7q8r9s0) ----
     # Credentials/endpoint rows are blank so the env fallback stays in effect.
     # Two rows ship with a concrete default on purpose: s3_root_prefix is

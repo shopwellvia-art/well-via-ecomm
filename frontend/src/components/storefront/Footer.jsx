@@ -6,6 +6,7 @@ import { useFooterConfig } from '@/features/footer/hooks';
 import { FOOTER_DEFAULTS, resolveIcon } from '@/features/footer/defaults';
 import { useStorefrontConfigWithDefaults } from '@/features/storefront-config/hooks.js';
 import { useSubscribeNewsletter } from '@/features/contact/hooks.js';
+import CookiePreferencesLink from '@/components/consent/CookiePreferencesLink.jsx';
 import { LeafMark } from './Logo';
 
 /**
@@ -217,6 +218,14 @@ export default function Footer() {
             </ul>
           )}
           <p className="font-wserif text-[16px] text-wpaper/90 m-0">{copyright}</p>
+          {/*
+           * The withdrawal path. It is on every storefront page and one click
+           * from any of them, because consent that is easy to give and hard to
+           * take back is not consent — it is a one-way ratchet.
+           */}
+          <p className="m-0 mt-3">
+            <CookiePreferencesLink className="font-wserif text-[14px] text-wpaper/80 hover:text-wgold transition-colors" />
+          </p>
         </div>
       </div>
     </footer>

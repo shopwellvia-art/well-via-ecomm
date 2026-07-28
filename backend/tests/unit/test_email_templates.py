@@ -39,6 +39,7 @@ from app.services.email_templates.seed import (
     get_default,
     seed_email_templates,
 )
+from tests.conftest import TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD
 
 # ---------------------------------------------------------------------------
 # Shared SQLite fixture
@@ -410,7 +411,7 @@ def _get_admin_token(client) -> str:
     try:
         resp = client.post(
             "/api/v1/auth/login",
-            json={"email": "vinay@gmail.com", "password": "vinay@123"},
+            json={"email": TEST_ADMIN_EMAIL, "password": TEST_ADMIN_PASSWORD},
         )
         assert resp.status_code == 200, f"Admin login failed: {resp.text}"
         return resp.json()["access_token"]
