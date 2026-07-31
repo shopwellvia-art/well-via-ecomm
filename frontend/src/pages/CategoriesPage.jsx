@@ -58,7 +58,7 @@ export default function CategoriesPage() {
 
     <div className="absolute inset-0 bg-black/20" />
 
-<div className="relative z-10 max-w-[1320px] mx-auto px-5 sm:px-10 lg:px-16 pt-0 sm:pt-10 pb-10 sm:pb-20 -translate-y-10 sm:translate-y-0">
+<div className="relative z-10 max-w-[1320px] mx-auto px-5 sm:px-10 lg:px-16 pt-0 sm:pt-4 pb-10 sm:pb-20 -translate-y-10 sm:-translate-y-4">
 
   <h1 className="font-cormorant font-semibold text-black text-[22px] sm:text-[clamp(30px,4.2vw,50px)] leading-[1.1] m-0 mb-1 sm:mb-2 max-w-[180px] sm:max-w-xl">
     Your Perfect Wellness Bundle.
@@ -70,7 +70,7 @@ export default function CategoriesPage() {
 
   <Link
     to="/products?offers=combo"
-    className="mt-3 sm:mt-5 inline-block rounded-full px-4 sm:px-6 py-2 sm:py-3 text-[10px] sm:text-[13px] tracking-wide text-white no-underline transition-colors"
+    className="mt-2.5 sm:mt-5 -ml-0.5 sm:ml-0 inline-block rounded-full px-2.5 sm:px-6 py-1 sm:py-3 text-[8.5px] sm:text-[13px] tracking-wide text-white no-underline transition-colors"
     style={{ backgroundColor: "#08112C" }}
   >
     Shop your combos →

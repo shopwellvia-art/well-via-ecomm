@@ -37,7 +37,7 @@ function CheckRow({ checked, onChange, children }) {
         type="checkbox"
         checked={checked}
         onChange={onChange}
-        className="size-4 shrink-0 rounded-sm border-wline accent-wgreen"
+        className="size-4 shrink-0 rounded-sm border-wline accent-[#08112C]"
       />
       <span className="min-w-0 truncate">{children}</span>
     </label>
@@ -56,12 +56,16 @@ export default function FilterSidebar({ filters, onChange }) {
   return (
     <div className="bg-wcard border border-wline rounded-xl2 p-5">
       {/* ── Goal (categories) ── */}
+      {/* GOALS are {label, slug} objects (see lib/catalogOptions.js), so the
+          slug drives the filter and the label is what renders. */}
       <Section title="Goal">
         {GOALS.map((goal) => (
           <CheckRow
             key={goal.slug}
-            checked={filters.goals.includes(goal.slug)}
-            onChange={() => onChange({ goals: toggleIn(filters.goals, goal.slug) })}
+            checked={filters.goals?.includes(goal.slug) ?? false}
+            onChange={() =>
+              onChange({ goals: toggleIn(filters.goals || [], goal.slug) })
+            }
           >
             {goal.label}
           </CheckRow>
@@ -100,7 +104,7 @@ export default function FilterSidebar({ filters, onChange }) {
         <div className="relative h-6 mt-1">
           <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[3px] rounded-full bg-wline" />
           <div
-            className="absolute top-1/2 -translate-y-1/2 h-[3px] rounded-full bg-wgreen"
+            className="absolute top-1/2 -translate-y-1/2 h-[3px] rounded-full bg-[#08112C]"
             style={{ left: `${pct(lo)}%`, right: `${100 - pct(hi)}%` }}
           />
           <input
@@ -157,11 +161,12 @@ export default function FilterSidebar({ filters, onChange }) {
               className="flex cursor-pointer items-center gap-2.5 py-[5px] text-[13px] text-wink"
             >
               <input
-                type="checkbox"
-                checked={active}
-                onChange={() => onChange({ minRating: active ? null : r.value })}
-                className="size-4 shrink-0 rounded-sm border-wline accent-wgreen"
-              />
+  type="checkbox"
+  checked={active}
+  onChange={() => onChange({ minRating: active ? null : r.value })}
+  className="size-4 shrink-0 rounded-sm border-wline"
+  style={{ accentColor: "#08112C" }}
+/>
               <span className={cn('inline-flex items-center gap-1 text-wgold')}>
                 <Stars count={Number(r.value)} />
               </span>

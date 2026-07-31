@@ -4,7 +4,7 @@ import { useProducts, useBestsellers } from '@/features/products/hooks.js';
 import HeroSection from '@/components/storefront/HeroSection';
 import WImage from '@/components/storefront/WImage';
 import { Stars } from '@/components/storefront/Icons';
-import { Heart } from "lucide-react";
+import { Heart, ShoppingCart } from "lucide-react";
 import { Fragment, useEffect, useState } from 'react';
 import { AnimatePresence } from "framer-motion";
 import { formatPrice } from '@/lib/utils';
@@ -180,49 +180,57 @@ function BestsellerCard({ product }) {
     );
   };
 
+  /* Card chrome is Kavya's design from the kavya branch (bordered tile, tinted
+     image box, full-bleed dark CTA with a cart icon). Her version rendered a
+     hardcoded DEMO_PRODUCTS array and its buttons were stubs
+     (`console.log("Add to cart")`, a <Link to="/wishlist">), so only the
+     styling was taken — the behaviour below is the real wiring. */
   return (
-    <div className="shrink-0 w-[46%] sm:w-[42%] md:w-auto snap-start rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
-      <div className="relative">
-        <Link to={`/products/${id}`} className="block">
+    <div className="shrink-0 w-[60%] sm:w-[35%] md:w-[260px] lg:w-[280px] snap-start border border-[#EBE8E0] bg-[#FAF9F6] rounded-xl shadow-[0_2px_6px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col">
+      {/* Product image box */}
+      <div className="relative aspect-[4/3] md:aspect-[16/9] w-full bg-[#F3F2EE] flex items-center justify-center p-2.5">
+        <Link to={`/products/${id}`} className="block w-full h-full">
           <WImage
             src={image_url}
             alt={name}
-            className="w-full h-40 sm:h-52 md:h-64 object-cover"
+            className="w-full h-full object-contain max-h-[80%]"
           />
         </Link>
 
-        {/* Wishlist */}
+        {/* Wishlist — a real mutation, with the guest redirect */}
         <button
           onClick={handleWishlist}
           aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
-          className={`absolute top-3 right-3 w-8 h-8 md:w-10 md:h-10 rounded-full bg-white shadow flex items-center justify-center hover:bg-gray-100 transition ${
-            inWishlist ? 'text-red-500' : 'text-wink'
+          className={`absolute top-2 right-2 w-6 h-6 rounded-full bg-white/80 shadow-sm flex items-center justify-center hover:bg-white transition border border-gray-100 ${
+            inWishlist ? 'text-red-500' : 'text-[#08112C]'
           }`}
         >
-          <Heart size={14} fill={inWishlist ? 'currentColor' : 'none'} />
+          <Heart size={12} fill={inWishlist ? 'currentColor' : 'none'} />
         </button>
       </div>
 
-      <div className="p-3 md:p-4">
-        <Link to={`/products/${id}`} className="no-underline text-wink">
-          <h3 className="font-semibold text-[13px] sm:text-base md:text-lg m-0">
-            {name}
-          </h3>
-        </Link>
-
-        <p className="text-[#2B5E3B] font-semibold mt-1 text-[12px] sm:text-sm md:text-base">
-          {formatPrice(price)}
-          {isDiscounted && (
-            <span className="ml-2 text-wmuted font-normal line-through">
-              {formatPrice(compare_at_price)}
-            </span>
-          )}
-        </p>
+      {/* Card body */}
+      <div className="flex-grow flex flex-col justify-between pt-2.5 lg:pt-2">
+        <div className="text-left px-3 pb-2 lg:px-4 lg:pb-2">
+          <Link to={`/products/${id}`} className="no-underline">
+            <h3 className="font-wserif font-semibold text-[13px] sm:text-[14px] lg:text-[16px] leading-snug text-[#08112C] m-0 truncate">
+              {name}
+            </h3>
+          </Link>
+          <p className="font-wserif text-[12px] sm:text-[13px] lg:text-[15px] text-[#08112C] m-0 mt-0.5">
+            {formatPrice(price)}
+            {isDiscounted && (
+              <span className="ml-2 text-wmuted font-normal line-through">
+                {formatPrice(compare_at_price)}
+              </span>
+            )}
+          </p>
+        </div>
 
         {outOfStock ? (
           <button
             disabled
-            className="mt-3 md:mt-4 w-full bg-wline/60 text-wmuted rounded-lg py-2 md:py-3 text-[12px] sm:text-sm md:text-base cursor-not-allowed"
+            className="w-full bg-wline/60 text-wmuted rounded-b-[11px] rounded-t-none py-2 lg:py-1.5 px-3 text-[11px] sm:text-[12px] lg:text-[13px] font-semibold tracking-wide border-0 cursor-not-allowed"
           >
             Out of Stock
           </button>
@@ -230,9 +238,10 @@ function BestsellerCard({ product }) {
           <button
             onClick={handleAddToCart}
             disabled={addToCart.isPending}
-            className="mt-3 md:mt-4 w-full bg-[#08112C] text-white rounded-lg py-2 md:py-3 text-[12px] sm:text-sm md:text-base hover:bg-[#08112C] transition disabled:opacity-60"
+            className="w-full bg-[#08112C] text-white rounded-b-[11px] rounded-t-none py-2 lg:py-1.5 px-3 flex items-center justify-center gap-1.5 text-[11px] sm:text-[12px] lg:text-[13px] font-semibold tracking-wide hover:bg-[#010E37] transition-colors border-0 cursor-pointer disabled:opacity-60"
           >
             {addToCart.isPending ? 'Adding…' : 'Add to Cart'}
+            <ShoppingCart size={13} />
           </button>
         )}
       </div>
@@ -285,30 +294,37 @@ useEffect(() => {
     'why-we-exist': (title) => (
       <section
   id="why-we-exist"
-  className="grid grid-cols-[0.85fr_1.15fr] md:grid-cols-[1fr_1.05fr] gap-4 lg:gap-16 items-center pr-5 sm:pr-10 lg:pr-16 py-6 lg:py-[40px]"
+  className="grid grid-cols-[1.7fr_1fr] md:grid-cols-[1.2fr_1fr] gap-2 sm:gap-6 lg:gap-12 items-center md:items-start pl-0 pr-3 sm:pr-10 lg:pr-16 py-6 lg:py-[40px]"
 >
-  <div className="flex justify-start w-full">
-    {/* Tilted pouch with berry spill — brand shot from the design file */}
+  <div className="flex flex-col items-start w-full">
+    {/* Small gummy accent that overlaps the pouch shot below it */}
+    <img
+      src="/gummy3.png"
+      alt=""
+      aria-hidden="true"
+      className="w-[105px] sm:w-[130px] md:w-[210px] lg:w-[250px] -mb-12 md:-mb-28 lg:-mb-32 ml-2 sm:ml-16 md:ml-20 lg:ml-24 relative z-10"
+    />
+
+    {/* Tilted pouch with berry spill — bleeds off the left edge on mobile */}
     <img
       src="/homepage2.png"
       alt="Wellvia Immunity gummies spilling from the pouch"
       loading="lazy"
-      className="block w-full max-w-[140px] sm:max-w-[220px] md:max-w-[520px] h-auto rounded-xl2"
+      className="block w-[115%] max-w-none sm:w-full sm:max-w-[440px] md:w-[110%] md:max-w-[620px] lg:max-w-[720px] h-auto rounded-r-xl2 md:rounded-r-2xl -ml-[7.5%] sm:ml-0"
     />
   </div>
 
-  <div className="text-left md:text-right pl-5 sm:pl-10 lg:pl-16">
-    <h2 className="font-cormorant font-semibold text-[22px] sm:text-[28px] md:text-[clamp(28px,3vw,40px)] text-[#08112C] m-0 mb-3 md:mb-5">
+  <div className="text-right pl-0 sm:pl-6 lg:pl-12 md:mt-24 lg:mt-36">
+    <h2 className="font-cormorant font-semibold text-[24px] sm:text-[28px] md:text-[clamp(32px,3.5vw,48px)] text-[#08112C] m-0 mb-1.5 md:mb-5 lg:mb-12">
       {title || 'Why we Exist?'}
     </h2>
-    <p className="font-cormorant font-semibold text-[16px] sm:text-[20px] md:text-[clamp(22px,2.2vw,30px)] text-wink m-0 mb-2 md:mb-4">
+    <p className="font-cormorant font-semibold text-[16px] sm:text-[20px] md:text-[clamp(24px,2.5vw,34px)] text-wink m-0 mb-1 md:mb-4 lg:mb-8 whitespace-nowrap">
       It started with one belief.
     </p>
-    <p className="font-cormorant text-[13px] sm:text-[16px] md:text-[clamp(18px,1.8vw,25px)] leading-[1.5] md:leading-[1.55] text-wink/85 m-0 max-w-full md:max-w-[520px] md:ml-auto">
-      Taking care of your health shouldn&apos;t feel like a chore.
-      That&apos;s why we created gummies that are enjoyable to take,
-      thoughtfully formulated, and made to fit effortlessly into your
-      day.
+    <p className="font-cormorant text-[14px] sm:text-[16px] md:text-[clamp(20px,2vw,28px)] leading-[1.3] md:leading-[1.55] text-wink/85 m-0 max-w-[280px] xs:max-w-[320px] sm:max-w-full md:max-w-[580px] ml-auto">
+      Taking care of your health shouldn&apos;t feel like a chore. That&apos;s
+      why we created gummies that are enjoyable to take, thoughtfully
+      formulated, and made to fit effortlessly into your day.
     </p>
   </div>
 </section>
@@ -317,23 +333,34 @@ useEffect(() => {
     /* 3. Product rail — bestsellers (hidden entirely when the API returns none) */
     'bestsellers-rail': (title) =>
       (bestsellersLoading || bestsellersError || bestsellers.length > 0) && (
-        <section className="px-5 sm:px-10 lg:px-16 py-10 lg:py-[64px]">
-          <h2 className="font-wserif font-semibold text-[clamp(28px,3.2vw,42px)] leading-[1.15] text-wink m-0 mb-8 lg:mb-10 max-w-[520px]">
-            {title || (
-              <>
-                Your body works hard.
-                <br />
-                Help it a little.
-              </>
-            )}
-          </h2>
+        <section className="px-5 sm:px-10 lg:px-16 py-8 lg:pt-0 lg:pb-[48px] lg:-mt-44">
+          <div className="flex items-start justify-between mb-8 lg:mb-6 max-w-[1080px] mx-auto">
+            <h2 className="font-wserif font-semibold text-[clamp(24px,2.8vw,36px)] leading-[1.15] text-[#08112C] m-0 max-w-[460px]">
+              {title || (
+                <>
+                  Your body works hard.
+                  <br />
+                  Help it a little.
+                </>
+              )}
+            </h2>
+
+            {/* Floating gummy accent */}
+            <img
+              src="/gummy2.png"
+              alt=""
+              className="block w-14 sm:w-12 md:w-16 lg:w-24 h-auto -translate-y-2"
+              aria-hidden="true"
+            />
+          </div>
 
           {bestsellersLoading ? (
             <RailSkeleton />
           ) : bestsellersError ? (
             <InlineError onRetry={refetchBestsellers} />
           ) : (
-            <div className="flex md:grid md:grid-cols-4 gap-4 md:gap-6 overflow-x-auto md:overflow-visible snap-x snap-mandatory md:snap-none -mx-5 px-5 md:mx-0 md:px-0 pb-2 scrollbar-hide">
+            /* Horizontal scroll on every breakpoint, with a visible slim thumb */
+            <div className="flex gap-3 md:gap-4 lg:gap-6 overflow-x-auto snap-x snap-mandatory -mx-5 px-5 md:mx-auto md:px-0 pb-4 max-w-[1080px] lg:max-w-[1280px] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
               {bestsellers.map((p) => (
                 <BestsellerCard key={p.id} product={p} />
               ))}
@@ -463,7 +490,9 @@ useEffect(() => {
     /* 6. Wellness, without the confusion — static blog cards */
     blog: (title) => (
       <section className="px-5 sm:px-10 lg:px-16 py-12 lg:py-[84px]">
-  <div className="grid grid-cols-2 gap-4 md:gap-8 items-start max-w-[1140px] mx-auto mb-6 lg:mb-14">
+  {/* Tighter desktop gap under the header, and the intro copy bottom-aligned
+      to the heading, so the band does not carry dead space (kavya branch). */}
+  <div className="grid grid-cols-2 gap-4 md:gap-8 items-start max-w-[1140px] mx-auto mb-4 lg:mb-2">
     <h2 className="font-cormorant text-[18px] sm:text-[24px] md:text-[clamp(26px,3vw,40px)] leading-[1.3] tracking-[0.04em] text-wink m-0">
             {title || (
               <>
@@ -475,7 +504,7 @@ useEffect(() => {
               </>
             )}
           </h2>
-          <p className="font-cormorant text-[12px] sm:text-[15px] md:text-[clamp(18px,1.8vw,25px)] leading-[1.4] md:leading-[1.6] text-wink/85 m-0 text-right md:text-right max-w-full md:max-w-[360px] ml-auto">
+          <p className="font-cormorant text-[12px] sm:text-[15px] md:text-[clamp(18px,1.8vw,25px)] leading-[1.4] md:leading-[1.6] text-wink/85 m-0 text-right md:text-right max-w-full md:max-w-[360px] ml-auto lg:self-end lg:mb-3">
             No complicated jargon. No wellness myths. Just simple insights to
             help you make better choices every day.
           </p>

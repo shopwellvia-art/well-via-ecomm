@@ -490,8 +490,8 @@
   width: 16px;
   height: 16px;
   border-radius: 9999px;
-  background: #183a2e;
-  border: 2px solid #fff;
+   background: #08112C;
+   border: 2px solid #08112C;
   box-shadow: 0 1px 4px rgba(30, 24, 14, 0.35);
   cursor: pointer;
 }

@@ -257,6 +257,10 @@ export default function ProductListPage({ mode = 'all' }) {
 
   /* Active filter chips (mockup: "Grape ×" "In Stock ×" next to the count) */
   const chips = [
+    ...filters.goals.map((goal) => ({
+    label: goal,
+    clear: () => update({ goals: filters.goals.filter((x) => x !== goal) }),
+  })),
     ...filters.categoryIds.map((id) => ({
       label: catName(id),
       clear: () => update({ categoryIds: filters.categoryIds.filter((x) => x !== id) }),
@@ -311,7 +315,6 @@ export default function ProductListPage({ mode = 'all' }) {
     // HERO BANNER OF ALL 3 PAGES
     <Page bleed>
       {/* ── HERO BAND ── */}
-     {/* ── HERO BAND ── */}
 <section
   className="border-b border-wline"
   style={{ background: modeCfg.heroBg }}
@@ -319,80 +322,78 @@ export default function ProductListPage({ mode = 'all' }) {
 >
 
   {/* BESTSELLERS */}
-  {mode === "bestsellers" && (
-    <div className="relative">
+{mode === "bestsellers" && (
+  <div className="relative overflow-hidden w-full">
+    <img
+      src={modeCfg.heroImage}
+      alt="Best Sellers"
+      className="w-full h-[160px] sm:h-[200px] md:h-auto object-cover object-left md:object-contain block"
+    />
+
+    <Link
+      to="/bestsellers"
+      className="absolute left-3.5 bottom-3 md:left-20 md:bottom-12 bg-[#08112C] text-white px-2.5 py-1.5 md:px-6 md:py-3 rounded-full font-serif text-[9px] sm:text-xs md:text-base leading-none shadow-md"
+    >
+      Shop for Bestsellers
+    </Link>
+  </div>
+)}
+
+  {/* ALL PRODUCTS */}
+  {mode === "all" && (
+    <div className="relative overflow-hidden w-full">
       <img
         src={modeCfg.heroImage}
-        alt="Best Sellers"
-        className="w-full block"
+        alt="Products"
+        className="w-full h-[160px] sm:h-[200px] md:h-auto object-cover object-center md:object-contain block"
       />
 
-      <Link
-        to="/bestsellers"
-        className="absolute left-4 bottom-2 md:bottom-12 md:left-36 md:bottom-12 bg-[#08112C] text-white px-1.5 py-1.5 md:px-6 md:py-3 rounded-full font-serif text-[8px] md:text-base leading-none"
-      >
-        Shop for Bestsellers
-      </Link>
+      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 max-w-[58%] md:left-12 md:max-w-none">
+        <h1 className="font-cormorant font-medium text-[clamp(15px,4.5vw,22px)] md:text-[clamp(30px,4.2vw,50px)] text-[#133F30] m-0 mb-0.5 md:mb-2 leading-[1.15] md:leading-[1.35] max-w-[220px] md:max-w-[420px]">
+          {modeCfg.title}
+        </h1>
+
+        <p className="font-cormorant text-[10px] sm:text-[12px] md:text-[14.5px] text-black m-0 font-light max-w-[140px] md:max-w-[380px] mb-2 md:mb-5 leading-[1.25] md:leading-normal">
+          {modeCfg.sub}
+        </p>
+
+        <Link
+          to="/products"
+          className="inline-block bg-[#08112C] text-white px-2.5 py-1.5 md:px-6 md:py-3 rounded-full font-serif text-[9px] sm:text-xs md:text-base leading-none"
+        >
+          Shop All Products
+        </Link>
+      </div>
     </div>
   )}
 
+  {/* NEW ARRIVALS */}
+  {mode === "new-arrivals" && (
+    <div className="relative overflow-hidden w-full">
+      <img
+        src={modeCfg.heroImage}
+        alt="New Arrivals"
+        className="w-full h-[160px] sm:h-[200px] md:h-auto object-cover object-center md:object-contain block"
+      />
 
- {/* ALL PRODUCTS */}
-{mode === "all" && (
-  <div className="relative">
-    <img
-      src={modeCfg.heroImage}
-      alt="Products"
-      className="w-full block"
-    />
+      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 max-w-[58%] md:left-12 md:max-w-none">
+        <h1 className="font-cormorant font-medium text-[clamp(15px,4.5vw,22px)] md:text-[clamp(30px,4.2vw,50px)] text-[#133F30] m-0 mb-1 md:mb-2 leading-[1.15] md:leading-[1.35] max-w-[140px] md:max-w-[380px]">
+          {modeCfg.title}
+        </h1>
 
-    <div className="absolute left-4 top-6 max-w-[55%] md:left-12 md:top-1/2 md:-translate-y-1/2 md:max-w-none">
-      <h1 className="font-cormorant font-medium text-[clamp(16px,4.5vw,22px)] md:text-[clamp(30px,4.2vw,50px)] text-[#133F30] m-0 mb-0.5 md:mb-2 leading-[1.2] md:leading-[1.35] max-w-[220px] md:max-w-[420px]">
-        {modeCfg.title}
-      </h1>
+        <p className="font-cormorant text-[10px] sm:text-[12px] md:text-[14.5px] text-black m-0 font-light max-w-[130px] md:max-w-[380px] mb-2 md:mb-5 leading-[1.25] md:leading-normal">
+          {modeCfg.sub}
+        </p>
 
-      <p className="font-cormorant text-[10.5px] md:text-[14.5px] text-black m-0 font-light max-w-[140px] md:max-w-[380px] mb-3 md:mb-5 leading-[1.3] md:leading-normal">
-        {modeCfg.sub}
-      </p>
-
-      <Link
-        to="/products"
-         className="absolute left-4 -bottom-4 md:static md:translate-y-0 md:ml-0 bg-[#08112C] text-white px-1.5 py-1.5 md:px-6 md:py-3 rounded-full font-serif text-[8px] md:text-base leading-none"
-      >
-        Shop All Products
-      </Link>
+        <Link
+          to="/new-arrivals"
+          className="inline-block bg-[#08112C] text-white px-2.5 py-1.5 md:px-6 md:py-3 rounded-full font-serif text-[9px] sm:text-xs md:text-base leading-none"
+        >
+          Shop New Arrivals
+        </Link>
+      </div>
     </div>
-  </div>
-)}
-
-{/* NEW ARRIVALS */}
-{mode === "new-arrivals" && (
-  <div className="relative">
-    <img
-      src={modeCfg.heroImage}
-      alt="New Arrivals"
-      className="w-full block"
-    />
-
-    <div className="absolute left-4 top-6 max-w-[55%] md:left-12 md:top-1/2 md:-translate-y-1/2 md:max-w-none">
-      <h1 className="font-cormorant font-medium text-[clamp(16px,4.5vw,22px)] md:text-[clamp(30px,4.2vw,50px)] text-[#133F30] m-0 mb-1 md:mb-2 leading-[1.2] md:leading-[1.35] max-w-[140px] md:max-w-[380px]">
-        {modeCfg.title}
-      </h1>
-
-      <p className="font-cormorant text-[10.5px] md:text-[14.5px] text-black m-0 font-light max-w-[130px] md:max-w-[380px] mb-3 md:mb-5 leading-[1.3] md:leading-normal">
-        {modeCfg.sub}
-      </p>
-
-      <Link
-        to="/new-arrivals"
-      className="absolute left-4 -bottom-4 md:static md:translate-y-0 md:ml-0 bg-[#08112C] text-white px-1.5 py-1.5 md:px-6 md:py-3 rounded-full font-serif text-[8px] md:text-base leading-none"
->
-        Shop New Arrivals
-      </Link>
-    </div>
-  </div>
-)}
-
+  )}
 
 </section>
 
@@ -426,7 +427,7 @@ export default function ProductListPage({ mode = 'all' }) {
             {isLoading ? 'Loading…' : `Showing ${shown} of ${total.toLocaleString('en-IN')}`}
           </p>
 </div>
-          <div className="mt-2 mb-4 flex flex-wrap items-center gap-2">
+          <div className="mt-5 mb-4 flex flex-wrap items-center gap-2">
             {chips.map((chip) => (
               <button
                 key={chip.label}
@@ -550,7 +551,7 @@ export default function ProductListPage({ mode = 'all' }) {
                 {hasFilters && (
                   <Link
                     to={mode === 'all' ? '/products' : `/${mode}`}
-                    className="inline-block bg-wgreen text-white no-underline rounded-full px-7 py-3 text-[13px] tracking-wide hover:bg-wgreen-dark transition-colors"
+                    className="inline-block bg-[#08112C] text-white no-underline rounded-full px-7 py-3 text-[13px] tracking-wide hover:bg-wgreen-dark transition-colors"
                   >
                     Clear filters
                   </Link>
@@ -686,7 +687,7 @@ export default function ProductListPage({ mode = 'all' }) {
             <div className="border-t border-wline px-4 py-4">
               <button
                 type="button"
-                className="w-full bg-wgreen text-white rounded-full py-3 text-[13px] tracking-wide hover:bg-wgreen-dark transition-colors"
+                className="w-full bg-[#08112C] text-white rounded-full py-3 text-[13px] tracking-wide hover:bg-wgreen-dark transition-colors"
                 onClick={() => setFilterOpen(false)}
               >
                 Apply

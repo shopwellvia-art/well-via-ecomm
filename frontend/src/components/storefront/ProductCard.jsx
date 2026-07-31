@@ -160,12 +160,13 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
 
         {/* Product name */}
         {/* here here */}
-        <Link
-          to={`/products/${id}`}
-          className="font-inter font-bold text-[14px] lg:text-[18px] leading-tight mb-1 lg:mb-[5px] no-underline text-wink hover:text-wgreen transition-colors"
-        >
-          {name}
-        </Link>
+        {/* Product name */}
+<Link
+  to={`/products/${id}`}
+  className="font-inter font-bold text-[14px] lg:text-[18px] leading-tight mb-1 lg:mb-[5px] no-underline text-wink hover:text-[#08112C] transition-colors"
+>
+  {name}
+</Link>
 
         {/* Flavour tag */}
         {/* {flavour && (
@@ -186,9 +187,9 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
         {/* Price row */}
         {/* here here */}
         <div className="flex items-baseline gap-2.5 mb-[13px] flex-wrap">
-          <span className="font-inter text-[16px] lg:text-[20px] text-wink">
-            {formatPrice(price)}
-          </span>
+          <span className="font-inter text-[13px] lg:text-[16px] font-semibold text-wink">
+  {formatPrice(price)}
+</span>
           {/* {isDiscounted && (
             <>
               <span className="text-[13px] text-wmuted line-through">
