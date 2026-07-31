@@ -61,9 +61,9 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
@@ -136,9 +136,9 @@ jobs:
           --health-retries=20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -148,8 +148,16 @@ jobs:
 
       # requirements-dev.txt pulls in requirements.txt plus the test tooling.
       # The DB driver is PyMySQL (pure Python), so no system build deps needed.
+      #
+      # Deliberately NOT --no-cache-dir: `setup-python` above is configured with
+      # `cache: pip`, which registers a post-job step that saves ~/.cache/pip.
+      # --no-cache-dir stopped pip ever writing there, so the save step found an
+      # empty path and annotated every run with "Cache folder path is retrieved
+      # for pip but doesn't exist on disk" — while the install re-downloaded
+      # every wheel from scratch. Letting pip use its cache makes the configured
+      # cache do its job and silences the annotation.
       - name: Install dependencies
-        run: pip install --no-cache-dir -r requirements-dev.txt
+        run: pip install -r requirements-dev.txt
 
       # The service's healthcheck can go green a moment before MySQL is really
       # accepting application connections. Poll with the same driver the app
@@ -228,7 +236,7 @@ jobs:
       backend_image: ${{ steps.images.outputs.backend }}
       frontend_image: ${{ steps.images.outputs.frontend }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # GHCR repository paths must be lowercase; the GitHub owner name is not
       # guaranteed to be, so normalise it once and reuse.
@@ -305,7 +313,7 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Keep the host's compose file in sync with the commit we just built.
       - name: Copy compose file to EC2
