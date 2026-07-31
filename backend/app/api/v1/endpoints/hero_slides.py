@@ -4,7 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Form, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_admin
+from app.api.deps import get_db, require_permission
 from app.core.exceptions import ValidationError
 from app.schemas.hero_slide import (
     HeroSlideRead,
@@ -22,7 +22,15 @@ def list_hero_slides(db: Session = Depends(get_db)):
     return HeroSlideService(db).list_active()
 
 
-@router.get("/all", response_model=list[HeroSlideRead], dependencies=[Depends(require_admin)])
+# Staff-only sibling of the public route above: `list_all` returns unpublished
+# and inactive slides, `list_active` (line 20) returns only what the storefront
+# should render. Same shape, different audience — hence the gate on one and not
+# the other.
+@router.get(
+    "/all",
+    response_model=list[HeroSlideRead],
+    dependencies=[Depends(require_permission("hero_slides.manage"))],
+)
 def list_all_hero_slides(db: Session = Depends(get_db)):
     return HeroSlideService(db).list_all()
 
@@ -31,7 +39,7 @@ def list_all_hero_slides(db: Session = Depends(get_db)):
     "",
     response_model=HeroSlideRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_permission("hero_slides.manage"))],
 )
 async def create_hero_slide(
     file: UploadFile,
@@ -93,7 +101,7 @@ async def create_hero_slide(
 @router.patch(
     "/{slide_id}",
     response_model=HeroSlideRead,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_permission("hero_slides.manage"))],
 )
 def update_hero_slide(
     slide_id: int, payload: HeroSlideUpdate, db: Session = Depends(get_db)
@@ -104,7 +112,7 @@ def update_hero_slide(
 @router.delete(
     "/{slide_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_permission("hero_slides.manage"))],
 )
 def delete_hero_slide(slide_id: int, db: Session = Depends(get_db)):
     HeroSlideService(db).delete(slide_id)
@@ -113,7 +121,7 @@ def delete_hero_slide(slide_id: int, db: Session = Depends(get_db)):
 @router.post(
     "/reorder",
     response_model=list[HeroSlideRead],
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_permission("hero_slides.manage"))],
 )
 def reorder_hero_slides(payload: HeroSlideReorder, db: Session = Depends(get_db)):
     return HeroSlideService(db).reorder(payload.ids)

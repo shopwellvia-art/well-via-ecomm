@@ -132,6 +132,16 @@ _SEGMENT_RULES: tuple[tuple[str, Any], ...] = (
 #: Only reachable if `_SEGMENT_RULES` stops covering the 5x5 grid.
 _SEGMENT_FALLBACK = "needs_attention"
 
+#: Every value `rfm_segment` can hold, derived from the rules above rather than
+#: re-typed. Public because the admin customer directory filters on this column
+#: with raw equality: a filter value the job never writes returns an empty list
+#: instead of an error, which reads as "no customers in this segment" rather
+#: than "that segment does not exist". `endpoints/customers.py` validates
+#: against this tuple so the two cannot drift.
+SEGMENT_NAMES: tuple[str, ...] = tuple(
+    name for name, _rule in _SEGMENT_RULES
+) + (_SEGMENT_FALLBACK,)
+
 
 def _customer_key(user_id: int) -> str:
     """The stable analytics identity for a customer.

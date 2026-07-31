@@ -48,7 +48,7 @@ def create_role(
     actor: User = Depends(require_permission("roles.create")),
     db: Session = Depends(get_db),
 ):
-    role = RoleService(db).create(payload)
+    role = RoleService(db).create(actor, payload)
     AuditService(db).record(
         actor=actor,
         actor_ip=get_client_ip(request),
@@ -92,7 +92,7 @@ def update_role(
     before_perms = sorted(p.name for p in before.permissions)
     before_name = before.name
 
-    role = svc.update(role_id, payload)
+    role = svc.update(actor, role_id, payload)
     after_perms = sorted(p.name for p in role.permissions)
     changes = {}
     if role.name != before_name:
@@ -157,7 +157,7 @@ def assign_roles_to_user(
     before_user = svc.users.get(user_id)
     before_roles = sorted(r.name for r in (before_user.roles if before_user else []))
 
-    user = svc.assign_to_user(user_id, payload.role_ids)
+    user = svc.assign_to_user(actor, user_id, payload.role_ids)
     after_roles = sorted(r.name for r in user.roles)
     AuditService(db).record(
         actor=actor,

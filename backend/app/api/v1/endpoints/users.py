@@ -17,9 +17,11 @@ from app.core.rate_limit import get_client_ip
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import Page
+from app.schemas.customer_admin import StaffInvite, StaffInviteResponse
 from app.schemas.user import AdminPasswordResetResponse, AdminUserUpdate, UserRead
 from app.services.audit_service import AuditService
 from app.services.auth_service import AuthService
+from app.services.role_service import RoleService
 
 router = APIRouter()
 
@@ -31,12 +33,23 @@ router = APIRouter()
 )
 def list_users(
     q: str | None = Query(default=None, description="Match against email or full name"),
+    scope: str = Query(
+        default="all",
+        description=(
+            "'staff' narrows to accounts that hold admin access (the legacy "
+            "is_admin flag, or any role other than the empty 'customer' system "
+            "role). 'all' is the pre-split behaviour."
+        ),
+        pattern="^(all|staff)$",
+    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
 ):
     offset = (page - 1) * page_size
-    items, total = UserRepository(db).search(q=q, offset=offset, limit=page_size)
+    items, total = UserRepository(db).search(
+        q=q, scope=scope, offset=offset, limit=page_size
+    )
     return Page[UserRead](items=items, total=total, page=page, page_size=page_size)
 
 
@@ -86,6 +99,62 @@ def update_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.post(
+    "/invite",
+    response_model=StaffInviteResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def invite_staff(
+    payload: StaffInvite,
+    request: Request,
+    actor: User = Depends(require_permission("users.invite")),
+    db: Session = Depends(get_db),
+):
+    """Create a staff account and email it a set-password code.
+
+    Before this existed the only way to onboard a colleague was to have them
+    register on the storefront as a shopper and then hand them a role, which
+    meant every staff account started life indistinguishable from a customer.
+
+    The password is random and discarded — the emailed one-time code is the only
+    way in. Roles go through `RoleService.assign_to_user`, so the same
+    escalation guard applies here as anywhere else: an inviter cannot create an
+    account more powerful than themselves.
+    """
+    auth = AuthService(db)
+    user = auth.admin_invite_staff(payload.email, payload.full_name)
+    if payload.role_ids:
+        RoleService(db).assign_to_user(actor, user.id, payload.role_ids)
+    granted = sorted(r.name for r in user.roles)
+    AuditService(db).record(
+        actor=actor,
+        actor_ip=get_client_ip(request),
+        action="user.invite",
+        target_type="user",
+        target_id=user.id,
+        target_label=user.email,
+        summary=(
+            f"Invited {user.email} as staff"
+            + (f" with role(s): {', '.join(granted)}" if granted else " with no roles")
+        ),
+        extra={"roles": granted},
+    )
+    db.commit()
+    db.refresh(user)
+    # Sent AFTER the commit: an email promising a code the database never
+    # stored would be worse than no email at all.
+    auth.request_password_reset(user.email)
+    return StaffInviteResponse(
+        id=user.id,
+        email=user.email,
+        detail=(
+            "Account created. A set-password code has been emailed — it expires "
+            "in 10 minutes, after which they can use 'Forgot password' on the "
+            "login page at any time."
+        ),
+    )
 
 
 @router.post(

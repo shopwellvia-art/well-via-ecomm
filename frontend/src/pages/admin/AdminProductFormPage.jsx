@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft,
   AlertTriangle,
+  BarChart3,
   ImageOff,
   Percent,
   DollarSign,
@@ -23,7 +24,7 @@ import { Button } from '@/components/ui/Button.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { cn } from '@/lib/utils.js';
-import { useProduct } from '@/features/products/hooks.js';
+import { useProductForAdmin } from '@/features/products/hooks.js';
 import { useCategories } from '@/features/categories/hooks.js';
 import { useCreateProduct, useUpdateProduct } from '@/features/admin/hooks.js';
 import { useTaxes, useSetProductTaxes } from '@/features/taxes/hooks.js';
@@ -40,7 +41,84 @@ const EMPTY = {
   weight_grams: '',
   cod_blocked: false,
   category_id: '',
+  // Analytics & compliance — see ANALYTICS_FIELDS below.
+  brand: '',
+  hsn_code: '',
+  reorder_point: '',
+  shelf_life_days: '',
 };
+
+/** The four analytics/compliance fields, in the order they appear in the form.
+ *  Kept as one list so the edit-load, validation and payload paths cannot drift
+ *  apart by someone remembering three of the four. */
+const ANALYTICS_FIELDS = ['brand', 'hsn_code', 'reorder_point', 'shelf_life_days'];
+
+/** 4, 6 or 8 digits — the only legal HSN granularities on a GST invoice.
+ *  ASCII-only by design: `\d` in a JS regex does not match "٤" or "²". */
+const HSN_PATTERN = /^(?:\d{4}|\d{6}|\d{8})$/;
+
+const isBlank = (value) => String(value ?? '').trim() === '';
+
+/**
+ * Validation for the analytics/compliance fields. Pure, and exported so it can
+ * be unit-tested without mounting the page.
+ *
+ * Mirrors the server (app/schemas/product.py) rather than guessing: the server
+ * is authoritative, this only saves the admin a round-trip.
+ */
+export function validateAnalyticsFields(form) {
+  const next = {};
+
+  if (String(form?.brand ?? '').trim().length > 120) {
+    next.brand = 'Brand cannot be longer than 120 characters.';
+  }
+
+  const hsn = String(form?.hsn_code ?? '').trim();
+  if (hsn !== '' && !HSN_PATTERN.test(hsn)) {
+    next.hsn_code = 'HSN must be exactly 4, 6 or 8 digits — digits only.';
+  }
+
+  if (!isBlank(form?.reorder_point)) {
+    const n = Number(form.reorder_point);
+    if (!Number.isInteger(n) || n < 0) {
+      next.reorder_point = 'Enter a whole number of units, 0 or more.';
+    }
+  }
+
+  if (!isBlank(form?.shelf_life_days)) {
+    const n = Number(form.shelf_life_days);
+    if (!Number.isInteger(n) || n <= 0) {
+      next.shelf_life_days = 'Enter a whole number of days greater than 0.';
+    }
+  }
+
+  return next;
+}
+
+/**
+ * Serialise the analytics/compliance fields. Pure, and exported for tests.
+ *
+ * A blank input must become `null`, never `0` and never `''`:
+ *   - `reorder_point: 0` means "reorder only when the shelf is empty" and is a
+ *     real, storable answer. `null` means nobody has set one. The inventory
+ *     rollup's `reorder_gap` column depends on telling those apart, so turning
+ *     an untouched box into 0 would be a wrong answer, not a missing one.
+ *   - `brand: ''` would give "no brand" two spellings in the database.
+ *
+ * Blankness is tested on the TRIMMED value, which is stricter than the existing
+ * `cost` / `weight_grams` handling: `Number('  ')` is 0, so a field containing
+ * only spaces would otherwise serialise as a confident zero.
+ */
+export function analyticsPayload(form) {
+  return {
+    brand: String(form?.brand ?? '').trim() || null,
+    hsn_code: String(form?.hsn_code ?? '').trim() || null,
+    reorder_point: isBlank(form?.reorder_point) ? null : Number(form.reorder_point),
+    shelf_life_days: isBlank(form?.shelf_life_days)
+      ? null
+      : Number(form.shelf_life_days),
+  };
+}
 
 /** Storefront merchandising + PDP content — all optional, edited via
  *  ProductContentEditor and normalized in buildPayload. */
@@ -74,7 +152,12 @@ export default function AdminProductFormPage() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
 
-  const { data: product, isLoading, isError } = useProduct(isEdit ? id : undefined);
+  // Admin read, not the public one: the storefront response omits
+  // reorder_point / shelf_life_days, and the edit-load mapping turns a missing
+  // key into a blank input that the next save writes back as null.
+  const { data: product, isLoading, isError } = useProductForAdmin(
+    isEdit ? id : undefined,
+  );
   const { data: categories = [] } = useCategories();
   const { data: taxes = [] } = useTaxes();
   const createProduct = useCreateProduct();
@@ -131,6 +214,14 @@ export default function AdminProductFormPage() {
           product.weight_grams != null ? String(product.weight_grams) : '',
         cod_blocked: !!product.cod_blocked,
         category_id: product.category_id != null ? String(product.category_id) : '',
+        // `!= null` on purpose: `reorder_point: 0` is a real configured value
+        // and must load as "0", not as an empty (unconfigured) box.
+        ...Object.fromEntries(
+          ANALYTICS_FIELDS.map((key) => [
+            key,
+            product[key] != null ? String(product[key]) : '',
+          ]),
+        ),
       });
       setSelectedTaxIds((product.taxes || []).map((t) => t.id));
       setContent({
@@ -197,6 +288,7 @@ export default function AdminProductFormPage() {
         next.weight_grams = 'Enter a weight between 0 and 200000 grams.';
       }
     }
+    Object.assign(next, validateAnalyticsFields(form));
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -241,6 +333,7 @@ export default function AdminProductFormPage() {
       benefits: cleanRows(content.benefits, ['icon', 'title', 'text']),
       usage_steps: cleanRows(content.usage_steps, ['label', 'text']),
       faqs: cleanRows(content.faqs, ['q', 'a']),
+      ...analyticsPayload(form),
     };
     return isEdit ? base : { sku: form.sku.trim(), ...base };
   }
@@ -537,6 +630,69 @@ export default function AdminProductFormPage() {
                     })}
                   </div>
                 )}
+              </div>
+            </Card>
+          </motion.div>
+
+          {/* ── Analytics & compliance ──
+              Sits after Taxes on purpose. All four fields are invisible to
+              shoppers and exist only to feed reporting and GST detail, so they
+              read as one group with one "why bother" story told once, rather
+              than four unfamiliar boxes scattered between fields an admin fills
+              in every day. HSN in particular lands directly under the tax
+              selector, which is the context that makes it make sense. */}
+          <motion.div variants={fadeUp} className="mt-5">
+            <Card className="p-5 shadow-md">
+              <SectionLabel icon={BarChart3}>Analytics &amp; compliance</SectionLabel>
+              <p className="-mt-2 mb-4 text-xs text-ink-tertiary">
+                None of these appear on the storefront. Each one is optional, and
+                each one unlocks a report that is blank without it. Leave a field
+                empty when you genuinely do not know — blank is stored as
+                &ldquo;not set&rdquo;, which reports honestly. A guessed number does
+                not.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Input
+                  label="Brand"
+                  value={form.brand}
+                  onChange={set('brand')}
+                  error={errors.brand}
+                  maxLength={120}
+                  helper="Optional. Recorded on every order line, so sales can be broken down by brand."
+                  placeholder="Wellvia"
+                />
+                <Input
+                  label="HSN code"
+                  value={form.hsn_code}
+                  onChange={set('hsn_code')}
+                  error={errors.hsn_code}
+                  inputMode="numeric"
+                  maxLength={8}
+                  helper="Optional. 4, 6 or 8 digits. Required on GST invoices — without it, tax reports stay operational-only and cannot be used for filing."
+                  placeholder="21069099"
+                />
+                <Input
+                  label="Reorder point (units)"
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={form.reorder_point}
+                  onChange={set('reorder_point')}
+                  error={errors.reorder_point}
+                  helper="Optional. Stock level that should trigger a restock, so inventory reports can flag this product before it runs out. Leave blank for no reorder point — 0 means 'only when it hits zero'."
+                  placeholder="25"
+                />
+                <Input
+                  label="Shelf life (days)"
+                  type="number"
+                  step="1"
+                  min="1"
+                  value={form.shelf_life_days}
+                  onChange={set('shelf_life_days')}
+                  error={errors.shelf_life_days}
+                  helper="Optional. Days this product stays sellable, so cover-days reports can warn when stock will expire before it sells."
+                  placeholder="540"
+                />
               </div>
             </Card>
           </motion.div>

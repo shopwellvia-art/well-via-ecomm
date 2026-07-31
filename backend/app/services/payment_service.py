@@ -40,6 +40,7 @@ from app.repositories.product_repository import ProductRepository
 from app.schemas.payment import CheckoutRequest
 from app.services.address_service import AddressService, render_address_text, snapshot_of
 from app.services import order_sync
+from app.services.analytics.order_line_facts import capture_order_lines
 from app.services.cart_service import CartService
 from app.services.cod_service import CodService
 from app.services.coupon_service import CouponService
@@ -113,6 +114,29 @@ class PaymentService:
         # order_number embeds the now-allocated id (WV-<year>-<id>).
         if not order.order_number:
             order.order_number = order_sync.make_order_number(order.id)
+
+        # Snapshot the immutable line facts (name/SKU/category/brand + allocated
+        # money) while the order is being built, so a later rename or re-SKU
+        # cannot retroactively rewrite what historical reports say was sold.
+        #
+        # THIS is the checkout. `OrderService.create` also captures, but it has
+        # no HTTP caller — the admin routes reach OrderService for search and
+        # ship only. Wiring capture there alone left production writing zero
+        # facts, which is how the table sat empty while looking implemented.
+        #
+        # Safe to call here: it runs in a SAVEPOINT, so a fact-write failure
+        # unwinds only itself and leaves the order, its items, the payment legs
+        # and the stock decrement intact. The reverse cannot happen — a rollback
+        # of this order discards its facts with it. That asymmetry is
+        # deliberate: an order without facts is recoverable (the backfill's
+        # predicate is exactly "order lines with no fact row"), whereas a fact
+        # pointing at a rolled-back order_items.id would be silently
+        # misattributed to whatever row later reuses that id.
+        #
+        # Placed after the order_number assignment because capture flushes, and
+        # a flush inside the savepoint would let an analytics failure undo the
+        # order number too.
+        capture_order_lines(self.db, order)
 
         currency = (data.currency or order.currency or "INR").upper()
         order.currency = currency
@@ -866,8 +890,19 @@ class PaymentService:
             # charge. A mismatch (e.g. amount tampering or replay from a
             # different order) must not result in marking the order PAID.
             if gateway_amount_minor is not None:
+                # Compare against what the GATEWAY was actually asked for, not
+                # the order total. For split COD the two differ: checkout only
+                # charges `total - cod_balance` and the carrier collects the
+                # balance on delivery. Comparing against the total made every
+                # split COD order fail this guard and sit PENDING forever with
+                # the prepaid slice already captured — and reconcile_pending
+                # re-polled the same figure, so it never self-healed. For a
+                # plain prepaid order cod_balance is 0 and this is unchanged;
+                # pure COD never reaches here (it has no gateway leg).
+                cod_balance = Decimal(str(order.cod_balance or 0))
                 expected_minor = int(
-                    (Decimal(str(order.total_amount)) * 100).to_integral_value()
+                    ((Decimal(str(order.total_amount)) - cod_balance) * 100)
+                    .to_integral_value()
                 )
                 if gateway_amount_minor != expected_minor:
                     logger.error(

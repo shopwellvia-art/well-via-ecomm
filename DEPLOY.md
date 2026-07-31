@@ -201,6 +201,56 @@ Schema changes are applied **manually, from reviewed SQL only**:
 2. Take a backup first — `backend/scripts/backup_db.sh` (see [§7](#7-database-backups)).
 3. Apply it against the DB with a MySQL client during a maintenance window.
 
+### 6.1 Applied / pending ledger
+
+`backend/scripts/sql/` is an append-only pile of every schema change ever
+written. Nothing in it records what has actually been run against the shared
+remote MySQL, so **this table is the only place that knows.** Update it in the
+same commit that adds a script, and tick the box in the same session you apply
+it.
+
+Because the pipeline never migrates, a script that ships **after** the code that
+reads its column is not a degraded feature — it is an outage. Verify, don't
+remember: each row carries the exact `SHOW COLUMNS` check.
+
+| Script | Applied to remote? | Verify with | Breaks if missing |
+|---|---|---|---|
+| `2026-07-16_order_indexes_and_coupon_uniq.sql` | ✅ | `SHOW INDEX FROM orders` | slow order queries |
+| `2026-07-28_analytics_v2_schema.sql` | ✅ | `SHOW TABLES LIKE 'agg_%'` | all analytics |
+| `2026-07-28_categories_parent_id.sql` | ✅ | `SHOW COLUMNS FROM categories LIKE 'parent_id'` | category nav |
+| `2026-07-28_agg_customer_snapshot_tz_index.sql` | ✅ | `SHOW INDEX FROM agg_customer_snapshot` | snapshot perf |
+| `2026-07-29_*.sql` (5 analytics tables) | ✅ | `SHOW TABLES LIKE 'agg_%'` | those views |
+| `2026-07-31_users_last_login_at.sql` | ✅ verified 2026-07-31 | `SHOW COLUMNS FROM users LIKE 'last_login_at'` | 🔴 **every login 500s** |
+| `2026-07-31_product_analytics_fields.sql` | ✅ verified 2026-07-31 | `SHOW COLUMNS FROM products LIKE 'reorder_point'` | 🔴 **entire storefront 500s** |
+
+> ⚠️ **The two 2026-07-31 scripts are pre-deploy blockers for the
+> customers/team split.** Both were confirmed applied against the remote on
+> 2026-07-31 by running the checks below; this table had them recorded as
+> PENDING for several hours after they were already live. That direction of
+> drift is harmless (it delays a deploy). The opposite direction is an outage,
+> which is exactly why the rule is **run the query, do not trust this table.**
+>
+> `users.last_login_at` is a mapped column on the `User` model, so it is in every
+> `SELECT ... FROM users`, and `AuthService._issue_tokens` writes it on every
+> fresh login (password, 2FA and Google all converge there). Deploy the code
+> first and MySQL raises 1054 on every login — including yours, which removes the
+> in-app route to fix it.
+>
+> The four `products` columns are mapped the same way, so they land in every
+> product read, including anonymous storefront traffic.
+>
+> Re-confirm before every deploy that touches these models:
+>
+> ```bash
+> mysql -h "$MYSQL_HOST" -u "$MYSQL_USER" -p "$MYSQL_DB" \
+>   -e "SHOW COLUMNS FROM users LIKE 'last_login_at'; \
+>       SHOW COLUMNS FROM products LIKE 'reorder_point';"
+> # two rows back = safe to deploy. Zero rows = do not push to production.
+> ```
+>
+> No `mysql` client on your machine? `pymysql` is available to system python3,
+> and the backend container can reach the remote directly.
+
 > **Analytics v2** adds 23 tables, two worker containers and four environment
 > variables, and its schema step must be applied **one deploy before** the code
 > that reads it. It has its own runbook — read it first:

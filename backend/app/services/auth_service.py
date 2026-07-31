@@ -230,7 +230,18 @@ class AuthService:
     def _issue_tokens(self, user: User) -> Token:
         """Start a new refresh-token family for the user. Used on a fresh
         login (password or Google). Subsequent /auth/refresh calls rotate
-        within this family."""
+        within this family.
+
+        Also stamps `last_login_at`. This is the one place every fresh login
+        converges on — password, TOTP completion and Google all land here — so
+        it is the only place the timestamp can be written exactly once per
+        login. Deliberately NOT in `refresh()`: a rotating refresh token would
+        turn "last login" into "last API call".
+        """
+        user.last_login_at = datetime.now(timezone.utc)
+        # Owns its commit: the password path reaches here with no open write of
+        # its own, so leaving it to the caller would silently drop the stamp.
+        self.db.commit()
         sessions = SessionService(self.redis)
         family_id, jti = sessions.start_family(user.id)
         return Token(
@@ -516,6 +527,19 @@ class AuthService:
                 customer.deleted_at = None
                 changes["is_active"] = {"before": False, "after": True}
             else:
+                # Never disable the last enabled superadmin — that locks every
+                # human out of the admin with no in-app way back in.
+                if (
+                    target.is_admin
+                    and self.users.count_active_superadmins(
+                        excluding_user_id=target.id
+                    )
+                    == 0
+                ):
+                    raise ForbiddenError(
+                        "This is the last active superadmin — disabling it "
+                        "would lock everyone out of the admin."
+                    )
                 # Mirror of the self-service deactivate flow, plus a forced
                 # logout everywhere: get_current_user already rejects
                 # is_active=False, revoking sessions kills refresh too.
@@ -528,6 +552,43 @@ class AuthService:
 
         self.db.flush()
         return target, changes
+
+    def admin_invite_staff(self, email: str, full_name: str | None) -> User:
+        """Create a staff account that nobody knows the password to.
+
+        Mirrors `register` for the User + eager Customer row (every account is a
+        customer, even a staff one — the satellite carries the profile), but
+        seeds an unguessable random password instead of a chosen one. The
+        invitee never receives it: the caller follows this with
+        `request_password_reset`, and the emailed one-time code is the only way
+        in. That keeps the "admin sets a password and tells you over chat"
+        pattern — and its shared-secret problem — out of the flow entirely.
+
+        Flushes but does NOT commit; the endpoint owns the transaction so the
+        role grant and the audit row land with the account or not at all.
+        """
+        if self.users.get_by_email(email):
+            raise ConflictError("Email already registered")
+        user = User(
+            email=email,
+            # 64 URL-safe chars, discarded immediately. Not a placeholder anyone
+            # could guess, so the account is unusable until the reset lands.
+            hashed_password=hash_password(secrets.token_urlsafe(48)),
+            is_active=True,
+        )
+        self.users.add(user)
+        self.db.flush()
+        first, last = _split_name(full_name)
+        self.db.add(
+            Customer(
+                user_id=user.id,
+                first_name=first,
+                last_name=last,
+                account_status=AccountStatus.ACTIVE,
+            )
+        )
+        self.db.flush()
+        return user
 
     def admin_trigger_password_reset(self, actor: User, user_id: int) -> User:
         """POST /users/{id}/password-reset: email the user a one-time reset

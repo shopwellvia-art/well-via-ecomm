@@ -34,15 +34,37 @@ PERMISSIONS: tuple[PermissionDef, ...] = (
     # Returns
     PermissionDef("returns.view_all", "View all customer returns", "Returns"),
     PermissionDef("returns.manage", "Approve/reject returns + reverse pickups", "Returns"),
-    # Users / RBAC
-    PermissionDef("users.view", "View users", "Users"),
+    # Staff accounts / RBAC.
+    # `users.*` is the STAFF directory (/admin/team): accounts that hold admin
+    # access. Shoppers are a separate tier — see `customers.*` below. The split
+    # exists so an ops user who must look up a customer never gets the ability
+    # to grant admin access as a side effect.
+    PermissionDef("users.view", "View staff accounts and their roles", "Users"),
     PermissionDef("users.update", "Update users (activate/deactivate)", "Users"),
     PermissionDef(
         "users.manage",
-        "Edit user accounts (name, active status) and trigger password resets",
+        "Edit staff accounts (name, active status) and trigger password resets",
         "Users",
     ),
     PermissionDef("users.assign_role", "Assign roles to users", "Users"),
+    PermissionDef(
+        "users.invite",
+        "Invite new staff accounts by email",
+        "Users",
+    ),
+    # Customers — the shopper directory (/admin/customers). Deliberately NOT
+    # `users.*`: this tier can look up and support a shopper but can never
+    # touch a staff account or grant a role.
+    PermissionDef(
+        "customers.view",
+        "View the customer directory and individual customer profiles",
+        "Customers",
+    ),
+    PermissionDef(
+        "customers.manage",
+        "Edit customer accounts (name, disable/re-enable) and trigger password resets",
+        "Customers",
+    ),
     PermissionDef("roles.view", "View roles & permissions", "RBAC"),
     PermissionDef("roles.create", "Create roles", "RBAC"),
     PermissionDef("roles.update", "Update roles (incl. permissions)", "RBAC"),

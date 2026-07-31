@@ -17,6 +17,17 @@ export function useProduct(id) {
   });
 }
 
+// Separate cache key from `useProduct` on purpose: the two responses have
+// different shapes, and sharing a key would let a storefront read of the same
+// product evict the admin copy (or vice versa) and drop the ops fields.
+export function useProductForAdmin(id) {
+  return useQuery({
+    queryKey: ['product', id, 'admin'],
+    queryFn: () => productsApi.getForAdmin(id),
+    enabled: !!id,
+  });
+}
+
 export function useRelatedProducts(id, limit = 8) {
   return useQuery({
     queryKey: ['product', id, 'related', limit],

@@ -13,6 +13,7 @@ import {
   TicketPercent,
   ShieldCheck,
   Users,
+  UserCog,
   Percent,
   Star,
   Coins,
@@ -51,7 +52,12 @@ const NAV = [
   { to: '/admin/taxes', label: 'Taxes', icon: Percent, end: false, permission: 'taxes.view' },
   { to: '/admin/reviews', label: 'Reviews', icon: Star, end: false, permission: 'reviews.view' },
   { to: '/admin/loyalty', label: 'Loyalty', icon: Coins, end: false, permission: 'loyalty.view' },
-  { to: '/admin/users', label: 'Users', icon: Users, end: false, permission: 'users.view' },
+  // Two directories over one users table. Customers sits with the operational
+  // pages (it is a support tool); Team sits next to Roles because it is about
+  // who holds access. Keeping them apart is the point — the role-assign control
+  // must never render on a shopper's row.
+  { to: '/admin/customers', label: 'Customers', icon: Users, end: false, permission: 'customers.view' },
+  { to: '/admin/team', label: 'Team', icon: UserCog, end: false, permission: 'users.view' },
   { to: '/admin/roles', label: 'Roles', icon: ShieldCheck, end: false, permission: 'roles.view' },
   { to: '/admin/audit', label: 'Audit log', icon: History, end: false, permission: 'audit.view' },
   { to: '/admin/observability', label: 'Observability', icon: Activity, end: false, permission: 'observability.view' },

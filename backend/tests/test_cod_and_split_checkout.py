@@ -23,6 +23,7 @@ from app.core.exceptions import ConflictError, ValidationError
 from app.core.security import hash_password
 from app.db.session import SessionLocal
 from app.integrations.payments import InitiateResponse
+from app.integrations.payments.base import PaymentStatus, StatusResponse
 from app.models.order import Order, OrderStatus
 from app.models.product import Product
 from app.models.user import User
@@ -642,6 +643,41 @@ class TestSplitCod:
 
             # Sanity: provider transaction id was stored.
             assert order.payment_provider_ref == "PVR123"
+
+            # --- The webhook must actually SETTLE it. -----------------------
+            # This assertion is the point of the test. The gateway reports the
+            # PREPAID slice it charged, not the order total, and `_apply_status`
+            # used to compare that against `order.total_amount` — so the amount
+            # guard fired on every split COD order and left it PENDING with the
+            # money already captured. reconcile_pending re-polled the same
+            # figure, so it never recovered on its own.
+            confirmed = StatusResponse(
+                merchant_transaction_id=mtid,
+                status=PaymentStatus.SUCCESS,
+                provider_transaction_id="PVR123",
+                amount_minor=expected_prepaid_minor,
+            )
+            mock_provider.verify_webhook.return_value = True
+            mock_provider.parse_webhook.return_value = confirmed
+            mock_provider.fetch_status.return_value = confirmed
+
+            with patch(
+                "app.services.payment_service.get_payment_provider",
+                return_value=mock_provider,
+            ):
+                PaymentService(db).handle_webhook(
+                    b"{}", "sig", gateway_code="mock"
+                )
+
+            db.expire_all()
+            settled = db.get(Order, order.id)
+            assert settled.status == OrderStatus.PAID, (
+                f"split COD order stuck in {settled.status.value} after a "
+                f"successful webhook for the prepaid portion "
+                f"({expected_prepaid_minor} paise)"
+            )
+            # The balance the carrier still collects must survive settlement.
+            assert Decimal(settled.cod_balance) == balance
 
         finally:
             SettingsService(db).set_many({

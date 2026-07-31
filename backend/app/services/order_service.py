@@ -14,6 +14,7 @@ from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
 from app.schemas.order import OrderCreate
 from app.services import order_sync
+from app.services.analytics.order_line_facts import capture_order_lines
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,12 @@ class OrderService:
         self.db.flush()
         if not order.order_number:
             order.order_number = order_sync.make_order_number(order.id)
+        # Snapshot the line facts in THIS transaction, so they commit atomically
+        # with the order below and a rollback takes them with it. The call is
+        # savepoint-wrapped and never raises: an analytics failure must not cost
+        # a sale, and the resulting gap is logged and swept by
+        # scripts/backfill_order_lines.py. See order_line_facts' docstring.
+        capture_order_lines(self.db, order)
         self.db.commit()
         return self.orders.get_with_items(order.id)  # type: ignore[return-value]
 

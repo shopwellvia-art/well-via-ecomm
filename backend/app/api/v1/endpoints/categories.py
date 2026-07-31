@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_admin
+from app.api.deps import get_db, require_permission
 from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
 from app.services.category_service import CategoryService
 
@@ -17,7 +17,7 @@ def list_categories(db: Session = Depends(get_db)):
     "",
     response_model=CategoryRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_permission("categories.create"))],
 )
 def create_category(payload: CategoryCreate, db: Session = Depends(get_db)):
     return CategoryService(db).create(payload)
@@ -26,7 +26,7 @@ def create_category(payload: CategoryCreate, db: Session = Depends(get_db)):
 @router.patch(
     "/{category_id}",
     response_model=CategoryRead,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_permission("categories.update"))],
 )
 def update_category(
     category_id: int, payload: CategoryUpdate, db: Session = Depends(get_db)
@@ -37,7 +37,7 @@ def update_category(
 @router.delete(
     "/{category_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_permission("categories.delete"))],
 )
 def delete_category(category_id: int, db: Session = Depends(get_db)):
     CategoryService(db).delete(category_id)
@@ -46,7 +46,7 @@ def delete_category(category_id: int, db: Session = Depends(get_db)):
 @router.post(
     "/{category_id}/image",
     response_model=CategoryRead,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_permission("categories.update"))],
 )
 async def set_category_image(
     category_id: int,
@@ -65,7 +65,7 @@ async def set_category_image(
 @router.delete(
     "/{category_id}/image",
     response_model=CategoryRead,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_permission("categories.update"))],
 )
 def remove_category_image(category_id: int, db: Session = Depends(get_db)):
     return CategoryService(db).remove_image(category_id)

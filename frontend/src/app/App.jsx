@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 
 import Layout from '@/components/layout/Layout.jsx';
 import AdminLayout from '@/components/admin/AdminLayout.jsx';
@@ -54,7 +54,11 @@ const AdminCategoriesPage = lazy(() => import('@/pages/admin/AdminCategoriesPage
 const AdminHeroSlidesPage = lazy(() => import('@/pages/admin/AdminHeroSlidesPage.jsx'));
 const AdminCouponsPage = lazy(() => import('@/pages/admin/AdminCouponsPage.jsx'));
 const AdminRolesPage = lazy(() => import('@/pages/admin/AdminRolesPage.jsx'));
-const AdminUsersPage = lazy(() => import('@/pages/admin/AdminUsersPage.jsx'));
+const AdminTeamPage = lazy(() => import('@/pages/admin/AdminTeamPage.jsx'));
+const AdminCustomersPage = lazy(() => import('@/pages/admin/AdminCustomersPage.jsx'));
+const AdminCustomerDetailPage = lazy(() =>
+  import('@/pages/admin/AdminCustomerDetailPage.jsx'),
+);
 const AdminTaxesPage = lazy(() => import('@/pages/admin/AdminTaxesPage.jsx'));
 const AdminReviewsPage = lazy(() => import('@/pages/admin/AdminReviewsPage.jsx'));
 const AdminLoyaltyPage = lazy(() => import('@/pages/admin/AdminLoyaltyPage.jsx'));
@@ -232,10 +236,33 @@ export default function App() {
               }
             />
             <Route
-              path="admin/users"
+              path="admin/team"
               element={
                 <RequirePermission permission="users.view">
-                  <AdminUsersPage />
+                  <AdminTeamPage />
+                </RequirePermission>
+              }
+            />
+            {/* The staff directory used to live here and mixed shoppers in with
+                it. Redirect rather than 404 so existing links and bookmarks
+                still land somewhere sensible. */}
+            <Route
+              path="admin/users"
+              element={<Navigate to="/admin/team" replace />}
+            />
+            <Route
+              path="admin/customers"
+              element={
+                <RequirePermission permission="customers.view">
+                  <AdminCustomersPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="admin/customers/:id"
+              element={
+                <RequirePermission permission="customers.view">
+                  <AdminCustomerDetailPage />
                 </RequirePermission>
               }
             />

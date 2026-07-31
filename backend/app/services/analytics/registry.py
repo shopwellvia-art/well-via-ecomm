@@ -576,14 +576,34 @@ _SALES_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
         # -> `subtotal_sum`; cart_service applies tax per item on the list
         # price, before any coupon).
         #
-        # `rate` and `state` are left UNMAPPED on purpose and stay blank. There
-        # is no HSN code, no rate slab, no place of supply and no reverse-charge
-        # flag anywhere in the schema, so a rate column filled from anything
+        # `rate` and `state` are left UNMAPPED on purpose and stay blank. No
+        # rate slab, no place of supply and no reverse-charge flag exists
+        # anywhere in the schema, so a rate column filled from anything
         # available would be an invented slab, and a place of supply taken from
         # the delivery address would silently assert an intra/inter-state call
         # this system never made. A blank column reads as "not available"; a
         # filled one would read as a filing-ready fact. The view therefore stays
         # PARTIAL and keeps its NOT-compliance-grade limitation.
+        #
+        # HSN moved, and the limitation moved with it — but only by one step.
+        # `products.hsn_code` exists now, so an HSN is knowable for a product
+        # TODAY. It is NOT on `analytics_order_line`: that table snapshots sku,
+        # name, category and brand, and has no `hsn_snapshot` column. So this
+        # view cannot aggregate tax BY HSN at all — doing it through a live join
+        # to `products` would restate every past line the moment a code is
+        # corrected, which is the exact retroactive rewrite the snapshot columns
+        # exist to prevent. Per-product HSN is reportable; per-line historical
+        # HSN is not, and tax here is an ORDER-level total that was never
+        # attributable to a line in the first place.
+        #
+        # The limitation is NARROWED to name what is still missing, and is not
+        # lifted. Place of supply is the reason: without it there is no way to
+        # tell a CGST/SGST pair from IGST, and those are different rows of a
+        # different return. A GST view that stopped warning while that is
+        # unknown would invite somebody to file on it. `HSN_TAX_DETAIL` stays in
+        # `requires` for the same reason — the capability names the whole
+        # missing chain (line-level HSN + slab + place of supply), not just the
+        # product attribute that has now landed.
         params={
             "source": "agg_order_daily",
             "table": "tax_table",
@@ -592,8 +612,11 @@ _SALES_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
                 "tax_amount": "tax_sum",
             },
         },
-        limitation="Operational reporting only — HSN-level detail is not stored, so these "
-                   "figures are NOT compliance-grade and must not be used for GST filing.",
+        limitation="Operational reporting only — NOT compliance-grade, and must not be "
+                   "used for GST filing. HSN is now captured per product but is not "
+                   "snapshotted onto the order line, so tax still cannot be broken down "
+                   "by HSN; and neither the per-line rate slab nor the place of supply "
+                   "that decides CGST/SGST against IGST is recorded anywhere.",
         keywords=("gst", "tax", "hsn", "slab"),
     ),
 )

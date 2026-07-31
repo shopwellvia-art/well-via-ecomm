@@ -1297,8 +1297,15 @@ export default function AdminOrderDetailPage() {
                   {order.customer.full_name}
                 </p>
               )}
+              {/* Straight to the customer record. This used to point at
+                  /admin/users?q=<email>, which after the customers/team split
+                  redirects to /admin/team — the STAFF directory, where a shopper
+                  cannot appear, with the ?q= dropped by the redirect and the
+                  page gated on users.view that a support operator may not hold.
+                  AdminCustomerBrief already carries `id`, so address the detail
+                  page directly and skip the search round-trip. */}
               <Link
-                to={`/admin/users?q=${encodeURIComponent(order.customer.email)}`}
+                to={`/admin/customers/${order.customer.id}`}
                 className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:underline focus-visible:focus-ring"
               >
                 View customer profile →

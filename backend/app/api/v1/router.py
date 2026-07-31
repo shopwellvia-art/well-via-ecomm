@@ -19,6 +19,7 @@ from app.api.v1.endpoints import (
     contact,
     coupons,
     csp_report,
+    customers,
     dashboard,
     database,
     email_templates,
@@ -73,6 +74,11 @@ api_router.include_router(
 )
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
+# The shopper directory. A sibling of /users rather than a sub-path of it: the
+# two are gated by different permission tiers (customers.* vs users.*), and
+# nesting would have implied that reaching a customer requires staff-directory
+# access.
+api_router.include_router(customers.router, prefix="/customers", tags=["customers"])
 api_router.include_router(taxes.router, prefix="/taxes", tags=["taxes"])
 api_router.include_router(coupons.router, prefix="/coupons", tags=["coupons"])
 api_router.include_router(wishlist.router, prefix="/wishlist", tags=["wishlist"])

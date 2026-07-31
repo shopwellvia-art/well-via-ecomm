@@ -142,6 +142,9 @@ class UserRead(UserBase):
     lifetime_points: int = 0
     # 2FA state — used by the Account/Security page to show whether TOTP is on.
     totp_enabled: bool = False
+    # Last successful login. None until the account logs in again after the
+    # column was introduced — absence is "unknown", never "never logged in".
+    last_login_at: datetime | None = None
     created_at: datetime
 
 

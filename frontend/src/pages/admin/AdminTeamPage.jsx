@@ -10,6 +10,7 @@ import {
   ChevronRight,
   KeyRound,
   Loader2,
+  UserPlus,
 } from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Button } from '@/components/ui/Button.jsx';
@@ -24,6 +25,7 @@ import {
   useUsers,
   useUpdateUser,
   useTriggerPasswordReset,
+  useInviteStaff,
 } from '@/features/users/hooks.js';
 import { useRoles, useAssignUserRoles } from '@/features/roles/hooks.js';
 import { useAuthStore, useHasPermission } from '@/features/auth/store.js';
@@ -75,7 +77,7 @@ function RoleAssignForm({ user, roles, onClose }) {
 
   return (
     <tr className="bg-bg-sunken">
-      <td colSpan={4} className="px-4 py-4">
+      <td colSpan={5} className="px-4 py-4">
         <motion.div
           variants={fadeUp}
           initial="hidden"
@@ -186,7 +188,7 @@ function NameEditForm({ user, onClose }) {
 
   return (
     <tr className="bg-bg-sunken">
-      <td colSpan={4} className="px-4 py-4">
+      <td colSpan={5} className="px-4 py-4">
         <motion.form
           variants={fadeUp}
           initial="hidden"
@@ -266,7 +268,7 @@ function StatusConfirmRow({ user, onClose }) {
 
   return (
     <tr className="bg-bg-sunken">
-      <td colSpan={4} className="px-4 py-4">
+      <td colSpan={5} className="px-4 py-4">
         <motion.div
           variants={fadeUp}
           initial="hidden"
@@ -314,12 +316,152 @@ function StatusConfirmRow({ user, onClose }) {
   );
 }
 
+/** Invite a colleague. Rendered as a panel above the table rather than a modal,
+ *  matching the expand-in-place idiom the rest of this page uses. */
+function InviteForm({ roles, onClose }) {
+  const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [selected, setSelected] = useState(() => new Set());
+  const [error, setError] = useState(null);
+  const invite = useInviteStaff();
+
+  function toggle(id) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError(null);
+    try {
+      const res = await invite.mutateAsync({
+        email: email.trim(),
+        full_name: fullName.trim() || null,
+        role_ids: Array.from(selected),
+      });
+      toast.success(res?.detail || 'Invitation sent.');
+      onClose();
+    } catch (err) {
+      setError(
+        err.response?.data?.error?.message || 'Could not send the invitation.',
+      );
+    }
+  }
+
+  return (
+    <motion.form
+      variants={fadeUp}
+      initial="hidden"
+      animate="show"
+      onSubmit={handleSubmit}
+      className="rounded-xl border border-line-subtle bg-bg-elevated p-5 shadow-md"
+    >
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <p className="text-sm font-semibold text-ink-primary">
+            Invite a team member
+          </p>
+          <p className="mt-0.5 text-xs text-ink-tertiary">
+            They receive an email with a one-time code to set their own
+            password. Nobody — including you — ever sees it.
+          </p>
+        </div>
+        <button
+          type="button"
+          aria-label="Cancel"
+          onClick={onClose}
+          className="grid size-8 place-items-center rounded-md text-ink-tertiary transition-colors hover:bg-fill hover:text-ink-primary focus-visible:focus-ring"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Input
+          label="Email"
+          type="email"
+          required
+          placeholder="colleague@shopwellvia.in"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <Input
+          label="Full name"
+          placeholder="Priya Sharma"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          maxLength={255}
+        />
+      </div>
+
+      <p className="mb-2 mt-4 text-xs font-medium text-ink-secondary">
+        Roles — you can only grant permissions you hold yourself.
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {roles.length === 0 ? (
+          <p className="col-span-2 text-sm text-ink-tertiary">
+            No roles defined yet. Create one on the Roles page first.
+          </p>
+        ) : (
+          roles.map((r) => (
+            <label
+              key={r.id}
+              className={cn(
+                'flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 text-sm transition-all duration-150',
+                selected.has(r.id)
+                  ? 'border-accent/40 bg-accent/8 shadow-glow-sm'
+                  : 'border-line-subtle bg-bg-sunken hover:border-line-strong hover:bg-fill',
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={selected.has(r.id)}
+                onChange={() => toggle(r.id)}
+                className="mt-0.5 size-4 rounded border border-line-subtle bg-bg-sunken text-accent focus-visible:focus-ring"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium text-ink-primary">{r.name}</span>
+                {r.description && (
+                  <span className="block text-xs text-ink-tertiary">
+                    {r.description}
+                  </span>
+                )}
+              </span>
+            </label>
+          ))
+        )}
+      </div>
+
+      {error && <p className="mt-3 text-xs text-danger">{error}</p>}
+
+      <div className="mt-5 flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onClose}
+          disabled={invite.isPending}
+        >
+          Cancel
+        </Button>
+        <Button type="submit" loading={invite.isPending} disabled={!email.trim()}>
+          Send invitation
+        </Button>
+      </div>
+    </motion.form>
+  );
+}
+
 function UserRow({
   user,
   roles,
   canManage,
   canAssignRoles,
   actorIsSuperadmin,
+  actorId,
   expandedMode,
   onExpand,
 }) {
@@ -330,6 +472,9 @@ function UserRow({
   // mirror that shield here so we don't offer controls that guarantee a 403.
   const targetLocked = user.is_admin && !actorIsSuperadmin;
   const showManage = canManage && !targetLocked;
+  // Nobody edits their own access. Mirrors the server guard so the control
+  // isn't offered at all rather than failing on click.
+  const isSelf = user.id === actorId;
 
   function handlePasswordReset() {
     reset.mutate(user.id, {
@@ -368,15 +513,34 @@ function UserRow({
           </div>
         </td>
         <td className="px-5 py-3.5">
-          <div className="flex flex-wrap gap-1.5">
-            {user.is_admin && <RoleBadge name="admin (legacy)" isAdmin />}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {user.is_admin && <RoleBadge name="superadmin" isAdmin />}
             {(user.roles || []).map((r) => (
               <RoleBadge key={r.id} name={r.name} />
             ))}
-            {!user.is_admin && (user.roles || []).length === 0 && (
-              <span className="text-xs text-ink-tertiary">— shopper —</span>
+            {isSelf && (
+              <span className="text-[10px] uppercase tracking-wider text-ink-tertiary">
+                you
+              </span>
             )}
           </div>
+          <p className="mt-1 text-xs text-ink-tertiary">
+            <span className="nums">{(user.permissions || []).length}</span>{' '}
+            permission{(user.permissions || []).length === 1 ? '' : 's'}
+            {user.totp_enabled && ' · 2FA on'}
+          </p>
+        </td>
+        <td className="px-5 py-3.5 text-xs text-ink-secondary">
+          {user.last_login_at ? (
+            new Date(user.last_login_at).toLocaleDateString(undefined, {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+            })
+          ) : (
+            // NULL means "not since the column existed", never "never".
+            <span className="text-ink-tertiary">Unknown</span>
+          )}
         </td>
         <td className="px-5 py-3.5">
           <div className="flex items-center gap-2">
@@ -443,7 +607,7 @@ function UserRow({
                 </button>
               </>
             )}
-            {canAssignRoles && (
+            {canAssignRoles && !isSelf && (
               <button
                 type="button"
                 aria-label={`Edit roles for ${user.email}`}
@@ -475,25 +639,31 @@ function UserRow({
   );
 }
 
-export default function AdminUsersPage() {
+export default function AdminTeamPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounced(search, 250);
   // { id, mode: 'roles' | 'name' | 'status' } — at most one expansion open.
   const [expanded, setExpanded] = useState(null);
+  const [inviting, setInviting] = useState(false);
 
   // Route is gated at users.view; finer-grained controls are gated per action.
   // UX only — the API re-checks every permission server-side.
   const canManage = useHasPermission('users.manage');
   const canAssignRoles = useHasPermission('users.assign_role');
+  const canInvite = useHasPermission('users.invite');
   const actorIsSuperadmin = useAuthStore((s) => !!s.user?.is_admin);
+  const actorId = useAuthStore((s) => s.user?.id);
 
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch]);
 
+  // `scope: 'staff'` is what makes this the TEAM page: shoppers are excluded
+  // entirely, so the role-assign control can never land on a customer row.
   const { data, isLoading, isError, refetch } = useUsers({
     q: debouncedSearch,
+    scope: 'staff',
     page,
     page_size: PAGE_SIZE,
   });
@@ -505,15 +675,26 @@ export default function AdminUsersPage() {
 
   return (
     <AdminPage
-      title="Users"
+      title="Team"
       description={
         isLoading
           ? 'Loading…'
-          : `${total} user${total === 1 ? '' : 's'} — assign roles to grant admin access.`
+          : `${total} staff account${total === 1 ? '' : 's'} — everyone with admin access. Shoppers live under Customers.`
+      }
+      action={
+        canInvite && !inviting ? (
+          <Button size="sm" onClick={() => setInviting(true)}>
+            <UserPlus className="size-4" /> Invite member
+          </Button>
+        ) : null
       }
     >
+      {inviting && (
+        <InviteForm roles={roles} onClose={() => setInviting(false)} />
+      )}
+
       {/* Search bar */}
-      <div className="mb-5 max-w-sm">
+      <div className="max-w-sm">
         <Input
           icon={Search}
           placeholder="Search by email or name…"
@@ -526,7 +707,7 @@ export default function AdminUsersPage() {
         <EmptyState
           icon={UsersIcon}
           iconTone="danger"
-          title="Couldn't load users"
+          title="Couldn't load the team"
           description="Something went wrong. Please try again."
           action={
             <Button size="sm" onClick={() => refetch()}>
@@ -555,11 +736,15 @@ export default function AdminUsersPage() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={UsersIcon}
-          title={debouncedSearch ? 'No users match your search' : 'No users yet'}
+          title={
+            debouncedSearch
+              ? 'No team members match your search'
+              : 'No staff accounts yet'
+          }
           description={
             debouncedSearch
               ? 'Try a different email or name.'
-              : 'When customers register they will appear here.'
+              : 'Invite a colleague, or grant a role to an existing account.'
           }
         />
       ) : (
@@ -570,14 +755,17 @@ export default function AdminUsersPage() {
             initial="hidden"
             animate="show"
           >
-            <table className="w-full min-w-[640px]">
+            <table className="w-full min-w-[760px]">
               <thead>
                 <tr className="border-b border-line-subtle bg-bg-sunken/60 text-left">
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
                     User
                   </th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
-                    Roles
+                    Access
+                  </th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+                    Last login
                   </th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
                     Status
@@ -596,6 +784,7 @@ export default function AdminUsersPage() {
                     canManage={canManage}
                     canAssignRoles={canAssignRoles}
                     actorIsSuperadmin={actorIsSuperadmin}
+                    actorId={actorId}
                     expandedMode={expanded?.id === u.id ? expanded.mode : null}
                     onExpand={(mode) =>
                       setExpanded((cur) =>
@@ -614,7 +803,7 @@ export default function AdminUsersPage() {
             <div className="mt-4 flex items-center justify-between gap-2">
               <p className="text-xs text-ink-tertiary">
                 Showing <span className="nums font-medium text-ink-secondary">{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)}</span> of{' '}
-                <span className="nums font-medium text-ink-secondary">{total}</span> users
+                <span className="nums font-medium text-ink-secondary">{total}</span> team members
               </p>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-ink-tertiary">

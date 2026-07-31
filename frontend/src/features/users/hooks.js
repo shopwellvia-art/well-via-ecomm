@@ -6,10 +6,10 @@ import {
 } from '@tanstack/react-query';
 import { usersApi } from './api.js';
 
-export function useUsers({ q = '', page = 1, page_size = 50 } = {}) {
+export function useUsers({ q = '', scope, page = 1, page_size = 50 } = {}) {
   return useQuery({
-    queryKey: ['users', { q, page, page_size }],
-    queryFn: () => usersApi.list({ q, page, page_size }),
+    queryKey: ['users', { q, scope, page, page_size }],
+    queryFn: () => usersApi.list({ q, scope, page, page_size }),
     placeholderData: keepPreviousData,
   });
 }
@@ -37,5 +37,14 @@ export function useUpdateUser() {
 export function useTriggerPasswordReset() {
   return useMutation({
     mutationFn: (userId) => usersApi.triggerPasswordReset(userId),
+  });
+}
+
+/** Invite a new staff account by email (users.invite). */
+export function useInviteStaff() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data) => usersApi.invite(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
   });
 }

@@ -707,8 +707,11 @@ KPIS: tuple[KpiDef, ...] = (
             "invoice.",
             "This is a liability, not income. It is inside paid_order_value and "
             "net_revenue and outside every merchandise and margin figure.",
-            "There is no HSN-level breakdown in the schema, so this cannot be split "
-            "for a GST return without the HSN_TAX_DETAIL capability.",
+            "HSN is now captured per product but is not snapshotted onto the order "
+            "line, so this total still cannot be broken down by HSN; the per-line "
+            "rate slab and the place of supply that decides CGST/SGST against IGST "
+            "are not recorded anywhere. It is not compliance-grade and cannot be "
+            "split for a GST return without the HSN_TAX_DETAIL capability.",
         ),
     ),
     KpiDef(
@@ -2296,8 +2299,10 @@ KPIS: tuple[KpiDef, ...] = (
             "likely to be wrong right before a promotion.",
             "Direction is set to lower-is-better for working capital, but a very low "
             "figure means an imminent stockout — this is a band, not a race to zero.",
-            "Shelf life is not modelled; a supplement can have plenty of cover and still "
-            "expire before it sells.",
+            "Shelf life is now captured per product (`products.shelf_life_days`) but is "
+            "NOT compared against this figure, and it is NULL on most of the catalogue. "
+            "So a supplement can still show plenty of cover and expire before it sells, "
+            "and nothing here flags it.",
         ),
     ),
     KpiDef(

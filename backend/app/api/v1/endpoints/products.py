@@ -3,9 +3,14 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_admin
+from app.api.deps import get_db, require_permission
 from app.schemas.common import Page, PaginationParams
-from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
+from app.schemas.product import (
+    ProductAdminRead,
+    ProductCreate,
+    ProductRead,
+    ProductUpdate,
+)
 from app.services.product_service import ProductService
 
 router = APIRouter()
@@ -86,6 +91,27 @@ def products_by_ids(
 
 @router.get("/{product_id}", response_model=ProductRead)
 def get_product(product_id: int, db: Session = Depends(get_db)):
+    """Public product detail. Deliberately `ProductRead`, not `ProductAdminRead`.
+
+    Anonymous storefront traffic reaches this route, so it must never carry
+    `reorder_point` / `shelf_life_days` — see `ProductOpsFields`.
+    """
+    return ProductService(db).get(product_id)
+
+
+@router.get(
+    "/{product_id}/admin",
+    response_model=ProductAdminRead,
+    dependencies=[Depends(require_permission("products.update"))],
+)
+def get_product_for_admin(product_id: int, db: Session = Depends(get_db)):
+    """Product detail including the internal ops fields, for the edit form.
+
+    The form cannot load from the public detail route: it maps a missing key to
+    a blank input, and `analyticsPayload` maps blank back to null, so a save
+    after loading from `ProductRead` would silently clear a configured
+    `reorder_point`.
+    """
     return ProductService(db).get(product_id)
 
 
@@ -123,9 +149,9 @@ def likely_to_buy(
 
 @router.post(
     "",
-    response_model=ProductRead,
+    response_model=ProductAdminRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_permission("products.create"))],
 )
 def create_product(payload: ProductCreate, db: Session = Depends(get_db)):
     return ProductService(db).create(payload)
@@ -133,8 +159,8 @@ def create_product(payload: ProductCreate, db: Session = Depends(get_db)):
 
 @router.patch(
     "/{product_id}",
-    response_model=ProductRead,
-    dependencies=[Depends(require_admin)],
+    response_model=ProductAdminRead,
+    dependencies=[Depends(require_permission("products.update"))],
 )
 def update_product(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db)):
     return ProductService(db).update(product_id, payload)
@@ -143,7 +169,7 @@ def update_product(product_id: int, payload: ProductUpdate, db: Session = Depend
 @router.delete(
     "/{product_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_permission("products.delete"))],
 )
 def delete_product(product_id: int, db: Session = Depends(get_db)):
     ProductService(db).delete(product_id)
@@ -151,9 +177,9 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
 
 @router.post(
     "/{product_id}/images",
-    response_model=ProductRead,
+    response_model=ProductAdminRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_permission("products.update"))],
 )
 async def upload_product_images(
     product_id: int,
@@ -169,8 +195,8 @@ async def upload_product_images(
 
 @router.delete(
     "/{product_id}/images/{image_id}",
-    response_model=ProductRead,
-    dependencies=[Depends(require_admin)],
+    response_model=ProductAdminRead,
+    dependencies=[Depends(require_permission("products.update"))],
 )
 def delete_product_image(
     product_id: int, image_id: int, db: Session = Depends(get_db)
@@ -180,8 +206,8 @@ def delete_product_image(
 
 @router.post(
     "/{product_id}/images/{image_id}/primary",
-    response_model=ProductRead,
-    dependencies=[Depends(require_admin)],
+    response_model=ProductAdminRead,
+    dependencies=[Depends(require_permission("products.update"))],
 )
 def set_primary_product_image(
     product_id: int, image_id: int, db: Session = Depends(get_db)

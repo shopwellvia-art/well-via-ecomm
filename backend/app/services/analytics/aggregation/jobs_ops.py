@@ -276,16 +276,40 @@ class InventoryDailyJob:
     silently move the start of history. Any bucket earlier than that date is
     refused with a warning and writes nothing.
 
+    ``reorder_gap``: measured where it is configured, NULL where it is not
+    ----------------------------------------------------------------------
+    ``products.reorder_point`` exists now, so this column is
+    ``stock_close - reorder_point`` — a difference of two levels, and therefore
+    itself a LEVEL (``metric_kind`` classifies it so; never sum it).
+
+    Three values, three different statements, and the job keeps them apart:
+
+    * **NULL** — no reorder point is configured on the product. This is not
+      zero and must never be coalesced to zero: 0 would assert "reorder at an
+      empty shelf, and we are exactly there", which is a claim nobody entered.
+      Most of the catalogue is NULL and that is the honest reading of it. No
+      warning is raised for it either — unlike ``stock_value_close``, which
+      writes a real 0 for an unknown cost and therefore needs the run log to
+      say so, this column *can* represent "unknown" in the value itself, so a
+      per-run coverage warning would be noise restating what the NULL says.
+    * **0** — configured, and stock is sitting exactly on the threshold.
+    * **negative** — configured, and stock is BELOW the threshold. Not clamped:
+      the depth below the reorder point is the whole operational signal, and a
+      clamp at zero would flatten "one unit short" and "two hundred short" into
+      the same row.
+
     Columns this job cannot fill honestly
     -------------------------------------
-    * ``reorder_gap`` is always NULL. No product carries a reorder point in this
-      schema, and NULL here means "not configured" — which is the truth, and is
-      a different statement from 0 ("at the reorder point"). It is not in the
-      UNIQUE key, so the nullability is safe.
     * ``stock_value_close`` values stock at ``products.cost``, which is nullable.
       A product with no cost contributes 0 to the value and is counted in a
       coverage warning; there is no quality column on this table to carry that,
       so the run log is where it has to live.
+    * ``reorder_point`` is read as it stands **right now**, not as it stood on
+      ``bucket_date`` — the catalogue keeps no history of the threshold, so a
+      merchant raising it today restates every past ``reorder_gap`` on the next
+      recompute. That is the same live-read limitation ``sku_snapshot`` and
+      ``cost`` already carry here, and the fix is a threshold history table,
+      not arithmetic in this job.
     """
 
     name = "inventory_daily"
@@ -323,7 +347,9 @@ class InventoryDailyJob:
         for product_id in sorted(levels):
             stock_close = levels[product_id]
             sold, restocked = flows.get(product_id, (0, 0))
-            sku, cost = catalogue.get(product_id, (_dim(None), None))
+            sku, cost, reorder_point = catalogue.get(
+                product_id, (_dim(None), None, None)
+            )
             if cost is None:
                 uncosted += 1
             value_minor = 0 if cost is None else to_minor(cost) * stock_close
@@ -343,8 +369,16 @@ class InventoryDailyJob:
                     "days_oos": self._days_oos(
                         db, product_id, bucket_date, tz_generation, is_oos
                     ),
-                    # Genuinely unknown: no reorder point exists in this schema.
-                    "reorder_gap": None,
+                    # NULL when no reorder point is configured, and NULL only
+                    # then. `or 0` / `coalesce(..., 0)` here would turn "nobody
+                    # set a threshold" into "the threshold is zero and we are
+                    # on it" for the whole catalogue — a plausible number on a
+                    # LEVEL column, published under a heading that says
+                    # "needs attention". Negative is kept as measured: it is
+                    # how far below the threshold the shelf has fallen.
+                    "reorder_gap": (
+                        None if reorder_point is None else stock_close - int(reorder_point)
+                    ),
                 }
             )
 
@@ -489,21 +523,33 @@ class InventoryDailyJob:
     @staticmethod
     def _catalogue(
         db: Session, product_ids: set[int]
-    ) -> dict[int, tuple[str, Decimal | None]]:
-        """`(sku_snapshot, cost)` per product, as of right now.
+    ) -> dict[int, tuple[str, Decimal | None, int | None]]:
+        """`(sku_snapshot, cost, reorder_point)` per product, as of right now.
 
         A product that no longer exists snapshots as the `'-'` sentinel rather
         than being dropped: the stock was really held, and this table has no FK
-        precisely so a deleted product cannot erase its own history.
+        precisely so a deleted product cannot erase its own history. It also
+        gets `reorder_point = None`, which is right for the same reason: a row
+        the catalogue no longer holds has no configured threshold to compare
+        against, and inventing 0 would file it as "at its reorder point".
+
+        `reorder_point` is nullable and is carried through as `None`, never
+        coalesced — see the class docstring. The `int | None` is deliberate:
+        `stock_close - reorder_point` is only computed on the branch where it
+        is not None.
         """
         if not product_ids:
             return {}
         return {
-            int(row.id): (_dim(row.sku), row.cost)
+            int(row.id): (
+                _dim(row.sku),
+                row.cost,
+                None if row.reorder_point is None else int(row.reorder_point),
+            )
             for row in db.execute(
-                select(Product.id, Product.sku, Product.cost).where(
-                    Product.id.in_(product_ids)
-                )
+                select(
+                    Product.id, Product.sku, Product.cost, Product.reorder_point
+                ).where(Product.id.in_(product_ids))
             ).all()
         }
 
