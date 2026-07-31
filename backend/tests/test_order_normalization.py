@@ -260,12 +260,43 @@ def db():
 
 class TestOrderNormalizationDB:
     def _seed_user_and_product(self, db):
+        """Reuse ambient rows when present, otherwise create our own.
+
+        This used to assert on whatever happened to be in the database, which
+        made the test pass locally (a dev DB has products) and fail on a clean
+        CI database, where `alembic upgrade head` creates the schema and no
+        rows. Worse, it passed or failed depending on what earlier tests in the
+        run had left behind. Creating the fixture is what the rest of the suite
+        does (see `_make_product` in test_cod_and_split_checkout.py et al).
+        """
+        import uuid
+
+        from app.core.security import hash_password
         from app.models.product import Product
         from app.models.user import User
 
         user = db.query(User).first()
+        if user is None:
+            user = User(
+                email=f"ordnorm-{uuid.uuid4().hex[:10]}@example.com",
+                hashed_password=hash_password("TestPass123!"),
+                is_active=True,
+            )
+            db.add(user)
+            db.flush()
+
         product = db.query(Product).filter(Product.stock > 0).first()
-        assert user is not None and product is not None, "seed data missing"
+        if product is None:
+            uid = uuid.uuid4().hex[:10]
+            product = Product(
+                sku=f"SKU-ORDNORM-{uid}",
+                name=f"OrdNormTestProd-{uid}",
+                price=Decimal("100.00"),
+                stock=50,
+            )
+            db.add(product)
+            db.flush()
+
         return user, product
 
     def test_create_order_populates_payments_and_addresses(self, db):
