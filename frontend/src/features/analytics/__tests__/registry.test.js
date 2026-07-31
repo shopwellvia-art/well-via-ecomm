@@ -26,10 +26,15 @@ import { VIEW_STATE } from '@/features/analytics/viewState.js';
 const views = allViews();
 
 describe('contract integrity', () => {
-  it('ships exactly 12 modules, 73 views and 59 KPIs', () => {
+  it('ships exactly 12 modules, 73 views and 63 KPIs', () => {
     expect(MODULES).toHaveLength(12);
     expect(views).toHaveLength(73);
-    expect(KPIS).toHaveLength(59);
+    // 59 -> 61: basket cross-sell (basket_attach_rate, basket_pairs_observed).
+    // 61 -> 63: blended ROAS (total_spend, blended_roas — deliberately distinct
+    // from the ad-platform marketing_spend/cac entries, which stay gated).
+    // This count is a guard against ACCIDENTAL additions: update it only in the
+    // same change that adds a KpiDef, never to sync a drifted contract.
+    expect(KPIS).toHaveLength(63);
   });
 
   it('has unique module slugs, view slugs and KPI ids', () => {

@@ -218,6 +218,39 @@ in the header of the SQL file.
 
 ---
 
+## Production remediation — GA4 purchases not delivering (`ga4_server_delivery_without_secret`)
+
+The production deployment is currently in this state: `analytics.ga4_purchase_delivery`
+is a **server mode** while **no Measurement Protocol API secret is saved**. In that
+combination every purchase event is written to the outbox and can never be delivered —
+the delivery worker idles with reason `no_api_secret` — so **GA4 shows zero ecommerce
+revenue while the outbox grows silently**. Tracking Health reports it as the warning
+code above, and the Analytics Integrations page banners it.
+
+The save path now **refuses to create or keep this state** (a 422 with the same code:
+choosing a server delivery mode with no secret, or clearing the secret while a server
+mode is active, is rejected). But a guard cannot repair a deployment that is already
+broken — only the operator holds the secret. One of the following, via
+**Admin → Analytics → Integrations → Google Analytics 4**:
+
+1. **Enter the Measurement Protocol API secret** (preferred — server-side delivery is
+   the authoritative mode). Get it from **GA4 Admin → Data Streams → choose the web
+   stream → Measurement Protocol API secrets** (create one if none exists), paste it
+   into *Measurement Protocol API secret*, and save. It may be saved in the same
+   request as the delivery mode — no ordering is forced. Then press *Test connection*:
+   it validates the measurement-id/secret pair against Google's debug endpoint without
+   writing an event.
+2. **Or switch “Purchase events are sent from” to browser-only** — but only once the
+   GTM tag is verified to actually fire `purchase` (GTM Preview against the live
+   storefront), otherwise revenue is lost from both sides instead of one.
+
+Until one of these is done, **purchases do not reach GA4**. The queued `pending` rows
+are a preserved debt, not a loss: once the secret is saved, the delivery worker drains
+them on its next ticks. `FAILED` rows (retries exhausted) stay lost unless replayed —
+check the outbox counts on the Tracking Health panel after remediation.
+
+---
+
 ## Changing the reporting timezone
 
 **Do not edit `store.timezone` directly once rollups exist.** Every bucketed row

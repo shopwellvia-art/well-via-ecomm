@@ -2496,8 +2496,9 @@
     {
       "basis": "inventory",
       "caveats": [
-        "AVERAGE INVENTORY CANNOT BE COMPUTED TODAY. products.stock is a single mutable column with no history and there is no inventory ledger, so there is no way to know what stock was three weeks ago. Substituting today's stock for the period average would be a fabricated number and is not done — the metric reports INCOMPLETE and names the missing ledger.",
-        "Also inherits COGS's coverage gap, so even with a ledger it stays INCOMPLETE until unit_cost coverage reaches 100%.",
+        "Average inventory comes from the FORWARD-ONLY ledger (agg_inventory_daily via the avg: projection): a mean over the ledger days that exist in the window. A gap day is in neither numerator nor denominator — it is 'no data', not 'zero stock'; zero-filling would inflate turnover. Windows before the ledger began cannot be reconstructed and report the gap rather than substituting today's stock.",
+        "Stock is valued at CURRENT cost, not the cost in force on the bucket day, so the denominator is ESTIMATED at best.",
+        "Also inherits COGS's coverage gap, so it drops to INCOMPLETE with the percentage carried until unit_cost coverage reaches 100%.",
         "Annualising a short window on a seasonal product produces a wildly misleading turn figure; 90 days is the shortest window worth reading."
       ],
       "currency_handling": "Ratio of two INR figures computed over the same window, so the currency cancels; both sides must be single-currency for the ratio to be meaningful.",
@@ -2604,6 +2605,140 @@
       "tax_treatment": "n/a",
       "tooltip": "Percentage of sellable products that are out of stock right now.",
       "unit": "pct",
+      "version": 1
+    },
+    {
+      "basis": "order",
+      "caveats": [
+        "Counts DISTINCT PRODUCTS, not lines or units. Three of one product is a single-product basket and does not attach — quantity is a different question from breadth, and units_sold already answers it.",
+        "Both halves are bucket-level scalars repeated on every pair row of their day, so they must be summed once per bucket_date. Summing them across rows multiplies each day by its pair count and reports a store many times larger than it is.",
+        "Orders above the basket-size cap in agg_basket_pair_daily are excluded from BOTH halves, so the rate stays over one population; the view warns when any were dropped.",
+        "Every order in the bucket counts regardless of status. The line fact's order_status is an ingestion-time snapshot that keeps moving, so filtering on it would make the figure depend on when ingestion ran."
+      ],
+      "currency_handling": "Not a monetary figure — currency does not apply.",
+      "default_quality": "AUTHORITATIVE",
+      "denominator": "orders that entered the co-occurrence universe",
+      "description": "Share of orders that contained more than one distinct product.",
+      "dimensions": [
+        "date"
+      ],
+      "excluded_statuses": [],
+      "formula": "SUM(agg_basket_pair_daily.orders_with_any_pair) / SUM(agg_basket_pair_daily.total_orders_in_bucket) * 100, both summed once per bucket_date",
+      "freshness": "daily",
+      "higher_is_better": true,
+      "id": "basket_attach_rate",
+      "included_statuses": [],
+      "label": "Basket Attach Rate",
+      "numerator": "orders holding at least two distinct products",
+      "refund_treatment": "n/a",
+      "shipping_treatment": "n/a",
+      "source": "internal_db",
+      "tax_treatment": "n/a",
+      "tooltip": "Percentage of orders in this period that contained more than one distinct product. It is the ceiling on what cross-sell can move.",
+      "unit": "pct",
+      "version": 1
+    },
+    {
+      "basis": "order",
+      "caveats": [
+        "Pairs below the small-sample floor are deliberately NOT counted. Counting them would turn a long tail of one-off coincidences into hundreds of apparent merchandising opportunities.",
+        "NOT additive across periods: a pair that clears the floor over a month may clear it in none of that month's weeks. Recompute it for the window you are reporting.",
+        "Grows roughly with the square of catalogue breadth, so it is not comparable between stores of different sizes."
+      ],
+      "currency_handling": "Not a monetary figure — currency does not apply.",
+      "default_quality": "AUTHORITATIVE",
+      "denominator": "",
+      "description": "Distinct product pairs bought together often enough for their lift to mean something.",
+      "dimensions": [
+        "date"
+      ],
+      "excluded_statuses": [],
+      "formula": "COUNT(DISTINCT (product_a_id, product_b_id)) WHERE SUM(pair_orders) >= resolvers.basket.SMALL_SAMPLE_MIN_PAIR_ORDERS",
+      "freshness": "daily",
+      "higher_is_better": true,
+      "id": "basket_pairs_observed",
+      "included_statuses": [],
+      "label": "Product Pairs Observed",
+      "numerator": "pairs clearing the small-sample floor",
+      "refund_treatment": "n/a",
+      "shipping_treatment": "n/a",
+      "source": "internal_db",
+      "tax_treatment": "n/a",
+      "tooltip": "How many product pairs were bought together often enough in this period for their affinity to be worth acting on.",
+      "unit": "int",
+      "version": 1
+    },
+    {
+      "basis": "event",
+      "caveats": [
+        "Manually entered. The grade rides on each row's stated quality: reconciled invoices are ACTUAL, everything else a human asserted is ESTIMATED, and days spread out of a monthly lump are ALLOCATED.",
+        "No rows in the window means NOT RECORDED, never zero — the view gates itself rather than reporting free marketing.",
+        "Distinct from `marketing_spend`, which is defined as ad-platform spend over connected accounts and remains INCOMPLETE until an ads API is connected. The two must never be summed or swapped.",
+        "A monthly row cut by the window edge contributes only its in-window daily shares, allocated to the paisa with no rounding drift."
+      ],
+      "currency_handling": "Single-currency store. Every orders row carries currency='INR'; figures are summed as Decimal(12,2) with no FX conversion anywhere in the stack. The resolver asserts exactly one distinct currency per window and downgrades the metric to INCOMPLETE rather than summing mixed currencies naively.",
+      "default_quality": "ESTIMATED",
+      "denominator": "",
+      "description": "Money recorded as spent on marketing in the window — typed into the admin from invoices, per channel, daily or as monthly totals.",
+      "dimensions": [
+        "date",
+        "channel",
+        "campaign"
+      ],
+      "excluded_statuses": [],
+      "formula": "SUM(analytics_marketing_spend rows allocated to the window's days); MONTHLY rows are spread across their month to the paisa (allocate_row_to_days) and only their in-window days count",
+      "freshness": "daily",
+      "higher_is_better": null,
+      "id": "total_spend",
+      "included_statuses": [],
+      "label": "Marketing Spend (entered)",
+      "numerator": "",
+      "refund_treatment": "n/a",
+      "shipping_treatment": "n/a",
+      "source": "internal_db",
+      "tax_treatment": "n/a",
+      "tooltip": "Marketing spend recorded for this period in the admin. A typed figure, graded by the entry's own quality — not a number read from an ad platform.",
+      "unit": "money",
+      "version": 1
+    },
+    {
+      "basis": "order",
+      "caveats": [
+        "BLENDED, never per-channel. Revenue cannot be attributed to a channel without ad-platform click attribution (no session-to-order key exists), so `dimensions` deliberately excludes channel — a per-channel split of this ratio would be fabricated.",
+        "The denominator is typed by a human, so the ratio is at best as good as the entered rows: it inherits their quality grade and never reports better than ESTIMATED while spend is manual.",
+        "Undefined — None, not 0 and not infinity — for any span with no recorded spend, including a single bucket inside a window that has spend elsewhere.",
+        "Recomputed from window sums on every re-bucketing. Averaging daily ROAS values weights a Rs.10 day equal to a Rs.10,000 day and is wrong silently.",
+        "Uses accounting net_revenue (tax and shipping in, refunds deducted), so it is comparable with the revenue cards, not with an ad platform's own conversion-value ROAS."
+      ],
+      "currency_handling": "Ratio of two INR figures computed over the same window, so the currency cancels; both sides must be single-currency for the ratio to be meaningful.",
+      "default_quality": "ESTIMATED",
+      "denominator": "SUM(analytics_marketing_spend allocated to the window's days)",
+      "description": "Total store revenue per rupee of recorded marketing spend — the marketing efficiency ratio, blended across every channel.",
+      "dimensions": [
+        "date"
+      ],
+      "excluded_statuses": [
+        "pending",
+        "cancelled"
+      ],
+      "formula": "net_revenue / total_spend over the SAME window — sums first, one division; never an average of daily ratios",
+      "freshness": "daily",
+      "higher_is_better": true,
+      "id": "blended_roas",
+      "included_statuses": [
+        "paid",
+        "shipped",
+        "delivered",
+        "refunded"
+      ],
+      "label": "Blended ROAS (MER)",
+      "numerator": "net_revenue over the window (internal, AUTHORITATIVE)",
+      "refund_treatment": "deducted",
+      "shipping_treatment": "included",
+      "source": "internal_db",
+      "tax_treatment": "inclusive",
+      "tooltip": "Net revenue divided by recorded marketing spend for the same period. Blended across all channels — this is MER, not a per-channel return.",
+      "unit": "ratio",
       "version": 1
     }
   ],
@@ -4176,7 +4311,7 @@
           "bespoke": "",
           "charts": [
             {
-              "empty_hint": "",
+              "empty_hint": "No two products have been bought together yet.",
               "format": "int",
               "id": "top_pairs",
               "series": [
@@ -4190,11 +4325,7 @@
           ],
           "export": true,
           "filters": [
-            "date_range",
-            "comparison",
-            "granularity",
-            "category",
-            "product"
+            "date_range"
           ],
           "freshness": "daily",
           "group": "",
@@ -4202,26 +4333,29 @@
             "bundle",
             "cross-sell",
             "market basket",
-            "affinity"
+            "affinity",
+            "lift"
           ],
           "kpis": [
-            "units_sold",
-            "aov",
-            "net_revenue"
+            "basket_attach_rate",
+            "basket_pairs_observed"
           ],
           "limitation": "",
           "name": "Product Bundling and Cross-Sell",
           "number": 57,
-          "params": {},
+          "params": {
+            "fn": "basket_cross_sell",
+            "source": "agg_basket_pair_daily"
+          },
           "permission": "analytics.products.view",
           "requires": [],
-          "resolver": "table",
+          "resolver": "custom",
           "slug": "product-bundling-and-cross-sell",
           "sources": [
             "internal_db"
           ],
           "state": "LIVE",
-          "summary": "Which products are bought together, and how often, from actual baskets.",
+          "summary": "Which products are bought together more often than chance, from actual baskets.",
           "tables": [
             {
               "columns": [
@@ -4248,43 +4382,49 @@
                 },
                 {
                   "align": "right",
+                  "format": "int",
+                  "key": "days_observed",
+                  "label": "Days seen",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "pct",
+                  "key": "support",
+                  "label": "Support",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "pct",
+                  "key": "confidence",
+                  "label": "Confidence",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
                   "format": "ratio",
                   "key": "lift",
                   "label": "Lift",
                   "sortable": true
                 }
               ],
-              "default_sort": "orders",
+              "default_sort": "lift",
               "default_sort_dir": "desc",
-              "empty_hint": "",
+              "empty_hint": "No two products have been bought together yet.",
               "id": "basket_pairs",
               "page_size": 25,
-              "title": "Product pairs"
+              "title": "Frequently bought together"
             }
           ]
         },
         {
           "bespoke": "",
-          "charts": [
-            {
-              "empty_hint": "",
-              "format": "money",
-              "id": "aov_with_addon",
-              "series": [
-                "aov"
-              ],
-              "span": 2,
-              "title": "AOV with vs without add-on",
-              "type": "bar",
-              "x": "group"
-            }
-          ],
+          "charts": [],
           "export": false,
           "filters": [
             "date_range",
-            "comparison",
-            "granularity",
-            "category"
+            "comparison"
           ],
           "freshness": "daily",
           "group": "",
@@ -4293,12 +4433,8 @@
             "add-on",
             "uplift"
           ],
-          "kpis": [
-            "aov",
-            "units_sold",
-            "net_revenue"
-          ],
-          "limitation": "No upsell placement is instrumented, so uplift is inferred from basket composition and cannot be attributed to a specific offer.",
+          "kpis": [],
+          "limitation": "No upsell placement exists in the storefront, so no offer impression, click or acceptance is ever recorded — offer conversion has neither a numerator nor a denominator. The basket data that does exist cannot stand in: the pair rollup stores counts and name snapshots with no prices, and no rollup splits order value by basket size, so a trade-up cannot be told apart from a co-purchase, which Product Bundling and Cross-Sell already reports.",
           "name": "Upsell Performance",
           "number": 58,
           "params": {},
@@ -4311,8 +4447,8 @@
           "sources": [
             "internal_db"
           ],
-          "state": "PARTIAL",
-          "summary": "Whether baskets grow when a higher-value or add-on item is included.",
+          "state": "FEATURE_REQUIRED",
+          "summary": "Whether upsell offers work: offers shown, offers taken, and the order value they add.",
           "tables": []
         }
       ]
@@ -4858,7 +4994,8 @@
               "id": "points_flow",
               "series": [
                 "points_issued",
-                "points_redeemed"
+                "points_redeemed",
+                "points_expired"
               ],
               "span": 2,
               "title": "Points issued vs redeemed",
@@ -4868,12 +5005,12 @@
             {
               "empty_hint": "",
               "format": "int",
-              "id": "referral_orders",
+              "id": "referral_completions",
               "series": [
-                "orders_count"
+                "referral_completions"
               ],
               "span": 1,
-              "title": "Orders from referrals",
+              "title": "Completed referrals",
               "type": "line",
               "x": "date"
             }
@@ -4901,7 +5038,15 @@
           "limitation": "",
           "name": "Loyalty and Rewards",
           "number": 52,
-          "params": {},
+          "params": {
+            "metrics": {
+              "points_expired": "points_expired",
+              "points_issued": "points_earned",
+              "points_redeemed": "points_redeemed",
+              "referral_completions": "referral_completions"
+            },
+            "source": "agg_loyalty_daily"
+          },
           "permission": "analytics.customers.view",
           "requires": [],
           "resolver": "timeseries",
@@ -4910,7 +5055,7 @@
             "internal_db"
           ],
           "state": "LIVE",
-          "summary": "Points issued, redeemed and outstanding, plus referral activity and its order value.",
+          "summary": "Points issued, redeemed, expired and outstanding, plus completed referrals.",
           "tables": [
             {
               "columns": [
@@ -5175,41 +5320,109 @@
         },
         {
           "bespoke": "",
-          "charts": [],
+          "charts": [
+            {
+              "empty_hint": "",
+              "format": "ratio",
+              "id": "roas_trend",
+              "series": [
+                "blended_roas"
+              ],
+              "span": 2,
+              "title": "Blended ROAS (MER)",
+              "type": "line",
+              "x": "date"
+            },
+            {
+              "empty_hint": "",
+              "format": "money",
+              "id": "spend_by_channel",
+              "series": [
+                "spend"
+              ],
+              "span": 2,
+              "title": "Spend by channel",
+              "type": "hbar",
+              "x": "channel"
+            }
+          ],
           "export": false,
           "filters": [
             "date_range",
             "comparison",
-            "channel",
-            "campaign"
+            "granularity"
           ],
           "freshness": "daily",
           "group": "",
           "keywords": [
             "roas",
-            "cac",
+            "mer",
             "spend",
-            "profit"
+            "profit",
+            "blended"
           ],
-          "kpis": [],
-          "limitation": "ROAS needs ad spend from the ad platforms, and profitability additionally needs product cost rules; neither is available.",
+          "kpis": [
+            "blended_roas",
+            "total_spend",
+            "net_revenue"
+          ],
+          "limitation": "Spend is manually entered in the admin, so ROAS here is blended (MER): total store revenue over total recorded spend. Revenue cannot be attributed to a channel without ad-platform attribution, so per-channel ROAS is not shown — only per-channel spend.",
           "name": "ROAS and Marketing Profitability",
           "number": 21,
-          "params": {},
+          "params": {
+            "fn": "roas_blended"
+          },
           "permission": "analytics.marketing.view",
           "requires": [
-            "ad_platform",
-            "cost_rules"
+            "ad_platform"
           ],
-          "resolver": "breakdown",
+          "resolver": "custom",
           "slug": "roas-and-marketing-profitability",
           "sources": [
-            "internal_db",
-            "ad_platforms"
+            "internal_db"
           ],
-          "state": "INTEGRATION_REQUIRED",
-          "summary": "Return on ad spend and contribution after marketing, by channel.",
-          "tables": []
+          "state": "PARTIAL",
+          "summary": "Blended return on recorded marketing spend (MER), with the spend split by channel.",
+          "tables": [
+            {
+              "columns": [
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "channel",
+                  "label": "Channel",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "money",
+                  "key": "spend",
+                  "label": "Spend",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "pct",
+                  "key": "spend_share_pct",
+                  "label": "Share of spend",
+                  "sortable": true
+                },
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "quality",
+                  "label": "Quality",
+                  "sortable": true
+                }
+              ],
+              "default_sort": "spend",
+              "default_sort_dir": "desc",
+              "empty_hint": "",
+              "id": "channel_spend",
+              "page_size": 25,
+              "title": "Recorded spend by channel"
+            }
+          ]
         },
         {
           "bespoke": "",
@@ -6193,7 +6406,7 @@
               "x": "category"
             }
           ],
-          "export": false,
+          "export": true,
           "filters": [
             "date_range",
             "comparison",
@@ -6212,23 +6425,99 @@
             "stock_value",
             "units_sold"
           ],
-          "limitation": "Turnover needs average stock across the period (ledger history starts now) and product costs to value COGS; both are incomplete.",
+          "limitation": "The inventory ledger is forward-only (history begins when it was switched on), so the average stock in older windows cannot be reconstructed, and stock is valued at CURRENT cost — turnover is an estimate at best, incomplete where unit_cost coverage is below 100%. The ledger stores no category, so turns cannot be split by category.",
           "name": "Inventory Turnover",
           "number": 30,
-          "params": {},
+          "params": {
+            "fn": "inventory_turnover"
+          },
           "permission": "analytics.inventory.view",
           "requires": [
             "inventory_ledger",
             "cost_rules"
           ],
-          "resolver": "breakdown",
+          "resolver": "custom",
           "slug": "inventory-turnover",
           "sources": [
             "internal_db"
           ],
           "state": "PARTIAL",
-          "summary": "How many times stock turns over in a period, and days of cover by category.",
-          "tables": []
+          "summary": "How many times stock turns over in a period, and days of cover per product with the slow movers first.",
+          "tables": [
+            {
+              "columns": [
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "product",
+                  "label": "Product",
+                  "sortable": true
+                },
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "sku",
+                  "label": "SKU",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "units_sold",
+                  "label": "Units sold",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "money",
+                  "key": "cogs",
+                  "label": "COGS",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "money",
+                  "key": "avg_stock_value",
+                  "label": "Avg stock value",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "ratio",
+                  "key": "inventory_turnover",
+                  "label": "Turns",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "days",
+                  "key": "days_of_inventory",
+                  "label": "Days of cover",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "pct",
+                  "key": "cost_coverage_pct",
+                  "label": "Cost coverage",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "days_observed",
+                  "label": "Ledger days",
+                  "sortable": true
+                }
+              ],
+              "default_sort": "inventory_turnover",
+              "default_sort_dir": "desc",
+              "empty_hint": "No inventory ledger days inside this window yet.",
+              "id": "turnover_by_product",
+              "page_size": 25,
+              "title": "Turnover by product"
+            }
+          ]
         },
         {
           "bespoke": "",
@@ -7306,7 +7595,7 @@
           "bespoke": "",
           "charts": [
             {
-              "empty_hint": "",
+              "empty_hint": "No order matched a risk signal in this period.",
               "format": "int",
               "id": "risk_signals",
               "series": [
@@ -7339,19 +7628,23 @@
             "payment_success_rate",
             "cancellation_rate"
           ],
-          "limitation": "",
+          "limitation": "These are internal behavioural signals — repeated payment failures, gateway amount mismatches, unsigned callbacks, order velocity and billing/shipping address mismatches — not a fraud score. Chargebacks and disputes need the gateway settlement feed, which is not connected, so no dispute appears here at all.",
           "name": "Fraud and Risk Analytics",
           "number": 42,
-          "params": {},
+          "params": {
+            "fn": "risk_signals"
+          },
           "permission": "analytics.payments.view",
-          "requires": [],
-          "resolver": "table",
+          "requires": [
+            "gateway_settlement_api"
+          ],
+          "resolver": "custom",
           "slug": "fraud-and-risk-analytics",
           "sources": [
             "internal_db"
           ],
-          "state": "LIVE",
-          "summary": "Risk signals from our own data: repeated payment failures, RTO history and unusual order patterns.",
+          "state": "PARTIAL",
+          "summary": "Risk signals from our own data: repeated payment failures, gateway amount mismatches, unsigned callbacks, order velocity and address mismatches.",
           "tables": [
             {
               "columns": [
@@ -7367,6 +7660,13 @@
                   "format": "text",
                   "key": "signal",
                   "label": "Signal",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "observed",
+                  "label": "Observed",
                   "sortable": true
                 },
                 {
@@ -7395,8 +7695,34 @@
         },
         {
           "bespoke": "",
-          "charts": [],
-          "export": false,
+          "charts": [
+            {
+              "empty_hint": "No settlement report covers this period.",
+              "format": "money",
+              "id": "fees_trend",
+              "series": [
+                "fee_transacted",
+                "tax_transacted"
+              ],
+              "span": 2,
+              "title": "Gateway fees charged (payment-dated)",
+              "type": "line",
+              "x": "date"
+            },
+            {
+              "empty_hint": "No payout was credited in this period.",
+              "format": "money",
+              "id": "payout_trend",
+              "series": [
+                "payout_amount"
+              ],
+              "span": 2,
+              "title": "Payouts credited (settlement-dated)",
+              "type": "bar",
+              "x": "date"
+            }
+          ],
+          "export": true,
           "filters": [
             "date_range",
             "comparison",
@@ -7408,26 +7734,274 @@
             "settlement",
             "payout",
             "mdr",
-            "fees"
+            "fees",
+            "utr"
           ],
           "kpis": [],
-          "limitation": "Settlement batches, fees and payout dates must be read from the gateway settlement API; captured payment records alone cannot show what was paid out.",
+          "limitation": "Fed by uploaded gateway settlement report CSVs, not a live gateway feed: coverage is whatever finance has uploaded, and fees are ACTUAL only on days a report fully covers. The Razorpay settlements API integration remains future work.",
           "name": "Settlements and Payouts",
           "number": 64,
-          "params": {},
+          "params": {
+            "fn": "settlements_payouts",
+            "source": "agg_settlement_daily"
+          },
           "permission": "analytics.finance.view",
           "requires": [
-            "gateway_settlement_api"
+            "gateway_settlement_report"
           ],
-          "resolver": "reconciliation",
+          "resolver": "custom",
           "slug": "settlements-and-payouts",
           "sources": [
             "internal_db",
             "payment_gateway"
           ],
-          "state": "INTEGRATION_REQUIRED",
-          "summary": "Gateway settlement batches, fees deducted and the payout dates behind them.",
-          "tables": []
+          "state": "PARTIAL",
+          "summary": "Gateway settlement lines from the uploaded settlement report: fees deducted (payment-dated), payouts credited (settlement-dated), and the lines that do not reconcile.",
+          "tables": [
+            {
+              "columns": [
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "date",
+                  "label": "Day",
+                  "sortable": true
+                },
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "gateway",
+                  "label": "Gateway",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "money",
+                  "key": "gross_transacted",
+                  "label": "Gross (transacted)",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "money",
+                  "key": "fee_transacted",
+                  "label": "Fee (transacted)",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "money",
+                  "key": "tax_transacted",
+                  "label": "Tax on fee",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "matched_txns",
+                  "label": "Matched",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "unmatched_txns",
+                  "label": "Unmatched",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "unsettled_payments",
+                  "label": "Unsettled captures",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "money",
+                  "key": "payout_amount",
+                  "label": "Payout (settled)",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "settlement_batches",
+                  "label": "Batches",
+                  "sortable": true
+                }
+              ],
+              "default_sort": "date",
+              "default_sort_dir": "desc",
+              "empty_hint": "No settlement report covers this period.",
+              "id": "settlement_days",
+              "page_size": 25,
+              "title": "Daily settlement activity"
+            },
+            {
+              "columns": [
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "check_name",
+                  "label": "Check",
+                  "sortable": true
+                },
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "period",
+                  "label": "Period",
+                  "sortable": true
+                },
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "status",
+                  "label": "Status",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "money",
+                  "key": "source_value",
+                  "label": "Source",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "money",
+                  "key": "rollup_value",
+                  "label": "Expected",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "pct",
+                  "key": "variance_pct",
+                  "label": "Variance",
+                  "sortable": true
+                }
+              ],
+              "default_sort": "check_name",
+              "default_sort_dir": "desc",
+              "empty_hint": "No settlement report covers this period, so nothing was compared.",
+              "id": "variances",
+              "page_size": 25,
+              "title": "Settlement reconciliation"
+            },
+            {
+              "columns": [
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "transaction_id",
+                  "label": "Gateway txn",
+                  "sortable": true
+                },
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "transaction_type",
+                  "label": "Type",
+                  "sortable": true
+                },
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "payment_date",
+                  "label": "Transacted",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "money",
+                  "key": "gross",
+                  "label": "Gross",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "money",
+                  "key": "fee",
+                  "label": "Fee",
+                  "sortable": true
+                },
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "match_status",
+                  "label": "Match status",
+                  "sortable": true
+                },
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "reference",
+                  "label": "Reference",
+                  "sortable": true
+                }
+              ],
+              "default_sort": "payment_date",
+              "default_sort_dir": "desc",
+              "empty_hint": "Every settlement line in this period was tied to a payment.",
+              "id": "unmatched_lines",
+              "page_size": 25,
+              "title": "Settlement lines with no matching payment"
+            },
+            {
+              "columns": [
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "order_id",
+                  "label": "Order",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "order_payment_id",
+                  "label": "Payment leg",
+                  "sortable": true
+                },
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "gateway",
+                  "label": "Gateway",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "money",
+                  "key": "amount",
+                  "label": "Amount",
+                  "sortable": true
+                },
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "paid_at",
+                  "label": "Captured",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "days_outstanding",
+                  "label": "Days outstanding",
+                  "sortable": true
+                }
+              ],
+              "default_sort": "days_outstanding",
+              "default_sort_dir": "desc",
+              "empty_hint": "Every capture in this period is explained by a settlement line (or is still inside the gateway's settlement cycle).",
+              "id": "unsettled_payments",
+              "page_size": 25,
+              "title": "Captured payments with no settlement"
+            }
+          ]
         }
       ]
     },
@@ -7578,7 +8152,7 @@
               "x": "topic"
             }
           ],
-          "export": true,
+          "export": false,
           "filters": [
             "date_range",
             "comparison",
@@ -7596,12 +8170,21 @@
           "limitation": "Only inbound contact messages are stored — without ticketing there is no assignment, SLA clock, first-response or resolution time to report.",
           "name": "Customer Support and Complaint",
           "number": 50,
-          "params": {},
+          "params": {
+            "metrics": {
+              "messages": {
+                "add": [
+                  "messages_received"
+                ]
+              }
+            },
+            "source": "agg_cx_daily"
+          },
           "permission": "analytics.cx.view",
           "requires": [
             "support_ticketing"
           ],
-          "resolver": "breakdown",
+          "resolver": "timeseries",
           "slug": "customer-support-and-complaint",
           "sources": [
             "internal_db"
@@ -7697,10 +8280,34 @@
           "limitation": "",
           "name": "Reviews and Ratings",
           "number": 51,
-          "params": {},
+          "params": {
+            "dimension": "product",
+            "fn": "cx_reviews",
+            "metrics": {
+              "avg_rating": {
+                "add": [
+                  "rating_sum"
+                ],
+                "over": [
+                  "rated_reviews"
+                ]
+              },
+              "one_star": {
+                "add": [
+                  "rating_1"
+                ]
+              },
+              "reviews": {
+                "add": [
+                  "reviews_submitted"
+                ]
+              }
+            },
+            "source": "agg_cx_daily"
+          },
           "permission": "analytics.cx.view",
           "requires": [],
-          "resolver": "breakdown",
+          "resolver": "custom",
           "slug": "reviews-and-ratings",
           "sources": [
             "internal_db"
@@ -7789,14 +8396,16 @@
           "bespoke": "",
           "charts": [
             {
-              "empty_hint": "",
+              "empty_hint": "No storefront requests were recorded in this period.",
               "format": "int",
               "id": "latency_trend",
               "series": [
-                "p95_ms"
+                "p50_ms",
+                "p95_ms",
+                "p99_ms"
               ],
               "span": 2,
-              "title": "p95 response time",
+              "title": "Response time (storefront routes)",
               "type": "line",
               "x": "date"
             },
@@ -7808,8 +8417,20 @@
                 "error_rate"
               ],
               "span": 2,
-              "title": "Error rate",
+              "title": "Error rate (storefront routes)",
               "type": "line",
+              "x": "date"
+            },
+            {
+              "empty_hint": "",
+              "format": "int",
+              "id": "throughput",
+              "series": [
+                "requests"
+              ],
+              "span": 2,
+              "title": "Requests (storefront routes)",
+              "type": "bar",
               "x": "date"
             }
           ],
@@ -7825,25 +8446,81 @@
             "speed",
             "latency",
             "performance",
-            "core web vitals"
+            "core web vitals",
+            "p95",
+            "apm"
           ],
           "kpis": [],
-          "limitation": "Server-side latency and errors are measured from the internal request log; browser Core Web Vitals need a front-end RUM source such as GA4.",
+          "limitation": "Server-side latency measured between request receipt and response start, as percentiles over raw request rows — never re-aggregated from stored daily figures, and withheld entirely above the scan bound rather than estimated. This is NOT what a visitor experiences: TTFB, LCP, CLS and INP need browser real-user monitoring such as GA4, which is not connected, so nothing here is a Core Web Vitals figure. Charts cover storefront routes only; admin and internal traffic is separated into the route-class table.",
           "name": "Website Speed and Technical Performance",
           "number": 71,
-          "params": {},
+          "params": {
+            "fn": "request_performance"
+          },
           "permission": "analytics.cx.view",
           "requires": [
             "ga4_data_api"
           ],
-          "resolver": "timeseries",
+          "resolver": "custom",
           "slug": "website-speed-and-technical-performance",
           "sources": [
             "internal_db"
           ],
           "state": "PARTIAL",
-          "summary": "API latency, error rate and slowest endpoints from the internal request log.",
+          "summary": "Server-side latency percentiles, error rate, throughput and the slowest endpoints and queries, from the internal request log.",
           "tables": [
+            {
+              "columns": [
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "route_class",
+                  "label": "Route class",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "requests",
+                  "label": "Requests",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "p50_ms",
+                  "label": "p50 (ms)",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "p95_ms",
+                  "label": "p95 (ms)",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "p99_ms",
+                  "label": "p99 (ms)",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "pct",
+                  "key": "error_rate",
+                  "label": "Errors",
+                  "sortable": true
+                }
+              ],
+              "default_sort": "requests",
+              "default_sort_dir": "desc",
+              "empty_hint": "No requests were recorded in this period.",
+              "id": "latency_summary",
+              "page_size": 25,
+              "title": "By route class (whole window)"
+            },
             {
               "columns": [
                 {
@@ -7851,6 +8528,13 @@
                   "format": "text",
                   "key": "endpoint",
                   "label": "Endpoint",
+                  "sortable": true
+                },
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "route_class",
+                  "label": "Class",
                   "sortable": true
                 },
                 {
@@ -7881,6 +8565,51 @@
               "id": "slow_endpoints",
               "page_size": 25,
               "title": "Slowest endpoints"
+            },
+            {
+              "columns": [
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "table_name",
+                  "label": "Table",
+                  "sortable": true
+                },
+                {
+                  "align": "left",
+                  "format": "text",
+                  "key": "operation",
+                  "label": "Operation",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "occurrences",
+                  "label": "Occurrences",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "total_ms",
+                  "label": "Total (ms)",
+                  "sortable": true
+                },
+                {
+                  "align": "right",
+                  "format": "int",
+                  "key": "max_ms",
+                  "label": "Worst (ms)",
+                  "sortable": true
+                }
+              ],
+              "default_sort": "total_ms",
+              "default_sort_dir": "desc",
+              "empty_hint": "No query crossed the slow-query threshold in this period.",
+              "id": "slow_queries",
+              "page_size": 25,
+              "title": "Slowest queries"
             }
           ]
         }
@@ -7927,10 +8656,12 @@
           "limitation": "",
           "name": "Analytics Tracking Health",
           "number": 62,
-          "params": {},
+          "params": {
+            "fn": "tracking_health"
+          },
           "permission": "analytics.control_centre.view",
           "requires": [],
-          "resolver": "tracking_health",
+          "resolver": "custom",
           "slug": "analytics-tracking-health",
           "sources": [
             "internal_db"
@@ -7972,10 +8703,12 @@
           "limitation": "",
           "name": "Data Reconciliation",
           "number": 63,
-          "params": {},
+          "params": {
+            "fn": "reconciliation_grid"
+          },
           "permission": "analytics.control_centre.view",
           "requires": [],
-          "resolver": "reconciliation",
+          "resolver": "custom",
           "slug": "data-reconciliation",
           "sources": [
             "internal_db"
@@ -8065,18 +8798,20 @@
             "orders_count",
             "net_revenue"
           ],
-          "limitation": "",
+          "limitation": "No experiment framework exists. Four separate pieces are missing and each is required before a single number here would mean anything: an assignment service that puts a visitor in an arm, exposure logging that records which arm they actually saw, variant storage that survives the session so an order can be attributed back, and a significance test with a minimum sample size. Without the first three there is nothing to split by variant, and a single-variant result would read as an experiment that ran and found no difference. Without the fourth, the winner is a coin flip presented as a decision.",
           "name": "Experiment and A/B Testing",
           "number": 66,
           "params": {},
           "permission": "analytics.control_centre.view",
-          "requires": [],
+          "requires": [
+            "experiments"
+          ],
           "resolver": "custom",
           "slug": "experiment-and-ab-testing",
           "sources": [
             "internal_db"
           ],
-          "state": "LIVE",
+          "state": "FEATURE_REQUIRED",
           "summary": "Running and finished experiments with per-variant conversion, AOV and revenue.",
           "tables": []
         },
@@ -8113,10 +8848,12 @@
           "limitation": "",
           "name": "Alerts and Anomaly",
           "number": 73,
-          "params": {},
+          "params": {
+            "fn": "anomaly_feed"
+          },
           "permission": "analytics.control_centre.view",
           "requires": [],
-          "resolver": "table",
+          "resolver": "custom",
           "slug": "alerts-and-anomaly",
           "sources": [
             "internal_db"

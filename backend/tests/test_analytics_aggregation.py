@@ -283,8 +283,19 @@ def _cleanup(owned: _Owned) -> None:
     transaction in the test's own session. The rollup and run-log rows go by
     sandbox date / worker id rather than by id, because they are written by
     Core statements the test never sees the ids of.
+
+    READ COMMITTED, for the same reason `RecomputeQueue._use_read_committed`
+    exists: under REPEATABLE READ a range DELETE over a mostly-empty date range
+    next-key-locks the gap up to the next populated index key — here, from the
+    June 2009 sandbox all the way to the 2026 live rollups — and a concurrent
+    suite inserting into its own sandbox inside that gap blocks or deadlocks on
+    rows this suite never owned. READ COMMITTED locks only the rows actually
+    deleted.
     """
     with SessionLocal() as session:
+        session.connection(
+            execution_options={"isolation_level": "READ COMMITTED"}
+        )
         if owned.returns:
             session.execute(
                 text("DELETE FROM return_items WHERE return_id IN :ids"),
@@ -1305,26 +1316,43 @@ def test_unknown_job_fails_before_anything_is_written() -> None:
     db = SessionLocal()
     try:
         assert sorted(JOBS) == [
+            "basket_pair_daily",
             "cohort_monthly",
             "customer_daily",
             "customer_snapshot",
+            "cx_daily",
             "funnel_daily",
+            "ga4_daily",
             "inventory_daily",
+            "loyalty_daily",
             "order_daily",
             "order_hourly",
             "payment_daily",
             "product_daily",
             "promo_daily",
+            "settlement_daily",
+            "shadow_compare",
             "shipment_daily",
             "shipment_geo_daily",
         ], (
-            "all twelve rollups are implemented and registered. This list is "
-            "exhaustive on purpose: a job registered under a real name but not "
-            "actually built would report SUCCESS, advance a watermark, and make "
-            "an unbuilt table indistinguishable from a quiet one. Absent is "
-            "honest; a stub is not. They live in aggregation/jobs.py, "
-            "jobs_customer.py, jobs_ops.py and jobs_finance.py, covered by "
-            "test_analytics_aggregation{,_jobs2,_jobs3}.py"
+            "This list is EXHAUSTIVE ON PURPOSE and must equal sorted(JOBS) "
+            "from app.services.analytics.aggregation exactly — every registered "
+            "job, no more, no fewer (18 at last reconciliation). Its purpose is "
+            "to FAIL whenever a job registers without this list being updated: "
+            "a job registered under a real name but not actually built would "
+            "report SUCCESS, advance a watermark, and make an unbuilt table "
+            "indistinguishable from a quiet one. Absent is honest; a stub is "
+            "not. Do NOT weaken this to a subset check — that would defeat its "
+            "reason to exist. If you are landing a new job, ADD its name in "
+            "sorted order and change nothing else: this list is edited by "
+            "concurrent agent waves, and one wave of six partially overwrote "
+            "each other's entries by rewriting neighbours instead of inserting "
+            "their own. The jobs live in aggregation/jobs*.py, covered by "
+            "test_analytics_aggregation{,_jobs2,_jobs3}.py. `shadow_compare` "
+            "(aggregation/jobs_shadow.py, test_analytics_shadow_job.py) is "
+            "registered alongside them and writes no rollup: it compares the "
+            "legacy pages against the new subsystem one bucket at a time so the "
+            "retirement gate has thirty days of evidence to read."
         )
         with pytest.raises(KeyError):
             # A name that is not, and will never be, a real job. This example has
@@ -1346,8 +1374,38 @@ def test_unknown_job_fails_before_anything_is_written() -> None:
 # ===========================================================================
 
 
+#: A second bucket for the drain test: a REAL registered job, a later date in
+#: this module's own June 2009 sandbox, no orders under it. It stands in for
+#: "some other suite's pending row" and is seeded on every run so the
+#: foreign-row case is exercised deterministically rather than only when
+#: another suite happens to leak. Its date being LATER than ``DAY_QUEUE`` is
+#: deliberate — a foreign row with a later bucket is exactly the shape that
+#: used to break this test's ``watermark == DAY_QUEUE`` assertion.
+DAY_DECOY = date(2009, 6, 25)
+
+
 def test_drain_queue_claims_runs_and_completes() -> None:
-    """claim -> run -> complete, using the queue rather than reimplementing it."""
+    """claim -> run -> complete, using the queue rather than reimplementing it.
+
+    The recompute queue is GLOBAL and ``drain_queue`` has no job or date filter
+    (see ``AggregationRunner.drain_queue`` — ``RecomputeQueue.claim`` accepts a
+    ``jobs`` list, but the runner does not pass one), so the claimed batch may
+    contain any other suite's leftovers alongside this test's rows. Every
+    assertion is therefore about this test's OWN rows being claimed, completed
+    and written — the claimed set as a SUPERSET of ours — never about the batch
+    being exactly ours. Batch-level claims like ``failed == 0`` or
+    ``watermark_date == DAY_QUEUE`` are exactly what a single foreign pending
+    row (a poison bucket, or any later date) used to break.
+
+    The global queue also has a LIVE consumer: a worker (`worker_id='local'`)
+    drains it on its own schedule and can legitimately claim this test's rows
+    in the gap between the enqueue commit and this runner's claim. `enqueue` is
+    documented to reopen `done` rows, so the enqueue+drain is retried a few
+    times until THIS runner completes at least one of its own buckets — the
+    rival winning the same millisecond race several times in a row is not a
+    real schedule. The final row-state assertions then poll briefly, because a
+    row the rival claimed is `claimed`, not `done`, until its recompute lands.
+    """
     owned = _Owned()
     db = SessionLocal()
     try:
@@ -1360,27 +1418,63 @@ def test_drain_queue_claims_runs_and_completes() -> None:
         db.commit()
 
         queue = RecomputeQueue(db)
-        queue.enqueue("order_daily", DAY_QUEUE, reason=RecomputeReason.BACKFILL)
-        db.commit()
+        job = None
+        for _attempt in range(5):
+            # priority=1 < DEFAULT_PRIORITY: claim order is (priority,
+            # bucket_date), so even a deep foreign backlog cannot push these
+            # two rows out of the limit=50 batch.
+            queue.enqueue(
+                "order_daily", DAY_QUEUE, reason=RecomputeReason.BACKFILL, priority=1
+            )
+            queue.enqueue(
+                "order_daily", DAY_DECOY, reason=RecomputeReason.BACKFILL, priority=1
+            )
+            db.commit()
 
-        result = _runner(db).drain_queue(limit=50)
+            result = _runner(db).drain_queue(limit=50)
+            job = result["jobs"].get("order_daily")
+            if job is not None and job["completed"] >= 1:
+                break
+        assert job is not None and job["completed"] >= 1, (
+            "this runner never claimed one of its own order_daily buckets in "
+            f"five attempts; last drain: {result!r}"
+        )
 
-        assert result["completed"] >= 1
-        assert result["failed"] == 0
-        assert "order_daily" in result["jobs"]
-        assert result["jobs"]["order_daily"]["watermark_date"] == DAY_QUEUE
+        # The per-job watermark is the max bucket THIS runner completed. Both
+        # of ours are >= DAY_QUEUE, and a completed foreign row is allowed to
+        # have pushed it higher — `== DAY_QUEUE` is exactly what a foreign
+        # watermark used to break.
+        assert job["watermark_date"] >= DAY_QUEUE
+
+        # Both OWN rows end DONE — whoever ran them — asserted on the rows
+        # themselves rather than on batch counters a foreign row could move.
+        # Poll briefly: a row the live worker claimed completes on its
+        # schedule, not this test's.
+        import time as _time
+
+        deadline = _time.monotonic() + 60
+        for bucket in (DAY_QUEUE, DAY_DECOY):
+            while True:
+                db.expire_all()
+                queued = db.execute(
+                    select(AnalyticsRecomputeQueue).where(
+                        AnalyticsRecomputeQueue.job == "order_daily",
+                        AnalyticsRecomputeQueue.bucket_date == bucket,
+                    )
+                ).scalars().one()
+                if queued.status == RecomputeStatus.DONE:
+                    break
+                assert _time.monotonic() < deadline, (
+                    f"{bucket}: still {queued.status}, "
+                    f"last_error={queued.last_error}"
+                )
+                _time.sleep(1)
+            assert queued.processed_at is not None
 
         row = _daily(db, DAY_QUEUE, generation)
         assert row is not None and row.net_revenue == Decimal("440.00")
-
-        queued = db.execute(
-            select(AnalyticsRecomputeQueue).where(
-                AnalyticsRecomputeQueue.job == "order_daily",
-                AnalyticsRecomputeQueue.bucket_date == DAY_QUEUE,
-            )
-        ).scalars().one()
-        assert queued.status == RecomputeStatus.DONE
-        assert queued.processed_at is not None
     finally:
+        # `_cleanup` sweeps the whole June 2009 sandbox: both queue rows and
+        # any rollup row the decoy's (order-less) recompute wrote.
         _cleanup(owned)
         db.close()

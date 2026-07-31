@@ -38,6 +38,14 @@ import {
   useUpdateAnalyticsIntegrations,
   warningTone,
 } from '@/features/analytics/integrations.js';
+import {
+  API_SECRET_KEY,
+  DELIVERY_GUARD_ERROR_CODE,
+  DELIVERY_GUARD_FIXES,
+  DELIVERY_KEY,
+  deliverySelectionError,
+  storedStateUndeliverable,
+} from '@/features/tracking/deliveryGuard.js';
 
 /**
  * Analytics integrations + Tracking Health.
@@ -86,7 +94,7 @@ function truthy(value) {
 
 // ─── FieldRow ─────────────────────────────────────────────────────────────────
 
-function FieldRow({ field, value, onChange }) {
+function FieldRow({ field, value, onChange, error }) {
   const { key, label, type, description, placeholder, options } = field;
 
   if (type === 'bool') {
@@ -123,6 +131,7 @@ function FieldRow({ field, value, onChange }) {
         value={value ?? ''}
         onChange={(e) => onChange(key, e.target.value)}
         helper={description}
+        error={error}
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -160,6 +169,7 @@ function FieldRow({ field, value, onChange }) {
         onChange={(e) => onChange(key, e.target.value)}
         placeholder={placeholder}
         helper={description}
+        error={error}
         autoComplete={field.is_secret ? 'new-password' : undefined}
       />
       {field.is_secret && value === REDACTED && <MaskedHint />}
@@ -326,6 +336,54 @@ function SaveBar({ dirty, saving, saved, error, onSave }) {
           {integrationsErrorMessage(error, 'Save failed.')}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Delivery guard banner ────────────────────────────────────────────────────
+
+/**
+ * Shown while the STORED state is the undeliverable one: purchase delivery in
+ * a server mode with GA4 enabled and no Measurement Protocol API secret saved.
+ *
+ * The backend now refuses to create this state (422, same code as the
+ * tracking-health warning), so the banner exists for deployments configured
+ * before the guard did — including production right now. It partially
+ * duplicates the health panel's warning on purpose: health needs
+ * `analytics.control_centre.view` and this page only needs manage, so the
+ * operator who can actually fix the state must see it without the extra
+ * permission.
+ */
+function DeliveryGuardBanner() {
+  return (
+    <div
+      role="alert"
+      className={cn('rounded-lg border px-4 py-3.5 text-xs leading-relaxed', TONE_STYLES.danger)}
+    >
+      <div className="flex items-start gap-2">
+        <AlertOctagon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">
+            Purchases are not reaching GA4 — server-side delivery has no API secret
+          </p>
+          <p className="mt-1 opacity-90">
+            Purchase delivery is set to a server mode, but no Measurement Protocol API
+            secret is saved. Every purchase is queued in the server outbox and cannot be
+            delivered, so GA4 reports zero ecommerce revenue while the queue grows
+            silently (tracking-health warning{' '}
+            <code className="font-mono">{DELIVERY_GUARD_ERROR_CODE}</code>). Two ways to
+            fix it, in the GA4 group below:
+          </p>
+          <ul className="mt-2 space-y-1">
+            {DELIVERY_GUARD_FIXES.map((fix) => (
+              <li key={fix} className="flex items-start gap-1.5">
+                <span className="mt-1.5 size-1 shrink-0 rounded-full bg-current" />
+                <span>{fix}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }
@@ -660,6 +718,15 @@ export default function AdminAnalyticsSettingsPage() {
 
   const groups = useMemo(() => data?.groups || [], [data]);
 
+  // The deliverability guard's inputs. `has_value` is the API's "a secret is
+  // stored" flag — the secret's value never reaches the browser and is never
+  // needed to answer "is one saved".
+  const fieldByKey = useMemo(() => {
+    const map = {};
+    for (const g of groups) for (const f of g.fields) map[f.key] = f;
+    return map;
+  }, [groups]);
+
   // Seed the draft from the server exactly once per key. Re-seeding on every
   // response would discard whatever the admin is typing when the health poll
   // happens to land — which is why the settings query does not poll at all.
@@ -744,6 +811,23 @@ export default function AdminAnalyticsSettingsPage() {
     }
   }
 
+  // Inline refusal on the delivery selector, mirroring the backend guard: a
+  // server mode with no secret on file — and none arriving with this save —
+  // is an inline error before it becomes a 422.
+  const deliveryError = deliverySelectionError({
+    deliveryDraft: draft[DELIVERY_KEY] ?? fieldByKey[DELIVERY_KEY]?.value,
+    hasStoredSecret: Boolean(fieldByKey[API_SECRET_KEY]?.has_value),
+    secretDraft: draft[API_SECRET_KEY],
+  });
+
+  // Banner condition — the STORED state, not the draft: it reports what the
+  // deployment is doing right now, not what the operator is about to try.
+  const storedUndeliverable = storedStateUndeliverable({
+    enabled: fieldByKey['analytics.ga4_enabled']?.value,
+    delivery: fieldByKey[DELIVERY_KEY]?.value,
+    hasStoredSecret: Boolean(fieldByKey[API_SECRET_KEY]?.has_value),
+  });
+
   if (isLoading) {
     return (
       <AdminPage title="Analytics integrations" description="Loading…">
@@ -796,6 +880,8 @@ export default function AdminAnalyticsSettingsPage() {
       description="Tag IDs, credentials and consent defaults — plus whether any of it is actually working. Credentials are encrypted at rest and never returned."
     >
       <TrackingHealthPanel query={health} />
+
+      {storedUndeliverable && <DeliveryGuardBanner />}
 
       <div className="grid gap-6 lg:grid-cols-[248px_1fr]">
         {/* ── Sub-sidebar ── */}
@@ -890,6 +976,9 @@ export default function AdminAnalyticsSettingsPage() {
                       field={f}
                       value={draft[f.key]}
                       onChange={setField}
+                      // The delivery selector carries the guard's inline
+                      // refusal — the same condition the backend 422s on.
+                      error={f.key === DELIVERY_KEY ? deliveryError : undefined}
                     />
                   ))}
                 </div>

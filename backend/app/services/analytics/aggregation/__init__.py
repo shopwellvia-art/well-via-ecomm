@@ -55,6 +55,24 @@ from app.services.analytics.aggregation import (  # noqa: F401 - registers
 from app.services.analytics.aggregation import (  # noqa: F401 - registers
     jobs_finance as jobs_finance,
 )
+from app.services.analytics.aggregation import (  # noqa: F401 - registers
+    jobs_ga4 as jobs_ga4,
+)
+from app.services.analytics.aggregation import (  # noqa: F401 - registers
+    jobs_basket as jobs_basket,
+)
+from app.services.analytics.aggregation import (  # noqa: F401 - registers
+    jobs_cx as jobs_cx,
+)
+from app.services.analytics.aggregation import (  # noqa: F401 - registers
+    jobs_loyalty as jobs_loyalty,
+)
+from app.services.analytics.aggregation import (  # noqa: F401 - registers
+    jobs_shadow as jobs_shadow,
+)
+from app.services.analytics.aggregation import (  # noqa: F401 - registers
+    jobs_settlement as jobs_settlement,
+)
 from app.services.analytics.aggregation.runner import (
     DEFAULT_BUDGET_MS,
     AggregationRunner,

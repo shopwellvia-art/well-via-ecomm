@@ -33,6 +33,18 @@ What this module deliberately does **not** do:
   `SUM(stock_close)` sums a level, and both are allowed here because the
   allowlist is a *safety* boundary, not a semantic one. Additivity is documented
   per column in `analytics_rollups.py` and is the resolver's responsibility.
+
+  The `avg:<column>` projection is the one deliberate exception, and it is an
+  exception because the shapes differ: a SUM has correct callers for both flows
+  and levels depending on what the resolver is asking, whereas `AVG(<flow>)` has
+  no correct caller at all — averaging daily sums produces a figure that changes
+  when the same period is re-bucketed. So `avg:` asks `metric_kind.classify` and
+  refuses anything that is not a LEVEL, rather than building a wrong number and
+  trusting every future caller to know not to ask for it.
+* It does not return a truth value where a number was asked for. `func.sum()`
+  inherits its column's type, so `SUM(<Boolean column>)` used to come back as
+  `True` rather than a count — see `_sum`, which casts before summing so no
+  present or future rollup flag can regress to that.
 * It does not invent zeros. `fetch_totals` over an empty window returns `None`
   per column, and `source_watermark` returns `(None, 0)` — "no rows yet" stays
   distinguishable from "genuinely zero", which is the same rule the rest of the
@@ -49,10 +61,22 @@ from decimal import Decimal
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping
 
-from sqlalchemy import Select, distinct, func, inspect as sa_inspect, select
+from sqlalchemy import (
+    Integer,
+    Select,
+    cast,
+    distinct,
+    func,
+    inspect as sa_inspect,
+    select,
+)
 from sqlalchemy.orm import InstrumentedAttribute, Session
 from sqlalchemy.sql.schema import UniqueConstraint
 
+from app.models.analytics_basket import AggBasketPairDaily
+from app.models.analytics_cx import AggCxDaily
+from app.models.analytics_ga4 import AggGa4Daily
+from app.models.analytics_loyalty import AggLoyaltyDaily
 from app.models.analytics_rollups import (
     AggCustomerCohortMonthly,
     AggCustomerDaily,
@@ -67,7 +91,9 @@ from app.models.analytics_rollups import (
     AggPromoDaily,
     AggShipmentDaily,
 )
+from app.models.analytics_settlement import AggSettlementDaily
 from app.services.analytics.filters import ResolvedWindow
+from app.services.analytics.metric_kind import assert_averagable
 
 logger = logging.getLogger(__name__)
 
@@ -87,9 +113,27 @@ HARD_ROW_CAP = 5000
 COUNT_ROWS = "row_count"
 COUNT_DISTINCT_PREFIX = "count_distinct:"
 
+#: `avg:<column>` — the MEAN of a stored column over the matched rows.
+#:
+#: Needed because there are questions a SUM cannot answer at all. Inventory
+#: Turnover is COGS over *average* stock held, and `stock_close` is a LEVEL:
+#: summing it counts the same units once per day, and taking the latest bucket
+#: answers "what do we hold now", not "what did we hold on average". Neither
+#: existing projection can produce the denominator.
+#:
+#: Unlike the count projections this one names a real column, so its argument
+#: goes through the same allowlist and the same `measures` check as a SUM — and
+#: then through `metric_kind.assert_averagable`, which refuses anything that is
+#: not a LEVEL. See `_avg` for why that guard is not optional.
+AVG_PREFIX = "avg:"
+
 
 def _is_count_projection(name: str) -> bool:
     return name == COUNT_ROWS or name.startswith(COUNT_DISTINCT_PREFIX)
+
+
+def _is_avg_projection(name: Any) -> bool:
+    return isinstance(name, str) and name.startswith(AVG_PREFIX)
 
 #: Columns present on every rollup that are bookkeeping, not data.
 _META_COLUMNS = frozenset({"id", "computed_at"})
@@ -104,6 +148,74 @@ def _is_numeric(column: Any) -> bool:
     except (NotImplementedError, AttributeError):  # pragma: no cover - defensive
         return False
     return python_type in (int, float, bool, Decimal)
+
+
+def _is_boolean(column: Any) -> bool:
+    """True for a column whose PYTHON-side type is a truth value.
+
+    Tested through `python_type` rather than `isinstance(column.type, Boolean)`
+    so a `TypeDecorator` wrapping a Boolean is caught too. `python_type` is
+    precisely the property that predicts the coercion in `_numeric` below: it is
+    what tells SQLAlchemy to attach a result processor that turns whatever the
+    driver hands back into `True`/`False`.
+    """
+    try:
+        return column.type.python_type is bool
+    except (NotImplementedError, AttributeError):  # pragma: no cover - defensive
+        return False
+
+
+def _numeric(column: InstrumentedAttribute) -> Any:
+    """The column as an aggregate-safe integer expression.
+
+    **This is the fix for a live wrong number, and it belongs here rather than
+    at any call site.** `func.sum(col)` inherits `col`'s SQLAlchemy type. For a
+    `Boolean` column that means the aggregate is typed `Boolean`, so the result
+    processor MySQL's driver output passes through is the Boolean one — and a
+    day with 7 out-of-stock products comes back as `True`. Verified against
+    MySQL 8, same SQL both ways:
+
+        SELECT sum(agg_inventory_daily.is_oos)                 -> True   (bool)
+        SELECT sum(CAST(agg_inventory_daily.is_oos AS SIGNED)) -> 7      (int)
+
+    The database was never wrong: a raw `text("SELECT SUM(is_oos) ...")` returns
+    `Decimal('7')`. The truncation to a truth value happens entirely in the
+    result processor, which is why nothing raises and why the number is
+    unfalsifiable downstream — `True` formats as `1`, and one product out of
+    stock is an utterly ordinary reading.
+
+    Casting inside the repository — the one module that builds this SQL — is
+    what makes the fix durable. Fixing it per caller (as `resolvers/levels.py`
+    did, by routing every flag through a GROUP BY instead of a SUM) leaves the
+    next rollup Boolean one binding away from the same silent failure, and a
+    reviewer has nothing to notice.
+
+    Applied to AVG as well as SUM. `func.avg` happens NOT to inherit the column
+    type today (`avg` is not a registered generic function, unlike `sum`, `min`
+    and `max`, all of which do), so `AVG(<bool>)` is currently correct by
+    accident. One line here means it stays correct on purpose.
+    """
+    return cast(column, Integer) if _is_boolean(column) else column
+
+
+def _sum(column: InstrumentedAttribute) -> Any:
+    """`SUM(column)`, never a truth value. See `_numeric`.
+
+    The OUTER cast is not about correctness — `SUM(CAST(b AS SIGNED))` already
+    returns the right count — it is about the Python type. MySQL's `SUM()` over
+    an integer returns `DECIMAL`, so without it a Boolean sum arrives as
+    `Decimal('7')`. A sum over a Boolean is a COUNT of the rows whose flag was
+    set, and every other count this module projects (`row_count`,
+    `count_distinct:`) arrives as a plain `int`; `CAST(SUM(...) AS SIGNED)`
+    returns BIGINT and so does this one. It also makes the test that pins this
+    behaviour able to assert `type(value) is int`, which is the ONLY assertion
+    that positively excludes a bool — `isinstance(True, int)` is `True` in
+    Python, so an `isinstance` check would pass on exactly the bug it is there
+    to catch.
+    """
+    if _is_boolean(column):
+        return cast(func.sum(_numeric(column)), Integer)
+    return func.sum(column)
 
 
 def _is_identity(key: str) -> bool:
@@ -179,6 +291,19 @@ def _build_registry() -> Mapping[str, _SourceSpec]:
         AggPromoDaily,
         AggFunnelDaily,
         AggInventoryDaily,
+        AggLoyaltyDaily,
+        AggCxDaily,
+        AggBasketPairDaily,
+        # GA4 traffic, from the Data API. Registered so a view CAN be bound to
+        # it; none is yet. Note for whoever binds one: `total_users` is a
+        # DISTINCT count and `metric_kind.classify` does not yet know that, so
+        # it must not be summed — see `analytics_ga4.NON_ADDITIVE_COLUMNS`.
+        AggGa4Daily,
+        # `agg_settlement_daily` only. `payment_settlements` is a FACT table —
+        # one row per gateway settlement line — and is read through
+        # `services/analytics/settlements.py`, not through the generic
+        # source allowlist, so it deliberately does not appear here.
+        AggSettlementDaily,
     ):
         spec = _SourceSpec(model)
         registry[spec.name] = spec
@@ -237,11 +362,66 @@ def _column(spec: _SourceSpec, name: Any) -> InstrumentedAttribute:
     return spec.columns[name]
 
 
-def _measure(spec: _SourceSpec, name: Any) -> InstrumentedAttribute:
+def _measure(
+    spec: _SourceSpec, name: Any, *, kind: str = "summable"
+) -> InstrumentedAttribute:
     column = _column(spec, name)
     if name not in spec.measures:
-        _reject(f"summable column for {spec.name}", name, spec.measures)
+        _reject(f"{kind} column for {spec.name}", name, spec.measures)
     return column
+
+
+def _avg(spec: _SourceSpec, projection: str) -> Any:
+    """`AVG(<column>)` for the `avg:<column>` projection.
+
+    Two guards, in this order, because they answer different questions:
+
+    1. `_measure` — is this a real, numeric, non-dimension column of THIS table?
+       The safety boundary, identical to the one a SUM goes through, so
+       `avg:1; DROP TABLE x` fails a dict lookup rather than reaching the
+       compiler.
+    2. `metric_kind.assert_averagable` — is averaging this column *meaningful*?
+       The semantic boundary, and the reason this projection is not simply a
+       third `func.<agg>` in `fetch_rollup`. `AVG(units_sold)` over a window is
+       "units per bucket", which silently changes value when the same period is
+       re-bucketed from days to weeks; only a LEVEL has an average that means
+       what a caller asking for one expects. Refusing is the whole point — the
+       alternative is a plausible wrong figure, which is the failure mode this
+       subsystem is built around.
+
+    This is the one place in the repository that consults `metric_kind`. The
+    module docstring's "it does not decide what is additive" still holds for
+    SUM, where the allowlist is a safety boundary and additivity is the
+    resolver's call. AVG is different: there is no correct caller for
+    `AVG(<flow>)`, so there is nothing for a resolver to decide and no reason to
+    let the wrong number be constructed at all.
+
+    **Empty buckets: this is a mean over the rows that EXIST, not over calendar
+    days.** A day on which a product has no row contributes to neither the
+    numerator nor the denominator — `AVG` skips it, it does not read as zero
+    stock. That is deliberate and it is the conservative direction:
+
+    * `agg_inventory_daily` is forward-only and documents outright that an
+      absent bucket means "we have no data", not "we held no stock" (drawing it
+      as zero is the specific failure its `inventory_history_since` setting
+      exists to prevent). Dividing by calendar days would encode the opposite.
+    * It matches this module's standing rule that it does not invent zeros —
+      `fetch_totals` returns `None`, not 0, for an empty window, and `AVG` over
+      zero rows likewise returns `None`.
+    * It errs the safe way for the metric that motivated it. Turnover is COGS
+      over average stock, so a denominator deflated by phantom zero-stock days
+      would report *higher* turnover — the flattering direction, and the one
+      nobody investigates. Measured over 1997-03-01 (stock 10), no row on the
+      2nd, and 1997-03-03 (stock 20), this returns 15, not 10.
+
+    A caller who genuinely wants the calendar-day average can still have it, and
+    has to say so: project the SUM and divide by a denominator it names itself.
+    An implicit denominator is exactly what makes the wrong version invisible.
+    """
+    name = projection[len(AVG_PREFIX):]
+    column = _measure(spec, name, kind="averageable")
+    assert_averagable(name, source=spec.name)
+    return func.avg(_numeric(column))
 
 
 def _unique(kind: str, names: Iterable[str]) -> list[str]:
@@ -287,6 +467,12 @@ class AnalyticsRepository:
         requested column that is not itself a grouping key is wrapped in `SUM()`
         and must be a summable column of that source (see `measures_for`).
 
+        A `Boolean` column's SUM is cast to an integer first — see `_sum`, which
+        is where a rollup flag stopped reporting its count as `True`.
+
+        `avg:<column>` and the count pseudo-columns are aggregates whatever the
+        grouping, so like `row_count` they are recognised before that split.
+
         Values come back in their native Python types (`Decimal`, `date`,
         `datetime`); serialisation belongs to the schema layer.
         """
@@ -326,10 +512,17 @@ class AnalyticsRepository:
                     if name == COUNT_ROWS
                     else func.count(func.distinct(_column(spec, name[len(COUNT_DISTINCT_PREFIX):])))
                 ).label(name)
+            elif _is_avg_projection(name):
+                # An aggregate however the query is grouped, exactly like the
+                # counts above — `avg:stock_close` grouped by `bucket_date` is
+                # the mean across products on each day, ungrouped it is the mean
+                # across the whole window. Both are averages; neither is a
+                # column, so this branch precedes the group-key split.
+                expr = _avg(spec, name).label(name)
             elif not group_keys or name in grouped:
                 expr = _column(spec, name).label(name)
             else:
-                expr = func.sum(_measure(spec, name)).label(name)
+                expr = _sum(_measure(spec, name)).label(name)
             expressions[name] = expr
             projection.append(expr)
 
@@ -360,13 +553,28 @@ class AnalyticsRepository:
         That distinction is deliberate and load-bearing: 0 means "measured, and
         it was zero"; `None` means "there is nothing to measure yet". Pair it
         with `source_watermark` to tell the two apart in the envelope.
+
+        `avg:<column>` is accepted here too, and is the form a window-level
+        average is asked for: Inventory Turnover's denominator is one number for
+        the whole window, not one per bucket. It obeys the same `None`-not-zero
+        rule — `AVG` over no rows is `None`.
+
+        A `Boolean` column's total is a count of the rows whose flag was set,
+        returned as an `int`. It used to be returned as `True`; see `_sum`.
         """
         spec = _spec(source)
         columns = _unique("column", columns or [])
         if not columns:
             raise ValueError("fetch_totals requires at least one column")
 
-        projection = [func.sum(_measure(spec, name)).label(name) for name in columns]
+        projection = [
+            (
+                _avg(spec, name)
+                if _is_avg_projection(name)
+                else _sum(_measure(spec, name))
+            ).label(name)
+            for name in columns
+        ]
         stmt = select(*projection).where(*self._scope(spec, window, tz_generation, filters))
         row = self.db.execute(stmt).mappings().first()
         if row is None:  # pragma: no cover - an aggregate always returns a row

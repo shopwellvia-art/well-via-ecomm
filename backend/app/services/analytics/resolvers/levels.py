@@ -55,6 +55,12 @@ existed. ``metric_kind`` cannot say so itself — a count projection names no
 column, so there is nothing for it to classify — which is why ``_strategies_of``
 answers for it rather than asking.
 
+Counting a **flag** (out of stock, active) is a count and not a sum, and that is
+not a stylistic preference: ``SUM(<boolean column>)`` comes back through
+SQLAlchemy's Boolean result processor, so any number of out-of-stock products is
+reported as ``True``, which is 1. See ``COUNT_WHERE_PREFIX`` for what is done
+instead and why it needs nothing new from the repository.
+
 ``cohort_matrix``
 -----------------
 ``agg_customer_cohort_monthly`` repeats ``cohort_size`` on every period row of a
@@ -97,6 +103,7 @@ from app.repositories.analytics_repository import (
     COUNT_DISTINCT_PREFIX,
     COUNT_ROWS,
     HARD_ROW_CAP as REPOSITORY_ROW_CAP,
+    columns_for,
 )
 from app.schemas.analytics_view import (
     AnalyticsWarning,
@@ -431,8 +438,6 @@ def _stores_dimension(source: str, column: str) -> bool:
     assumed because the failure mode is not a blank chart: an absent column
     raises inside the repository's allowlist, which is a 500 on a LIVE view.
     """
-    from app.repositories.analytics_repository import columns_for
-
     return column in set(columns_for(source))
 
 

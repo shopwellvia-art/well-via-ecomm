@@ -7,6 +7,9 @@ from app.api.v1.endpoints import (
     addresses,
     analytics,
     analytics_admin,
+    analytics_cost_admin,
+    analytics_integrations,
+    analytics_settlements,
     analytics_views,
     audit,
     auth,
@@ -103,6 +106,27 @@ api_router.include_router(analytics.router, prefix="/analytics", tags=["analytic
 api_router.include_router(
     analytics_admin.router, prefix="/analytics", tags=["analytics-admin"]
 )
+# Tracking credentials — GTM, GA4, Clarity, consent: /integrations*.
+#
+# Mounted UNCONDITIONALLY, outside the ANALYTICS_V2_ENABLED block below, and the
+# ordering matters. This is the ONLY write path for these keys: the generic
+# PATCH /settings deliberately rejects every `analytics.*` integration key with
+# a ForbiddenError, because that path neither encrypts secrets nor validates the
+# field nor audits under its own action. So if this router is absent, the keys
+# cannot be set through any route at all — which is exactly what happened: the
+# module was written with a docstring claiming router.py mounted it, the
+# frontend called PUT /analytics/integrations, and the endpoint 404ed. The
+# service-layer tests all called `integrations.apply_updates` directly, so
+# nothing caught it.
+#
+# Not inside the flag block, because the rollout order in
+# docs/analytics/DEPLOYMENT.md configures tracking BEFORE enabling V2 — gating
+# it on V2 would make the documented sequence impossible to follow. The keys are
+# inert until ANALYTICS_TRACKING_ENABLED is on regardless, so mounting this
+# early changes no behaviour; it only makes the credentials enterable.
+api_router.include_router(
+    analytics_integrations.router, prefix="/analytics", tags=["analytics-integrations"]
+)
 # Analytics v2 read surface: navigation, the single view endpoint, the KPI
 # catalogue and CSV export. Paths start /modules, /kpis, /exports, so none of
 # them can shadow the two legacy static routes registered above.
@@ -123,6 +147,23 @@ api_router.include_router(
 if app_settings.ANALYTICS_V2_ENABLED:
     api_router.include_router(
         analytics_views.router, prefix="/analytics", tags=["analytics-views"]
+    )
+    # Cost-rule and marketing-spend entry: /admin/cost-rules,
+    # /admin/marketing-spend. Inside the flag block with the read surface it
+    # feeds — entering a rate is only meaningful once the views that consume it
+    # are mounted, and the documented rollback (flag off, no deploy) must take
+    # the whole subsystem with it. Paths start /admin/, so they cannot shadow
+    # the legacy /analytics/sales and /analytics/profit routes above.
+    api_router.include_router(
+        analytics_cost_admin.router, prefix="/analytics", tags=["analytics-costs"]
+    )
+    # Settlement report upload + status: /admin/settlements/*. Inside the flag
+    # block with the view (64) it feeds, for the same reason as the cost admin:
+    # the documented rollback (flag off, no deploy) must take the whole
+    # subsystem with it, and uploading a report is only meaningful once the
+    # view that reads it is mounted.
+    api_router.include_router(
+        analytics_settlements.router, prefix="/analytics", tags=["analytics-settlements"]
     )
 api_router.include_router(footer.router, prefix="/footer", tags=["footer"])
 api_router.include_router(

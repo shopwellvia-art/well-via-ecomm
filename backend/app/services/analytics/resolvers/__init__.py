@@ -38,6 +38,13 @@ from app.services.analytics.resolvers import levels as _levels  # noqa: F401
 # contributes nothing — and the view that names its function 503s at request
 # time rather than failing at startup. Keep every resolver module listed here.
 from app.services.analytics.resolvers import forecast as _forecast  # noqa: F401
+from app.services.analytics.resolvers import control_centre as _control_centre  # noqa: F401
+from app.services.analytics.resolvers import basket as _basket  # noqa: F401
+from app.services.analytics.resolvers import cx as _cx  # noqa: F401
+from app.services.analytics.resolvers import risk as _risk  # noqa: F401
+from app.services.analytics.resolvers import marketing as _marketing  # noqa: F401
+from app.services.analytics.resolvers import turnover as _turnover  # noqa: F401
+from app.services.analytics.resolvers import settlements_view as _settlements_view  # noqa: F401
 from app.services.analytics.resolvers.base import (
     NOT_CONFIGURED,
     RESOLVERS,

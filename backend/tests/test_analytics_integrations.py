@@ -315,6 +315,53 @@ def _row(key: str) -> SystemSetting | None:
         ).scalar_one_or_none()
 
 
+def _snapshot_setting(key: str) -> dict | None:
+    """The row as it stands, or None when absent — for `_restore_setting`."""
+    row = _row(key)
+    if row is None:
+        return None
+    return {
+        "value": row.value,
+        "category": row.category,
+        "description": row.description,
+        "is_secret": bool(row.is_secret),
+    }
+
+
+def _restore_setting(key: str, prior: dict | None) -> None:
+    """Put a shared settings row back exactly as it was before a test wrote it.
+
+    The autouse `_clean_integration_rows` purge deletes this module's rows
+    after each test, but deletion-later is the wrong tool for a poisoned
+    CREDENTIAL: anything reading the shared row between the write and the purge
+    — another suite in a concurrent wave, or the live app — sees the fake value
+    and honestly reports auth_failed against it, and a run killed before the
+    purge leaves the poison in place indefinitely. Restoring the prior value
+    (or absence) in the test's own `finally` closes that window to the width of
+    the assertions. The settings cache is cleared too, or a reader could keep
+    seeing the poison for up to 60 seconds after the row itself is fixed.
+    """
+    with SessionLocal() as db:
+        row = db.execute(
+            select(SystemSetting).where(SystemSetting.key == key)
+        ).scalar_one_or_none()
+        if prior is None:
+            if row is not None:
+                db.delete(row)
+        elif row is None:
+            db.add(SystemSetting(key=key, **prior))
+        else:
+            for field, value in prior.items():
+                setattr(row, field, value)
+        db.commit()
+    try:
+        from app.db.redis import get_redis
+
+        get_redis().delete(f"settings:{key}")
+    except Exception:  # noqa: BLE001 — cache cleanup must never fail a test
+        pass
+
+
 def _configure_all(client: TestClient, manager: _Actor) -> None:
     resp = _put(
         client,
@@ -390,6 +437,13 @@ class TestSecretsNeverReachTheBrowser:
     def test_service_account_json_is_redacted_too(
         self, client: TestClient, manager: _Actor
     ) -> None:
+        """The fake key below is well-formed enough to save and USELESS to
+        authenticate with, so it is restored in the `finally` rather than left
+        for the fixture purge: the GA4 Data API reads this same shared row, and
+        a concurrent (or crashed) run that saw the poison would honestly —
+        and mystifyingly — report auth_failed."""
+        key = "analytics.ga4_data_api_credentials"
+        prior = _snapshot_setting(key)
         creds = json.dumps(
             {
                 "type": "service_account",
@@ -397,13 +451,14 @@ class TestSecretsNeverReachTheBrowser:
                 "private_key": "-----BEGIN PRIVATE KEY-----\nLEAKME-abc123\n",
             }
         )
-        assert _put(
-            client, manager, {"analytics.ga4_data_api_credentials": creds}
-        ).status_code == 200
+        try:
+            assert _put(client, manager, {key: creds}).status_code == 200
 
-        resp = _get(client, manager)
-        assert "LEAKME-abc123" not in resp.text
-        assert _field(resp.json(), "analytics.ga4_data_api_credentials")["value"] == "***"
+            resp = _get(client, manager)
+            assert "LEAKME-abc123" not in resp.text
+            assert _field(resp.json(), key)["value"] == "***"
+        finally:
+            _restore_setting(key, prior)
 
     def test_health_never_reports_a_credential_value(
         self, client: TestClient, manager: _Actor, viewer: _Actor
@@ -515,9 +570,23 @@ class TestEncryptionAtRest:
     ) -> None:
         """Distinct from the mask: an explicitly emptied field must actually
         remove the credential, or a compromised key could never be revoked from
-        the UI."""
+        the UI.
+
+        Delivery moves to browser-only in the same request: purchase delivery
+        defaults to server mode, and the deliverability guard (rightly) refuses
+        to drop the secret while the server is the one that needs it. Revoking
+        a compromised key therefore goes hand in hand with saying who sends
+        purchases from now on — see `test_analytics_delivery_guard.py`.
+        """
         assert _put(client, manager, {"analytics.ga4_api_secret": SECRET}).status_code == 200
-        assert _put(client, manager, {"analytics.ga4_api_secret": ""}).status_code == 200
+        assert _put(
+            client,
+            manager,
+            {
+                "analytics.ga4_api_secret": "",
+                "analytics.ga4_purchase_delivery": "browser",
+            },
+        ).status_code == 200
 
         assert (_row("analytics.ga4_api_secret").value or "") == ""
         with SessionLocal() as db:
@@ -635,11 +704,21 @@ class TestPermissions:
     def test_a_refused_write_changes_nothing(
         self, client: TestClient, nobody: _Actor
     ) -> None:
-        """A 403 that still wrote the row would be the worst possible outcome."""
+        """A 403 that still wrote the row would be the worst possible outcome.
+
+        Asserted as "the refused VALUE did not land", not as "the row is
+        absent": `system_settings` is shared, and any concurrent reader of the
+        integrations screen (another suite, the live app) legitimately
+        re-creates the row with its shipped default via `ensure_rows`. Same
+        reasoning as `test_malformed_values_are_rejected_not_normalised`.
+        """
         assert _put(
             client, nobody, {"analytics.gtm_container_id": VALID_GTM}
         ).status_code == 403
-        assert _row("analytics.gtm_container_id") is None
+        row = _row("analytics.gtm_container_id")
+        assert row is None or (row.value or "") != VALID_GTM, (
+            "the refused write landed in the shared settings row"
+        )
 
     def test_health_requires_control_centre_view_not_manage(
         self, client: TestClient, viewer: _Actor, manager: _Actor, nobody: _Actor
@@ -773,20 +852,30 @@ class TestConnectionHonesty:
         self, client: TestClient, manager: _Actor
     ) -> None:
         """The one thing that *is* locally decidable must not be hidden inside
-        `cannot_verify_server_side` — a malformed id is a definite failure."""
-        with SessionLocal() as db:
-            integrations_service.ensure_rows(db)
-            db.execute(
-                text(
-                    "UPDATE system_settings SET value = 'gtm-lowercase' "
-                    "WHERE `key` = 'analytics.gtm_container_id'"
-                )
-            )
-            db.commit()
+        `cannot_verify_server_side` — a malformed id is a definite failure.
 
-        body = _test_provider(client, manager, "gtm").json()
-        assert body["status"] == "invalid_format", body
-        assert body["verified"] is False
+        The malformed id is written straight into the shared row (the API would
+        rightly refuse it), so like the poisoned credential above it is restored
+        in the `finally` rather than left for the fixture purge.
+        """
+        key = "analytics.gtm_container_id"
+        prior = _snapshot_setting(key)
+        try:
+            with SessionLocal() as db:
+                integrations_service.ensure_rows(db)
+                db.execute(
+                    text(
+                        "UPDATE system_settings SET value = 'gtm-lowercase' "
+                        "WHERE `key` = 'analytics.gtm_container_id'"
+                    )
+                )
+                db.commit()
+
+            body = _test_provider(client, manager, "gtm").json()
+            assert body["status"] == "invalid_format", body
+            assert body["verified"] is False
+        finally:
+            _restore_setting(key, prior)
 
 
 class TestGa4ConnectionTest:
@@ -1067,16 +1156,27 @@ class TestTrackingHealth:
         self, client: TestClient, manager: _Actor, viewer: _Actor
     ) -> None:
         """Purchases would queue in the outbox forever with nothing to send
-        them with — and the outbox would look busy rather than broken."""
-        assert _put(
-            client,
-            manager,
-            {
-                "analytics.ga4_enabled": "true",
-                "analytics.ga4_measurement_id": VALID_GA4,
-                "analytics.ga4_purchase_delivery": "server",
-            },
-        ).status_code == 200
+        them with — and the outbox would look busy rather than broken.
+
+        The state is seeded with raw row writes, not through the PUT endpoint:
+        the save path now *refuses* to create it (`UndeliverableConfiguration`),
+        but deployments configured before the guard existed are already in it,
+        and the warning is the defence-in-depth that must keep firing for them.
+        """
+        with SessionLocal() as db:
+            integrations_service.ensure_rows(db)
+            db.execute(
+                text(
+                    "UPDATE system_settings SET value = :v WHERE `key` = :k"
+                ),
+                [
+                    {"k": "analytics.ga4_enabled", "v": "true"},
+                    {"k": "analytics.ga4_measurement_id", "v": VALID_GA4},
+                    {"k": "analytics.ga4_purchase_delivery", "v": "server"},
+                    {"k": "analytics.ga4_api_secret", "v": ""},
+                ],
+            )
+            db.commit()
 
         body = _health(client, viewer).json()
         assert body["providers"]["ga4"]["server_delivery_ready"] is False

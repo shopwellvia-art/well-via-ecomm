@@ -338,6 +338,46 @@ def _bulk(db, table, rows: list[dict]) -> int:
     return written
 
 
+def _split_exactly(total: int, weights: list[float]) -> list[int]:
+    """Split `total` across `weights` so the parts sum to `total` EXACTLY.
+
+    Rounding each day's share independently leaves a residue, and the residue
+    depends on the weights — which here depend on which weekdays the seeded
+    window happens to contain, because weekends carry a 1.35 multiplier. The
+    window ends yesterday, so its weekday mix changes every day: the seeder
+    wrote exactly 400 orders on some calendar days and 398 on others. That makes
+    `--orders 400` a label rather than a fact, and every latency figure in the
+    report is quoted against that label.
+
+    The rule is the one `kpis._ALLOCATION_RULE` already states for pushing an
+    order-level amount down to lines: floor every share, then hand the remaining
+    units to the largest fractional parts. Every day still gets at least one
+    order — that floor is allocated first, so it cannot be paid for by making
+    the total wrong.
+    """
+    days = len(weights)
+    if days == 0:
+        return []
+    if total <= days:
+        # Degenerate, and not silently: one order per day for as many days as
+        # there are orders, rather than a window padded out with empty days.
+        return [1] * total + [0] * (days - total)
+
+    remaining = total - days  # the guaranteed one-per-day is taken out first
+    weight_sum = sum(weights) or 1.0
+    exact = [remaining * w / weight_sum for w in weights]
+    counts = [1 + int(share) for share in exact]
+
+    short = total - sum(counts)
+    # Hand out what rounding down left over, largest fractional part first.
+    for index in sorted(
+        range(days), key=lambda i: (exact[i] - int(exact[i]), i), reverse=True
+    )[:short]:
+        counts[index] += 1
+    assert sum(counts) == total, "largest-remainder split must be exact"
+    return counts
+
+
 def _existing_counts(db) -> dict[str, int]:
     """How much of the namespace is already present."""
     from app.models.order import Order
@@ -602,8 +642,7 @@ def seed(profile: SeedProfile, *, force: bool = False, quiet: bool = False) -> d
             weekend = 1.35 if day.weekday() >= 5 else 1.0
             growth = 0.7 + 0.6 * (offset / max(1, profile.days - 1))
             weights.append(weekend * growth)
-        total_weight = sum(weights)
-        per_day = [max(1, round(profile.orders * w / total_weight)) for w in weights]
+        per_day = _split_exactly(profile.orders, weights)
 
         order_id = base_order_id
         sequence = 0
@@ -932,6 +971,16 @@ def clean(*, rollups: bool = False, quiet: bool = False) -> dict[str, int]:
 
     removed: dict[str, int] = {}
     with SessionLocal() as db:
+        # Captured BEFORE the orders are deleted: the rollup cleanup below is
+        # scoped to the date window the PERF dataset actually occupies, and the
+        # orders' created_at range is the only durable record of that window.
+        perf_window = db.execute(
+            select(
+                func.min(func.date(Order.created_at)),
+                func.max(func.date(Order.created_at)),
+            ).where(Order.order_number.like(f"{ORDER_NUMBER_PREFIX}%"))
+        ).one()
+
         perf_orders = select(Order.id).where(
             Order.order_number.like(f"{ORDER_NUMBER_PREFIX}%")
         )
@@ -991,22 +1040,43 @@ def clean(*, rollups: bool = False, quiet: bool = False) -> dict[str, int]:
         db.commit()
 
         if rollups:
-            # Derived tables. Emptied only on request, because a developer
+            # Derived tables. Cleaned only on request, because a developer
             # cleaning the transactional namespace usually still wants to look
             # at what the rollups produced.
-            for table in (
-                "agg_order_daily",
-                "agg_order_hourly",
-                "agg_product_daily",
-                "agg_customer_daily",
-                "agg_customer_snapshot",
-                "agg_funnel_daily",
-                "agg_inventory_daily",
-                "agg_shipment_daily",
-            ):
-                db.execute(text(f"DELETE FROM {table}"))
-            db.commit()
-            removed["rollup_tables_emptied"] = 8
+            #
+            # SCOPED to the PERF dataset's own date window, never `DELETE FROM
+            # <table>` bare. The unscoped version emptied every rollup row on
+            # the shared database — including rows other test suites had seeded
+            # for their own assertions and a demo dataset's 90-day backfill —
+            # every time `tests/perf` ran inside a full-suite invocation. A
+            # cleanup that destroys OTHER owners' state is the exact defect the
+            # analytics test conventions exist to prevent; rollup rows carry no
+            # namespace column, so the window derived from the PERF orders
+            # (captured above, before those orders were deleted) is the scope.
+            # No PERF orders ⇒ seed produced nothing ⇒ nothing to clean.
+            window_from, window_to = perf_window
+            if window_from is not None:
+                for table in (
+                    "agg_order_daily",
+                    "agg_order_hourly",
+                    "agg_product_daily",
+                    "agg_customer_daily",
+                    "agg_customer_snapshot",
+                    "agg_funnel_daily",
+                    "agg_inventory_daily",
+                    "agg_shipment_daily",
+                ):
+                    db.execute(
+                        text(
+                            f"DELETE FROM {table} "
+                            "WHERE bucket_date BETWEEN :a AND :b"
+                        ),
+                        {"a": window_from, "b": window_to},
+                    )
+                db.commit()
+                removed["rollup_tables_cleaned"] = 8
+            else:
+                removed["rollup_tables_cleaned"] = 0
 
     log(f"clean: {removed}")
     return removed

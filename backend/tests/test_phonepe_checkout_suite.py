@@ -26,6 +26,14 @@ test provider. No real network calls and no PhonePe credentials in the DB are
 required. Webhook bodies are built and signed with the same test salt the
 provider verifies against, so the signature path is genuinely tested.
 
+Webhook tests must stub BOTH halves of the boundary. Since the webhook-
+confirmation hardening, ``handle_webhook`` re-reads the transaction from the
+gateway before settling a PENDING order and applies the gateway's answer rather
+than the payload's — so ``_sign_webhook`` alone is no longer a complete setup.
+Every webhook test also calls ``_gateway_confirms`` to arm ``_get``; without it
+``fetch_status`` reaches for the real sandbox hostname and the test dies on DNS
+instead of on payment behaviour.
+
 Tests use the shared dev MySQL (the project convention) and clean up after
 themselves in a fresh session, FK-safe. payment_events rows are append-only
 audit and are intentionally left (their order_id FK is ON DELETE SET NULL);
@@ -155,6 +163,28 @@ def _use_phonepe(provider: PhonePeProvider):
         "app.services.payment_service.get_provider_for_order", return_value=provider
     ):
         yield
+
+
+def _gateway_confirms(provider: PhonePeProvider, envelope: dict) -> None:
+    """Arm ``/pg/v1/status`` with the answer the gateway will give.
+
+    ``PaymentService.handle_webhook`` does not trust a signed payload: a valid
+    signature proves the body was authored by someone holding the salt, not that
+    money moved. Before settling a PENDING order it re-reads the transaction
+    from the gateway (``provider.fetch_status`` → ``_get``) and applies THAT
+    answer, ignoring whatever the payload claimed.
+
+    So every webhook test has to say two things, not one: what PhonePe *posted*
+    (``_sign_webhook``) and what PhonePe *confirms when asked* (this). Stubbing
+    only ``_post`` at checkout leaves ``_get`` pointed at the real sandbox
+    hostname, which does not resolve — the suite then fails on a DNS error that
+    looks nothing like the payment behaviour under test.
+
+    Pass the same envelope to both helpers for the ordinary case (gateway agrees
+    with the webhook); pass different ones to exercise the disagreement path,
+    where the gateway's answer must win.
+    """
+    provider._get = MagicMock(return_value=envelope)
 
 
 # ---------------------------------------------------------------------------
@@ -684,6 +714,8 @@ class TestWebhookSuccess:
             txn_id = "T_HOOK_" + _uid().upper()
             payload = _phonepe_status_envelope(mtid, amount_minor, txn_id)
             body, signature = _sign_webhook(provider, payload)
+            # ...and PhonePe stands behind it when handle_webhook asks.
+            _gateway_confirms(provider, payload)
 
             with _use_phonepe(provider):
                 returned = PaymentService(db).handle_webhook(
@@ -754,9 +786,9 @@ class TestPathConsistency:
             mtids.append(mtid_b)
             amt_b = _expected_minor(_snapshot_order(order_b.id)["total_amount"])
             txn_b = "T_B_" + _uid().upper()
-            body, sig = _sign_webhook(
-                prov_b, _phonepe_status_envelope(mtid_b, amt_b, txn_b)
-            )
+            envelope_b = _phonepe_status_envelope(mtid_b, amt_b, txn_b)
+            body, sig = _sign_webhook(prov_b, envelope_b)
+            _gateway_confirms(prov_b, envelope_b)
             with _use_phonepe(prov_b):
                 PaymentService(db).handle_webhook(body, sig, gateway_code="phonepe")
 
@@ -854,9 +886,9 @@ class TestIdempotency:
             order_ids.append(order.id)
             amount_minor = _expected_minor(_snapshot_order(order.id)["total_amount"])
             txn_id = "T_DUP_" + _uid().upper()
-            body, sig = _sign_webhook(
-                provider, _phonepe_status_envelope(mtid, amount_minor, txn_id)
-            )
+            envelope = _phonepe_status_envelope(mtid, amount_minor, txn_id)
+            body, sig = _sign_webhook(provider, envelope)
+            _gateway_confirms(provider, envelope)
 
             # Deliver the SAME signed webhook three times.
             with _use_phonepe(provider):
@@ -909,12 +941,11 @@ class TestNegative:
             order, mtid, provider = _checkout_phonepe(db, svc, user, prod, quantity=3)
             order_ids.append(order.id)
             amount_minor = _expected_minor(_snapshot_order(order.id)["total_amount"])
-            body, sig = _sign_webhook(
-                provider,
-                _phonepe_status_envelope(
-                    mtid, amount_minor, "T_FAIL", code="PAYMENT_ERROR", state="FAILED"
-                ),
+            envelope = _phonepe_status_envelope(
+                mtid, amount_minor, "T_FAIL", code="PAYMENT_ERROR", state="FAILED"
             )
+            body, sig = _sign_webhook(provider, envelope)
+            _gateway_confirms(provider, envelope)
 
             with _use_phonepe(provider):
                 PaymentService(db).handle_webhook(body, sig, gateway_code="phonepe")
@@ -1017,6 +1048,14 @@ class TestNegative:
             db.close()
 
     def test_amount_mismatch_does_not_mark_paid(self) -> None:
+        """The gateway reports a capture that does not match the order total.
+
+        The mismatch is asserted on the CONFIRMED amount, not the payload's:
+        `handle_webhook` re-reads the transaction and applies the gateway's
+        answer, so a payload-only discrepancy is overwritten before it can be
+        checked. What must never happen — and is what this asserts — is an
+        order marked PAID against an amount the gateway itself says was short.
+        """
         user_ids: list[int] = []
         product_ids: list[int] = []
         order_ids: list[int] = []
@@ -1036,9 +1075,9 @@ class TestNegative:
             expected = _expected_minor(_snapshot_order(order.id)["total_amount"])
             wrong = expected - 100  # underpaid by 1 rupee
 
-            body, sig = _sign_webhook(
-                provider, _phonepe_status_envelope(mtid, wrong, "T_MISMATCH")
-            )
+            envelope = _phonepe_status_envelope(mtid, wrong, "T_MISMATCH")
+            body, sig = _sign_webhook(provider, envelope)
+            _gateway_confirms(provider, envelope)
             with _use_phonepe(provider):
                 PaymentService(db).handle_webhook(body, sig, gateway_code="phonepe")
 

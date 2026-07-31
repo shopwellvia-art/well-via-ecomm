@@ -125,7 +125,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Mapping, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence
 
 import redis
 from sqlalchemy import and_, case, func, or_, select
@@ -145,6 +145,14 @@ from app.services.analytics.contracts import (
 from app.services.analytics.cost_rules import CostRuleResolver
 from app.services.analytics.types import MetricQuality, worst_quality
 from app.services.dashboard_service import _REVENUE_STATUSES
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    # NEVER import `settlements` at module level here. The runtime cycle is
+    # margin -> settlements -> reconciliation -> margin (reconciliation
+    # legitimately needs MarginService), so the observed-fee entry point is
+    # imported late inside `_observed_gateway_fees`, the house pattern for
+    # late binding. This block exists only so the annotation below is real.
+    from app.services.analytics.settlements import ObservedFee
 
 __all__ = [
     "MarginService",
@@ -1191,10 +1199,28 @@ class MarginService:
             name: _Accumulator(name) for name in CM2_COST_TYPES + CM3_COST_TYPES
         }
         carrier_actual_minor = sum(b.carrier_actual_minor for b in bases)
+        observed_fees = self._observed_gateway_fees(bases, scope)
+        observed_full = 0
+        observed_blended = 0
 
         for b in bases:
             for name in CM2_COST_TYPES + CM3_COST_TYPES:
                 if not self._is_charged(name, b):
+                    continue
+                # Gateway fee is the second component with a real observed
+                # source (forward shipping was the first): a matched settlement
+                # line carries the fee the gateway ACTUALLY charged, and on a
+                # day the report fully covers, that measurement replaces the
+                # cost-rule estimate. A day with no report keeps the rule.
+                if name == CostType.GATEWAY_FEE and b.day in observed_fees:
+                    day_component, fully_covered = self._gateway_fee_from_observed(
+                        observed_fees[b.day], b, scope
+                    )
+                    accs[name].add(day_component)
+                    if fully_covered:
+                        observed_full += 1
+                    else:
+                        observed_blended += 1
                     continue
                 component = self.resolver.resolve(
                     name, b.day, scope_candidates=dict(scope) or None
@@ -1210,6 +1236,16 @@ class MarginService:
                         on_date=b.day,
                     )
                 )
+
+        if observed_full or observed_blended:
+            warnings.append(
+                f"gateway_fee: observed settlement fees were used on "
+                f"{observed_full + observed_blended} day(s): {observed_full} fully "
+                "covered (ACTUAL, replacing the cost-rule estimate) and "
+                f"{observed_blended} partially covered (observed fee on the matched "
+                "payments plus the cost rule on the remainder — the blend is graded "
+                "by its weaker half, never ACTUAL)."
+            )
 
         resolved = {
             name: acc.freeze(idle_source=_IDLE_SOURCE[name])
@@ -1255,6 +1291,159 @@ class MarginService:
                 else "shipments.shipment_cost + cost rule"
             ),
             rule_id=rule_component.rule_id,
+        )
+
+    # ------------------------------------------------------------------
+    # ESTIMATED -> ACTUAL: the gateway fee, observed from settlements
+    # ------------------------------------------------------------------
+    def _observed_gateway_fees(
+        self, bases: Sequence[_DayBases], scope: Mapping[str, str]
+    ) -> dict[date, ObservedFee]:
+        """Observed gateway fees for every window day a settlement report covers.
+
+        **Zero settlement rows must change nothing.** The pre-scan below is one
+        bounded SELECT for the window's distinct settlement payment-dates; when
+        it finds none — the state of every deployment before its first upload —
+        this returns ``{}`` and the resolver path runs byte-identically to how
+        it ran before this method existed. `observed_gateway_fee` is only
+        called for the days the pre-scan proved have lines, so a 90-day window
+        with no report costs one query, not 90.
+
+        Scope discipline: a settlement report describes the *gateway's* whole
+        traffic. It can honestly serve an un-scoped window and a
+        ``{"gateway": ...}`` slice; it cannot be cut by payment method or
+        courier, so any other scope keeps the cost rule — applying a
+        whole-gateway observation to a filtered slice would attribute other
+        orders' fees to it.
+        """
+        if any(key != CostScope.GATEWAY for key in scope):
+            return {}
+        if not bases:
+            return {}
+        # Late-bound: margin -> settlements -> reconciliation -> margin is a
+        # real import cycle, and reconciliation's import of MarginService is
+        # the legitimate one. See the TYPE_CHECKING note at the top of the file.
+        from app.services.analytics.settlements import (
+            DEFAULT_GATEWAY,
+            observed_gateway_fee,
+        )
+
+        gateway = scope.get(CostScope.GATEWAY, DEFAULT_GATEWAY)
+
+        first, last = bases[0].day, bases[-1].day
+        from app.models.analytics_settlement import PaymentSettlement
+
+        covered_days = {
+            row[0]
+            for row in self.db.execute(
+                select(PaymentSettlement.payment_date)
+                .where(
+                    PaymentSettlement.gateway == gateway,
+                    PaymentSettlement.payment_date >= first,
+                    PaymentSettlement.payment_date <= last,
+                )
+                .distinct()
+            ).all()
+        }
+        if not covered_days:
+            return {}
+
+        from app.services.analytics.timebox import active_generation
+
+        generation = int(active_generation(self.db).generation)
+        window_days = {b.day for b in bases}
+        observed: dict[date, ObservedFee] = {}
+        for day in sorted(covered_days & window_days):
+            fee = observed_gateway_fee(
+                self.db, day, gateway=gateway, tz_generation=generation
+            )
+            if fee is not None:
+                observed[day] = fee
+        return observed
+
+    def _gateway_fee_from_observed(
+        self,
+        obs: ObservedFee,
+        b: _DayBases,
+        scope: Mapping[str, str],
+    ) -> tuple[CostComponent, bool]:
+        """One day's gateway-fee component when a settlement report covers it.
+
+        Returns ``(component, fully_covered)``. Three cases:
+
+        * **Full coverage** — the report explains every payment (its quality is
+          ACTUAL) and the matched gross covers the whole gateway base. The
+          observed ``fee + tax`` replaces the estimate outright, graded ACTUAL.
+          The cost rule is not consulted, so a day like this no longer *needs*
+          a rule — the measurement is strictly better evidence than the rate.
+        * **Partial coverage** — the observed fee is applied to the matched
+          subset, and the rule is applied to the uncovered remainder of the
+          base (and of the order count, for PER_ORDER rules). The pair is
+          graded by ``worst_quality`` — the blend is NOT ACTUAL, because part
+          of it is still a forecast. A missing rule here makes the whole
+          component MISSING, exactly as it would without a report: the
+          remainder's fee is unknown, and unknown is never zero.
+        * **Covered base, imperfect day** — the matched gross covers the whole
+          base but the day still has unmatched lines or unsettled captures.
+          The remainder is zero so no rule is needed, but the day's settlement
+          picture has unexplained pieces, so it is graded INCOMPLETE rather
+          than ACTUAL — a measurement gap, not a modelling choice.
+        """
+        remainder_base = max(0, b.gateway_base_minor - max(0, obs.matched_gross_minor))
+        source = f"payment_settlements ({obs.source})"
+
+        if obs.quality is MetricQuality.ACTUAL and remainder_base == 0:
+            return (
+                CostComponent(
+                    cost_type=CostType.GATEWAY_FEE,
+                    value_minor=obs.total_minor,
+                    quality=MetricQuality.ACTUAL,
+                    source=source,
+                ),
+                True,
+            )
+
+        if remainder_base == 0:
+            return (
+                CostComponent(
+                    cost_type=CostType.GATEWAY_FEE,
+                    value_minor=obs.total_minor,
+                    quality=MetricQuality.INCOMPLETE,
+                    source=source,
+                ),
+                False,
+            )
+
+        rule = self.resolver.resolve(
+            CostType.GATEWAY_FEE, b.day, scope_candidates=dict(scope) or None
+        )
+        remainder = self.resolver.compute(
+            rule,
+            base_minor=remainder_base,
+            units=self._units_base(CostType.GATEWAY_FEE, b),
+            weight_grams=self._weight_base(CostType.GATEWAY_FEE, b),
+            orders=max(0, b.gateway_orders - obs.matched_txns),
+            days_in_period=1,
+            on_date=b.day,
+        )
+        if remainder.is_missing:
+            # No rule covers the uncovered part of the day. The observed piece
+            # is real but the total is unknowable, and MISSING must propagate —
+            # publishing only the matched fees would report the gateway charged
+            # less than it did, the flattering direction of error.
+            return remainder, False
+
+        return (
+            CostComponent(
+                cost_type=CostType.GATEWAY_FEE,
+                value_minor=obs.total_minor + int(remainder.value_minor or 0),
+                quality=worst_quality([MetricQuality.ACTUAL, remainder.quality]),
+                scope=remainder.scope,
+                scope_value=remainder.scope_value,
+                source=f"{source} + cost rule",
+                rule_id=remainder.rule_id,
+            ),
+            False,
         )
 
     @staticmethod

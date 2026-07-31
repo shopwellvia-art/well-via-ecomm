@@ -212,6 +212,13 @@ class Capability(str, Enum):
     ORDER_LINE_FACT = "order_line_fact"
     BUDGETS = "budgets"
     EXPERIMENTS = "experiments"
+    #: Settlement rows exist in `payment_settlements` — satisfied the moment a
+    #: gateway settlement report is uploaded (CSV) or, one day, pulled by an API
+    #: client. Deliberately distinct from GATEWAY_SETTLEMENT_API: the API is an
+    #: external integration that remains unbuilt, whereas the *report* is
+    #: internal data a finance person can supply this afternoon. A view keyed on
+    #: this capability is fed by uploads and must not claim it needs the API.
+    GATEWAY_SETTLEMENT_REPORT = "gateway_settlement_report"
 
     # Business features this deployment does not have
     PRODUCT_VARIANTS = "product_variants"

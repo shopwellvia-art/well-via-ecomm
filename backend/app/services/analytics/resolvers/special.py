@@ -33,6 +33,9 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Callable, Mapping
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from app.schemas.analytics_view import (
     AnalyticsWarning,
     KpiValue,
@@ -64,7 +67,12 @@ from app.services.analytics.resolvers.core import (
     dense_points,
     evaluate,
 )
-from app.services.analytics.types import Capability, MetricQuality, ResolverId
+from app.services.analytics.types import (
+    AnalyticsViewDefinition,
+    Capability,
+    MetricQuality,
+    ResolverId,
+)
 
 __all__ = [
     "FunnelResolver",
@@ -75,15 +83,33 @@ __all__ = [
     "CustomResolver",
     "CUSTOM_FUNCTIONS",
     "custom_function",
+    "EXTERNAL_CAPABILITIES",
+    "external_capability_satisfied",
+    "unsatisfied_external_requirements",
 ]
 
 _HUNDRED = Decimal("100")
 _PCT_Q = Decimal("0.0001")
 
-#: Capabilities that cannot be satisfied by anything inside this deployment. A
-#: view requiring one of these can only ever answer "not connected" — so it says
-#: so, rather than rendering an empty chart the reader will misread as a flat
-#: line at zero.
+#: Capabilities that name a system OUTSIDE this deployment. A view requiring one
+#: can only answer with that system's data — so where it is missing, the view
+#: says "not connected" rather than rendering an empty chart the reader will
+#: misread as a flat line at zero.
+#:
+#: Membership here means "external", NOT "unsatisfiable forever". Whether an
+#: entry is satisfied in THIS deployment is a runtime question answered by
+#: `external_capability_satisfied`, because two entries stopped being
+#: hard-coded absences:
+#:
+#:   * `GA4_DATA_API` — a real Data API client exists (`ga4_data_api.py`). With
+#:     credentials configured in system settings the capability is satisfiable;
+#:     with none (every deployment today) it behaves exactly as before.
+#:   * `AD_PLATFORM` — manually entered spend (`analytics_marketing_spend`)
+#:     satisfies the SPEND half of what an ad platform provides, and only that:
+#:     blended ROAS/MER and spend-by-channel. Clicks, impressions and
+#:     per-channel revenue attribution cannot be typed in, so any view whose
+#:     promise includes those (views 19 and 20) must stay gated regardless of
+#:     what this probe returns.
 EXTERNAL_CAPABILITIES: frozenset[Capability] = frozenset(
     {
         Capability.GA4_MEASUREMENT,
@@ -101,6 +127,72 @@ EXTERNAL_CAPABILITIES: frozenset[Capability] = frozenset(
     }
 )
 
+
+def _ga4_data_api_configured(db: Session) -> bool:
+    """Whether usable GA4 Data API credentials are configured RIGHT NOW.
+
+    Delegates to `ga4_data_api.load_data_api_config`, which never raises and
+    respects `ANALYTICS_ROLLUPS_ENABLED` — with the subsystem's kill switch off,
+    credentials that exist are credentials the pipeline is forbidden to use, so
+    the capability is honestly unsatisfied. Imported locally to keep the heavy
+    GA4 module off this package's import path.
+    """
+    from app.services.analytics.ga4_data_api import load_data_api_config
+
+    return load_data_api_config(db).configured
+
+
+def _marketing_spend_recorded(db: Session) -> bool:
+    """Whether ANY marketing spend has ever been entered.
+
+    Existence, not coverage: per-window coverage (and the honest refusal when a
+    window has no rows) belongs to the resolver reading the ledger, exactly as
+    a rollup's watermark does. This probe only answers "has the admin started
+    recording spend at all".
+    """
+    from app.models.analytics_spend import AnalyticsMarketingSpend
+
+    return (
+        db.execute(select(AnalyticsMarketingSpend.id).limit(1)).first() is not None
+    )
+
+
+def external_capability_satisfied(db: Session, capability: Capability) -> bool:
+    """Whether an EXTERNAL capability is satisfied in this deployment, today.
+
+    False for anything not named below: nothing inside this deployment can
+    stand in for Clarity, Search Console, a settlement API, a courier scan feed
+    or the rest, so their honest answer is still an unconditional "not
+    connected".
+
+    `AD_PLATFORM` deliberately reports the narrowest true thing: entered spend
+    satisfies the questions SPEND alone can answer (blended ROAS/MER, spend by
+    channel). It does not conjure clicks, impressions or attribution, and no
+    caller may ungate a view that promises those on the strength of this
+    returning True — the registry keeps such views (19, 20) statically gated.
+    """
+    if capability is Capability.GA4_DATA_API:
+        return _ga4_data_api_configured(db)
+    if capability is Capability.AD_PLATFORM:
+        return _marketing_spend_recorded(db)
+    return False
+
+
+def unsatisfied_external_requirements(
+    db: Session, view: AnalyticsViewDefinition
+) -> list[str]:
+    """The view's external requirements that are NOT satisfied right now.
+
+    This is what a runtime gate consumes: with nothing configured anywhere (the
+    state of every current deployment) it returns exactly the static filter it
+    replaced — every external requirement — byte for byte.
+    """
+    return sorted(
+        c.value
+        for c in view.requires
+        if c in EXTERNAL_CAPABILITIES and not external_capability_satisfied(db, c)
+    )
+
 #: Geo rollups only cover orders whose delivery address resolved to a state, so
 #: their totals are a subset of the store's. Stated rather than reconciled away.
 GEO_SCOPE_PARTIAL = "GEO_SCOPE_PARTIAL"
@@ -117,9 +209,7 @@ RECONCILIATION_VARIANCE = "RECONCILIATION_VARIANCE"
 
 
 def _external_requirements(ctx: ResolverContext) -> list[str]:
-    return sorted(
-        c.value for c in ctx.view.requires if c in EXTERNAL_CAPABILITIES
-    )
+    return unsatisfied_external_requirements(ctx.db, ctx.view)
 
 
 def _ratio(
@@ -609,12 +699,19 @@ class ReconciliationResolver:
     and no external system is needed to know it. `contracts.RevenueBridge` owns
     the identity so this resolver and the aggregation tests assert the same one.
 
-    What is NOT checkable is everything with a gateway on the other side —
-    settlement batches, fees deducted, payout dates. Those need the gateway
-    settlement API, which is not connected. They appear in the variance table
-    with NULL values and status `not_configured`, so an admin can see the check
-    exists and is not running, rather than seeing a table that looks clean
-    because it is empty.
+    What is NOT checkable HERE is everything with a gateway on the other side —
+    settlement batches, fees deducted, payout dates. Those appear in the
+    variance table with NULL values and status `not_configured`, so an admin can
+    see the check exists and is not running, rather than seeing a table that
+    looks clean because it is empty.
+
+    NOTE: view 64 (Settlements & Payouts) no longer uses this resolver — it
+    moved to `resolvers/settlements_view.py` (`settlements_payouts`), fed by
+    uploaded settlement report CSVs (`payment_settlements` /
+    `agg_settlement_daily`). This resolver remains correct for view 63's bridge
+    identity, and its gateway-side rows could now defer to
+    `settlements.settlement_reconciliation()` where report data exists — a
+    deliberate future improvement, not an oversight.
     """
 
     id = ResolverId.RECONCILIATION.value

@@ -273,10 +273,11 @@ def _preload_products(items: Sequence[Any]) -> None:
     """
     session = None
     item_mapper = None
-    mapper = None
+    target_mapper = None
     target = None
     primary_key = None
-    #: item -> the product id it is waiting for.
+    #: item -> the product id it is waiting for. Keyed by instance, which for a
+    #: declarative model is identity — no model here defines `__eq__`.
     pending: dict[Any, Any] = {}
 
     for item in items:
@@ -296,9 +297,9 @@ def _preload_products(items: Sequence[Any]) -> None:
             if relationship is None:
                 return
             item_mapper = state.mapper
-            mapper = relationship.mapper
-            target = mapper.class_
-            primary_key = mapper.primary_key[0]
+            target_mapper = relationship.mapper
+            target = target_mapper.class_
+            primary_key = target_mapper.primary_key[0]
         pending[item] = product_id
 
     if session is None:
@@ -311,8 +312,9 @@ def _preload_products(items: Sequence[Any]) -> None:
         # `state.dict`, not `getattr`: reading through the instance would
         # unexpire an expired row, which is a query — the thing being avoided.
         sibling_id = state.dict.get("product_id")
-        if sibling_id is not None and state.obj() is not None:
-            pending.setdefault(state.obj(), sibling_id)
+        sibling = state.obj()  # a weak reference; may already be collected
+        if sibling_id is not None and sibling is not None:
+            pending.setdefault(sibling, sibling_id)
 
     by_id: dict[Any, Any] = {}
     missing: list[Any] = []
@@ -332,7 +334,7 @@ def _preload_products(items: Sequence[Any]) -> None:
             )
         ).scalars()
         for product in rows:
-            by_id[mapper.primary_key_from_instance(product)[0]] = product
+            by_id[target_mapper.primary_key_from_instance(product)[0]] = product
 
     for item, product_id in pending.items():
         product = by_id.get(product_id)

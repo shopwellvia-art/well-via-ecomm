@@ -27,8 +27,10 @@ failure mode this subsystem exists to prevent.
     over the window. 50% and 25% are both real figures; only the first is what
     `kpis.stockout_rate` defines, and the catalogue says outright that the
     second "does not exist yet".
-  * ``test_inventory_turnover_is_still_not_computable`` — the view that stays
-    unbound, with the reason asserted rather than described in a comment.
+  * ``test_inventory_turnover_binding_did_not_upgrade_its_claims`` — view 30
+    is now bound (the repository's `avg:` projection made the denominator
+    expressible), and the tests that used to pin its refusal now pin the
+    bound behaviour: real sources, real values, state still PARTIAL.
 
 Isolation strategy
 ------------------
@@ -96,32 +98,84 @@ NEWLY_BOUND: tuple[tuple[int, str, str], ...] = (
     (59, "customers", "rfm-customer-analysis"),
 )
 
-#: View 30 is the one that was re-assessed and left alone. Turnover is
-#: annualised COGS over AVERAGE inventory at cost: the numerator lives in
-#: `agg_order_daily` and the denominator in `agg_inventory_daily`, a
-#: `MetricBinding` names one source, and an average over time of a LEVEL is not
-#: expressible through a repository that offers SUM and COUNT — summing
-#: `stock_value_close` across days is precisely the non-additive operation
-#: `metric_kind` refuses. The KPI catalogue grades it INCOMPLETE for the same
-#: reason and says so in its caveats.
+#: View 30 was re-assessed and left alone when COUNT projections landed —
+#: turnover is COGS over AVERAGE inventory at cost, and an average over time of
+#: a LEVEL was not expressible through a repository that offered only SUM and
+#: COUNT. It is bound now: the repository grew `avg:<column>` (LEVEL-only, so
+#: `avg:stock_value_close` is legal and `avg:units_sold` refuses), and
+#: `resolvers/turnover.py` combines it with the `agg_order_daily` COGS totals
+#: the margin engine already uses. `tests/test_analytics_turnover.py` owns the
+#: arithmetic; the tests here pin that the binding replaced the old refusal
+#: without upgrading the view's claims.
 INVENTORY_TURNOVER = (30, "inventory", "inventory-turnover")
 
 #: Every non-gated view still carrying empty `params`, with the reason it does.
 #: An entry leaving this set is a deliberate wiring change and should show up as
 #: a failing test, not as a view that quietly started answering.
+#: Two shapes of gap, and they are not the same conversation. "no source" means
+#: the fact is not recorded anywhere and someone has to build or connect it.
+#: "no rollup" means the rows exist and the repository cannot reach them,
+#: because it reads exactly the 12 `agg_*` tables — that one is a day of
+#: aggregation work, not a product decision.
 STILL_UNBOUND: dict[int, str] = {
-    30: "average inventory over a period: no cross-rollup binding, and no AVG",
-    42: "risk signals: nothing scores an order for fraud, so no rollup holds it",
-    50: "support tickets and conversations: no such table in this deployment",
-    51: "reviews: the repository reads the 12 rollups, and none aggregates them",
-    52: "loyalty points and referrals: no loyalty model exists to aggregate",
-    57: "basket co-occurrence: needs line-pair counts no rollup computes",
-    58: "upsell attribution: needs a recommendation impression this store has no record of",
-    62: "resolver-owned: tracking_health reads its own instrumentation tables",
-    63: "resolver-owned: reconciliation drives itself from the shadow ledger",
-    66: "resolver-owned: experiment_results dispatches through `bespoke`",
-    71: "web vitals: needs an RUM feed; the app records requests, not page loads",
-    73: "resolver-owned: the alert feed is the anomalies service, not a rollup",
+    # 30 left this set when the repository grew the `avg:<column>` projection
+    # (LEVEL-only by construction) and cost rules became enterable by admins —
+    # the two facts its old entry said were missing. `resolvers/turnover.py`
+    # divides the `agg_order_daily` COGS totals (the same unit_cost-snapshot
+    # basis margin uses) by the mean of `stock_value_close` over the ledger
+    # days that exist. The view stays PARTIAL: the ledger is forward-only and
+    # stock is valued at current cost, so the figure is an estimate at best.
+    # 42 left this set when the risk view was bound to observable payment and
+    # order signals. It also moved LIVE -> PARTIAL: it was previously declared
+    # LIVE with no binding at all, so it issued a fetch and rendered a data page
+    # for numbers it could not produce. No fraud SCORE is computed — the view
+    # shows observed signals and lets the operator draw the conclusion.
+    # 50 and 51 left this set when `agg_cx_daily` was built (models/analytics_cx.py,
+    # aggregation/jobs_cx.py). 51 now breaks reviews down by product off the stored
+    # star counts. 50 is bound to inbound VOLUME only and stays PARTIAL with
+    # support_ticketing in `requires`: contact_messages still carries no topic, no
+    # assignment and no resolution time, so everything the view promises beyond the
+    # trend is deliberately unbound — see the comments on the view in registry.py.
+    # 57 left this set when `agg_basket_pair_daily` was built
+    # (models/analytics_basket.py, aggregation/jobs_basket.py). Pairs are read
+    # from `analytics_order_line`, NOT from order_items joined to products — a
+    # historical basket's identity must not resolve through the live catalogue.
+    # The view is on the custom resolver rather than the table one because the
+    # rollup stores counts and the view shows ratios: support, confidence and
+    # lift are recomputed from summed counts in resolvers/basket.py, since a
+    # stored daily lift cannot be re-bucketed into a week.
+    # 58 left this set by becoming GATED, not by being bound — the same move as
+    # 66. "No source: needs a recommendation impression" is still true for
+    # everything offer-shaped, and the basket data that landed since cannot
+    # stand in: `agg_basket_pair_daily` stores counts and name snapshots with
+    # deliberately no money column, and no rollup splits order value by basket
+    # size, so a trade-up is indistinguishable from a co-purchase — which view
+    # 57 already reports. The one computable figure (the attach rate) is view
+    # 57's headline KPI, and binding it to 58 would have republished it under
+    # an upsell heading. So: PARTIAL -> FEATURE_REQUIRED, `params` still empty
+    # on purpose. See the view-58 comment in registry.py and
+    # tests/test_analytics_upsell.py, which pins the schema facts.
+    # 62, 63 and 73 left this set when the Control Centre resolvers were built
+    # (resolvers/control_centre.py). All three are read-only by construction:
+    # reconciliation runs with write_alerts=False and the anomaly feed runs the
+    # detector inside a SAVEPOINT rolled back unconditionally, with results
+    # snapshotted to plain values INSIDE the savepoint, because run.alerts are
+    # live ORM rows the rollback expunges.
+    #
+    # 66 left this set by becoming GATED, not by being bound. There is no
+    # experiment infrastructure in this codebase at all — no assignment, no
+    # exposure logging, no variant storage, and zero tables or columns matching
+    # experiment/variant/exposure in the live schema. It was declared LIVE, so
+    # it promised A/B results it could never produce; it is now FEATURE_REQUIRED
+    # with the four missing pieces named in its `limitation`. Note that
+    # `experiment_id` appears in the Clarity tag allowlist, but nothing ever
+    # populates it and Clarity tags are write-only to Microsoft, so that
+    # parameter could never return to this database.
+    #
+    # 71 left this set when it was bound to obs_request_logs. What it shows is
+    # SERVER request latency, not what a browser experiences — there is no RUM
+    # feed, so no TTFB, LCP or CLS. That limitation is stated on the view so
+    # nobody reads it as Core Web Vitals.
 }
 
 # April 2001 — before this store's first order, and outside every other
@@ -631,55 +685,78 @@ def test_customer_churn_cards_stay_null_and_name_what_they_need():
 # ---------------------------------------------------------------------------
 
 
-def test_inventory_turnover_is_still_not_computable():
-    """The re-assessed view that COUNT projections did NOT unblock.
+def test_inventory_turnover_binding_did_not_upgrade_its_claims():
+    """View 30 is bound now — and the binding earned it NOTHING else.
 
-    Turnover is annualised COGS over AVERAGE inventory at cost. Three separate
-    things are missing and only one of them was about counting:
+    The two blockers its old entry in ``STILL_UNBOUND`` named are gone: the
+    repository projects `avg:<column>` (LEVEL-only), and cost rules are
+    enterable by admins. What must NOT have moved with the wiring:
 
-      1. The numerator is on `agg_order_daily` and the denominator on
-         `agg_inventory_daily`. A `MetricBinding` names ONE source and
-         `evaluate` reads one row of totals, so there is no shape for it.
-      2. An average of a LEVEL over time needs AVG. The repository projects
-         SUM and COUNT; `SUM(stock_value_close)` across days is exactly the
-         non-additive operation `metric_kind` refuses.
-      3. `stock_value_close` is only as good as `unit_cost` coverage, which the
-         catalogue already grades INCOMPLETE.
-
-    So it stays unbound, and the state stays PARTIAL — a binding never earns a
-    view a better state.
+      * the state stays PARTIAL — the ledger is forward-only and stock is
+        valued at current cost, and a binding never earns a view a better
+        state;
+      * the limitation still says so, in words an admin can act on;
+      * `stock_value_close` still classifies as a LEVEL, which is exactly why
+        the denominator goes through `avg:` and never through a SUM across
+        days.
     """
     number, module_slug, view_slug = INVENTORY_TURNOVER
     view = registry.get_view(module_slug, view_slug)
     assert view is not None and view.number == number
-    assert view.params == {}, (
-        f"View {number} ({view_slug}) acquired a binding: {view.params!r}. Average "
-        "inventory is still not expressible; whatever this points at, it is not "
-        "the period's average stock at cost."
+    assert view.params == {"fn": "inventory_turnover"}, (
+        f"View {number} ({view_slug}) declares {view.params!r}. The binding is a "
+        "custom function because the figure is a two-rollup ratio over an "
+        "averaged level; anything else here is a different (and suspect) wiring."
     )
-    assert view.state is ViewState.PARTIAL
-    assert "average stock" in view.limitation.lower()
+    assert view.state is ViewState.PARTIAL, (
+        "the binding is wiring, not new data — PARTIAL is still the honest ceiling"
+    )
+    assert "forward-only" in view.limitation.lower()
+    assert "current cost" in view.limitation.lower()
 
-    # The KPI catalogue agrees, in its own words, and is where the reason lives.
-    meta = kpi_catalogue.by_id("inventory_turnover")
-    assert meta is not None
-    assert any("AVERAGE INVENTORY CANNOT BE COMPUTED" in c for c in meta.caveats)
-
-    # And `stock_value_close` is a level, so the arithmetic an average needs is
+    # `stock_value_close` is a level: the average the denominator needs is the
+    # one thing the `avg:` projection permits, and a SUM across days remains
     # the arithmetic this subsystem exists to refuse.
     assert classify("stock_value_close", source=INVENTORY_SOURCE) is MetricKind.LEVEL
 
 
-def test_inventory_turnover_reports_itself_unwired_rather_than_empty():
-    """A view with nothing to show must say so, not return a blank chart.
+def test_inventory_turnover_reports_real_sources_now_that_it_is_bound():
+    """The refusal this test used to pin is gone; pin what replaced it.
 
-    `not_configured` carries an explicitly EMPTY `sources` list, which is how a
-    caller tells "not wired up" from "wired up and the answer is nothing".
+    This test asserted `sources == []` and NOT_CONFIGURED — the machine-readable
+    "nothing is wired up". View 30 is wired now, so the same request must carry
+    provenance for BOTH rollups the ratio reads and a real value, computed from
+    this suite's seed:
+
+      denominator = Σ per-product mean of `stock_value_close` over the days
+                    each product has rows (the documented `avg:` semantics)
+                  = A:(1000+800)/2 + B:(50+0)/2 + C:(0+0)/2 = 900 + 25 + 0 = 925
+      numerator   = Σ cogs_sum over the window = 400 + 400 = 800
+      turnover    = 800 / 925 = 0.8649 (4 dp)
+
+    Cost coverage is 40/40 = 100%, so the figure is ESTIMATED (stock is valued
+    at current cost — never better), not INCOMPLETE.
     """
     with sandbox() as (db, _generation):
         envelope = _resolve(db, INVENTORY_TURNOVER)
-        assert envelope.sources == []
-        assert NOT_CONFIGURED in {w.code for w in envelope.warnings}
+
+        assert {s.id for s in envelope.sources} >= {
+            "agg_inventory_daily",
+            "agg_order_daily",
+        }, "both halves of the ratio must state their provenance"
+        assert NOT_CONFIGURED not in {w.code for w in envelope.warnings}, (
+            "the view is bound; a NOT_CONFIGURED here means the binding regressed"
+        )
+
+        turnover = envelope.kpis["inventory_turnover"]
+        assert turnover.value == Decimal("0.8649"), (
+            "COGS 800 over average inventory 925 — see the docstring arithmetic"
+        )
+        assert turnover.inputs_missing == []
+        assert turnover.quality == "ESTIMATED", (
+            "stock_value_close is valued at CURRENT cost, so full coverage earns "
+            "ESTIMATED and nothing better"
+        )
 
 
 def test_the_set_of_unbound_non_gated_views_is_exactly_what_is_documented():

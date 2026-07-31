@@ -12,12 +12,16 @@ from app.models.analytics_control import (  # noqa: F401
     AnalyticsSyncRun,
     AnalyticsTzGeneration,
 )
+from app.models.analytics_cx import AggCxDaily  # noqa: F401
+from app.models.analytics_basket import AggBasketPairDaily  # noqa: F401
 from app.models.analytics_facts import (  # noqa: F401
     AnalyticsOrderAdjustment,
     AnalyticsOrderLine,
     CartEvent,
     InventoryMovement,
 )
+from app.models.analytics_ga4 import AggGa4Daily  # noqa: F401
+from app.models.analytics_loyalty import AggLoyaltyDaily  # noqa: F401
 from app.models.analytics_rollups import (  # noqa: F401
     AggCustomerCohortMonthly,
     AggCustomerDaily,
@@ -31,6 +35,11 @@ from app.models.analytics_rollups import (  # noqa: F401
     AggProductDaily,
     AggPromoDaily,
     AggShipmentDaily,
+)
+from app.models.analytics_spend import AnalyticsMarketingSpend  # noqa: F401
+from app.models.analytics_settlement import (  # noqa: F401
+    AggSettlementDaily,
+    PaymentSettlement,
 )
 from app.models.observability import RequestLog, SlowQuery  # noqa: F401
 from app.models.audit import AuditEvent  # noqa: F401

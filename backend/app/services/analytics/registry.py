@@ -759,6 +759,22 @@ _PRODUCT_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
         permission=P_PRODUCTS,
         resolver=ResolverId.BREAKDOWN,
         freshness=Freshness.DAILY,
+        # Stays FEATURE_REQUIRED, and `agg_basket_pair_daily` landing does not
+        # change that. The basket rollup answers "which two products appear in
+        # the same order more often than chance" — an observation about what
+        # customers already did unprompted. This view asks what a recommender
+        # *caused*: impressions of a slot, clicks on it, and revenue attributed
+        # to it. Those need a recommender that served something and logging of
+        # what it served. Neither exists — there is no recommendation slot in
+        # the storefront and no impression or click event for one.
+        #
+        # So the pair rollup is not the substrate for this view, and binding it
+        # here would be wrong twice over: it would report co-occurrence under
+        # three column headings that promise causation, and it would duplicate
+        # view 57 (Product Bundling and Cross-Sell), which is already LIVE on
+        # that exact rollup and is where "frequently bought together" belongs.
+        # If a recommender is ever built, the pair rollup is a reasonable thing
+        # to seed it *from*; it is not a measurement of it.
         state=ViewState.FEATURE_REQUIRED,
         requires=(Capability.RECOMMENDATION_ENGINE,),
         filters=_RANGE,
@@ -770,52 +786,120 @@ _PRODUCT_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
         number=57,
         name="Product Bundling and Cross-Sell",
         slug="product-bundling-and-cross-sell",
-        summary="Which products are bought together, and how often, from actual baskets.",
+        summary="Which products are bought together more often than chance, from actual "
+                "baskets.",
         permission=P_PRODUCTS,
-        resolver=ResolverId.TABLE,
+        # CUSTOM, not TABLE, and that is forced by the rollup rather than chosen:
+        # `agg_basket_pair_daily` stores COUNTS (pair_orders, orders_with_a,
+        # orders_with_b, total_orders_in_bucket) and this view shows RATIOs.
+        # There is no `lift` column for a table binding to project, deliberately
+        # — a stored daily lift cannot be re-bucketed into a week, because the
+        # average of daily lifts is not the lift of their union. `resolvers/
+        # basket.py` recomputes support, confidence and lift from the summed
+        # counts at the moment the window is known.
+        resolver=ResolverId.CUSTOM,
         freshness=Freshness.DAILY,
         state=ViewState.LIVE,
-        filters=_TIME + (FilterKey.CATEGORY, FilterKey.PRODUCT),
-        kpis=("units_sold", "aov", "net_revenue"),
+        # DATE_RANGE only, and the two that were here before are gone on purpose.
+        # A CATEGORY filter has nothing to bind to: the pair rollup carries no
+        # category, and a pair spans two products that may sit in different ones,
+        # so "revenue in category X" has no analogue here. A PRODUCT filter is
+        # worse than useless on an unordered pair — the product sits in
+        # product_a_id or product_b_id depending on which id is lower, so
+        # filtering one column silently returns half the pairs that mention it.
+        # A filter a view declares and does not honour is a control that appears
+        # to work.
+        filters=(FilterKey.DATE_RANGE,),
+        kpis=("basket_attach_rate", "basket_pairs_observed"),
         charts=(
-            _chart("top_pairs", "Most frequent pairs", "hbar", "pair", ("orders_count",)),
+            _chart("top_pairs", "Most frequent pairs", "hbar", "pair", ("orders_count",),
+                   hint="No two products have been bought together yet."),
         ),
         tables=(
             _table(
                 "basket_pairs",
-                "Product pairs",
+                "Frequently bought together",
                 (
                     _col("product_a", "Product A"),
                     _col("product_b", "Product B"),
                     _col("orders", "Orders together", FormatId.INT, "right"),
+                    # How many DAYS the pair co-occurred. On the table because
+                    # every ratio beside it is computed over exactly those days,
+                    # so "20 baskets across 30 days" and "20 baskets on one
+                    # festival day" are otherwise indistinguishable rows.
+                    _col("days_observed", "Days seen", FormatId.INT, "right"),
+                    _col("support", "Support", FormatId.PCT, "right"),
+                    _col("confidence", "Confidence", FormatId.PCT, "right"),
                     _col("lift", "Lift", FormatId.RATIO, "right"),
                 ),
-                sort="orders",
+                # Lift, not co-occurrence count: sorting by count just reprints
+                # the bestseller list, because the two most popular products
+                # co-occur most whether or not they have anything to do with
+                # each other. The resolver breaks lift ties on support and ranks
+                # every small-sample pair below every pair that clears the floor.
+                sort="lift",
+                hint="No two products have been bought together yet.",
             ),
         ),
         export=True,
-        keywords=("bundle", "cross-sell", "market basket", "affinity"),
+        params={"fn": "basket_cross_sell", "source": "agg_basket_pair_daily"},
+        keywords=("bundle", "cross-sell", "market basket", "affinity", "lift"),
     ),
     AnalyticsViewDefinition(
         number=58,
         name="Upsell Performance",
         slug="upsell-performance",
-        # PARTIAL: baskets tell us a bigger item was bought, they do not tell us
-        # an upsell offer caused it. Without placement tracking this is inference.
-        summary="Whether baskets grow when a higher-value or add-on item is included.",
+        summary="Whether upsell offers work: offers shown, offers taken, and the order "
+                "value they add.",
         permission=P_PRODUCTS,
         resolver=ResolverId.BREAKDOWN,
         freshness=Freshness.DAILY,
-        state=ViewState.PARTIAL,
+        # FEATURE_REQUIRED, not PARTIAL — reassessed after `agg_basket_pair_daily`
+        # landed, and the honest answer is that no subset of "upsell performance"
+        # exists in this deployment's data. Three candidates were checked against
+        # the real schema before binding nothing:
+        #
+        #   * Offer conversion / acceptance / attributed revenue: needs an upsell
+        #     placement that records impressions and clicks. The storefront has
+        #     none, so those metrics have neither a numerator nor a denominator.
+        #     This was the original gap and it is still the whole gap.
+        #   * "Traded up to a higher-value item": the pair rollup deliberately
+        #     carries NO money column ("a basket composition table, not a revenue
+        #     table" — models/analytics_basket.py), and its name snapshots must
+        #     not be resolved through the live catalogue for a price. A price
+        #     step between paired products is therefore not computable from any
+        #     source the repository can read.
+        #   * "Baskets with an add-on are worth more" (AOV multi- vs single-item):
+        #     needs order value split by basket size. `agg_order_daily` is one
+        #     row a day with aggregate money; no rollup stores that split, and
+        #     building one is an aggregation change, not a wiring change, so it
+        #     is deliberately not done here.
+        #
+        # What IS computable — the share of orders holding a second distinct
+        # product, and its trend — is `basket_attach_rate`: view 57's headline
+        # KPI, served from the same rows. Binding it here would republish the
+        # cross-sell number under an upsell heading, and without prices "traded
+        # up" cannot even be told apart from "bought together". PARTIAL means
+        # reduced data; the reduced subset that is honestly *upsell* is empty,
+        # so the state is FEATURE_REQUIRED and `params` stays empty on purpose.
+        # tests/test_analytics_upsell.py pins the schema facts above — if a
+        # price or a basket-size split ever lands, it fails and forces this
+        # state to be reargued.
+        state=ViewState.FEATURE_REQUIRED,
         requires=(Capability.RECOMMENDATION_ENGINE,),
-        filters=_TIME + (FilterKey.CATEGORY,),
-        kpis=("aov", "units_sold", "net_revenue"),
-        charts=(
-            _chart("aov_with_addon", "AOV with vs without add-on", "bar", "group", ("aov",),
-                   FormatId.MONEY),
-        ),
-        limitation="No upsell placement is instrumented, so uplift is inferred from basket "
-                   "composition and cannot be attributed to a specific offer.",
+        filters=_RANGE,
+        # No kpis and no charts. The previous declarations ("AOV with vs without
+        # add-on") described exactly the basket inference ruled out above, and a
+        # gated view's declarations are a promise about what will render when
+        # the capability lands — impressions, acceptance rate and attributed
+        # revenue, whose shapes cannot be named until a placement exists.
+        limitation="No upsell placement exists in the storefront, so no offer impression, "
+                   "click or acceptance is ever recorded — offer conversion has neither a "
+                   "numerator nor a denominator. The basket data that does exist cannot "
+                   "stand in: the pair rollup stores counts and name snapshots with no "
+                   "prices, and no rollup splits order value by basket size, so a "
+                   "trade-up cannot be told apart from a co-purchase, which Product "
+                   "Bundling and Cross-Sell already reports.",
         keywords=("upsell", "add-on", "uplift"),
     ),
 )
@@ -1069,8 +1153,14 @@ _CUSTOMER_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
         number=52,
         name="Loyalty and Rewards",
         slug="loyalty-and-rewards",
-        summary="Points issued, redeemed and outstanding, plus referral activity and its "
-                "order value.",
+        # Reworded from "referral activity and its order value": the completion
+        # is counted here, the money is not. `referrals.completed_order_id` makes
+        # a referral-attributed revenue figure joinable in principle, but it is
+        # order-level money under the revenue bridge's definitions, and a second
+        # revenue number computed in the loyalty rollup is how two screens end up
+        # disagreeing under one word.
+        summary="Points issued, redeemed, expired and outstanding, plus completed "
+                "referrals.",
         permission=P_CUSTOMERS,
         resolver=ResolverId.TIMESERIES,
         freshness=Freshness.DAILY,
@@ -1079,9 +1169,18 @@ _CUSTOMER_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
         kpis=("returning_customers", "orders_count", "aov", "repeat_purchase_rate"),
         charts=(
             _chart("points_flow", "Points issued vs redeemed", "bar", "date",
-                   ("points_issued", "points_redeemed")),
-            _chart("referral_orders", "Orders from referrals", "line", "date",
-                   ("orders_count",), FormatId.INT, 1),
+                   ("points_issued", "points_redeemed", "points_expired")),
+            # Was "Orders from referrals" bound to `orders_count`. That series
+            # lives in `agg_order_daily` and counts EVERY order, so on this view
+            # it drew the whole store's order line under a referral heading —
+            # and `orders_count` cannot be rebound, because a catalogue metric
+            # must mean one thing everywhere. What the data actually supports is
+            # the completion event: `referrals.completed_at` is stamped when a
+            # referred friend's first order is paid, which is one order, and the
+            # rollup counts it. The title says completions because that is what
+            # the number is.
+            _chart("referral_completions", "Completed referrals", "line", "date",
+                   ("referral_completions",), FormatId.INT, 1),
         ),
         tables=(
             _table(
@@ -1096,11 +1195,45 @@ _CUSTOMER_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
                 sort="period",
             ),
         ),
-        # NOT exportable. No rollup stores a loyalty point: `points_issued` and
-        # `points_redeemed` are unbound for exactly that reason, and there is no
-        # column anywhere for `issued` / `redeemed` / `outstanding` to come from.
-        # A table with no possible source cannot be exported by any resolver.
+        # NOT exportable, and the TableSpec above is still declared but still
+        # unfilled — for a narrower reason than before. `issued` and `redeemed`
+        # are now stored (`points_earned`, `points_redeemed`) and the timeseries
+        # resolver already draws them at whatever granularity is asked for,
+        # month included. `outstanding` is the blocker: `points_outstanding_close`
+        # is a LEVEL, so a month's value is its LAST bucket, and every resolver
+        # that emits a table SUMs — thirty daily balances added together would
+        # report thirty times the liability under a column labelled
+        # "Outstanding". A table with two right columns and one silently wrong
+        # one is worse than no table, so this one stays empty until a
+        # level-aware table resolver exists. The spec is kept because the intent
+        # is part of the frontend contract (see tests/test_analytics_export.py).
         export=False,
+        # LIVE and now actually reading something. `points_issued`/`points_redeemed`
+        # /`points_expired` are display keys, not catalogue KPIs — kpis.py has no
+        # loyalty entry and inventing one here would put a metric on screen that
+        # nothing else in the catalogue can define — so they are bound directly
+        # to their stored columns. All three are FLOWS and are non-negative
+        # halves of the signed ledger `delta`, which is why the chart can add
+        # them across a bucket at all.
+        #
+        # Deliberately NOT bound, and each for its own reason:
+        #   * `points_outstanding_close` — a LEVEL. See the export note above.
+        #   * `distinct_customers` — a DISTINCT count. Summing a week
+        #     double-counts anyone who transacted twice and taking the latest day
+        #     is just as wrong; it has to be recomputed from the ledger.
+        #   * anything per redemption TIER — `points_transactions` and `coupons`
+        #     carry no `redemption_tier_id`, so the only trace of which tier was
+        #     traded is a free-text description. Parsing it would re-partition
+        #     history on a rename while looking like a measurement.
+        params={
+            "source": "agg_loyalty_daily",
+            "metrics": {
+                "points_issued": "points_earned",
+                "points_redeemed": "points_redeemed",
+                "points_expired": "points_expired",
+                "referral_completions": "referral_completions",
+            },
+        },
         keywords=("points", "rewards", "referral"),
     ),
     AnalyticsViewDefinition(
@@ -1212,17 +1345,56 @@ _MARKETING_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
         number=21,
         name="ROAS and Marketing Profitability",
         slug="roas-and-marketing-profitability",
-        summary="Return on ad spend and contribution after marketing, by channel.",
+        summary="Blended return on recorded marketing spend (MER), with the spend "
+                "split by channel.",
         permission=P_MARKETING,
-        resolver=ResolverId.BREAKDOWN,
+        resolver=ResolverId.CUSTOM,
         freshness=Freshness.DAILY,
-        state=ViewState.INTEGRATION_REQUIRED,
-        sources=(DataSource.INTERNAL_DB, DataSource.ADS),
-        requires=(Capability.AD_PLATFORM, Capability.COST_RULES),
-        filters=_RANGE + (FilterKey.CHANNEL, FilterKey.CAMPAIGN),
-        limitation="ROAS needs ad spend from the ad platforms, and profitability additionally "
-                   "needs product cost rules; neither is available.",
-        keywords=("roas", "cac", "spend", "profit"),
+        # PARTIAL, unlocked by manually entered spend (`analytics_marketing_spend`)
+        # — but ONLY for what spend alone can honestly answer: blended ROAS/MER
+        # (internal net_revenue over total recorded spend) and the spend split
+        # by channel. The resolver downgrades to the gated shape at runtime
+        # whenever the window holds zero spend rows. Per-channel ROAS is NOT
+        # computable — revenue cannot be attributed per channel without a
+        # session->order key (GA4 attribution, click ids), which does not exist
+        # — so the CHANNEL/CAMPAIGN filters were deliberately REMOVED: a channel
+        # filter on a blended ratio is a fabricated per-channel ROAS by another
+        # name. Views 19 and 20 stay INTEGRATION_REQUIRED for the same reason.
+        state=ViewState.PARTIAL,
+        sources=(DataSource.INTERNAL_DB,),
+        requires=(Capability.AD_PLATFORM,),
+        filters=_TIME,
+        kpis=("blended_roas", "total_spend", "net_revenue"),
+        charts=(
+            _chart("roas_trend", "Blended ROAS (MER)", "line", "date",
+                   ("blended_roas",), FormatId.RATIO),
+            _chart("spend_by_channel", "Spend by channel", "hbar", "channel",
+                   ("spend",), FormatId.MONEY),
+        ),
+        tables=(
+            # Spend ONLY. No revenue and no ROAS column may ever be added here
+            # without per-channel attribution actually existing — a per-channel
+            # ratio filled from blended revenue would be fabrication, and
+            # tests/test_analytics_roas.py pins the column set.
+            _table(
+                "channel_spend",
+                "Recorded spend by channel",
+                (
+                    _col("channel", "Channel"),
+                    _col("spend", "Spend", FormatId.MONEY, "right"),
+                    _col("spend_share_pct", "Share of spend", FormatId.PCT, "right"),
+                    _col("quality", "Quality"),
+                ),
+                sort="spend",
+            ),
+        ),
+        params={"fn": "roas_blended"},
+        limitation="Spend is manually entered in the admin, so ROAS here is blended "
+                   "(MER): total store revenue over total recorded spend. Revenue "
+                   "cannot be attributed to a channel without ad-platform "
+                   "attribution, so per-channel ROAS is not shown — only "
+                   "per-channel spend.",
+        keywords=("roas", "mer", "spend", "profit", "blended"),
     ),
     AnalyticsViewDefinition(
         number=22,
@@ -1678,9 +1850,10 @@ _INVENTORY_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
         number=30,
         name="Inventory Turnover",
         slug="inventory-turnover",
-        summary="How many times stock turns over in a period, and days of cover by category.",
+        summary="How many times stock turns over in a period, and days of cover per "
+                "product with the slow movers first.",
         permission=P_INVENTORY,
-        resolver=ResolverId.BREAKDOWN,
+        resolver=ResolverId.CUSTOM,
         freshness=Freshness.DAILY,
         state=ViewState.PARTIAL,
         requires=(Capability.INVENTORY_LEDGER, Capability.COST_RULES),
@@ -1690,8 +1863,48 @@ _INVENTORY_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
             _chart("turnover_by_category", "Turns by category", "hbar", "category",
                    ("inventory_turnover",), FormatId.RATIO),
         ),
-        limitation="Turnover needs average stock across the period (ledger history starts now) "
-                   "and product costs to value COGS; both are incomplete.",
+        tables=(
+            _table(
+                "turnover_by_product",
+                "Turnover by product",
+                (
+                    _col("product", "Product"),
+                    _col("sku", "SKU"),
+                    _col("units_sold", "Units sold", FormatId.INT, "right"),
+                    _col("cogs", "COGS", FormatId.MONEY, "right"),
+                    _col("avg_stock_value", "Avg stock value", FormatId.MONEY, "right"),
+                    _col("inventory_turnover", "Turns", FormatId.RATIO, "right"),
+                    _col("days_of_inventory", "Days of cover", FormatId.DAYS, "right"),
+                    _col("cost_coverage_pct", "Cost coverage", FormatId.PCT, "right"),
+                    _col("days_observed", "Ledger days", FormatId.INT, "right"),
+                ),
+                sort="inventory_turnover",
+                hint="No inventory ledger days inside this window yet.",
+            ),
+        ),
+        export=True,
+        # Turnover = COGS in window / AVERAGE inventory value over the window —
+        # a two-rollup ratio whose denominator is the mean of a LEVEL, which no
+        # `metrics` binding can express (a MetricBinding names one source, and a
+        # SUM of `stock_value_close` across days is the non-additive operation
+        # `metric_kind` refuses). `resolvers/turnover.py` computes it through
+        # the repository's `avg:stock_value_close` projection (LEVEL-only by
+        # construction), never as units-sold over latest-stock: a level pinned
+        # at the window end understates turnover after a restock and overstates
+        # it after a sellout.
+        #
+        # The by-category chart and the category filter CANNOT be honoured: the
+        # ledger is keyed by product and carries no category column, and no
+        # rollup joins a stock level to a category — both are reported as
+        # DIMENSION_NOT_STORED (the same refusal views 28/29 make on this
+        # table) rather than regrouped by something adjacent. The per-product
+        # table, slow movers first, is the split the ledger can answer.
+        params={"fn": "inventory_turnover"},
+        limitation="The inventory ledger is forward-only (history begins when it was "
+                   "switched on), so the average stock in older windows cannot be "
+                   "reconstructed, and stock is valued at CURRENT cost — turnover is an "
+                   "estimate at best, incomplete where unit_cost coverage is below 100%. "
+                   "The ledger stores no category, so turns cannot be split by category.",
         keywords=("turnover", "turns", "days cover"),
     ),
     AnalyticsViewDefinition(
@@ -2139,18 +2352,49 @@ _PAYMENT_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
         number=42,
         name="Fraud and Risk Analytics",
         slug="fraud-and-risk-analytics",
-        # LIVE, but deliberately scoped: these are internal behavioural signals
-        # (repeat failures, RTO history, address reuse), not a scoring service.
-        summary="Risk signals from our own data: repeated payment failures, RTO history and "
-                "unusual order patterns.",
+        # PARTIAL, downgraded from LIVE, and the downgrade is the point.
+        #
+        # It was LIVE with NO `params` at all: a LIVE view issues a fetch and
+        # renders a data page, so this one promised risk numbers it had no
+        # binding to produce. Two things were wrong and both are fixed here.
+        #
+        # 1. It is bound now. `resolvers/risk.py` reads `payment_events`,
+        #    `orders` and `order_addresses` directly — none of them is one of
+        #    the fifteen rollups `AnalyticsRepository` reflects its allowlist
+        #    from, so no shared resolver can reach them and `table` could never
+        #    have filled `flagged_orders` however the params were written. A
+        #    custom function is the documented escape hatch for exactly that,
+        #    and the function name is a server-trusted registry value.
+        #
+        # 2. It is PARTIAL because it cannot see disputes. `payment_settlements`
+        #    is not present in this deployment's schema, and where it exists it
+        #    is loaded from an uploaded gateway settlement report — the same
+        #    capability view 64 is gated on. A chargeback count is therefore
+        #    unobservable, not zero, and `test_gated_view_is_not_marked_live`
+        #    is right that a real caveat means PARTIAL: a fraud screen rendering
+        #    LIVE while blind to disputes is a green health check that is a
+        #    claim rather than a measurement.
+        #
+        # What it does NOT do is score. There is no weighted composite and no
+        # coefficients: this deployment has no labelled fraud outcomes to fit
+        # against, so any weighting would be invented, would look authoritative,
+        # and would rank orders by nothing. `risk.py` emits one row per
+        # (order, signal) with the observed count behind it and lets the
+        # operator judge. `keywords` still lists "chargeback" deliberately —
+        # somebody searching for it should land here and read the limitation.
+        summary="Risk signals from our own data: repeated payment failures, gateway amount "
+                "mismatches, unsigned callbacks, order velocity and address mismatches.",
         permission=P_PAYMENTS,
-        resolver=ResolverId.TABLE,
+        resolver=ResolverId.CUSTOM,
         freshness=Freshness.DAILY,
-        state=ViewState.LIVE,
+        state=ViewState.PARTIAL,
+        sources=(DataSource.INTERNAL_DB,),
+        requires=(Capability.GATEWAY_SETTLEMENT_API,),
         filters=_TIME + (FilterKey.PAYMENT_METHOD, FilterKey.STATE),
         kpis=("rto_rate", "payment_success_rate", "cancellation_rate"),
         charts=(
-            _chart("risk_signals", "Flagged orders by signal", "hbar", "signal", ("orders",)),
+            _chart("risk_signals", "Flagged orders by signal", "hbar", "signal", ("orders",),
+                   hint="No order matched a risk signal in this period."),
         ),
         tables=(
             _table(
@@ -2159,6 +2403,9 @@ _PAYMENT_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
                 (
                     _col("order_no", "Order"),
                     _col("signal", "Signal"),
+                    # The count behind the signal — three failed attempts reads
+                    # very differently from thirty, and a bare label hides that.
+                    _col("observed", "Observed", FormatId.INT, "right"),
                     _col("value", "Order value", FormatId.MONEY, "right"),
                     _col("placed_at", "Placed"),
                 ),
@@ -2167,24 +2414,132 @@ _PAYMENT_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
             ),
         ),
         export=True,
+        params={"fn": "risk_signals"},
+        limitation="These are internal behavioural signals — repeated payment failures, "
+                   "gateway amount mismatches, unsigned callbacks, order velocity and "
+                   "billing/shipping address mismatches — not a fraud score. Chargebacks and "
+                   "disputes need the gateway settlement feed, which is not connected, so no "
+                   "dispute appears here at all.",
         keywords=("fraud", "risk", "abuse", "chargeback"),
     ),
     AnalyticsViewDefinition(
         number=64,
         name="Settlements and Payouts",
         slug="settlements-and-payouts",
-        summary="Gateway settlement batches, fees deducted and the payout dates behind them.",
+        # PARTIAL, re-keyed from GATEWAY_SETTLEMENT_API to GATEWAY_SETTLEMENT_REPORT,
+        # and the re-key is the product decision, so it is recorded here:
+        #
+        #   * The view was INTEGRATION_REQUIRED on the settlements API. The API
+        #     is still not built (`settlements.RazorpaySettlementApiClient`
+        #     raises by design) and that meaning has NOT silently changed — the
+        #     API integration remains future work, and `limitation` says so.
+        #   * What unblocked the view is the CSV path: `payment_settlements` and
+        #     `agg_settlement_daily` are populated from an uploaded gateway
+        #     settlement report (POST /analytics/admin/settlements/upload), which
+        #     needs no credentials. GATEWAY_SETTLEMENT_REPORT is satisfied when
+        #     settlement rows exist, however they arrived — so the CSV is the
+        #     operative source today and an API client would satisfy the same
+        #     capability later without another registry change.
+        #   * PARTIAL is the ceiling, not LIVE: fees are ACTUAL only on days a
+        #     report fully covers, coverage is whatever finance has uploaded,
+        #     and the runtime probe in `resolvers/settlements_view.py` downgrades
+        #     to a `not_configured` refusal (the gated answer) when
+        #     `payment_settlements` holds no rows at all — mirroring how the
+        #     other probed views answer before their first data arrives.
+        #
+        # Two populations, never summed: `*_transacted` columns are payment-date
+        # bucketed (the fee side — a cost of the sale's day) and `*_settled`
+        # columns are settlement-date bucketed (the cash side — the day the
+        # payout cleared). Each chart and column below reads exactly one family.
+        summary="Gateway settlement lines from the uploaded settlement report: fees deducted "
+                "(payment-dated), payouts credited (settlement-dated), and the lines that "
+                "do not reconcile.",
         permission=P_FINANCE,
-        resolver=ResolverId.RECONCILIATION,
+        resolver=ResolverId.CUSTOM,
         freshness=Freshness.DAILY,
-        state=ViewState.INTEGRATION_REQUIRED,
+        state=ViewState.PARTIAL,
         sources=(DataSource.INTERNAL_DB, DataSource.PAYMENT_GATEWAY),
-        requires=(Capability.GATEWAY_SETTLEMENT_API,),
+        requires=(Capability.GATEWAY_SETTLEMENT_REPORT,),
         filters=_RANGE + (FilterKey.PAYMENT_GATEWAY,),
-        limitation="Settlement batches, fees and payout dates must be read from the gateway "
-                   "settlement API; captured payment records alone cannot show what was paid "
-                   "out.",
-        keywords=("settlement", "payout", "mdr", "fees"),
+        charts=(
+            _chart("fees_trend", "Gateway fees charged (payment-dated)", "line", "date",
+                   ("fee_transacted", "tax_transacted"), FormatId.MONEY,
+                   hint="No settlement report covers this period."),
+            _chart("payout_trend", "Payouts credited (settlement-dated)", "bar", "date",
+                   ("payout_amount",), FormatId.MONEY,
+                   hint="No payout was credited in this period."),
+        ),
+        tables=(
+            _table(
+                "settlement_days",
+                "Daily settlement activity",
+                (
+                    _col("date", "Day"),
+                    _col("gateway", "Gateway"),
+                    _col("gross_transacted", "Gross (transacted)", FormatId.MONEY, "right"),
+                    _col("fee_transacted", "Fee (transacted)", FormatId.MONEY, "right"),
+                    _col("tax_transacted", "Tax on fee", FormatId.MONEY, "right"),
+                    _col("matched_txns", "Matched", FormatId.INT, "right"),
+                    _col("unmatched_txns", "Unmatched", FormatId.INT, "right"),
+                    _col("unsettled_payments", "Unsettled captures", FormatId.INT, "right"),
+                    _col("payout_amount", "Payout (settled)", FormatId.MONEY, "right"),
+                    _col("settlement_batches", "Batches", FormatId.INT, "right"),
+                ),
+                sort="date",
+                hint="No settlement report covers this period.",
+            ),
+            _table(
+                "variances",
+                "Settlement reconciliation",
+                (
+                    _col("check_name", "Check"),
+                    _col("period", "Period"),
+                    _col("status", "Status"),
+                    _col("source_value", "Source", FormatId.MONEY, "right"),
+                    _col("rollup_value", "Expected", FormatId.MONEY, "right"),
+                    _col("variance_pct", "Variance", FormatId.PCT, "right"),
+                ),
+                sort="check_name",
+                hint="No settlement report covers this period, so nothing was compared.",
+            ),
+            _table(
+                "unmatched_lines",
+                "Settlement lines with no matching payment",
+                (
+                    _col("transaction_id", "Gateway txn"),
+                    _col("transaction_type", "Type"),
+                    _col("payment_date", "Transacted"),
+                    _col("gross", "Gross", FormatId.MONEY, "right"),
+                    _col("fee", "Fee", FormatId.MONEY, "right"),
+                    _col("match_status", "Match status"),
+                    _col("reference", "Reference"),
+                ),
+                sort="payment_date",
+                hint="Every settlement line in this period was tied to a payment.",
+            ),
+            _table(
+                "unsettled_payments",
+                "Captured payments with no settlement",
+                (
+                    _col("order_id", "Order", FormatId.INT, "right"),
+                    _col("order_payment_id", "Payment leg", FormatId.INT, "right"),
+                    _col("gateway", "Gateway"),
+                    _col("amount", "Amount", FormatId.MONEY, "right"),
+                    _col("paid_at", "Captured"),
+                    _col("days_outstanding", "Days outstanding", FormatId.INT, "right"),
+                ),
+                sort="days_outstanding",
+                hint="Every capture in this period is explained by a settlement line "
+                     "(or is still inside the gateway's settlement cycle).",
+            ),
+        ),
+        export=True,
+        params={"fn": "settlements_payouts", "source": "agg_settlement_daily"},
+        limitation="Fed by uploaded gateway settlement report CSVs, not a live gateway feed: "
+                   "coverage is whatever finance has uploaded, and fees are ACTUAL only on "
+                   "days a report fully covers. The Razorpay settlements API integration "
+                   "remains future work.",
+        keywords=("settlement", "payout", "mdr", "fees", "utr"),
     ),
 )
 
@@ -2259,7 +2614,15 @@ _CX_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
         # no assignment, no SLA clock and no resolution time.
         summary="Inbound contact volume and topics, and which orders they relate to.",
         permission=P_CX,
-        resolver=ResolverId.BREAKDOWN,
+        # TIMESERIES, not BREAKDOWN. The only thing this view can honestly draw
+        # is the volume trend, and the timeseries resolver draws exactly that and
+        # nothing else. A breakdown would additionally fill `message_table`
+        # ("Recent messages": received_at, subject, topic, status) with one row
+        # per DAY, because a daily rollup has no message-level grain — four empty
+        # columns under a heading that promises individual messages, and a CSV
+        # export of the same. An absent table reads as "nothing here"; a table of
+        # blank rows reads as data.
+        resolver=ResolverId.TIMESERIES,
         freshness=Freshness.DAILY,
         state=ViewState.PARTIAL,
         requires=(Capability.SUPPORT_TICKETING,),
@@ -2281,9 +2644,41 @@ _CX_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
                 sort="received_at",
             ),
         ),
-        export=True,
+        # NOT exportable. `message_table` is a MESSAGE-level list — received_at,
+        # subject, topic, status — and the only source the analytics repository
+        # may read is a daily rollup, so no resolver in this subsystem can
+        # produce those rows. The same call view 2 makes about `recent_orders`.
+        # Leaving `export=True` would leave a button that 404s every time it is
+        # pressed; filling the table with day rows to make the button work would
+        # ship a CSV of four empty columns under a heading that promises
+        # individual messages, which is worse. The trend above is what this view
+        # measures, and it works.
+        export=False,
         limitation="Only inbound contact messages are stored — without ticketing there is no "
                    "assignment, SLA clock, first-response or resolution time to report.",
+        # Volume, and only volume. `agg_cx_daily` also stores the status mix
+        # (messages_new / messages_replied / messages_closed / messages_other,
+        # which partition messages_received exactly), and it is deliberately NOT
+        # bound here: this view's only status-bearing element is a per-message
+        # table, and binding a day-grain row into it would publish daily
+        # aggregates under a "Recent messages" heading.
+        #
+        # Everything else this view names stays unbound because nothing measures
+        # it, and the state stays PARTIAL with SUPPORT_TICKETING in `requires`:
+        #   * `message_topics` (by topic) — contact_messages has a free-text
+        #     `subject` and no topic taxonomy. Bucketing subjects by keyword
+        #     would render invented categories as a measured distribution.
+        #   * `message_table` — message grain. No rollup stores it, and the
+        #     repository reads only rollups.
+        #   * first response, resolution time, SLA, assignment — there is no
+        #     assignee, no reply timestamp and no closure timestamp anywhere in
+        #     the schema, so every one of them would be measured against a clock
+        #     this system never started. This is the same refusal
+        #     `agg_shipment_daily` makes about on-time delivery.
+        params={
+            "source": "agg_cx_daily",
+            "metrics": {"messages": {"add": ["messages_received"]}},
+        },
         keywords=("support", "complaint", "contact", "tickets"),
     ),
     AnalyticsViewDefinition(
@@ -2293,7 +2688,7 @@ _CX_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
         summary="Rating distribution and trend, review volume, and the products pulling the "
                 "average down.",
         permission=P_CX,
-        resolver=ResolverId.BREAKDOWN,
+        resolver=ResolverId.CUSTOM,
         freshness=Freshness.DAILY,
         state=ViewState.LIVE,
         filters=_TIME + (FilterKey.CATEGORY, FilterKey.PRODUCT),
@@ -2317,6 +2712,49 @@ _CX_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
             ),
         ),
         export=True,
+        # Bound to `agg_cx_daily`, which stores the rating distribution as five
+        # counts (`rating_1`..`rating_5`) plus the additive pair
+        # `rating_sum` / `rated_reviews`. `avg_rating` is therefore computed as
+        # SUM(rating_sum) / SUM(rated_reviews) over whatever window is asked for,
+        # which re-buckets correctly to a week or a month — a stored daily
+        # average would not, and averaging averages is wrong silently.
+        #
+        # The metric ids are the TABLE's column keys, not catalogue KPI ids:
+        # `reviews`, `avg_rating` and `one_star` are display keys this view owns
+        # (the KPI catalogue has no review metrics), so the breakdown's rows drop
+        # straight into `rated_products`. `reviews` is declared first because the
+        # resolver ranks by the first metric's first column — most-reviewed
+        # products first, so the top-N is the population worth reading.
+        #
+        # On the CUSTOM resolver (`resolvers/cx.py::cx_reviews`) rather than
+        # BREAKDOWN, because the distribution is five COLUMNS, not a groupable
+        # dimension — no rollup groups by rating, so a group-by resolver cannot
+        # pivot it, and a view runs exactly one resolver. `cx_reviews` produces
+        # the same `rated_products` table through `BreakdownResolver`'s own
+        # helpers (same bindings, ordering and row cap — pinned by a regression
+        # test), plus the two shapes the breakdown could not express:
+        #   * `rating_distribution` (x = "rating") — the five counts pivoted
+        #     into five rows, ALWAYS all five: within a measured window a star
+        #     nobody gave is a real zero, and a histogram with a missing bar
+        #     reads as a four-point scale.
+        #   * `rating_trend` (x = "date") — SUM(rating_sum)/SUM(rated_reviews)
+        #     per bucket, summed first and divided once, so a weekly re-bucket
+        #     equals the true weekly average. A day with no rated reviews is a
+        #     GAP in the line, never a 0 — an average of nothing is not 0 stars.
+        #
+        # `agg_cx_daily` also carries a store-wide row at product_id = 0 holding
+        # the day's contact-message volume (a message belongs to no product). It
+        # appears here with zero reviews and an em-dash average, sorted last.
+        params={
+            "fn": "cx_reviews",
+            "source": "agg_cx_daily",
+            "dimension": "product",
+            "metrics": {
+                "reviews": {"add": ["reviews_submitted"]},
+                "avg_rating": {"add": ["rating_sum"], "over": ["rated_reviews"]},
+                "one_star": {"add": ["rating_1"]},
+            },
+        },
         keywords=("reviews", "ratings", "stars", "feedback"),
     ),
     AnalyticsViewDefinition(
@@ -2341,41 +2779,107 @@ _CX_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
         slug="website-speed-and-technical-performance",
         # PARTIAL: obs_request_logs is a real, internal APM source — server side
         # is genuinely measured. What is missing is the browser half.
-        summary="API latency, error rate and slowest endpoints from the internal request log.",
+        #
+        # Bound now, via `resolvers/risk.py`. The previous note here was right
+        # that `obs_request_logs` is outside `AnalyticsRepository`'s reflected
+        # allowlist and that no shared resolver can reach it — but the fix is a
+        # custom function reading the model directly (the same route
+        # `control_centre` takes to `analytics_alerts`), not a new source spec
+        # in the repository. `timeseries` was also the wrong shape regardless:
+        # it sums a bucket's stored rows, and a percentile is not a sum.
+        #
+        # PERCENTILES ARE COMPUTED OVER RAW ROWS, NEVER RE-AGGREGATED. There is
+        # no stored daily p95 here, because a stored daily p95 cannot be turned
+        # into a weekly one — no average, no weighting and no correction factor
+        # recovers it, and the wrong answer looks exactly as precise as the
+        # right one. `risk.py` sorts the raw `total_ms` values inside whatever
+        # bucket is being reported and takes the nearest rank; `latency_summary`
+        # does the same over the whole window rather than over the daily points.
+        # The scan is bounded at `risk.MAX_LATENCY_SAMPLE` rows, past which the
+        # percentiles are WITHHELD (null, with a LATENCY_SAMPLE_EXCEEDED
+        # warning) while the additive counts, which do re-aggregate, are kept.
+        summary="Server-side latency percentiles, error rate, throughput and the slowest "
+                "endpoints and queries, from the internal request log.",
         permission=P_CX,
-        resolver=ResolverId.TIMESERIES,
+        resolver=ResolverId.CUSTOM,
         freshness=Freshness.HOURLY,
         state=ViewState.PARTIAL,
         sources=(DataSource.INTERNAL_DB,),
         requires=(Capability.GA4_DATA_API,),
         filters=_TIME,
         charts=(
-            _chart("latency_trend", "p95 response time", "line", "date", ("p95_ms",),
-                   FormatId.INT),
-            _chart("error_rate", "Error rate", "line", "date", ("error_rate",), FormatId.PCT),
+            # Three percentiles rather than p95 alone: p50 next to p99 is what
+            # separates "everything got slower" from "a tail appeared", and a
+            # single line cannot show the difference.
+            _chart("latency_trend", "Response time (storefront routes)", "line", "date",
+                   ("p50_ms", "p95_ms", "p99_ms"), FormatId.INT,
+                   hint="No storefront requests were recorded in this period."),
+            _chart("error_rate", "Error rate (storefront routes)", "line", "date",
+                   ("error_rate",), FormatId.PCT),
+            _chart("throughput", "Requests (storefront routes)", "bar", "date",
+                   ("requests",), FormatId.INT),
         ),
         tables=(
+            # Window-level figures per route class. Admin traffic is kept OUT of
+            # the three charts above — an eleven-second admin export is not a
+            # storefront latency problem — and kept visible here, so it is
+            # separable rather than deleted.
+            _table(
+                "latency_summary",
+                "By route class (whole window)",
+                (
+                    _col("route_class", "Route class"),
+                    _col("requests", "Requests", FormatId.INT, "right"),
+                    _col("p50_ms", "p50 (ms)", FormatId.INT, "right"),
+                    _col("p95_ms", "p95 (ms)", FormatId.INT, "right"),
+                    _col("p99_ms", "p99 (ms)", FormatId.INT, "right"),
+                    _col("error_rate", "Errors", FormatId.PCT, "right"),
+                ),
+                sort="requests",
+                hint="No requests were recorded in this period.",
+            ),
             _table(
                 "slow_endpoints",
                 "Slowest endpoints",
                 (
                     _col("endpoint", "Endpoint"),
+                    _col("route_class", "Class"),
                     _col("requests", "Requests", FormatId.INT, "right"),
                     _col("p95_ms", "p95 (ms)", FormatId.INT, "right"),
                     _col("error_rate", "Errors", FormatId.PCT, "right"),
                 ),
                 sort="p95_ms",
             ),
+            _table(
+                "slow_queries",
+                "Slowest queries",
+                (
+                    _col("table_name", "Table"),
+                    _col("operation", "Operation"),
+                    _col("occurrences", "Occurrences", FormatId.INT, "right"),
+                    _col("total_ms", "Total (ms)", FormatId.INT, "right"),
+                    _col("max_ms", "Worst (ms)", FormatId.INT, "right"),
+                ),
+                sort="total_ms",
+                hint="No query crossed the slow-query threshold in this period.",
+            ),
         ),
-        # NOT exportable. `slow_endpoints` would come from `obs_request_logs`,
-        # which is not one of the twelve rollups `AnalyticsRepository` is allowed
-        # to read — every analytics query goes through that allowlist, so no
-        # resolver in this subsystem can reach it. Wiring this view up is a
-        # repository change (a new source spec), not an export flag.
+        # Still NOT exportable, and now for a different reason than the comment
+        # this replaces. The tables fill. What they must not become is a
+        # downloadable file of raw latency that reads as a Core Web Vitals
+        # report once it is out of the UI and away from the limitation line
+        # below. `tests/test_analytics_export.py` names this view explicitly, so
+        # re-enabling it stays a deliberate act.
         export=False,
-        limitation="Server-side latency and errors are measured from the internal request log; "
-                   "browser Core Web Vitals need a front-end RUM source such as GA4.",
-        keywords=("speed", "latency", "performance", "core web vitals"),
+        params={"fn": "request_performance"},
+        limitation="Server-side latency measured between request receipt and response start, "
+                   "as percentiles over raw request rows — never re-aggregated from stored "
+                   "daily figures, and withheld entirely above the scan bound rather than "
+                   "estimated. This is NOT what a visitor experiences: TTFB, LCP, CLS and INP "
+                   "need browser real-user monitoring such as GA4, which is not connected, so "
+                   "nothing here is a Core Web Vitals figure. Charts cover storefront routes "
+                   "only; admin and internal traffic is separated into the route-class table.",
+        keywords=("speed", "latency", "performance", "core web vitals", "p95", "apm"),
     ),
 )
 
@@ -2393,13 +2897,22 @@ _CONTROL_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
         slug="analytics-tracking-health",
         summary="Whether events, rollups and jobs are arriving on time, and which are stale.",
         permission=P_CONTROL,
-        resolver=ResolverId.TRACKING_HEALTH,
+        resolver=ResolverId.CUSTOM,
         freshness=Freshness.REALTIME,
         state=ViewState.LIVE,
         filters=(FilterKey.DATE_RANGE,),
         charts=(
             _chart("event_volume", "Events received per hour", "bar", "hour", ("events",)),
         ),
+        # `special.TrackingHealthResolver` answers only the rollup-watermark
+        # quarter of this screen. Provider configured/enabled state, consent,
+        # the server-side outbox (SUPPRESSED_NO_CONSENT included) and the
+        # environment mismatch all live in `analytics/integrations.py` and were
+        # never wired to anything; `control_centre.tracking_health` joins the
+        # two. `event_volume` is deliberately left unfilled — an empty bar chart
+        # reads as "zero events received", which is a stronger claim than "no
+        # client-side stream is connected".
+        params={"fn": "tracking_health"},
         bespoke="tracking_health",
         keywords=("tracking", "health", "pipeline", "stale"),
     ),
@@ -2409,7 +2922,7 @@ _CONTROL_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
         slug="data-reconciliation",
         summary="Rollups checked against the transactional tables, with every variance listed.",
         permission=P_CONTROL,
-        resolver=ResolverId.RECONCILIATION,
+        resolver=ResolverId.CUSTOM,
         freshness=Freshness.DAILY,
         state=ViewState.LIVE,
         filters=_RANGE,
@@ -2432,6 +2945,14 @@ _CONTROL_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
                 hint="Every check matched its source of truth.",
             ),
         ),
+        # `special.ReconciliationResolver` covers one of the six checks (the
+        # revenue-bridge identity) and hardcodes two more as stubs; it stays the
+        # right resolver for view 64, which is gated and has no partial answer.
+        # This view binds to `analytics/reconciliation.py`, which runs all six
+        # and whose `CheckResult.to_row()` already emits exactly the five
+        # columns above — including that a check which could not run is
+        # `not_configured` with NULL values and never a 0.00% variance.
+        params={"fn": "reconciliation_grid"},
         bespoke="reconciliation_grid",
         export=True,
         keywords=("reconciliation", "variance", "audit", "trust"),
@@ -2445,7 +2966,27 @@ _CONTROL_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
         permission=P_CONTROL,
         resolver=ResolverId.CUSTOM,
         freshness=Freshness.DAILY,
-        state=ViewState.LIVE,
+        # FEATURE_REQUIRED, not LIVE. LIVE makes the frontend issue a fetch and
+        # render a data page; this one has nothing to fetch. Nothing in this
+        # deployment assigns a visitor to a variant, so no row anywhere carries
+        # an arm: there is no experiment or variant table in the schema, no
+        # column matching experiment/variant on any of the 73 tables, and
+        # `cart_events.meta` — the one free-form field that could hold an arm —
+        # is never written with one. `experiment_id` appears twice in the repo
+        # and neither is a data source: it is allowlisted in the Clarity tag
+        # allowlist (`frontend/src/features/tracking/clarity.js`) but
+        # `setClarityTag` is only ever called with `page_type` and
+        # `device_category`, and Clarity tags are write-only to Microsoft
+        # regardless — they never come back to this database. A declared
+        # parameter nothing populates is not instrumentation.
+        #
+        # EXPERIMENTS is internal instrumentation this project would have to
+        # build, not an external system to connect, so FEATURE_REQUIRED rather
+        # than INTEGRATION_REQUIRED. `requires` can only name Capability
+        # members, so the four missing pieces are enumerated in `limitation`,
+        # which is the string the gated UI actually shows the admin.
+        state=ViewState.FEATURE_REQUIRED,
+        requires=(Capability.EXPERIMENTS,),
         filters=_RANGE,
         kpis=("conversion_rate", "aov", "orders_count", "net_revenue"),
         charts=(
@@ -2453,11 +2994,23 @@ _CONTROL_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
                    ("conversion_rate",), FormatId.PCT,
                    hint="No experiments have been defined yet."),
         ),
+        # Kept, exactly as view 65 keeps `journey_paths`: the view is gated, so
+        # the frontend never fetches and the component never renders. It stays
+        # so that the day an experiment store lands, the read side is already
+        # written and the change is a state flip rather than a new component.
         bespoke="experiment_results",
-        # No experiment store exists, so this resolver always returns
-        # NOT_CONFIGURED and the export button 404s. A button that cannot
-        # work is worse than an absent one.
+        # Also kept: a button that 404s is worse than an absent one, and a gated
+        # view has nothing to export either way.
         export=False,
+        limitation="No experiment framework exists. Four separate pieces are missing and "
+                   "each is required before a single number here would mean anything: an "
+                   "assignment service that puts a visitor in an arm, exposure logging that "
+                   "records which arm they actually saw, variant storage that survives the "
+                   "session so an order can be attributed back, and a significance test with "
+                   "a minimum sample size. Without the first three there is nothing to split "
+                   "by variant, and a single-variant result would read as an experiment that "
+                   "ran and found no difference. Without the fourth, the winner is a coin "
+                   "flip presented as a decision.",
         keywords=("experiment", "a/b", "test", "variant"),
     ),
     AnalyticsViewDefinition(
@@ -2467,7 +3020,7 @@ _CONTROL_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
         summary="Metrics that moved outside their expected band, and the alert rules that "
                 "fired.",
         permission=P_CONTROL,
-        resolver=ResolverId.TABLE,
+        resolver=ResolverId.CUSTOM,
         freshness=Freshness.HOURLY,
         state=ViewState.LIVE,
         filters=_RANGE,
@@ -2489,6 +3042,12 @@ _CONTROL_VIEWS: tuple[AnalyticsViewDefinition, ...] = (
                 hint="Nothing has breached an alert rule.",
             ),
         ),
+        # `analytics/anomalies.py` already returns alerts, skips AND clears, and
+        # the last two are the point: a skipped rule and a clear one both render
+        # as an absent alert, and only one of them means the store was checked.
+        # A `table` binding over `analytics_alerts` could never express that,
+        # because the difference is not in the alert table at all.
+        params={"fn": "anomaly_feed"},
         bespoke="anomaly_feed",
         export=True,
         keywords=("alerts", "anomaly", "spike", "threshold"),

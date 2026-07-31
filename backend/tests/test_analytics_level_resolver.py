@@ -40,6 +40,19 @@ test owns its ``SessionLocal()`` and tears down in a ``finally``.
      reads the active one from the database — so it seeds under the active
      generation and isolates by date range instead, deleting its window both
      before seeding and in ``finally`` so a rerun after a crashed run is clean.
+  4. Every sandbox **sweeps orphans from this module's own generation band out
+     of its own date window before running** (``_sweep_band_orphans``). This is
+     load-bearing: ``guard_tz_generation`` — called by every resolver through
+     ``probe_source`` — lists every generation with rows in the requested date
+     window, deliberately unfiltered by the caller's own generation, and raises
+     ``TzGenerationMixed`` when it sees more than one. So rows a CRASHED run
+     left behind under some other random generation fail every later run even
+     though that run's own queries are pinned to its own generation. (Exactly
+     this happened: one crashed run's five ``_seed_cohorts`` rows at
+     ``tz_generation=25194`` failed all five cohort tests of every run after
+     it.) The sweep deletes only rows that are BOTH inside this module's
+     private generation band AND inside its private May 2005 window —
+     coordinates only this module's past runs can produce.
 
 Run inside the analytics container:
 
@@ -112,6 +125,20 @@ SANDBOX_START = date(2005, 5, 1)
 SANDBOX_TODAY = date(2005, 5, 11)
 SANDBOX_END = date(2005, 5, 31)
 
+#: This module's private ``tz_generation`` band. It is a SmallInteger (max
+#: 32767); 22000-30999 sits above the 1000-20999 band
+#: ``test_analytics_resolvers.py`` draws from and below the 32700-32759 band
+#: ``test_analytics_repository_projections.py`` uses, so no two suites can
+#: collide on a generation — and any row found under a band generation is,
+#: by construction, this module's own (current or crashed-run) work.
+_GENERATION_BAND = (22000, 30999)
+
+#: Every date a fixture in this module can write: comparison-window tests reach
+#: back six days before ``SANDBOX_START``, so the owned range starts earlier.
+#: Both the per-test teardown and the orphan sweep are scoped to exactly this.
+SANDBOX_SWEEP_FROM = date(2005, 4, 20)
+SANDBOX_SWEEP_TO = SANDBOX_END
+
 #: Tables a test may write to. Teardown clears all of them.
 _OWNED_MODELS = (
     AggCustomerSnapshot,
@@ -144,21 +171,74 @@ def _day(offset: int) -> date:
     return date.fromordinal(SANDBOX_START.toordinal() + offset)
 
 
+def _use_read_committed(db: Session) -> None:
+    """Run a fixture delete without gap locks (cf. `RecomputeQueue._use_read_committed`).
+
+    Under REPEATABLE READ, a range DELETE over a mostly-empty (band, date)
+    range next-key-locks the gap up to the next populated index key — which in
+    these sparse rollup tables can span other suites' sandboxes entirely — and
+    a concurrent suite inserting inside that gap blocks or deadlocks on rows
+    this module never owned. READ COMMITTED locks only the rows actually
+    deleted. Applied per transaction; SQLAlchemy restores the level when the
+    connection returns to the pool.
+    """
+    if not db.in_transaction():
+        db.connection(execution_options={"isolation_level": "READ COMMITTED"})
+
+
+def _sweep_band_orphans(db: Session) -> None:
+    """Delete rows a CRASHED run of this module left inside its own sandbox.
+
+    See item 4 of the isolation strategy in the module docstring: an orphan row
+    under any band generation trips ``guard_tz_generation`` for every test that
+    later opens a window over it, however well that test pins its own
+    generation. Both predicates together — the private generation band AND the
+    private May 2005 date window — mean this delete can only ever name rows
+    this module's own runs wrote. It cannot touch the live demo (whose
+    generations sit far below the band and whose rollups live in 2026), other
+    suites' sandboxes (other date windows and other bands), or this module's
+    end-to-end fixtures (written under the ACTIVE generation, below the band;
+    ``live_sandbox`` clears those itself).
+    """
+    _use_read_committed(db)
+    for model in _OWNED_MODELS:
+        db.execute(
+            delete(model).where(
+                model.tz_generation >= _GENERATION_BAND[0],
+                model.tz_generation <= _GENERATION_BAND[1],
+                model.bucket_date >= SANDBOX_SWEEP_FROM,
+                model.bucket_date <= SANDBOX_SWEEP_TO,
+            )
+        )
+    db.commit()
+
+
 @contextmanager
 def sandbox() -> Iterator[tuple[Session, int]]:
-    """A session plus a private ``tz_generation``, cleaned up unconditionally."""
+    """A session plus a private ``tz_generation``, cleaned up unconditionally.
+
+    The generation is drawn from this module's own band, foreign orphans are
+    swept out of the window before the test runs, and teardown deletes only
+    this test's own (generation, date range) band — never anyone else's.
+    """
     db = SessionLocal()
-    # `tz_generation` is a SmallInteger (max 32767). 22000-30999 sits above the
-    # 1000-20999 band `test_analytics_resolvers.py` draws from, so two suites
-    # running back to back cannot collide on a generation.
-    generation = 22000 + (uuid.uuid4().int % 9000)
+    band_lo, band_hi = _GENERATION_BAND
+    generation = band_lo + (uuid.uuid4().int % (band_hi - band_lo + 1))
     try:
+        _sweep_band_orphans(db)
         yield db, generation
     finally:
         try:
             db.rollback()
+            _use_read_committed(db)
             for model in _OWNED_MODELS:
-                db.execute(delete(model).where(model.tz_generation == generation))
+                db.execute(
+                    delete(model).where(
+                        model.tz_generation == generation,
+                        model.bucket_date >= SANDBOX_SWEEP_FROM,
+                        model.bucket_date <= SANDBOX_SWEEP_TO,
+                    )
+                )
             db.commit()
         finally:
             db.close()
@@ -950,12 +1030,16 @@ def live_sandbox() -> Iterator[Session]:
     `AnalyticsViewService` reads the generation from the database and cannot be
     told otherwise, so isolation here is May 2005. The window is cleared before
     seeding as well as after, so a rerun following a crashed run is clean rather
-    than a duplicate-key error.
+    than a duplicate-key error. Band orphans are swept too: the resolvers this
+    service dispatches to guard against mixed generations across the whole date
+    window, so a crashed direct-resolver run's leftovers would fail this test
+    just as surely as they fail the direct ones.
     """
     db = SessionLocal()
     generation = int(active_generation(db).generation)
 
     def _clear() -> None:
+        _use_read_committed(db)
         for model in _OWNED_MODELS:
             db.execute(
                 delete(model).where(
@@ -968,6 +1052,7 @@ def live_sandbox() -> Iterator[Session]:
 
     try:
         db.rollback()
+        _sweep_band_orphans(db)
         _clear()
         for offset in range(5):
             day = _day(offset)

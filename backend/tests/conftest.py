@@ -40,6 +40,52 @@ def client() -> TestClient:
     return TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def _drop_stale_settings_cache() -> None:
+    """Start every test with an empty `settings:*` cache in Redis.
+
+    `SettingsService.get_raw` caches for 60 seconds, including the ABSENT case
+    (as the `__NONE__` sentinel), and Redis outlives the process. Several suites
+    write `system_settings` in raw SQL rather than through `set_many`, so the
+    cache is never told:
+
+      * `test_analytics_integrations` runs
+        `DELETE FROM system_settings WHERE key LIKE 'analytics.%'` twice, and
+        `UPDATE system_settings SET value = ...` once.
+      * `test_profit_service` upserts settings rows in raw SQL.
+      * `test_review_trust` constructs a `SystemSetting` row directly.
+      * `test_analytics_aggregation_jobs2` deletes the inventory-history marker.
+
+    A value one suite writes (or deletes) can therefore be served to another
+    suite's read for up to a minute afterwards. The symptom that led here: a
+    cohort/timezone assertion that passed in isolation and failed in a full run,
+    because `store.timezone` is read through this cache
+    (`analytics/timebox.py::store_timezone`) and a full run is the only thing
+    slow enough for the staleness to still be live when the next suite reads.
+
+    Scope note, so this fixture is not credited with more than it does: the GA4
+    *connection test* is NOT one of the things this can break.
+    `integrations.current_values` / `read_secret` / `secret_state` read the rows
+    with direct SQL and never touch Redis. The GA4 keys are cache-affected only
+    on the outbox/dispatch path (`analytics/ga4.py`, which does use `get_raw`).
+
+    A test that wants to exercise the cache still can: this clears it BEFORE the
+    test body, never during — the fixture deliberately does not `yield`, so
+    pytest runs all of it in setup and there is no teardown phase. The service's
+    own invalidation is covered by `tests/test_settings_cache_invalidation.py`,
+    which is where that behaviour is asserted rather than assumed.
+    """
+    try:
+        from app.db.redis import get_redis
+
+        redis_client = get_redis()
+        keys = list(redis_client.scan_iter(match="settings:*", count=500))
+        if keys:
+            redis_client.delete(*keys)
+    except Exception:  # noqa: BLE001 - a cache we cannot reach is already cold
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Test admin account
 # ---------------------------------------------------------------------------

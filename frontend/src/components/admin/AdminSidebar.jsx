@@ -31,6 +31,7 @@ import {
   Activity,
   AlertOctagon,
   Plug,
+  Calculator,
 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { analyticsNavItems } from '@/features/analytics/registry.icons.js';
@@ -90,6 +91,10 @@ const ANALYTICS_GROUP = {
     // It carries the manage permission rather than analytics.view, so a viewer
     // who may read every report still never sees the link to change the tags.
     { to: '/admin/analytics/settings', label: 'Tracking settings', icon: Plug, end: true, permission: 'analytics.integrations.manage' },
+    // Also not generated: this is the margin *inputs*, not a report. Gated on
+    // analytics.finance.view because a cost rate is the store's margin
+    // structure — the same tier as the margin views it feeds.
+    { to: '/admin/analytics/cost-rules', label: 'Cost rules & spend', icon: Calculator, end: true, permission: 'analytics.finance.view' },
     { to: '/admin/analytics/sales', label: 'Sales & Revenue (legacy)', icon: TrendingUp, end: true, permission: 'dashboard.view' },
     { to: '/admin/analytics/profit', label: 'Profitability (legacy)', icon: PiggyBank, end: true, permission: 'dashboard.view' },
   ],

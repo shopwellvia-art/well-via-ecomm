@@ -82,10 +82,17 @@ MAX_QUERIES_PER_COLD_RESOLVE = 600
 def perf_dataset():
     """The `tiny` dataset, built once for this module and removed afterwards.
 
-    Torn down including the rollup tables: leaving 21 days of `agg_*` rows
-    behind would change what the *functional* analytics suites see on their next
-    run, and a perf test that quietly alters another suite's fixtures is worse
-    than no perf test.
+    Torn down including the rollup rows *inside the PERF dataset's own date
+    window*: leaving 21 days of `agg_*` rows behind would change what the
+    *functional* analytics suites see on their next run, and a perf test that
+    quietly alters another suite's fixtures is worse than no perf test.
+
+    The scoping matters as much as the cleanup. `clean(rollups=True)` used to
+    run `DELETE FROM agg_*` bare, which emptied EVERY rollup row on the shared
+    database — other suites' seeded fixtures and a demo dataset's 90-day
+    backfill included — every time this module ran inside a full-suite
+    invocation. It is now windowed to the PERF orders' own date span, so this
+    fixture is provably incapable of touching state it does not own.
     """
     profile = perf.PROFILES["tiny"]
     perf.clean(rollups=True, quiet=True)

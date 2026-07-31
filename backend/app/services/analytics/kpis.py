@@ -2254,13 +2254,17 @@ KPIS: tuple[KpiDef, ...] = (
             "holding."
         ),
         caveats=(
-            "AVERAGE INVENTORY CANNOT BE COMPUTED TODAY. products.stock is a single "
-            "mutable column with no history and there is no inventory ledger, so there "
-            "is no way to know what stock was three weeks ago. Substituting today's "
-            "stock for the period average would be a fabricated number and is not done "
-            "— the metric reports INCOMPLETE and names the missing ledger.",
-            "Also inherits COGS's coverage gap, so even with a ledger it stays "
-            "INCOMPLETE until unit_cost coverage reaches 100%.",
+            "Average inventory comes from the FORWARD-ONLY ledger "
+            "(agg_inventory_daily via the avg: projection): a mean over the ledger "
+            "days that exist in the window. A gap day is in neither numerator nor "
+            "denominator — it is 'no data', not 'zero stock'; zero-filling would "
+            "inflate turnover. Windows before the ledger began cannot be "
+            "reconstructed and report the gap rather than substituting today's "
+            "stock.",
+            "Stock is valued at CURRENT cost, not the cost in force on the bucket "
+            "day, so the denominator is ESTIMATED at best.",
+            "Also inherits COGS's coverage gap, so it drops to INCOMPLETE with the "
+            "percentage carried until unit_cost coverage reaches 100%.",
             "Annualising a short window on a seasonal product produces a wildly "
             "misleading turn figure; 90 days is the shortest window worth reading.",
         ),
@@ -2322,6 +2326,177 @@ KPIS: tuple[KpiDef, ...] = (
             "The view says so rather than silently ignoring the filter.",
             "Unweighted by demand: a dead SKU being out of stock counts the same as the "
             "bestseller being out. Weight by units_sold for the version that matters.",
+        ),
+    ),
+    KpiDef(
+        id="basket_attach_rate",
+        label="Basket Attach Rate",
+        description="Share of orders that contained more than one distinct product.",
+        unit="pct",
+        formula=(
+            "SUM(agg_basket_pair_daily.orders_with_any_pair) / "
+            "SUM(agg_basket_pair_daily.total_orders_in_bucket) * 100, both summed "
+            "once per bucket_date"
+        ),
+        basis="order",
+        numerator="orders holding at least two distinct products",
+        denominator="orders that entered the co-occurrence universe",
+        currency_handling=_CCY_NA,
+        default_quality=MetricQuality.AUTHORITATIVE,
+        freshness=Freshness.DAILY,
+        dimensions=("date",),
+        higher_is_better=True,
+        tooltip=(
+            "Percentage of orders in this period that contained more than one "
+            "distinct product. It is the ceiling on what cross-sell can move."
+        ),
+        caveats=(
+            "Counts DISTINCT PRODUCTS, not lines or units. Three of one product is a "
+            "single-product basket and does not attach — quantity is a different "
+            "question from breadth, and units_sold already answers it.",
+            "Both halves are bucket-level scalars repeated on every pair row of their "
+            "day, so they must be summed once per bucket_date. Summing them across "
+            "rows multiplies each day by its pair count and reports a store many times "
+            "larger than it is.",
+            "Orders above the basket-size cap in agg_basket_pair_daily are excluded "
+            "from BOTH halves, so the rate stays over one population; the view warns "
+            "when any were dropped.",
+            "Every order in the bucket counts regardless of status. The line fact's "
+            "order_status is an ingestion-time snapshot that keeps moving, so filtering "
+            "on it would make the figure depend on when ingestion ran.",
+        ),
+    ),
+    KpiDef(
+        id="basket_pairs_observed",
+        label="Product Pairs Observed",
+        description=(
+            "Distinct product pairs bought together often enough for their lift to "
+            "mean something."
+        ),
+        unit="int",
+        formula=(
+            "COUNT(DISTINCT (product_a_id, product_b_id)) WHERE "
+            "SUM(pair_orders) >= resolvers.basket.SMALL_SAMPLE_MIN_PAIR_ORDERS"
+        ),
+        basis="order",
+        numerator="pairs clearing the small-sample floor",
+        currency_handling=_CCY_NA,
+        default_quality=MetricQuality.AUTHORITATIVE,
+        freshness=Freshness.DAILY,
+        dimensions=("date",),
+        higher_is_better=True,
+        tooltip=(
+            "How many product pairs were bought together often enough in this period "
+            "for their affinity to be worth acting on."
+        ),
+        caveats=(
+            "Pairs below the small-sample floor are deliberately NOT counted. Counting "
+            "them would turn a long tail of one-off coincidences into hundreds of "
+            "apparent merchandising opportunities.",
+            "NOT additive across periods: a pair that clears the floor over a month may "
+            "clear it in none of that month's weeks. Recompute it for the window you "
+            "are reporting.",
+            "Grows roughly with the square of catalogue breadth, so it is not "
+            "comparable between stores of different sizes.",
+        ),
+    ),
+    # ======================================================================
+    # Marketing efficiency from ENTERED spend (view 21)
+    # ======================================================================
+    # These two are deliberately separate from `marketing_spend`/`cac` above,
+    # which define the AD-PLATFORM figures and stay INCOMPLETE until one is
+    # connected. The ids below are computed from `analytics_marketing_spend`,
+    # the internal ledger of spend a human typed from an invoice — a different
+    # provenance under a different id, exactly as the five revenue figures are
+    # kept apart.
+    KpiDef(
+        id="total_spend",
+        label="Marketing Spend (entered)",
+        description=(
+            "Money recorded as spent on marketing in the window — typed into the "
+            "admin from invoices, per channel, daily or as monthly totals."
+        ),
+        unit="money",
+        formula=(
+            "SUM(analytics_marketing_spend rows allocated to the window's days); "
+            "MONTHLY rows are spread across their month to the paisa "
+            "(allocate_row_to_days) and only their in-window days count"
+        ),
+        basis="event",
+        currency_handling=_CCY_INR,
+        source=DataSource.INTERNAL_DB,
+        default_quality=MetricQuality.ESTIMATED,
+        freshness=Freshness.DAILY,
+        dimensions=("date", "channel", "campaign"),
+        higher_is_better=None,
+        tooltip=(
+            "Marketing spend recorded for this period in the admin. A typed "
+            "figure, graded by the entry's own quality — not a number read from "
+            "an ad platform."
+        ),
+        caveats=(
+            "Manually entered. The grade rides on each row's stated quality: "
+            "reconciled invoices are ACTUAL, everything else a human asserted is "
+            "ESTIMATED, and days spread out of a monthly lump are ALLOCATED.",
+            "No rows in the window means NOT RECORDED, never zero — the view "
+            "gates itself rather than reporting free marketing.",
+            "Distinct from `marketing_spend`, which is defined as ad-platform "
+            "spend over connected accounts and remains INCOMPLETE until an ads "
+            "API is connected. The two must never be summed or swapped.",
+            "A monthly row cut by the window edge contributes only its in-window "
+            "daily shares, allocated to the paisa with no rounding drift.",
+        ),
+    ),
+    KpiDef(
+        id="blended_roas",
+        label="Blended ROAS (MER)",
+        description=(
+            "Total store revenue per rupee of recorded marketing spend — the "
+            "marketing efficiency ratio, blended across every channel."
+        ),
+        unit="ratio",
+        formula=(
+            "net_revenue / total_spend over the SAME window — sums first, one "
+            "division; never an average of daily ratios"
+        ),
+        basis="order",
+        numerator="net_revenue over the window (internal, AUTHORITATIVE)",
+        denominator=(
+            "SUM(analytics_marketing_spend allocated to the window's days)"
+        ),
+        included_statuses=_RECOGNISED_SALE_STATUSES,
+        excluded_statuses=_UNRECOGNISED_STATUSES,
+        refund_treatment="deducted",
+        tax_treatment="inclusive",
+        shipping_treatment="included",
+        currency_handling=_CCY_RATIO,
+        source=DataSource.INTERNAL_DB,
+        default_quality=MetricQuality.ESTIMATED,
+        freshness=Freshness.DAILY,
+        dimensions=("date",),
+        higher_is_better=True,
+        tooltip=(
+            "Net revenue divided by recorded marketing spend for the same "
+            "period. Blended across all channels — this is MER, not a "
+            "per-channel return."
+        ),
+        caveats=(
+            "BLENDED, never per-channel. Revenue cannot be attributed to a "
+            "channel without ad-platform click attribution (no session-to-order "
+            "key exists), so `dimensions` deliberately excludes channel — a "
+            "per-channel split of this ratio would be fabricated.",
+            "The denominator is typed by a human, so the ratio is at best as "
+            "good as the entered rows: it inherits their quality grade and "
+            "never reports better than ESTIMATED while spend is manual.",
+            "Undefined — None, not 0 and not infinity — for any span with no "
+            "recorded spend, including a single bucket inside a window that has "
+            "spend elsewhere.",
+            "Recomputed from window sums on every re-bucketing. Averaging daily "
+            "ROAS values weights a Rs.10 day equal to a Rs.10,000 day and is "
+            "wrong silently.",
+            "Uses accounting net_revenue (tax and shipping in, refunds "
+            "deducted), so it is comparable with the revenue cards, not with "
+            "an ad platform's own conversion-value ROAS.",
         ),
     ),
 )

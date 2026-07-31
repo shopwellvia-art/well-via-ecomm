@@ -76,6 +76,9 @@ const AdminAnalyticsModulePage = lazy(() => import('@/pages/admin/AdminAnalytics
 const AdminAnalyticsSettingsPage = lazy(
   () => import('@/pages/admin/AdminAnalyticsSettingsPage.jsx'),
 );
+const AdminAnalyticsCostRulesPage = lazy(
+  () => import('@/pages/admin/AdminAnalyticsCostRulesPage.jsx'),
+);
 const AdminObservabilityPage = lazy(() => import('@/pages/admin/AdminObservabilityPage.jsx'));
 const AdminDangerZonePage = lazy(() => import('@/pages/admin/AdminDangerZonePage.jsx'));
 
@@ -356,6 +359,18 @@ export default function App() {
               element={
                 <RequirePermission permission="analytics.integrations.manage">
                   <AdminAnalyticsSettingsPage />
+                </RequirePermission>
+              }
+            />
+            {/* Also declared BEFORE :moduleSlug, and for the same reason as
+                "settings" above. Gated on analytics.finance.view: a cost rate is
+                the store's margin structure, so seeing it is the same privilege
+                as seeing the margin itself. */}
+            <Route
+              path="admin/analytics/cost-rules"
+              element={
+                <RequirePermission permission="analytics.finance.view">
+                  <AdminAnalyticsCostRulesPage />
                 </RequirePermission>
               }
             />

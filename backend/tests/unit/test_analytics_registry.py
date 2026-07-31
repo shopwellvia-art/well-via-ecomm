@@ -109,6 +109,10 @@ INTERNAL_INSTRUMENTATION_CAPABILITIES: frozenset[Capability] = frozenset(
         Capability.ORDER_LINE_FACT,
         Capability.BUDGETS,
         Capability.EXPERIMENTS,
+        # Satisfied by data this project ingests itself (the uploaded gateway
+        # settlement report -> payment_settlements). The settlements *API* stays
+        # in EXTERNAL_INTEGRATION_CAPABILITIES above; this is the report.
+        Capability.GATEWAY_SETTLEMENT_REPORT,
     }
 )
 

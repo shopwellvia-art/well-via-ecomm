@@ -97,10 +97,12 @@ __all__ = [
     "CATEGORY",
     "REDACTED",
     "PROVIDERS",
+    "SERVER_DELIVERY_MODES",
     "Visibility",
     "IntegrationField",
     "BadIntegrationRequest",
     "InvalidIntegrationValue",
+    "UndeliverableConfiguration",
     "FIELDS",
     "FIELD_BY_KEY",
     "PUBLIC_KEYS",
@@ -128,6 +130,19 @@ REDACTED = "***"
 
 #: Providers `test_connection` accepts.
 PROVIDERS = ("gtm", "ga4", "clarity")
+
+#: The `analytics.ga4_purchase_delivery` values under which the *server* is
+#: responsible for sending `purchase` to GA4 — and therefore the values that
+#: cannot work without the Measurement Protocol api_secret. Established from
+#: the delivery code, not assumed: `outbox.drain` idles with reason
+#: ``no_api_secret`` whenever `ga4.load_ga4_config` finds no secret, and the
+#: outbox is the only sender in ``server`` mode and one of the two senders in
+#: ``both`` mode. ``browser`` is the single mode with no server-side sender.
+SERVER_DELIVERY_MODES = frozenset({"server", "both"})
+
+#: The two settings the delivery guard reasons about, named once.
+_DELIVERY_KEY = "analytics.ga4_purchase_delivery"
+_API_SECRET_KEY = "analytics.ga4_api_secret"
 
 #: The MP **validation** endpoint. Note the `/debug/` segment: this URL
 #: validates and reports, it does NOT ingest. Pointing a connection test at the
@@ -180,6 +195,25 @@ class InvalidIntegrationValue(AppError):
 
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
     code = "validation_error"
+
+
+class UndeliverableConfiguration(AppError):
+    """422 — a save that would leave purchases queueing with nothing to send them.
+
+    Each value is fine on its own; the *combination* is the defect: purchase
+    delivery in a server mode with no Measurement Protocol api_secret means
+    every purchase is written to the outbox and can never leave it, while GA4
+    reports zero ecommerce revenue. The tracking-health probe WARNS about this
+    state (``ga4_server_delivery_without_secret``); this exception is what
+    PREVENTS a save from creating it. Warning about a state you could have
+    refused is second best.
+
+    Deliberately shares its `code` with that warning so the two surfaces of the
+    same defect are greppable as one.
+    """
+
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    code = "ga4_server_delivery_without_secret"
 
 
 # ===========================================================================
@@ -719,6 +753,112 @@ def _validate(field: IntegrationField, value: str) -> str:
 
 
 # ===========================================================================
+# Delivery-consistency guard
+# ===========================================================================
+#: The two operator remedies, stated once and shipped in every rejection. The
+#: rejection must always name the way out, or it is just a smarter trap.
+_DELIVERY_FIXES = (
+    "Save the Measurement Protocol API secret (GA4 Admin → Data Streams → "
+    "choose the stream → Measurement Protocol API secrets) — it may arrive in "
+    "the same request as the delivery mode.",
+    "Or set 'Purchase events are sent from' to browser-only, once the browser "
+    "tag is verified to fire purchase.",
+)
+
+
+def _post_save_delivery(db: Session, prepared: dict[str, str]) -> str:
+    """The delivery mode that would be in effect *after* this save.
+
+    An empty value falls back to the field default (``server``) exactly as
+    `current_values` would resolve it — a save that clears the mode has still
+    chosen server delivery, just implicitly.
+    """
+    field = FIELD_BY_KEY[_DELIVERY_KEY]
+    if _DELIVERY_KEY in prepared:
+        return prepared[_DELIVERY_KEY] or field.default
+    row = _rows(db).get(_DELIVERY_KEY)
+    return ((row.value if row else "") or "") or field.default
+
+
+def _guard_deliverable(db: Session, prepared: dict[str, str]) -> None:
+    """Refuse a save that would configure server-side delivery with no secret.
+
+    Runs after per-field validation and **before** anything is persisted, so a
+    rejected request changes nothing. The rule, in both directions:
+
+    * choosing a server delivery mode while no api_secret is stored and none
+      arrives in the same request → rejected;
+    * clearing the api_secret while delivery is (or becomes) a server mode →
+      rejected, mirrored.
+
+    What it deliberately does NOT do — this is the non-bricking property: a
+    deployment *already* in the broken state can always save its way out,
+    because the guard only fires when the request touches one of the two
+    fields. Switching to browser-only passes (server modes are never reached),
+    saving the secret passes (the secret becomes usable), and saving anything
+    unrelated passes (neither field is touched). "Reject any save while the
+    stored state is inconsistent" would have trapped the operator with the
+    broken config.
+
+    Never logs and never embeds a credential: the only secret-shaped value in
+    reach is fresh Fernet ciphertext in `prepared`, and only its *presence* is
+    read. Every rejection is composed purely of key names, mode names and
+    state words.
+    """
+    touches_delivery = _DELIVERY_KEY in prepared
+    touches_secret = _API_SECRET_KEY in prepared
+    if not (touches_delivery or touches_secret):
+        return
+
+    delivery = _post_save_delivery(db, prepared)
+    if delivery not in SERVER_DELIVERY_MODES:
+        return  # browser-only never needs the secret.
+
+    stored_state = secret_state(db, _API_SECRET_KEY)
+    if touches_secret:
+        # Non-empty here is fresh ciphertext arriving in this request; empty is
+        # an explicit clear. The mask and unchanged-secret no-ops never reach
+        # `prepared`, so "touched" always means "actually changing".
+        secret_after = "set" if prepared[_API_SECRET_KEY] else "unset"
+    else:
+        secret_after = stored_state
+    if secret_after == "set":
+        return
+
+    clearing = touches_secret and not prepared[_API_SECRET_KEY] and stored_state != "unset"
+    if clearing:
+        message = (
+            "This would remove the Measurement Protocol API secret while "
+            f"purchase delivery is {delivery!r} (server-side). Every purchase "
+            "would be queued in the outbox with nothing able to send it, and "
+            "GA4 would report zero ecommerce revenue while the queue grows "
+            "silently."
+        )
+    else:
+        message = (
+            f"Purchase delivery cannot be {delivery!r} (server-side) while no "
+            "Measurement Protocol API secret is saved. Every purchase would be "
+            "queued in the outbox and never delivered — GA4 would report zero "
+            "ecommerce revenue while the queue grows silently."
+        )
+        if secret_after == "undecryptable":
+            message += (
+                " A secret is stored but can no longer be decrypted "
+                "(SECRET_KEY has probably rotated), so it must be re-entered."
+            )
+
+    raise UndeliverableConfiguration(
+        message,
+        details={
+            "missing": _API_SECRET_KEY,
+            "purchase_delivery": delivery,
+            "api_secret_state": "unset" if clearing else secret_after,
+            "fixes": list(_DELIVERY_FIXES),
+        },
+    )
+
+
+# ===========================================================================
 # Writes
 # ===========================================================================
 def apply_updates(
@@ -731,6 +871,11 @@ def apply_updates(
     """Validate, encrypt, persist and **audit** a batch of integration changes.
 
     Returns the keys that actually changed.
+
+    Beyond per-field validation, the batch as a whole must remain *deliverable*:
+    see `_guard_deliverable`. A request that would put purchase delivery in a
+    server mode with no Measurement Protocol api_secret is rejected with a 422
+    (`UndeliverableConfiguration`) before anything is written.
 
     Delegates the write itself to `SettingsService.set_many` rather than
     touching rows directly, so the Redis settings cache is invalidated by the
@@ -776,6 +921,10 @@ def apply_updates(
 
         value = text if field.type == "textarea" else text.strip()
         prepared[key] = _validate(field, value)
+
+    # After per-field validation, before anything persists: refuse the one
+    # *combination* of individually-valid values that cannot deliver.
+    _guard_deliverable(db, prepared)
 
     changed = SettingsService(db).set_many(prepared, actor=actor)
 

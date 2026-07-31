@@ -236,7 +236,19 @@ class WideRepo:
 #: these would fail inside the resolver rather than in an assertion, which is a
 #: test double lying about the schema rather than a finding.
 _NUMERIC_GROUP_KEYS = frozenset(
-    {"bucket_hour", "period_index", "product_id", "category_id_snapshot"}
+    {
+        "bucket_hour",
+        "period_index",
+        "product_id",
+        "category_id_snapshot",
+        # `agg_basket_pair_daily`'s grain is a PAIR, so its two product
+        # references are not called `product_id`. Both are `Integer NOT NULL`
+        # with no path that can produce a string, and `resolvers/basket.py`
+        # calls `int()` on them for its sort tiebreak — so a label here is this
+        # double lying about the schema, not a finding about the resolver.
+        "product_a_id",
+        "product_b_id",
+    }
 )
 
 

@@ -1,0 +1,38 @@
+# Local-image override for the analytics v2 rollout.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# `docker-compose.yml` runs images pulled from GHCR
+# (`ghcr.io/shopwellvia-art/simple-com-*:latest`), which CI builds from pushed
+# commits. The analytics v2 work is not pushed yet, so those images do not
+# contain it — restarting the stack alone would serve the OLD code against the
+# NEW database schema, which reads as "the deploy did nothing".
+#
+# This override points the same services at images built from the working tree,
+# so the stack on :8090 runs the current code against the production database.
+#
+# USE
+#   docker compose -f docker-compose.yml -f docker-compose.analytics-local.yml up -d
+#
+# THIS IS NOT THE PRODUCTION DEPLOY PATH. The real sequence is in DEPLOY.md:
+# commit -> push -> CI builds and publishes the GHCR image -> the server pulls
+# that tag. This file is for running the reviewed code locally against
+# production data before that push, and it deliberately uses a DISTINCT tag
+# rather than retagging `:latest`, so a later `docker compose pull` cannot
+# silently replace a locally-built image with a CI one (or vice versa) and leave
+# nobody able to tell which is running.
+#
+# TO REVERT: drop the `-f docker-compose.analytics-local.yml` argument. The
+# stack returns to the published GHCR images with no other change.
+services:
+  backend:
+    image: wellvia-backend:analytics-local
+
+  analytics-rollup-worker:
+    image: wellvia-backend:analytics-local
+
+  analytics-delivery-worker:
+    image: wellvia-backend:analytics-local
+
+  frontend:
+    image: wellvia-frontend:analytics-local

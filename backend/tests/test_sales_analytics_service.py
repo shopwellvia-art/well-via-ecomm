@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
@@ -270,14 +270,32 @@ class TestSalesAnalyticsService:
             db.close()
 
     def test_cancelled_order_excluded_from_revenue(self) -> None:
-        """A CANCELLED order must not appear in revenue or order count."""
+        """A CANCELLED order must not appear in revenue or order count.
+
+        Measured inside ONE database snapshot rather than by differencing two
+        reads taken a few hundred milliseconds apart.
+
+        The baseline-delta form this used to have is order-dependent by
+        construction. `revenue.current` is a global aggregate over
+        `[now - 30d, now)`; `now` advances between the baseline read and the
+        second read; and every suite in the session shares this database. Any
+        row that enters or leaves that window in between — a leaked order from a
+        suite that failed before its teardown, a row committed by something a
+        previous test started and never stopped — lands on THIS assertion
+        instead of on the code that caused it. The sibling dashboard KPI test
+        failed exactly that way: `assert (13 - 11) == 1`, two rows appearing
+        where the test had created one.
+
+        So instead: create the order, ask the service what window it used, and
+        aggregate that window twice — once whole, once with this order's id
+        excluded — through the same session with no commit in between, so all
+        three reads share one REPEATABLE READ snapshot. The difference between
+        the two aggregates is this order's contribution and nobody else's, and
+        no amount of foreign traffic can move it.
+        """
         order_ids, product_ids, user_ids, category_ids = [], [], [], []
         db = SessionLocal()
         try:
-            baseline = _sales(db, "30d")
-            rev_base = baseline["summary"]["revenue"]["current"]
-            cnt_base = baseline["summary"]["orders"]["current"]
-
             user = _create_user(db)
             user_ids.append(user.id)
             prod = _create_product(db, price=Decimal("500.00"))
@@ -294,13 +312,56 @@ class TestSalesAnalyticsService:
             order_ids.append(order.id)
             db.commit()
 
+            # From here to the last assert: no commit, so one snapshot.
             result = _sales(db, "30d")
-            assert abs(result["summary"]["revenue"]["current"] - rev_base) < 0.01, (
+            start = datetime.fromisoformat(result["period_start"])
+            end = datetime.fromisoformat(result["period_end"])
+
+            # The order really is inside the window by TIME — otherwise this
+            # test would pass for the wrong reason (excluded by date, not by
+            # status) and would keep passing if the status rule broke.
+            placed_at = db.execute(
+                select(Order.created_at).where(Order.id == order.id)
+            ).scalar_one()
+            if placed_at.tzinfo is None:
+                placed_at = placed_at.replace(tzinfo=timezone.utc)
+            assert start <= placed_at < end, (
+                f"fixture: the cancelled order sits at {placed_at}, outside the "
+                f"window [{start}, {end}) the service reported"
+            )
+
+            def _window_totals(exclude: list[int]) -> tuple[float, int]:
+                stmt = select(
+                    func.coalesce(func.sum(Order.total_amount), 0),
+                    func.count(Order.id),
+                ).where(
+                    Order.status.in_(
+                        (OrderStatus.PAID, OrderStatus.SHIPPED, OrderStatus.DELIVERED)
+                    ),
+                    Order.created_at >= start,
+                    Order.created_at < end,
+                )
+                if exclude:
+                    stmt = stmt.where(Order.id.not_in(exclude))
+                row = db.execute(stmt).one()
+                return float(row[0] or 0), int(row[1] or 0)
+
+            whole_revenue, whole_count = _window_totals([])
+            without_revenue, without_count = _window_totals([order.id])
+
+            assert abs(whole_revenue - without_revenue) < 0.01, (
                 "CANCELLED order must not change revenue"
             )
-            assert result["summary"]["orders"]["current"] == cnt_base, (
+            assert whole_count == without_count, (
                 "CANCELLED order must not change order count"
             )
+            # ...and the service agrees with that SQL over its own window, so
+            # this still proves live aggregation and not a hardcoded number.
+            assert abs(result["summary"]["revenue"]["current"] - whole_revenue) < 0.01, (
+                f"service revenue {result['summary']['revenue']['current']:.2f} != "
+                f"raw SQL over its own window {whole_revenue:.2f}"
+            )
+            assert result["summary"]["orders"]["current"] == whole_count
 
         finally:
             _cleanup(db, order_ids, product_ids, user_ids, category_ids)

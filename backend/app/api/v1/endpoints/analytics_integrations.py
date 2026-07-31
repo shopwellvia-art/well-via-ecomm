@@ -251,6 +251,17 @@ def update_integrations(
     a valid-looking string produces a tag that loads, reports nothing, and
     gives nobody a reason to look at it again.
 
+    One *combination* is also refused, with a 422 whose error code is
+    ``ga4_server_delivery_without_secret``: putting `ga4_purchase_delivery`
+    in a server mode (``server`` / ``both``) while no Measurement Protocol
+    api_secret is stored and none arrives in the same request — and, mirrored,
+    clearing the secret while delivery is a server mode. That state queues
+    every purchase in the outbox with nothing able to send it. The rejection
+    names the two fixes (save the secret, or choose browser-only) and an
+    already-inconsistent deployment can always save its way out, because the
+    guard fires only on requests that touch one of the two fields. See
+    `integrations._guard_deliverable`.
+
     Every accepted change writes an `AuditEvent`. Secret values are recorded as
     `***` on both sides: the trail records that a credential changed, never
     what it became.

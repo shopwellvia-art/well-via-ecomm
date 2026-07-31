@@ -38,11 +38,12 @@ Two differences, both forced by ``AnalyticsViewService`` reading the tz
 generation from the database rather than taking one:
 
   1. Fixtures are written under the **active** generation, because that is the
-     one the service will query, and are deleted by ``(generation, bucket_date
-     range)`` on the way out.
-  2. They live in **June 2008** — earlier than the June 2009 sandbox used by
-     ``test_analytics_resolvers.py``, so the two modules cannot see each
-     other's rows even mid-run.
+     one the service will query.
+  2. They live in a **per-run seven-day slot of 1982** — a year no other suite
+     touches, cut into 52 slots keyed by this process's pid — so two runs of
+     this module (concurrent or interleaved with ``test_analytics_resolvers``'s
+     June 2009 sandbox) cannot see, or delete, each other's rows. Every delete
+     is scoped to the run's own slot; see ``_clear_slot``.
 
 No login: the service only ever calls ``user.has_permission``, so a stub that
 grants exactly the eight view permissions exercises the real code path without
@@ -54,9 +55,10 @@ Run inside the analytics container:
 """
 from __future__ import annotations
 
+import os
 from collections import Counter
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Iterator
 
@@ -115,11 +117,57 @@ MARKETING_CHANNEL_VIEW = 19
 
 #: The states the registry declares today. Filling in `params` is a wiring
 #: change and must not move a single view between these buckets.
+#:
+#: Restated once, deliberately, for two independent state corrections. Neither
+#: was a wiring change, which is why the assertion is kept at full strength and
+#: only the numbers move:
+#:
+#:   * View 66 (experiment-and-ab-testing) LIVE -> FEATURE_REQUIRED. It was LIVE
+#:     with no `params` and a resolver returning `not_configured` on every path,
+#:     because nothing in this deployment assigns a visitor to a variant — no
+#:     assignment service, no exposure logging, no variant storage, and no
+#:     experiment or variant column anywhere in the schema.
+#:   * View 42 (fraud-and-risk-analytics) LIVE -> PARTIAL, audited separately
+#:     and landed while this file was open. Recorded here because this constant
+#:     is a single total and cannot show one change without the other.
+#:   * View 58 (upsell-performance) PARTIAL -> FEATURE_REQUIRED. It was PARTIAL
+#:     with an empty `params`, so it fetched with nothing to read — and the
+#:     re-assessment against the real schema found no honest subset to bind:
+#:     everything offer-shaped needs an impression the storefront never
+#:     records, the pair rollup carries no prices, no rollup splits order value
+#:     by basket size, and the one computable figure (the attach rate) is view
+#:     57's headline KPI already. See the view-58 registry comment and
+#:     tests/test_analytics_upsell.py.
+#:
+#: Net: LIVE 34 -> 32, PARTIAL 17 -> 18 -> 17, FEATURE_REQUIRED 6 -> 7 -> 8.
+#:
+#:   * View 64 (settlements-and-payouts) INTEGRATION_REQUIRED -> PARTIAL. Not a
+#:     wiring change either: the CSV settlement-upload surface landed (endpoint,
+#:     `settlement_daily` rollup, `settlements_payouts` resolver), so the view
+#:     is re-keyed to GATEWAY_SETTLEMENT_REPORT and is fed by uploads. PARTIAL
+#:     is its ceiling — fees are ACTUAL only on fully covered days — and the
+#:     runtime probe still refuses (`not_configured`) while the table is empty.
+#:     The settlements API integration remains future work.
+#:     Net: PARTIAL 17 -> 18, INTEGRATION_REQUIRED 15 -> 14.
+#:
+#:   * View 21 (roas-and-marketing-profitability) INTEGRATION_REQUIRED ->
+#:     PARTIAL. Not a wiring change: manually entered marketing spend
+#:     (`analytics_marketing_spend`, admin-enterable) unlocked the two things
+#:     spend alone can answer — blended ROAS/MER and spend by channel — via the
+#:     `roas_blended` custom function. PARTIAL is its ceiling (typed spend,
+#:     blended only, no per-channel ROAS without ad-platform attribution), and
+#:     the resolver downgrades to the gated shape at runtime whenever the
+#:     window holds zero spend rows. See tests/test_analytics_roas.py.
+#:     Net: PARTIAL 18 -> 19, INTEGRATION_REQUIRED 14 -> 13.
+#:
+#: This test caught these edits and did its job. See
+#: tests/test_analytics_view_state_honesty.py for the invariants that now stop a
+#: view reaching LIVE without a way to produce data at all.
 EXPECTED_STATE_COUNTS: dict[ViewState, int] = {
-    ViewState.LIVE: 34,
-    ViewState.PARTIAL: 17,
-    ViewState.INTEGRATION_REQUIRED: 15,
-    ViewState.FEATURE_REQUIRED: 6,
+    ViewState.LIVE: 32,
+    ViewState.PARTIAL: 19,
+    ViewState.INTEGRATION_REQUIRED: 13,
+    ViewState.FEATURE_REQUIRED: 8,
     ViewState.NOT_APPLICABLE: 1,
 }
 
@@ -191,13 +239,34 @@ NON_ADDITIVE_COLUMNS: dict[str, frozenset[str]] = {
     # on it is a level. Summing any of them over a window multiplies by the
     # number of snapshot days in range.
     "agg_customer_snapshot": frozenset(measures_for("agg_customer_snapshot")),
+    # Bucket-level scalars repeated on EVERY pair row of their day. Summing them
+    # across a day's rows multiplies the day by the number of pairs it produced
+    # — a store with 40 orders and 300 pairs would report 12 000 orders, which
+    # reads as a good month. The window total is obtained by GROUPing on the
+    # scalar itself alongside bucket_date (one row per day) and summing those;
+    # `resolvers/basket.py::_window_totals` is the worked example. The per-pair
+    # marginals are additive across DAYS for one pair and are not listed here.
+    "agg_basket_pair_daily": frozenset(
+        {"total_orders_in_bucket", "orders_with_any_pair", "orders_skipped_over_cap"}
+    ),
 }
 
-# June 2008 — before this store's first order, and before the June 2009 window
-# `test_analytics_resolvers.py` uses, so neither module can see the other's rows.
-SANDBOX_START = date(2008, 6, 1)
+# A per-RUN seven-day slot inside 1982 — a year before this store's first
+# order, and one no other analytics suite writes to. The slot index is this
+# process's pid, so two concurrent invocations of this module (which is how the
+# old fixed June 2008 window got corrupted: each run's teardown deleted the
+# other's rows by date range mid-test) hold disjoint windows. `AnalyticsViewService`
+# reads the ACTIVE tz generation from the database and cannot be handed a
+# private one, so a private generation band is not available to this suite —
+# date disjointness is its only isolation axis, and every read and delete below
+# stays inside this run's own slot. Two simultaneously spawned runs have
+# distinct pids and collide only if those pids differ by an exact multiple of
+# 52 — never the case for processes forked in the same wave.
+_SLOT_DAYS = 7
+_SLOT = os.getpid() % 52
+SANDBOX_START = date(1982, 1, 1) + timedelta(days=_SLOT * _SLOT_DAYS)
 SANDBOX_DAYS = 5
-SANDBOX_END = date(2008, 6, 30)
+SANDBOX_END = SANDBOX_START + timedelta(days=_SLOT_DAYS - 1)
 
 _OWNED_MODELS = (
     rollups.AggOrderDaily,
@@ -697,32 +766,69 @@ class _AnalyticsReader:
         return permission in self._permissions
 
 
+def _use_read_committed(db: Session) -> None:
+    """Run this fixture transaction without gap locks (cf. queue.py).
+
+    Under MySQL's default REPEATABLE READ, `_clear_slot`'s range DELETE over a
+    mostly-EMPTY index range next-key-locks the gap up to the next populated
+    index key — which, in a table whose nearest rows live decades away, spans
+    every other run's 1982 slot too. Two concurrent runs then deadlock through
+    gaps neither of them owns a row in, despite fully disjoint dates (observed:
+    1213 deadlocks between one run's slot clear and the other's seed). READ
+    COMMITTED takes no gap locks, so each run locks exactly the rows it deletes
+    or inserts — all inside its own slot. Set per transaction, exactly as
+    `RecomputeQueue._use_read_committed` does and for the same reason.
+    """
+    if not db.in_transaction():
+        db.connection(execution_options={"isolation_level": "READ COMMITTED"})
+
+
+def _clear_slot(db: Session) -> None:
+    """Delete every rollup row in THIS RUN's date slot, whatever its generation.
+
+    The slot is this run's private property — pid-derived, inside a year no
+    other suite touches — so anything found in it is either this run's own rows
+    or an orphan from a crashed run that landed on the same slot, possibly
+    under a generation that has since been rotated. Deleting across generations
+    here is what makes a rerun after a crash clean rather than a duplicate-key
+    error or a doubled sum, and every predicate is a 1982 date, so this delete
+    is provably incapable of touching live rollups (2026) or any other suite's
+    sandbox.
+    """
+    _use_read_committed(db)
+    for model in _OWNED_MODELS:
+        db.execute(
+            delete(model).where(
+                model.bucket_date >= SANDBOX_START,
+                model.bucket_date <= SANDBOX_END,
+            )
+        )
+    db.commit()
+
+
 @contextmanager
 def sandbox() -> Iterator[tuple[Session, int]]:
-    """A session plus one seeded June 2008 window, deleted unconditionally.
+    """A session plus one seeded five-day window in this run's private slot.
 
     The generation is the database's ACTIVE one rather than a private random
     value, because `AnalyticsViewService` reads it from the database and cannot
-    be told otherwise. Isolation therefore comes from the date range: June 2008
-    predates this store entirely.
+    be told otherwise. Isolation therefore comes entirely from the per-run date
+    slot (see `_SLOT`). The slot is cleared before seeding as well as in the
+    `finally`, so a run following a crashed run is clean — and no delete in
+    this module ever names a date outside the run's own slot, which is what
+    makes two concurrent invocations of this file safe.
     """
     db = SessionLocal()
     generation = int(active_generation(db).generation)
     try:
+        db.rollback()
+        _clear_slot(db)
         _seed(db, generation)
         yield db, generation
     finally:
         try:
             db.rollback()
-            for model in _OWNED_MODELS:
-                db.execute(
-                    delete(model).where(
-                        model.tz_generation == generation,
-                        model.bucket_date >= SANDBOX_START,
-                        model.bucket_date <= SANDBOX_END,
-                    )
-                )
-            db.commit()
+            _clear_slot(db)
         finally:
             db.close()
 
@@ -733,6 +839,7 @@ def _day(offset: int) -> date:
 
 def _seed(db: Session, generation: int) -> None:
     """One small, complete day written five times across every rollup read here."""
+    _use_read_committed(db)
     for offset in range(SANDBOX_DAYS):
         day = _day(offset)
         db.add(

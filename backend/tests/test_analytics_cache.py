@@ -711,11 +711,30 @@ def test_group_by_sums_measures_and_binds_filter_values() -> None:
 
 
 def test_every_rollup_table_is_reachable_by_name() -> None:
-    """All 12 rollups are in the allowlist, and every one of them can answer a
-    watermark query — a table renamed in the model but not here would otherwise
-    only fail the first time someone opened that view."""
+    """Every rollup is in the allowlist and can answer a watermark query — a
+    table renamed in the model but not here would otherwise only fail the first
+    time someone opened that view.
+
+    The allowlist is compared against the ORM rather than against a hand-written
+    count. A rollup ADDED to the models but never added to the model tuple in
+    `analytics_repository._build_registry` raises "unknown analytics source" on
+    the first read of any view bound to it — a runtime 500 on one dashboard, in
+    one deployment, months later. Deriving the expectation from
+    `Base.metadata` (which `app/db/base.py` populates with every model) catches
+    that on the change that introduced it, and keeps catching it as rollups are
+    added without this line needing an edit each time. It started at twelve.
+    """
+    from app.db.base import Base
+
     canonical = known_sources()
-    assert len(canonical) == 12
+    declared = sorted(name for name in Base.metadata.tables if name.startswith("agg_"))
+    assert sorted(canonical) == declared, (
+        "every agg_* table the ORM declares must be registered in "
+        "`analytics_repository._build_registry`, and nothing else may be: "
+        f"missing from the allowlist {sorted(set(declared) - set(canonical))}, "
+        f"registered but not an ORM rollup {sorted(set(canonical) - set(declared))}"
+    )
+    assert len(canonical) >= 12
     db = SessionLocal()
     try:
         repo = AnalyticsRepository(db)
