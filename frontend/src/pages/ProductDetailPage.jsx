@@ -1,6 +1,10 @@
 import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Page } from '@/components/layout/Page.jsx';
+import PageMeta from '@/components/storefront/PageMeta.jsx';
+import JsonLd from '@/components/storefront/JsonLd.jsx';
+import { absoluteUrl } from '@/lib/pageMeta.js';
+import { buildBreadcrumbSchema, buildProductSchema } from '@/lib/productSchema.js';
 import { Skeleton } from '@/components/storefront/ui/Skeleton.jsx';
 import {
   useProduct,
@@ -52,8 +56,39 @@ export default function ProductDetailPage() {
 
   const relatedProducts = likely?.length ? likely : coPurchased;
 
+  const canonical = absoluteUrl(`/products/${product.id}`);
+  const ogImage = product.image_url ? absoluteUrl(product.image_url) : undefined;
+  // Lead the description with what the product is for; the flavour and pack
+  // size are what shoppers scan for in a search snippet.
+  const metaDescription =
+    product.short_description ||
+    product.description ||
+    `${product.name} from Wellvia.`;
+
   return (
     <Page>
+      <PageMeta
+        title={product.name}
+        description={metaDescription}
+        canonicalPath={`/products/${product.id}`}
+        image={product.image_url}
+        type="product"
+      />
+      <JsonLd
+        id="product"
+        data={buildProductSchema(product, { canonical, image: ogImage })}
+      />
+      <JsonLd
+        id="breadcrumb"
+        data={buildBreadcrumbSchema([
+          { name: 'Home', path: '/' },
+          { name: 'Shop', path: '/products' },
+          ...(categoryName
+            ? [{ name: categoryName, path: `/products?category_id=${product.category_id}` }]
+            : []),
+          { name: product.name, path: `/products/${product.id}` },
+        ])}
+      />
 
       {/* ── BREADCRUMB ─────────────────────────────────────────────────────── */}
       <nav aria-label="Breadcrumb" className="mb-5">

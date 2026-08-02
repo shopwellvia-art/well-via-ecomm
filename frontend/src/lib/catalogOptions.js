@@ -10,6 +10,8 @@
  * categories seeded via Admin → Categories.
  */
 
+// Kept in sync with the flavour printed on the pack artwork — a flavour that
+// ships but is missing here is a product the filter can never surface.
 export const FLAVOURS = [
   'Grape',
   'Green Apple',
@@ -17,6 +19,9 @@ export const FLAVOURS = [
   'Mixed Berry',
   'Orange',
   'Mixed Fruit',
+  'Strawberry',
+  'Cherry',
+  'Blueberry',
 ];
 
 export const GOALS = [

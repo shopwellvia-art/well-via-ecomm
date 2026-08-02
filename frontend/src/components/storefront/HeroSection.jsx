@@ -130,7 +130,9 @@ export default function HeroSection({ showWhyButton = true }) {
               src="/homepage1.png"
               alt="Wellvia Beauty Boost and Multivitamin gummies"
               className="w-auto h-full max-h-[210px] sm:max-h-[300px] lg:max-h-none lg:w-full lg:h-auto object-contain max-w-[210px] sm:max-w-[360px] lg:max-w-[560px] -translate-x-2.5 lg:translate-x-0"
-              fetchPriority="high"
+              // React 18 does not recognise the camelCase form and drops it with
+              // a console error on every home page load; lowercase reaches the DOM.
+              fetchpriority="high"
             />
           )}
         </div>
