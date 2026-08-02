@@ -36,6 +36,7 @@ import CodOtpModal from '@/features/cod/components/CodOtpModal.jsx';
 import { usePaymentInstruments } from '@/features/payments/instruments.js';
 import { useActivePaymentMethods } from '@/features/paymentMethods/hooks.js';
 import { usePublicSettings } from '@/features/settings/public.js';
+import { lineDisplayAmount } from '@/features/cart/summary.js';
 import { cn, formatPrice } from '@/lib/utils.js';
 
 /* ─── Instrument icon map (from real instrument codes) ─── */
@@ -165,6 +166,7 @@ export default function CheckoutPage() {
               image_url: buyNowProduct.image_url,
               quantity: buyNowQty,
               unit_price: buyNowProduct.price,
+              line_subtotal: lineSubtotal,
               line_total: lineSubtotal + lineTax,
             },
           ],
@@ -193,7 +195,7 @@ export default function CheckoutPage() {
   const freeShippingThreshold = Number(publicSettings?.['shipping.free_threshold'] || 0);
 
   /* ── Shipping rate ── */
-  const { data: quote } = useRateQuote(pincode, checkoutItems);
+  const { data: quote, isError: quoteFailed } = useRateQuote(pincode, checkoutItems);
   const quotedShipping = quote ? Number(quote.amount) : 0;
   // Mirror backend payment_service: shipping is zeroed for prepaid/split_cod
   // orders once the subtotal crosses the free-shipping threshold. Full COD
@@ -540,8 +542,11 @@ export default function CheckoutPage() {
                             Qty {i.quantity}
                           </p>
                         </div>
+                        {/* Line amount, matching the Order Summary panel. Showing
+                            unit_price here made the same product read ₹100.00 in
+                            the Bag and ₹200.00 in the summary at Qty 2. */}
                         <span className="rounded-lg bg-wgreen text-white text-[13px] px-3 py-1.5 leading-none shrink-0">
-                          {formatPrice(i.unit_price)}
+                          {formatPrice(lineDisplayAmount(i))}
                         </span>
                       </div>
                     ))}
@@ -897,7 +902,11 @@ export default function CheckoutPage() {
 
                   {/* Error from submit attempt */}
                   {error && (
-                    <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm text-red-600">
+                    <div
+                      role="alert"
+                      aria-live="assertive"
+                      className="mt-4 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm text-red-600"
+                    >
                       <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                       <span>{error}</span>
                     </div>
@@ -963,8 +972,11 @@ export default function CheckoutPage() {
                       {i.brand ? `${i.brand} · ` : ''}Qty {i.quantity}
                     </div>
                   </div>
+                  {/* Pre-tax line amount: Tax is its own row below, so showing
+                      the tax-inclusive line_total here would represent tax twice
+                      and leave the item lines not summing to Subtotal. */}
                   <div className="font-wserif text-[16px] text-wink shrink-0">
-                    {formatPrice(i.line_total)}
+                    {formatPrice(lineDisplayAmount(i))}
                   </div>
                 </div>
               ))}
@@ -1033,6 +1045,10 @@ export default function CheckoutPage() {
                   ) : (
                     <dd className="font-medium text-wink">{formatPrice(shippingAmount)}</dd>
                   )
+                ) : quoteFailed ? (
+                  /* The rate quote errored (e.g. no shipping provider configured).
+                     Without this branch the row sat on "Calculating…" forever. */
+                  <dd className="text-xs text-wmuted">Calculated at next step</dd>
                 ) : pincode ? (
                   <dd className="text-xs text-wmuted">Calculating…</dd>
                 ) : (
