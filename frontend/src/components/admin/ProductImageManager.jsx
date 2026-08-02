@@ -1,5 +1,12 @@
-import { useRef, useState } from 'react';
-import { ImagePlus, Star, Trash2, Loader2, Images } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ImagePlus,
+  Star,
+  Trash2,
+  Loader2,
+  Images,
+  GripVertical,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils.js';
 import { scaleIn, fadeIn, duration, ease } from '@/lib/motion.js';
@@ -7,27 +14,71 @@ import {
   useUploadProductImages,
   useDeleteProductImage,
   useSetPrimaryImage,
+  useReorderProductImages,
 } from '@/features/admin/hooks.js';
 
 const MAX_IMAGES = 8;
 const MAX_SIZE_MB = 15; // mirrors the backend MAX_IMAGE_SIZE_MB
 
+/** Move `id` to `toIndex`, returning a new array (input untouched). */
+export function moveTo(list, id, toIndex) {
+  const from = list.findIndex((img) => img.id === id);
+  if (from === -1 || toIndex < 0 || toIndex >= list.length || from === toIndex) {
+    return list;
+  }
+  const next = list.slice();
+  const [moved] = next.splice(from, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
+}
+
+export const sameOrder = (a, b) =>
+  a.length === b.length && a.every((id, i) => id === b[i]);
+
+/** Re-sort `list` into `order` (a list of ids). Ids no longer present are
+ *  dropped, and anything `order` doesn't mention keeps its relative place at
+ *  the end — so a rollback can never lose a tile. */
+export function restoreOrder(list, order) {
+  const known = new Set(order);
+  return [
+    ...order.map((id) => list.find((img) => img.id === id)).filter(Boolean),
+    ...list.filter((img) => !known.has(img.id)),
+  ];
+}
+
 /**
  * Gallery manager for a product's images. Upload (multi-select from local
- * disk), delete, and pick a primary. Each action returns the updated product;
- * the local `images` state is synced from that response.
+ * disk), delete, pick a primary, and drag tiles to set the gallery order.
+ * Each action returns the updated product; the local `images` state is synced
+ * from that response.
+ *
+ * Ordering is optimistic: the grid reorders live under the cursor and only
+ * then persists, reverting to the pre-drag order if the server refuses.
  *
  * Prop API is unchanged — presentational upgrades only.
  */
 export function ProductImageManager({ productId, initialImages = [] }) {
   const [images, setImages] = useState(initialImages);
   const [error, setError] = useState(null);
+  const [dragId, setDragId] = useState(null);
   const fileRef = useRef(null);
+  // Order captured at drag start, so a rejected reorder can be undone.
+  const preDragOrder = useRef(null);
+  // Mirrors `images` for handlers that run after the last render (dragend).
+  const imagesRef = useRef(images);
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
 
   const upload = useUploadProductImages();
   const removeImage = useDeleteProductImage();
   const setPrimary = useSetPrimaryImage();
-  const busy = upload.isPending || removeImage.isPending || setPrimary.isPending;
+  const reorder = useReorderProductImages();
+  const busy =
+    upload.isPending ||
+    removeImage.isPending ||
+    setPrimary.isPending ||
+    reorder.isPending;
 
   async function handleFiles(e) {
     const files = Array.from(e.target.files || []);
@@ -78,6 +129,87 @@ export function ProductImageManager({ productId, initialImages = [] }) {
     }
   }
 
+  /** Persist a new order; `before` is the order to fall back to on failure. */
+  async function persistOrder(before, after) {
+    if (sameOrder(before, after)) return;
+    setError(null);
+    try {
+      const product = await reorder.mutateAsync({
+        id: productId,
+        imageIds: after,
+      });
+      setImages(product.images);
+    } catch (err) {
+      setImages((prev) => restoreOrder(prev, before));
+      setError(
+        err.response?.data?.error?.message ||
+          'Could not save the new image order.',
+      );
+    }
+  }
+
+  function handleDragStart(e, id) {
+    if (busy) {
+      e.preventDefault();
+      return;
+    }
+    preDragOrder.current = images.map((img) => img.id);
+    setDragId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    // Firefox refuses to start a drag unless some data is attached.
+    e.dataTransfer.setData('text/plain', String(id));
+  }
+
+  function handleDragOver(e, overId) {
+    if (dragId === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (overId === dragId) return;
+    setImages((prev) =>
+      moveTo(
+        prev,
+        dragId,
+        prev.findIndex((img) => img.id === overId),
+      ),
+    );
+  }
+
+  function handleDragEnd(e) {
+    const before = preDragOrder.current;
+    preDragOrder.current = null;
+    setDragId(null);
+    if (!before) return;
+    // Esc, or a release outside any tile, ends the drag with no drop effect —
+    // that is a cancel, so the live preview has to be rolled back, not saved.
+    if (e.dataTransfer?.dropEffect === 'none') {
+      setImages((prev) => restoreOrder(prev, before));
+      return;
+    }
+    persistOrder(
+      before,
+      imagesRef.current.map((img) => img.id),
+    );
+  }
+
+  /** Keyboard equivalent of a drag: Alt/Ctrl/Cmd + ←/→ on a focused tile. */
+  function handleTileKeyDown(e, id) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if (!(e.altKey || e.ctrlKey || e.metaKey) || busy) return;
+    e.preventDefault();
+    const before = images.map((img) => img.id);
+    const next = moveTo(
+      images,
+      id,
+      before.indexOf(id) + (e.key === 'ArrowLeft' ? -1 : 1),
+    );
+    if (next === images) return;
+    setImages(next);
+    persistOrder(
+      before,
+      next.map((img) => img.id),
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2">
       {/* Section label */}
@@ -94,29 +226,66 @@ export function ProductImageManager({ productId, initialImages = [] }) {
       {/* Grid */}
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
         <AnimatePresence initial={false}>
-          {images.map((img) => (
+          {images.map((img, index) => (
             <motion.div
               key={img.id}
+              layout
               variants={scaleIn}
               initial="hidden"
               animate="show"
               exit={{ opacity: 0, scale: 0.9, transition: { duration: duration.fast, ease: ease.exit } }}
-              className="group relative aspect-square overflow-hidden rounded-sm border border-line-subtle bg-bg-sunken"
+              draggable={!busy}
+              onDragStart={(e) => handleDragStart(e, img.id)}
+              onDragOver={(e) => handleDragOver(e, img.id)}
+              onDrop={(e) => e.preventDefault()}
+              onDragEnd={handleDragEnd}
+              onKeyDown={(e) => handleTileKeyDown(e, img.id)}
+              tabIndex={0}
+              // `group`, not `button` — the tile holds its own buttons, and a
+              // button must not contain interactive children.
+              role="group"
+              aria-roledescription="Draggable image"
+              aria-label={`Image ${index + 1} of ${images.length}. Hold Alt and press the left or right arrow key to move it.`}
+              title="Drag to reorder"
+              className={cn(
+                'group relative aspect-square overflow-hidden rounded-sm border bg-bg-sunken',
+                'cursor-grab focus-visible:focus-ring active:cursor-grabbing',
+                dragId === img.id
+                  ? 'border-accent opacity-40'
+                  : 'border-line-subtle',
+                busy && 'cursor-default',
+              )}
             >
               <img
                 src={img.url}
                 alt=""
                 loading="lazy"
-                className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                draggable={false}
+                className="pointer-events-none size-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
 
-              {/* Primary badge */}
-              {img.is_primary && (
-                <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium text-ink-inverse shadow-glow-sm">
-                  <Star className="size-2.5 fill-current" aria-hidden="true" />
-                  Primary
+              {/* Order + primary badges */}
+              <div className="pointer-events-none absolute left-1.5 top-1.5 flex items-center gap-1">
+                <span className="nums grid size-5 place-items-center rounded-full bg-black/60 text-[10px] font-medium text-white">
+                  {index + 1}
                 </span>
-              )}
+                {img.is_primary && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium text-ink-inverse shadow-glow-sm">
+                    <Star className="size-2.5 fill-current" aria-hidden="true" />
+                    Primary
+                  </span>
+                )}
+              </div>
+
+              {/* Drag affordance */}
+              <GripVertical
+                className={cn(
+                  'pointer-events-none absolute right-1 top-1.5 size-4 text-white drop-shadow',
+                  'opacity-0 transition-opacity duration-200',
+                  'group-hover:opacity-80 group-focus-within:opacity-80',
+                )}
+                aria-hidden="true"
+              />
 
               {/* Hover action bar */}
               <div
@@ -226,7 +395,9 @@ export function ProductImageManager({ productId, initialImages = [] }) {
             className="text-xs text-ink-tertiary"
           >
             {images.length}/{MAX_IMAGES} images · up to {MAX_SIZE_MB} MB each ·
-            select one or several at once.
+            select one or several at once
+            {images.length > 1 && ' · drag a tile to set the gallery order'}
+            {reorder.isPending && ' · saving order…'}
           </motion.p>
         )}
       </AnimatePresence>

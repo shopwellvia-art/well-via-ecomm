@@ -56,3 +56,11 @@ export function useSetPrimaryImage() {
     onSuccess: invalidate,
   });
 }
+
+export function useReorderProductImages() {
+  const invalidate = useProductInvalidation();
+  return useMutation({
+    mutationFn: ({ id, imageIds }) => adminApi.reorderProductImages(id, imageIds),
+    onSuccess: invalidate,
+  });
+}

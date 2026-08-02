@@ -20,4 +20,9 @@ export const adminApi = {
     apiClient.delete(`/products/${id}/images/${imageId}`).then((r) => r.data),
   setPrimaryImage: (id, imageId) =>
     apiClient.post(`/products/${id}/images/${imageId}/primary`).then((r) => r.data),
+  // Full gallery order, first id first — the server rejects partial lists.
+  reorderProductImages: (id, imageIds) =>
+    apiClient
+      .patch(`/products/${id}/images/order`, { image_ids: imageIds })
+      .then((r) => r.data),
 };

@@ -58,6 +58,12 @@ class ProductImageRead(BaseModel):
     is_primary: bool
 
 
+class ProductImageReorder(BaseModel):
+    """New gallery order — every image id of the product, exactly once."""
+
+    image_ids: list[int] = Field(min_length=1)
+
+
 class ProductTaxBrief(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

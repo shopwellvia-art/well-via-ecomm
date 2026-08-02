@@ -22,12 +22,12 @@ const ZOOM = 2.4;
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
 export function LuxuryGallery({ product }) {
+  // Gallery order is exactly the order the admin dragged the tiles into.
+  // `is_primary` deliberately does NOT hoist here: it marks the card/listing
+  // thumbnail, and hoisting it would silently override the drag order on the
+  // PDP — the admin would set an order and see a different one on the store.
   const images = useMemo(
-    () =>
-      [...(product.images || [])].sort(
-        (a, b) =>
-          Number(b.is_primary) - Number(a.is_primary) || a.position - b.position,
-      ),
+    () => [...(product.images || [])].sort((a, b) => a.position - b.position),
     [product.images],
   );
 
