@@ -232,6 +232,35 @@ class ProductService:
         self.db.commit()
         return self.get(product_id)
 
+    def reorder_images(self, product_id: int, image_ids: list[int]) -> Product:
+        """Rewrite gallery positions from `image_ids`, first id first.
+
+        The payload must be the product's full image set — a partial list would
+        leave the omitted images sharing stale positions with the reordered
+        ones, and the gallery order would then depend on row insertion order.
+        """
+        product = self.get(product_id)
+        current = {img.id for img in product.images}
+        given = list(image_ids)
+        if len(set(given)) != len(given):
+            raise ValidationError("image_ids contains duplicate ids")
+        if set(given) != current:
+            raise ValidationError(
+                "image_ids must list every image of this product exactly once"
+            )
+
+        by_id = {img.id: img for img in product.images}
+        for position, image_id in enumerate(given):
+            by_id[image_id].position = position
+        self.db.flush()
+        self._sync_primary(product)
+        self.db.commit()
+        # Sessions run with expire_on_commit=False, and a selectinload never
+        # overwrites an already-loaded collection — without this expire the
+        # response would echo the old order back while the DB holds the new one.
+        self.db.expire(product, ["images"])
+        return self.get(product_id)
+
     def set_primary_image(self, product_id: int, image_id: int) -> Product:
         product = self.get(product_id)
         if not any(img.id == image_id for img in product.images):

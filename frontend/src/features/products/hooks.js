@@ -67,6 +67,25 @@ export function useProductsByIds(ids) {
   });
 }
 
+/**
+ * Products for the header "Shop" mega menu.
+ *
+ * `enabled` is gated on the menu actually being open so the header does not
+ * fetch a catalog page for every visitor who never opens it. The query key is
+ * the ordinary ['products', params] shape, so once open it shares React Query's
+ * cache with the listing page rather than refetching.
+ */
+export function useShopMenuProducts(limit = 9, enabled = true) {
+  const params = { page_size: limit, sort_by: 'newest' };
+  return useQuery({
+    queryKey: ['products', params],
+    queryFn: () => productsApi.list(params),
+    enabled,
+    // The nav rarely changes mid-session; keep reopening the menu instant.
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useBestsellers(limit = 8) {
   return useQuery({
     queryKey: ['products', 'bestsellers', limit],

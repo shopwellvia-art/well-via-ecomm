@@ -8,6 +8,7 @@ from app.schemas.common import Page, PaginationParams
 from app.schemas.product import (
     ProductAdminRead,
     ProductCreate,
+    ProductImageReorder,
     ProductRead,
     ProductUpdate,
 )
@@ -191,6 +192,17 @@ async def upload_product_images(
         for f in files
     ]
     return ProductService(db).add_images(product_id, payloads)
+
+
+@router.patch(
+    "/{product_id}/images/order",
+    response_model=ProductAdminRead,
+    dependencies=[Depends(require_permission("products.update"))],
+)
+def reorder_product_images(
+    product_id: int, payload: ProductImageReorder, db: Session = Depends(get_db)
+):
+    return ProductService(db).reorder_images(product_id, payload.image_ids)
 
 
 @router.delete(

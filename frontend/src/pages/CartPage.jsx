@@ -28,6 +28,7 @@ import { toast } from '@/components/ui/Toaster.jsx';
 import { useAuthStore } from '@/features/auth/store.js';
 import FreeShippingNudge from '@/features/shipping/components/FreeShippingNudge.jsx';
 import { useRateQuote, useServiceability } from '@/features/shipping/hooks.js';
+import { cartUnitCount } from '@/features/cart/summary.js';
 import { cn, formatPrice } from '@/lib/utils.js';
 
 const LABEL_TEXT = { home: 'Home', work: 'Work', other: 'Other' };
@@ -277,6 +278,10 @@ export default function CartPage() {
   }, [addresses, pickedAddressId]);
 
   const items = useMemo(() => data?.items ?? [], [data]);
+  // Units, not lines. The header badge already counts units, and "Price (N items)"
+  // sits next to an amount covering every unit — counting lines here made a
+  // 3-unit cart read "Price (1 item) ₹1,197.00".
+  const unitCount = useMemo(() => cartUnitCount(items), [items]);
   const subtotal = Number(data?.subtotal ?? 0);
   const taxAmount = Number(data?.tax_amount ?? 0);
   const discountAmount = Number(data?.discount_amount ?? 0);
@@ -507,7 +512,7 @@ export default function CartPage() {
               <h1 className="font-wserif text-[clamp(28px,4vw,44px)] font-medium text-wink">
                 Your Cart{' '}
                 <span className="text-wmuted text-2xl font-light">
-                  ({items.length})
+                  ({unitCount})
                 </span>
               </h1>
               {(selectedAddress || detectedPincode) && (
@@ -734,7 +739,7 @@ export default function CartPage() {
 
                 <div className="flex justify-between">
                   <span className="text-wmuted">
-                    Price ({items.length} item{items.length === 1 ? '' : 's'})
+                    Price ({unitCount} item{unitCount === 1 ? '' : 's'})
                   </span>
                   <span className="font-medium text-wink">{formatPrice(mrpTotal)}</span>
                 </div>
