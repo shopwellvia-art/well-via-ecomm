@@ -341,22 +341,22 @@ useEffect(() => {
     {/* Content Grid */}
     <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 lg:gap-16 items-center justify-items-center">
       {/* Limited-collection trio */}
-      <div className="order-2 md:order-1 flex items-center justify-center relative isolate w-full">
-        <img
-          src="/launches-bg.png"
-          alt=""
-          aria-hidden="true"
-          className="absolute z-0 w-[110%] max-w-none h-auto top-[78%] left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-80 md:w-[125%] md:left-[47%] md:origin-left"
-        />
+    <div className="order-2 md:order-1 flex items-center justify-center relative isolate w-full">
+  <img
+    src="/launches-bg.png"
+    alt=""
+    aria-hidden="true"
+    className="absolute z-0 w-[110%] max-w-none h-auto top-[78%] left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-80 md:w-[150%] md:left-[48%] md:origin-center"
+  />
 
-        {/* Main image */}
-        <img
-          src="/launches.png"
-          alt="Core Omega, Beauty Boost and Sleep gummies — the limited collection"
-          loading="lazy"
-          className="w-full max-w-[520px] h-auto rounded-xl2 relative z-10 mx-auto"
-        />
-      </div>
+  {/* Main image */}
+  <img
+    src="/launches.png"
+    alt="Core Omega, Beauty Boost and Sleep gummies — the limited collection"
+    loading="lazy"
+    className="w-full max-w-[520px] h-auto rounded-xl2 relative z-10 mx-auto"
+  />
+</div>
 
       {/* Limited collection copy */}
       <div className="order-1 md:order-2 flex flex-row items-center justify-between gap-3 md:flex-col md:items-start md:justify-center w-full">
@@ -426,8 +426,8 @@ useEffect(() => {
           </Link>
         </div>
 
-        {/* Bundle visual */}
-        <div className="flex-1 min-w-0">
+        {/* Bundle visual - shifted up slightly more with md:-mt-10 */}
+        <div className={`flex-1 min-w-0 ${i === 1 ? 'md:-mt-10' : ''}`}>
           <Link to={target} className="block" aria-label={combo?.name ?? r.label}>
             <img
               src={`/routine-${r.key}.png`}
