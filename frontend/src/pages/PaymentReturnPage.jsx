@@ -19,6 +19,11 @@ export default function PaymentReturnPage() {
   const { data, isLoading, isError } = usePaymentStatus(mtid, {
     enabled: !!mtid,
     refetchInterval: (query) => {
+      // Once the query is in error (401 signed-out, 404 unknown mtid, network
+      // down after retries) stop polling — otherwise this loops forever, the
+      // user stares at the "Confirming" spinner, and every 401 tick also
+      // clears their stored session via the apiClient interceptor.
+      if (query.state.status === 'error') return false;
       const status = query.state.data?.order_status;
       return status && TERMINAL_STATES.has(status) ? false : 1500;
     },
