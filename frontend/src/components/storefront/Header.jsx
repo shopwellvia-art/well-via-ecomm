@@ -237,7 +237,11 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-40 bg-[#08112C]">
       {/* ── Desktop (frontend-3: dark-green band, left logo, serif nav) ───────── */}
-      <div className="hidden md:flex items-center gap-4 lg:gap-7 py-2.5 px-5 lg:px-10">
+      {/* py-1.5 rather than the old py-2.5: the lockup export already carries
+          ~10px of its own top margin at this box size, so the band only needs a
+          little extra. Net effect is the same ~76px bar as before but with the
+          visible mark ~25% larger instead of crammed at 36px. */}
+      <div className="hidden md:flex items-center gap-4 lg:gap-7 py-1.5 px-5 lg:px-10">
         {/* Left: logo — cream/gold on dark green */}
         <Logo
           size="md"
@@ -458,7 +462,9 @@ export default function Header() {
             <img
               src={mediaUrl(config.logo_url)}
               alt={config.brand_name}
-              className="max-h-7 w-auto object-contain"
+              /* 28px left a stacked lockup unreadable on the smallest screens,
+                 where the brand is the only wayfinding cue in the bar. */
+              className="max-h-10 w-auto object-contain"
             />
           ) : (
             <>
