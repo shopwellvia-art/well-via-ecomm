@@ -80,6 +80,28 @@ class CheckoutResponse(BaseModel):
     provider: str
     amount_minor: int
     currency: str
+    # Embedded-checkout payload, passed through verbatim from the provider's
+    # InitiateResponse (e.g. Razorpay Standard Checkout's checkout.js options:
+    # key_id / order_id / amount / prefill / notes). When present the SPA
+    # opens the provider's in-page checkout with it instead of following
+    # redirect_url (which is "" for such providers). None for redirect-style
+    # gateways and COD.
+    checkout: dict | None = None
+
+
+class RazorpayVerifyRequest(BaseModel):
+    """Browser callback from Razorpay Standard Checkout.
+
+    checkout.js hands the SPA this triplet in its success handler; the server
+    re-verifies the signature AND re-fetches the payment from the gateway
+    before any state moves (see PaymentService.verify_and_settle_razorpay) —
+    the browser is never trusted to settle an order.
+    """
+
+    merchant_transaction_id: str = Field(max_length=64)
+    razorpay_order_id: str = Field(max_length=64)
+    razorpay_payment_id: str = Field(max_length=64)
+    razorpay_signature: str = Field(max_length=256)
 
 
 class PaymentStatusResponse(BaseModel):

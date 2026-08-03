@@ -77,6 +77,11 @@ class InitiateResponse:
     redirect_url: str
     provider_transaction_id: str | None = None
     raw: dict | None = None
+    # Embedded-checkout payload for providers whose checkout renders inside
+    # our own page (e.g. Razorpay Standard Checkout opens checkout.js with
+    # this dict) instead of redirecting the browser away. None for
+    # redirect-style providers; when set, redirect_url may be "".
+    checkout: dict | None = None
 
 
 @dataclass

@@ -60,15 +60,22 @@ env facts the pipeline cannot fix; (b) is fixed in code on this branch.
 
 ## Phase 3 — payment go-live (owner: founder, Razorpay dashboard access)
 
-9. **Register the webhook** (until then the 10-min reconcile cron is the ONLY
-   settlement path): Razorpay dashboard → Webhooks → add
-   `https://<api origin>/api/v1/payments/webhook/razorpay`, subscribe
-   `payment_link.paid`, set a webhook secret, and paste that secret into
+9. **Register the webhook** (until then settlement rests on the browser's
+   verify call + the 10-min reconcile cron): Razorpay dashboard → Webhooks →
+   add `https://<api origin>/api/v1/payments/webhook/razorpay`, subscribe
+   **`payment.captured` and `order.paid`** (Standard Checkout — these are the
+   events that settle new orders) plus `payment_link.paid` while any legacy
+   payment link can still be paid. Set a webhook secret and paste it into
    Admin → Settings → Payments → Razorpay → webhook secret.
 10. **Live keys, when going live for real money:** generate LIVE key pair in
     the dashboard (needs completed KYC/activation), paste into Admin →
     Payments (the backend now strips stray whitespace on save), and re-run a
     ₹-small end-to-end order. Test keys (`rzp_test_…`) decline real cards.
+10b. **Auto-capture setting (Standard Checkout):** dashboard → Account &
+    Settings → Payment Capture → auto-capture ON. Authorized-but-uncaptured
+    payments are AUTO-REFUNDED by Razorpay after a timeout, and the backend
+    deliberately refuses to mark an order PAID until the payment is captured
+    — with auto-capture off, every payment would bounce back to customers.
 11. **Smoke test** (mirrors the launch plan's day-0 step): one real prepaid
     order end-to-end — pay, land on `/payments/return`, see "Payment
     Successful", order PAID in admin. Then one COD order; cancel it.

@@ -625,7 +625,7 @@ class TestCheckoutWithGatewayCode:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, redirect_url = svc.checkout(user, req)
+            order, mtid, redirect_url, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
 
             assert order.gateway_code == "mock", (
@@ -676,7 +676,7 @@ class TestCheckoutWithGatewayCode:
                 # gateway_code omitted — auto-resolve path
             )
             svc = PaymentService(db)
-            order, _, _ = svc.checkout(user, req)
+            order, _, _, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
 
             assert order.gateway_code == "mock", (

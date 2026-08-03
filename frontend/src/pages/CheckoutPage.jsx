@@ -28,6 +28,8 @@ import LoginPanel from '@/features/auth/components/LoginPanel.jsx';
 import { useCart, useApplyCoupon, useRemoveCoupon } from '@/features/cart/hooks.js';
 import { useProduct } from '@/features/products/hooks.js';
 import { useCheckout } from '@/features/payments/hooks.js';
+import { paymentsApi } from '@/features/payments/api.js';
+import { openRazorpayCheckout } from '@/features/payments/razorpayCheckout.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { useRateQuote } from '@/features/shipping/hooks.js';
 import FreeShippingNudge from '@/features/shipping/components/FreeShippingNudge.jsx';
@@ -449,6 +451,13 @@ export default function CheckoutPage() {
           ? { billing_address: billingPayload.address }
           : {}),
       });
+      // Razorpay Standard Checkout keeps the customer on this page and opens
+      // the embedded modal. Every other flow (mock gateway, legacy Payment
+      // Links, COD confirmation) still full-page redirects as before.
+      if (resp.checkout?.provider === 'razorpay') {
+        await openRazorpayModal(resp);
+        return;
+      }
       window.location.assign(resp.redirect_url);
     } catch (err) {
       setSubmitting(false);
@@ -456,6 +465,72 @@ export default function CheckoutPage() {
         err?.response?.data?.error?.message ||
         'Could not start payment. Please try again.';
       setError(msg);
+    }
+  }
+
+  /* ── Razorpay Standard Checkout (embedded modal) ──
+     The return page's poll of /payments/{mtid}/status is the single source
+     of truth for the outcome, so every path below either lands on
+     /payments/return?mtid=… or re-enables Place Order. The order already
+     exists server-side in PENDING when the modal opens; a retry via Place
+     Order creates a fresh order — same as abandoning the hosted page in the
+     redirect flow — and abandoned PENDING orders are reconciled server-side. */
+  async function openRazorpayModal(resp) {
+    const mtid = resp.merchant_transaction_id;
+    const toReturnPage = () =>
+      navigate(`/payments/return?mtid=${encodeURIComponent(mtid)}`);
+    try {
+      await openRazorpayCheckout(resp.checkout, {
+        // The customer's name is only in scope for inline (new) addresses —
+        // saved addresses expose just id/pincode/phone. Blank values are
+        // dropped by the helper so the server's email prefill survives.
+        prefillOverrides: {
+          name: addressPayload.address?.full_name,
+          contact: customerPhone?.trim(),
+        },
+        onSuccess: async (rzpResponse) => {
+          // Best-effort verify: lets the backend confirm the payment without
+          // waiting for the webhook. The return page polls status regardless,
+          // so a failed verify must never strand the customer on checkout.
+          try {
+            await paymentsApi.verifyRazorpay({
+              merchant_transaction_id: mtid,
+              razorpay_order_id: rzpResponse?.razorpay_order_id,
+              razorpay_payment_id: rzpResponse?.razorpay_payment_id,
+              razorpay_signature: rzpResponse?.razorpay_signature,
+            });
+          } catch {
+            // Swallowed: the webhook + status poll settle it server-side.
+          }
+          toReturnPage();
+        },
+        onDismiss: () => {
+          setSubmitting(false);
+          // Keep a more specific payment.failed description if one was set —
+          // dismiss always fires after a failed attempt is abandoned.
+          setError(
+            (prev) => prev || 'Payment was not completed. You can try again.',
+          );
+        },
+        onFailure: (err) => {
+          // Razorpay keeps the modal open for retries; surface the reason on
+          // the page so it's visible once the customer closes the modal.
+          setSubmitting(false);
+          setError(
+            err?.error?.description || 'Payment failed. Please try again.',
+          );
+        },
+      });
+    } catch {
+      // checkout.js failed to load (network / CSP / adblock). Fall back to
+      // the hosted redirect when the backend provided one; otherwise surface
+      // the error so the customer can retry.
+      if (resp.redirect_url) {
+        window.location.assign(resp.redirect_url);
+      } else {
+        setSubmitting(false);
+        setError('Could not open the payment window. Please try again.');
+      }
     }
   }
 

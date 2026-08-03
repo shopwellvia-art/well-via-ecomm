@@ -205,7 +205,7 @@ class TestWebhookSuccessWritesStatusAppliedEvent:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
             order_id = order.id
 
@@ -284,7 +284,7 @@ class TestAmountMismatchWritesEventAndLeavesPending:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
             order_id = order.id
 
@@ -479,7 +479,7 @@ class TestReconcileSettlesStalePendingOrder:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
             order_id = order.id
 
@@ -574,7 +574,7 @@ class TestReconcileLeavesGenuinelyPendingOrderPending:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
             order_id = order.id
 
