@@ -187,6 +187,11 @@ class AboutPage(BaseModel):
     enabled: bool = True
     hero: Hero
     intro: list[str] = []
+    # Section headings above the story and values blocks. They were fixed
+    # strings in the page, so an admin who repurposed either list could not
+    # retitle it.
+    story_label: str = "Our story"
+    values_label: str = "What we value"
     stats: list[Stat] = []
     values: list[FeatureItem] = []
     mission: ProseSection
@@ -299,12 +304,14 @@ DEFAULT_SITE_PAGES: dict = {
             "our promise hasn't changed: clean, effective formulas, honest labels, "
             "and support from real people who genuinely care about your wellbeing.",
         ],
-        "stats": [
-            {"value": "1M+", "label": "Happy customers"},
-            {"value": "50+", "label": "Wellness formulas"},
-            {"value": "4.8/5", "label": "Average rating"},
-            {"value": "100%", "label": "Clean ingredients"},
-        ],
+        # Ships EMPTY, and the page hides the whole row when it is. These were
+        # template placeholders — "1M+ Happy customers", "50+ Wellness
+        # formulas", "4.8/5 Average rating" — published on a store with no
+        # orders, nine products and zero reviews. Unsubstantiated figures like
+        # a made-up average rating are exactly what the CCPA misleading-
+        # advertisement guidelines and the ASCI code target, so the default is
+        # to claim nothing. An admin adds real numbers once they exist.
+        "stats": [],
         "values": [
             {
                 "icon": "Heart",

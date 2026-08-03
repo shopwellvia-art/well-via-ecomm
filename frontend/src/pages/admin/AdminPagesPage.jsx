@@ -288,6 +288,14 @@ function AboutEditor({ page, set }) {
         </div>
       </SectionCard>
       <SectionCard title="Story paragraphs" defaultOpen={false}>
+        <div className="mb-4">
+          <Input
+            label="Section heading"
+            value={page.story_label ?? ''}
+            placeholder="Our story"
+            onChange={(e) => set('story_label', e.target.value)}
+          />
+        </div>
         <StringList
           items={page.intro}
           onChange={(v) => set('intro', v)}
@@ -295,7 +303,16 @@ function AboutEditor({ page, set }) {
           addLabel="Add paragraph"
         />
       </SectionCard>
-      <SectionCard title="Stats" description="Headline numbers." defaultOpen={false}>
+      <SectionCard
+        title="Stats"
+        description="Headline numbers. Leave empty to hide the row."
+        defaultOpen={false}
+      >
+        <p className="mb-3 text-xs text-ink-tertiary">
+          Only publish figures you can substantiate. Invented customer counts or
+          average ratings are treated as misleading advertising under the CCPA
+          guidelines and the ASCI code.
+        </p>
         <ObjectList
           items={page.stats}
           onChange={(v) => set('stats', v)}
@@ -308,6 +325,14 @@ function AboutEditor({ page, set }) {
         />
       </SectionCard>
       <SectionCard title="Values" description="Icon + title + text cards." defaultOpen={false}>
+        <div className="mb-4">
+          <Input
+            label="Section heading"
+            value={page.values_label ?? ''}
+            placeholder="What we value"
+            onChange={(e) => set('values_label', e.target.value)}
+          />
+        </div>
         <ObjectList
           items={page.values}
           onChange={(v) => set('values', v)}

@@ -75,12 +75,13 @@ export const SITE_PAGES_DEFAULTS = {
       'Wellvia was founded to reimagine everyday wellness — nutrition and self-care that actually taste good, work as promised, and are easy to stick with. What started with a handful of thoughtfully formulated gummies is now a community that believes small daily habits create lasting change.',
       "Today we help people across India take better care of themselves, but our promise hasn't changed: clean, effective formulas, honest labels, and support from real people who genuinely care about your wellbeing.",
     ],
-    stats: [
-      { value: '1M+', label: 'Happy customers' },
-      { value: '50+', label: 'Wellness formulas' },
-      { value: '4.8/5', label: 'Average rating' },
-      { value: '100%', label: 'Clean ingredients' },
-    ],
+    story_label: 'Our story',
+    values_label: 'What we value',
+    // Ships EMPTY, and the page hides the row when it is. These were template
+    // placeholders — "1M+ Happy customers", "50+ Wellness formulas",
+    // "4.8/5 Average rating" — on a store with no orders, nine products and
+    // zero reviews. Claim nothing by default; an admin adds real figures.
+    stats: [],
     values: [
       {
         icon: 'Heart',
