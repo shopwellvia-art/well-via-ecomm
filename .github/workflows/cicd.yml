@@ -386,12 +386,23 @@ jobs:
             # because carts, refresh-token sessions and OTPs live in it.
             docker compose pull backend frontend
 
-            # Recreate the two app containers unconditionally. --force-recreate
+            # Recreate the app containers unconditionally. --force-recreate
             # means we do NOT depend on the image reference having changed to
             # trigger a restart — the containers are destroyed and rebuilt from
             # the new images every single deploy. redis is not named here, so it
             # keeps running and its volume is never touched.
-            docker compose up -d --force-recreate --remove-orphans backend frontend
+            #
+            # The sidecars MUST be in this list: compose bakes env_file into a
+            # container at creation, so a cron/worker that isn't recreated keeps
+            # the env and image it was born with forever. That is how the
+            # payment-reconcile cron ran with a blank PAYMENT_RECONCILE_TOKEN
+            # (403 every cycle) across deploys that "fixed" the host env file,
+            # and how the analytics workers can drift onto an older backend
+            # image than the API they feed.
+            docker compose up -d --force-recreate --remove-orphans \
+              backend frontend \
+              payment-reconcile-cron loyalty-cron \
+              analytics-rollup-worker analytics-delivery-worker
 
             # Now delete the superseded images. Only runs after the new
             # containers are up, and Docker refuses to remove an image that a
