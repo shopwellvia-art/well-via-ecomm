@@ -592,139 +592,145 @@ useEffect(() => {
   </div>
 </section>
 
-     {/* 8. Brand philosophy — the puzzle piece */}
+{/* 8. Brand philosophy — the puzzle piece */}
 <section className="px-5 sm:px-10 lg:px-16 pt-2 pb-12 lg:pt-8 lg:pb-[60px]">
   {/* 8a. the piece that brings it all together */}
   <div className="grid grid-cols-2 md:grid-cols-2 gap-4 md:gap-10 items-center max-w-[1140px] mx-auto mb-2 md:mb-6 lg:mb-8">
-  {/* Increased left padding on desktop (md:pl-16 lg:pl-24) */}
-  <div className="md:pl-16 lg:pl-24">
-    <h2 className="font-wserif text-[18px] sm:text-[26px] md:text-[clamp(32px,3.8vw,52px)] leading-[1.2] md:leading-[1.15] text-wink/85 m-0 mb-2 md:mb-5">
-      the piece that brings
-      <br />
-      it all together.
-    </h2>
-    <p className="font-wserif text-[15px] sm:text-[18px] md:text-[clamp(20px,1.9vw,26px)] leading-[1.4] md:leading-[1.5] text-wmuted m-0 max-w-[340px] md:max-w-[420px]">
-      &ldquo;sometimes, the smallest things make the biggest
-      difference.&rdquo;
-    </p>
-  </div>
+    {/* 0 left margin on mobile, keeping desktop padding intact */}
+    <div className="pl-0 md:pl-16 lg:pl-24">
+      <h2 className="font-wserif text-[18px] sm:text-[26px] md:text-[clamp(32px,3.8vw,52px)] leading-[1.2] md:leading-[1.15] text-wink/85 m-0 mb-2 md:mb-5">
+        the piece that brings
+        <br />
+        it all together.
+      </h2>
+      <p className="font-wserif text-[15px] sm:text-[18px] md:text-[clamp(20px,1.9vw,26px)] leading-[1.4] md:leading-[1.5] text-wmuted m-0 max-w-[340px] md:max-w-[420px] mb-4">
+        &ldquo;sometimes, the smallest things make the biggest
+        difference.&rdquo;
+      </p>
+      
+      {/* Line below the paragraph */}
+      <div className="h-px bg-wline w-full max-w-[340px] md:max-w-[420px] my-3" />
+    </div>
 
-  <div className="flex justify-center" aria-hidden="true">
-    {/* Wrapper container for layering */}
-    <div className="relative flex items-center justify-center p-2 sm:p-4">
-      {/* Background Image Layer - Scaled Down & Centered */}
-      <img
-        src="/huge-puzzle bg.png"
-        alt=""
-        aria-hidden="true"
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85%] max-w-[130px] sm:max-w-[210px] md:max-w-[320px] h-auto object-contain pointer-events-none select-none z-0"
-      />
+    <div className="flex justify-center" aria-hidden="true">
+      {/* Wrapper container for layering */}
+      <div className="relative flex items-center justify-center p-2 sm:p-4">
+        {/* Background Image Layer - Scaled Down & Centered */}
+        <img
+          src="/huge-puzzle bg.png"
+          alt=""
+          aria-hidden="true"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85%] max-w-[130px] sm:max-w-[210px] md:max-w-[320px] h-auto object-contain pointer-events-none select-none z-0"
+        />
 
-      {/* Front Huge Puzzle Image */}
-      <img
-        src="/huge-puzzle.png"
-        alt=""
-        loading="lazy"
-        className="relative z-10 w-full max-w-[160px] sm:max-w-[260px] md:max-w-[400px] h-auto rounded-xl2"
-      />
+        {/* Front Huge Puzzle Image */}
+        <img
+          src="/huge-puzzle.png"
+          alt=""
+          loading="lazy"
+          className="relative z-10 w-full max-w-[160px] sm:max-w-[260px] md:max-w-[400px] h-auto rounded-xl2"
+        />
+      </div>
     </div>
   </div>
-</div>
-<div className="flex justify-center items-center gap-4 sm:gap-8 md:gap-16 mt-0">
-  {/* Left-shifted download image & pushed down on desktop */}
-  <img
-    src="/homepage download.png"
-    alt=""
-    className="w-24 sm:w-32 md:w-64 translate-y-4 md:translate-y-16 lg:translate-y-20 md:-translate-x-16 lg:-translate-x-20"
-  />
 
-  {/* Shifted EVEN FURTHER UP on desktop (md:-mt-28 lg:-mt-36) */}
-  <div className="text-center md:text-left z-10 flex flex-col items-center md:items-start md:-mt-36 lg:-mt-48">
-  <p className="font-cormorant text-[13px] sm:text-[14px] md:text-[22px] leading-[1.3] md:leading-snug text-wink mb-2 md:mb-2 max-w-[600px] md:max-w-[200px] text-center md:text-left">
-    Science backed supplements for everyday
-  </p>
-
-  <Link
-    to="/products"
-    className="inline-flex items-center gap-1.5 md:gap-2.5 bg-[#08112C] text-white rounded-full pl-4 pr-1.5 py-1.5 md:pl-6 md:pr-2 md:py-2 text-[11px] md:text-[15px]"
-  >
-    Shop now
-    <span className="w-6 h-6 md:w-8 md:h-8 rounded-full border border-white/40 grid place-items-center text-[11px] md:text-base">
-      ↗
-    </span>
-  </Link>
-</div>
-
-  <div className="flex flex-col items-center">
-    {/* Question image pushed down on desktop */}
+  <div className="flex justify-center items-center gap-4 sm:gap-8 md:gap-16 mt-0">
+    {/* Left-shifted download image & pushed down on desktop */}
     <img
-      src="/homepage question.png"
+      src="/homepage download.png"
       alt=""
-      className="w-16 sm:w-24 md:w-52 translate-y-0 md:translate-y-16 lg:translate-y-20"
+      className="w-24 sm:w-32 md:w-64 translate-y-4 md:translate-y-16 lg:translate-y-20 md:-translate-x-16 lg:-translate-x-20"
     />
 
-    {/* Mobile heading */}
-    <h2 className="block md:hidden font-cormorant text-[18px] sm:text-[20px] text-wink/85 text-center -mt-2 sm:mt-0 p-0 leading-tight mb-8">
-      together with what?
-    </h2>
+    {/* Shifted EVEN FURTHER UP on desktop (md:-mt-28 lg:-mt-36) */}
+    <div className="text-center md:text-left z-10 flex flex-col items-center md:items-start md:-mt-36 lg:-mt-48">
+      <p className="font-cormorant text-[13px] sm:text-[14px] md:text-[22px] leading-[1.3] md:leading-snug text-wink mb-2 md:mb-2 max-w-[600px] md:max-w-[200px] text-center md:text-left">
+        Science backed supplements for everyday
+      </p>
+
+      <Link
+        to="/products"
+        className="inline-flex items-center gap-1.5 md:gap-2.5 bg-[#08112C] text-white rounded-full pl-4 pr-1.5 py-1.5 md:pl-6 md:pr-2 md:py-2 text-[11px] md:text-[15px]"
+      >
+        Shop now
+        <span className="w-6 h-6 md:w-8 md:h-8 rounded-full border border-white/40 grid place-items-center text-[11px] md:text-base">
+          ↗
+        </span>
+      </Link>
+    </div>
+
+    <div className="flex flex-col items-center">
+      {/* Question image pushed down on desktop */}
+      <img
+        src="/homepage question.png"
+        alt=""
+        className="w-16 sm:w-24 md:w-52 translate-y-0 md:translate-y-16 lg:translate-y-20"
+      />
+
+      {/* Mobile heading - whitespace-nowrap added to keep it in 1 line */}
+      <h2 className="block md:hidden font-cormorant text-[15px] sm:text-[18px] text-wink/85 text-center -mt-2 sm:mt-0 p-0 leading-tight mb-2 whitespace-nowrap">
+        together with what?
+      </h2>
+      
+      {/* Line below mobile heading */}
+      <div className="block md:hidden h-px bg-wline w-28 mb-6" />
+    </div>
   </div>
-</div>
+
   {/* 8b. together with what? */}
   <div className="max-w-[1140px] mx-auto mt-4 md:mt-4 mb-10 lg:mb-16">
-    {/* Flex container centers the side-by-side block on mobile */}
-    <div className="flex flex-row md:grid md:grid-cols-[1fr_auto] justify-center items-center gap-3 sm:gap-6 md:gap-8 max-w-[420px] sm:max-w-none mx-auto">
-  {/* Left - Puzzle Image */}
-  <div className="flex flex-col items-center justify-center md:block md:justify-start md:mt-12 shrink-0">
-    <img
-      src="/Puzzle.png"
-      alt=""
-      loading="lazy"
-      className="w-full max-w-[240px] sm:max-w-[280px] md:max-w-[620px] h-auto rounded-xl2"
-    />
-  </div>
-
-  {/* Right - Side-by-side with left image */}
-  <div className="flex flex-col justify-start text-left w-full h-full md:pl-4">
-    {/* Desktop heading */}
-    <h2 className="hidden md:block font-cormorant text-[clamp(30px,3.4vw,46px)] text-wink/85 m-0 mb-3 mt-0">
-      together with what?
-    </h2>
-
-    <div className="hidden md:block h-px bg-wline mt-3 mb-12 lg:mb-16" />
-
-    {/* Added md:mt-6 to nudge the points down on desktop */}
-    {/* Adjusted slightly up to md:mt-16 lg:mt-20 */}
-<div className="md:mt-16 lg:mt-20">
-  <ul className="m-0 p-0 list-none font-wserif text-[13px] sm:text-[19px] md:text-[clamp(20px,2vw,28px)] text-wink/85 space-y-1.5 md:space-y-7">
-        <li>Healthy habits</li>
-
+    {/* Flex container centers the side-by-side block on mobile with 0 right margin constraints */}
+    <div className="flex flex-row md:grid md:grid-cols-[1fr_auto] justify-center items-center gap-3 sm:gap-6 md:gap-8 max-w-[420px] sm:max-w-none mx-auto pr-0 md:pr-4">
+      {/* Left - Puzzle Image */}
+      <div className="flex flex-col items-center justify-center md:block md:justify-start md:mt-12 shrink-0">
         <img
-          src="/upVector.png"
+          src="/Puzzle.png"
           alt=""
-          className="w-6 sm:w-8 md:w-20 ml-2 md:ml-12"
+          loading="lazy"
+          className="w-full max-w-[240px] sm:max-w-[280px] md:max-w-[620px] h-auto rounded-xl2"
         />
+      </div>
 
-        <li>Daily routine</li>
+      {/* Right - Side-by-side with left image */}
+      <div className="flex flex-col justify-start text-left w-full h-full md:pl-4">
+        {/* Desktop heading */}
+        <h2 className="hidden md:block font-cormorant text-[clamp(30px,3.4vw,46px)] text-wink/85 m-0 mb-3 mt-0">
+          together with what?
+        </h2>
 
-        <img
-          src="/downVector.png"
-          alt=""
-          className="w-6 sm:w-8 md:w-20 ml-2 md:ml-12"
-        />
+        <div className="hidden md:block h-px bg-wline mt-3 mb-12 lg:mb-16" />
 
-        <li>Choices you make</li>
-      </ul>
+        <div className="md:mt-16 lg:mt-20">
+          <ul className="m-0 p-0 list-none font-wserif text-[13px] sm:text-[19px] md:text-[clamp(20px,2vw,28px)] text-wink/85 space-y-1.5 md:space-y-7">
+            <li>Healthy habits</li>
+
+            <img
+              src="/upVector.png"
+              alt=""
+              className="w-6 sm:w-8 md:w-20 ml-2 md:ml-12"
+            />
+
+            <li>Daily routine</li>
+
+            <img
+              src="/downVector.png"
+              alt=""
+              className="w-6 sm:w-8 md:w-20 ml-2 md:ml-12"
+            />
+
+            <li>Choices you make</li>
+          </ul>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
   </div>
 
   {/* 8c. Closing quote */}
   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-10 items-center max-w-[1140px] mx-auto">
     {/* Left - Quote */}
     <blockquote className="font-wserif text-[18px] sm:text-[20px] md:text-[clamp(26px,3vw,42px)] leading-[1.1] md:leading-[1.3] text-wink/85 mb-2 md:mb-0 max-w-[300px] md:max-w-none">
-      &ldquo;Every healthy routine has its pieces. This is one of them.&rdquo;
-    </blockquote>
+  &ldquo;Every healthy routine has its pieces.<br className="block md:hidden" /> This is one of them.&rdquo;
+</blockquote>
 
     {/* Right - Images */}
     <div className="grid grid-cols-2 md:grid-cols-2 gap-4 md:gap-4 mt-2 md:mt-0">
