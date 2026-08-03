@@ -8,6 +8,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { Page } from '@/components/layout/Page.jsx';
+import PageMeta from '@/components/storefront/PageMeta.jsx';
 import ProductGrid from '@/components/storefront/ProductGrid.jsx';
 import ProductCard from '@/components/storefront/ProductCard.jsx';
 import FilterSidebar, {
@@ -35,6 +36,11 @@ const MODES = {
   all: {
     title: 'Wellness, Your Way.',
     sub: 'From better sleep to daily immunity, discover gummies crafted for every goal.',
+    // Hero copy sells; the SEO title has to say what the page IS so it can win
+    // a search for the category rather than for a slogan nobody types.
+    seoTitle: 'Shop All Wellness Gummies',
+    seoDescription:
+      'Browse the full Wellvia range of clean-label wellness gummies — immunity, gut, sleep, beauty, hormone balance and daily multivitamins.',
     badge: undefined,
     heroBg: 'linear-gradient(115deg,#eef3e4 0%,#f7f4ea 55%,#e9efdc 100%)',
     heroImage: '/product-hero.png',
@@ -43,6 +49,9 @@ const MODES = {
   bestsellers: {
     title: 'Customer Favorites, For a Reason.',
     sub: 'Discover the gummies our customers keep coming back for.',
+    seoTitle: 'Best Selling Wellness Gummies',
+    seoDescription:
+      'The Wellvia gummies our customers reorder most — clean-label formulas for immunity, sleep, gut health and everyday nutrition.',
     badge: 'bestseller',
     heroBg: 'linear-gradient(115deg,#efe4f0 0%,#f7f0f4 55%,#e7dcEC 100%)',
     heroImage: '/bestseller-hero.png',
@@ -52,6 +61,9 @@ const MODES = {
   'new-arrivals': {
     title: 'Fresh Drops, Feel Good Finds.',
     sub: 'Be the first to discover our latest wellness gummies.',
+    seoTitle: 'New Arrivals',
+    seoDescription:
+      'The newest Wellvia wellness gummies — be first to try our latest clean-label formulas.',
     badge: 'new',
     heroBg: 'linear-gradient(115deg,#e7efe0 0%,#f6f3e9 55%,#eae4d4 100%)',
     heroImage: '/product-hero.png',
@@ -307,6 +319,20 @@ export default function ProductListPage({ mode = 'all' }) {
     return nums;
   }, [filters.page, totalPages]);
 
+  // Any search, facet or page beyond the first produces a thin near-duplicate of
+  // the clean listing. Those get noindex + a canonical back to the clean URL.
+  const isFilteredView =
+    Boolean(filters.q) ||
+    filters.categoryIds.length > 0 ||
+    filters.goals.length > 0 ||
+    filters.flavours.length > 0 ||
+    filters.offers.length > 0 ||
+    filters.minPrice != null ||
+    filters.maxPrice != null ||
+    Boolean(filters.minRating) ||
+    filters.inStock ||
+    filters.page > 1;
+
   const sidebar = (
     <FilterSidebar filters={filters} onChange={(patch) => update(patch)} categories={categories} />
   );
@@ -314,6 +340,15 @@ export default function ProductListPage({ mode = 'all' }) {
   return (
     // HERO BANNER OF ALL 3 PAGES
     <Page bleed>
+      {/* Filtered/paginated views are variants of one listing: they point their
+          canonical at the clean URL and stay out of the index, so Google sees a
+          single Shop page instead of dozens of thin near-duplicates. */}
+      <PageMeta
+        title={modeCfg.seoTitle ?? modeCfg.title}
+        description={modeCfg.seoDescription ?? modeCfg.sub}
+        canonicalPath={mode === 'all' ? '/products' : `/${mode}`}
+        noindex={isFilteredView}
+      />
       {/* ── HERO BAND ── */}
 <section
   className="border-b border-wline"

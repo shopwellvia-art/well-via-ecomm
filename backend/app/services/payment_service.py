@@ -20,7 +20,7 @@ from typing import Tuple
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.core.config import payment_return_url_is_dev_shaped, settings
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError, ValidationError
 from app.integrations.payments import (
     InitiateRequest,
@@ -37,7 +37,7 @@ from app.models.user import User
 from app.repositories.coupon_repository import CouponRepository
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
-from app.schemas.payment import CheckoutRequest
+from app.schemas.payment import CheckoutRequest, RazorpayVerifyRequest
 from app.services.address_service import AddressService, render_address_text, snapshot_of
 from app.services import order_sync
 from app.services.analytics.order_line_facts import capture_order_lines
@@ -68,17 +68,50 @@ class PaymentService:
 
     # ---- public ----
 
-    def checkout(self, user: User, data: CheckoutRequest) -> Tuple[Order, str, str]:
-        """Create an order + initiate payment. Returns (order, mtid, redirect_url).
+    def checkout(
+        self, user: User, data: CheckoutRequest
+    ) -> Tuple[Order, str, str, dict | None]:
+        """Create an order + initiate payment.
 
-        Two paths depending on `data.payment_method`:
-          - 'prepaid' (default): build order, ask provider for a redirect URL,
-            order stays PENDING until the webhook lands.
+        Returns (order, mtid, redirect_url, checkout_payload). The fourth
+        element is the provider's embedded-checkout payload (e.g. Razorpay
+        Standard Checkout's checkout.js options) — None for redirect-style
+        providers and for COD, where no gateway is involved at all.
+
+        Paths depending on `data.payment_method`:
+          - 'prepaid' (default): build order, ask provider to initiate,
+            order stays PENDING until the webhook / verify callback lands.
           - 'cod': build order with a COD surcharge added, skip the gateway,
             order transitions straight to PAID on placement (same side-effects
             as the webhook SUCCESS path), redirect URL points to the return
             page so the SPA can read /payments/{mtid}/order and confirm.
+          - 'split_cod': charge the prepaid slice via the gateway (same
+            initiate as prepaid, so the same checkout payload comes back);
+            the carrier collects the balance on delivery.
         """
+        # Refuse gateway checkouts while production carries a dev-shaped return
+        # URL. Redirect-style providers (mock, PhonePe) embed that URL as the
+        # post-payment callback, so the customer PAYS and is then sent to their
+        # own localhost — money captured, order stranded PENDING (live incident
+        # 2026-08-03 with the payment-link-era flow). Razorpay Standard
+        # Checkout no longer consumes return_url, but a dev-shaped value in
+        # production still means the env was never configured — refuse loudly
+        # here, before any rows exist, rather than trusting the rest of it.
+        # COD is deliberately NOT blocked: no money moves through the gateway,
+        # so a broken confirm-redirect is a nuisance, not a strand — and
+        # blocking it would mean zero orders sitewide over a config mistake.
+        method_early = (data.payment_method or "prepaid").lower()
+        if method_early != "cod" and payment_return_url_is_dev_shaped():
+            logger.critical(
+                "checkout refused: PAYMENT_RETURN_URL is dev-shaped (%r) in "
+                "production — fix the environment before taking gateway payments",
+                settings.PAYMENT_RETURN_URL,
+            )
+            raise ValidationError(
+                "Online payment is temporarily unavailable. Please try again "
+                "shortly or choose Cash on Delivery."
+            )
+
         # Resolve the shipping address BEFORE _enforce_cod_availability and
         # _build_order so that data.shipping_pincode and data.shipping_address
         # are populated from the structured source when downstream code reads them.
@@ -163,7 +196,7 @@ class PaymentService:
             # Fire the same post-paid side effects the gateway webhook would.
             self._send_notification(order, "order_paid")
             self._maybe_auto_push_shipment(order)
-            return order, mtid, f"{settings.PAYMENT_RETURN_URL}?mtid={mtid}"
+            return order, mtid, f"{settings.PAYMENT_RETURN_URL}?mtid={mtid}", None
 
         if method == "split_cod":
             # Split COD: charge only the prepaid portion via the gateway.
@@ -216,7 +249,7 @@ class PaymentService:
                 user.id, order.id, mtid, provider.name,
                 Decimal(prepaid_minor) / 100, order.cod_balance,
             )
-            return order, mtid, initiate.redirect_url
+            return order, mtid, initiate.redirect_url, initiate.checkout
 
         # Prepaid — ask the gateway for a redirect URL and stay PENDING.
         try:
@@ -255,7 +288,7 @@ class PaymentService:
             provider.name,
             order.gateway_code,
         )
-        return order, mtid, initiate.redirect_url
+        return order, mtid, initiate.redirect_url, initiate.checkout
 
     def _enforce_cod_otp_if_required(self, user: User, data: CheckoutRequest) -> None:
         """When `cod.require_otp` is on, the customer must have a verified
@@ -298,7 +331,9 @@ class PaymentService:
 
     def handle_webhook(
         self, body: bytes, signature: str | None, gateway_code: str = "phonepe"
-    ) -> Order:
+    ) -> Order | None:
+        """Verify, parse and settle an S2S webhook. Returns the affected order,
+        or None for a signed-but-uncorrelatable payload acked as a no-op."""
         provider = get_payment_provider(self.db, gateway_code)
         if not provider.verify_webhook(body, signature):
             record_payment_event(
@@ -324,6 +359,18 @@ class PaymentService:
             payment_status=result.status.value if result.status else None,
             provider_ref=result.provider_transaction_id,
         )
+        if not result.merchant_transaction_id:
+            # Signed but uncorrelatable (e.g. a payment.captured for a legacy
+            # payment link whose payload carries no notes.mtid). Ack with a
+            # no-op: a raise would make Razorpay redeliver the same event
+            # forever and eventually disable the webhook. The event row above
+            # preserves the payload for forensics.
+            logger.warning(
+                "webhook (%s) acked without correlation: no merchant "
+                "transaction id in payload (provider_ref=%s)",
+                gateway_code, result.provider_transaction_id,
+            )
+            return None
         order = self._order_for_mtid(result.merchant_transaction_id)
         # A valid signature only proves the payload was authored by someone
         # holding the webhook secret — not that money actually moved. Before
@@ -414,6 +461,138 @@ class PaymentService:
                     gateway_code=order.gateway_code,
                     message=str(exc),
                 )
+        return order
+
+    def verify_and_settle_razorpay(
+        self, user: User, data: RazorpayVerifyRequest
+    ) -> Order:
+        """Settle a Razorpay Standard Checkout payment from the browser callback.
+
+        checkout.js hands the SPA (order_id, payment_id, signature) the moment
+        the customer completes payment — usually before the S2S webhook lands.
+        This is the browser-driven twin of ``handle_webhook`` and holds the
+        same posture: client input proves nothing by itself.
+
+          1. The signature check binds the (order_id, payment_id) pair to our
+             key secret — it authenticates that Razorpay produced the pair,
+             not that money moved or that the pair belongs to THIS order.
+          2. The claimed order id must match the gateway order recorded at
+             checkout, so a valid signature minted for a different (cheaper)
+             order can't settle this one.
+          3. The payment entity is re-fetched from the gateway (same source of
+             truth as the webhook's fetch_status confirmation) and must be
+             captured; _apply_status then enforces the amount guard
+             (total − cod_balance) under the row lock.
+
+        "authorized" without capture stays PENDING — capture settings on the
+        Razorpay dashboard complete it, and the payment.captured webhook (or
+        reconcile) settles us; marking PAID now would recognize revenue we
+        might never receive. Idempotent: a non-PENDING order returns as-is
+        (the webhook usually races this call and sometimes wins).
+        """
+        order = self._order_for_mtid(data.merchant_transaction_id)
+        if order.user_id != user.id:
+            # 404, not 403 — matches get_status so neither mtid-keyed endpoint
+            # confirms to a non-owner that the transaction id exists.
+            raise NotFoundError("Order not found")
+        if order.status != OrderStatus.PENDING:
+            # Terminal (or at least already-moved) order — nothing to apply.
+            return order
+
+        provider = get_provider_for_order(self.db, order)
+        if provider.name != "razorpay":
+            # Per-order gating, same discipline as mark_mock_decision: only an
+            # order actually routed through Razorpay may be settled here.
+            raise ValidationError(
+                "This order was not placed through Razorpay."
+            )
+
+        # Bind the claim to the checkout-time gateway order. Without this, a
+        # valid signature from ANY order under our key (e.g. the attacker's
+        # own cheap order) would pass the signature check below.
+        if (
+            order.payment_provider_ref
+            and data.razorpay_order_id != order.payment_provider_ref
+        ):
+            record_payment_event(
+                event_type=PaymentEventType.CLIENT_SIGNATURE_INVALID,
+                order_id=order.id,
+                merchant_transaction_id=data.merchant_transaction_id,
+                gateway_code=order.gateway_code,
+                signature_valid=False,
+                provider_ref=data.razorpay_order_id,
+                message="verify called with a different razorpay order id "
+                "than the one recorded at checkout",
+            )
+            raise ValidationError("Payment verification failed.")
+
+        if not provider.verify_signature(
+            data.razorpay_order_id, data.razorpay_payment_id, data.razorpay_signature
+        ):
+            record_payment_event(
+                event_type=PaymentEventType.CLIENT_SIGNATURE_INVALID,
+                order_id=order.id,
+                merchant_transaction_id=data.merchant_transaction_id,
+                gateway_code=order.gateway_code,
+                signature_valid=False,
+                provider_ref=data.razorpay_payment_id,
+            )
+            raise ValidationError("Payment verification failed.")
+
+        # Signature OK — but it only authenticates the pair. Confirm with the
+        # gateway that money actually moved before settling (mirrors
+        # handle_webhook re-verifying a signed payload via fetch_status).
+        payment = provider.fetch_payment(data.razorpay_payment_id)
+        rzp_status = (payment.get("status") or "").lower()
+        payment_order_id = payment.get("order_id") or ""
+        if payment_order_id and payment_order_id != data.razorpay_order_id:
+            record_payment_event(
+                event_type=PaymentEventType.CLIENT_SIGNATURE_INVALID,
+                order_id=order.id,
+                merchant_transaction_id=data.merchant_transaction_id,
+                gateway_code=order.gateway_code,
+                signature_valid=True,
+                provider_ref=data.razorpay_payment_id,
+                message="verify: gateway says this payment belongs to a "
+                "different razorpay order",
+            )
+            raise ValidationError("Payment verification failed.")
+        if rzp_status not in ("captured", "authorized"):
+            record_payment_event(
+                event_type=PaymentEventType.GATEWAY_ERROR,
+                order_id=order.id,
+                merchant_transaction_id=data.merchant_transaction_id,
+                gateway_code=order.gateway_code,
+                signature_valid=True,
+                provider_ref=data.razorpay_payment_id,
+                message=f"verify: gateway reports payment status "
+                f"{rzp_status!r} — not settling",
+            )
+            raise ValidationError("Payment verification failed.")
+        if rzp_status == "authorized":
+            record_payment_event(
+                event_type=PaymentEventType.STATUS_POLL,
+                order_id=order.id,
+                merchant_transaction_id=data.merchant_transaction_id,
+                gateway_code=order.gateway_code,
+                signature_valid=True,
+                payment_status=PaymentStatus.PENDING.value,
+                provider_ref=data.razorpay_payment_id,
+                message="verify: payment authorized, awaiting capture",
+            )
+            return order
+
+        # Captured. Apply the exact settlement path the webhook success uses;
+        # _apply_status enforces the amount guard and, on success, upgrades
+        # order.payment_provider_ref from the order_... id to this pay_... id.
+        self._apply_status(
+            order,
+            PaymentStatus.SUCCESS,
+            gateway_amount_minor=payment.get("amount"),
+            provider_ref=data.razorpay_payment_id,
+            raw=payment,
+        )
+        self.db.refresh(order)
         return order
 
     def mark_mock_decision(self, mtid: str, action: str) -> Order:
@@ -881,8 +1060,21 @@ class PaymentService:
         # Stamp the gateway's own transaction id onto the order. PhonePe (and
         # several others) only return it at settlement, not at initiation, so
         # this is our first chance to record it. Write-once: a replayed
-        # callback never clobbers an existing ref.
+        # callback never clobbers an existing ref — with ONE deliberate
+        # upgrade: Razorpay Standard Checkout stamps the gateway order id
+        # (order_...) at initiate because that's all that exists pre-payment;
+        # the captured payment id (pay_...) supersedes it at settlement, since
+        # it's the id refunds and settlement matching key off (the plink_-era
+        # rows forced 2 API calls per refund precisely because this column
+        # never carried it). The order_... id is not lost — the prepaid leg's
+        # gateway_order_id keeps it.
         if provider_ref and not order.payment_provider_ref:
+            order.payment_provider_ref = provider_ref
+        elif (
+            provider_ref
+            and provider_ref.startswith("pay_")
+            and (order.payment_provider_ref or "").startswith("order_")
+        ):
             order.payment_provider_ref = provider_ref
         notify_paid = False
         if payment_status == PaymentStatus.SUCCESS:

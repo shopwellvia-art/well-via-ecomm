@@ -171,7 +171,7 @@ class TestReturnPagePolling:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
 
             assert order.status == OrderStatus.PENDING, (
@@ -247,7 +247,7 @@ class TestReturnPagePolling:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_id = order.id
             order_ids.append(order_id)
 
@@ -328,7 +328,7 @@ class TestGatewayDown:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
 
             assert order.status == OrderStatus.PENDING, (
@@ -391,7 +391,7 @@ class TestGatewayDown:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
 
             # Use a ValueError to confirm the except clause is broad.
@@ -442,7 +442,7 @@ class TestGatewayDown:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_id = order.id
             order_ids.append(order_id)
 

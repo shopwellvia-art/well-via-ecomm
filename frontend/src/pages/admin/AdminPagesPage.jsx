@@ -288,6 +288,14 @@ function AboutEditor({ page, set }) {
         </div>
       </SectionCard>
       <SectionCard title="Story paragraphs" defaultOpen={false}>
+        <div className="mb-4">
+          <Input
+            label="Section heading"
+            value={page.story_label ?? ''}
+            placeholder="Our story"
+            onChange={(e) => set('story_label', e.target.value)}
+          />
+        </div>
         <StringList
           items={page.intro}
           onChange={(v) => set('intro', v)}
@@ -295,7 +303,16 @@ function AboutEditor({ page, set }) {
           addLabel="Add paragraph"
         />
       </SectionCard>
-      <SectionCard title="Stats" description="Headline numbers." defaultOpen={false}>
+      <SectionCard
+        title="Stats"
+        description="Headline numbers. Leave empty to hide the row."
+        defaultOpen={false}
+      >
+        <p className="mb-3 text-xs text-ink-tertiary">
+          Only publish figures you can substantiate. Invented customer counts or
+          average ratings are treated as misleading advertising under the CCPA
+          guidelines and the ASCI code.
+        </p>
         <ObjectList
           items={page.stats}
           onChange={(v) => set('stats', v)}
@@ -308,6 +325,14 @@ function AboutEditor({ page, set }) {
         />
       </SectionCard>
       <SectionCard title="Values" description="Icon + title + text cards." defaultOpen={false}>
+        <div className="mb-4">
+          <Input
+            label="Section heading"
+            value={page.values_label ?? ''}
+            placeholder="What we value"
+            onChange={(e) => set('values_label', e.target.value)}
+          />
+        </div>
         <ObjectList
           items={page.values}
           onChange={(v) => set('values', v)}
@@ -334,6 +359,20 @@ function ContactEditor({ page, set }) {
         <EnabledToggle enabled={page.enabled} onChange={(v) => set('enabled', v)} />
         <div className="mt-4">
           <HeroEditor hero={page.hero} onChange={(v) => set('hero', v)} />
+        </div>
+        <div className="mt-4">
+          <Input
+            label="Banner image"
+            value={page.hero?.image ?? ''}
+            placeholder="/hero-contact.png"
+            onChange={(e) => set('hero', { ...page.hero, image: e.target.value })}
+          />
+          <p className="mt-1.5 text-xs text-ink-tertiary">
+            The default banner already has &ldquo;Contact Us&rdquo; and its sub-line
+            printed into the image, which is why the title fields above are empty —
+            filling them would show the same words twice. Point this at a banner
+            without text and the title/subtitle will render over it.
+          </p>
         </div>
         <div className="mt-4">
           <Textarea
@@ -378,6 +417,25 @@ function ContactEditor({ page, set }) {
             label="Success message"
             value={page.form.success}
             onChange={(e) => set('form', { ...page.form, success: e.target.value })}
+          />
+        </div>
+      </SectionCard>
+      <SectionCard
+        title="Support hours"
+        description="Shown under the enquiry form. Clear both fields to hide the block."
+      >
+        <div className="grid gap-4">
+          <Input
+            label="Hours"
+            value={page.hours ?? ''}
+            placeholder="Monday – Saturday (9:00 AM – 6:00 PM IST)"
+            onChange={(e) => set('hours', e.target.value)}
+          />
+          <Input
+            label="Response note"
+            value={page.response_note ?? ''}
+            placeholder="We aim to respond within 24–48 business hours."
+            onChange={(e) => set('response_note', e.target.value)}
           />
         </div>
       </SectionCard>

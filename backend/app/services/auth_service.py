@@ -349,6 +349,14 @@ class AuthService:
             f"It expires in {settings.OTP_TTL_MINUTES} minutes. "
             "If you didn't request this, you can ignore this email."
         )
+        # Rendering and delivery are separate failure domains and must be
+        # caught separately. Folding them into one try/except meant a delivery
+        # failure got logged as "template render failed" and then retried the
+        # send from inside the handler, where nothing was left to catch it —
+        # so a dead SMTP credential escaped as a 500 and turned the uniform
+        # "if that email is registered" reply into an account-existence oracle
+        # (unknown address → 202, real address → 500).
+        _subject, _html, _text = "Your password reset code", None, _plain_body
         try:
             from app.services.email_templates.catalog import password_reset_context
             from app.services.email_templates.renderer import render_email
@@ -357,22 +365,24 @@ class AuthService:
             if user.full_name:
                 first_name = user.full_name.split(" ")[0]
             _ctx = password_reset_context(first_name, otp, settings.OTP_TTL_MINUTES)
-            _subject, _html, _text = render_email(self.db, "password_reset", _ctx)
+            _s, _h, _t = render_email(self.db, "password_reset", _ctx)
+            _subject, _html, _text = _s or _subject, _h or None, _t or _plain_body
+        except Exception as _exc:  # noqa: BLE001
+            logger.warning("password_reset template render failed (%s); using plain text", _exc)
+
+        try:
             send_email(
                 to=email,
-                subject=_subject or "Your password reset code",
-                body=_text or _plain_body,
-                html=_html or None,
+                subject=_subject,
+                body=_text,
+                html=_html,
                 db=self.db,
             )
         except Exception as _exc:  # noqa: BLE001
-            logger.warning("password_reset template render failed (%s); using plain text", _exc)
-            send_email(
-                to=email,
-                subject="Your password reset code",
-                body=_plain_body,
-                db=self.db,
-            )
+            # Swallow deliberately: the caller's reply must not depend on
+            # whether delivery worked. Logged at error level because a silent
+            # failure here means real users stop receiving reset codes.
+            logger.error("password reset email delivery failed for %s: %s", normalised, _exc)
 
     def reset_password(self, email: str, otp: str, new_password: str) -> None:
         raw = self.redis.get(_otp_key(email))

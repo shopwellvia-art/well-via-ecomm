@@ -52,8 +52,21 @@ export default function Logo({
     size === 'lg' ? 'tracking-[0.26em]' : 'tracking-[0.2em]';
   const markSize = size === 'lg' ? 40 : 24;
   const paddingLeft = size === 'lg' ? '0.26em' : '0.2em';
+  // An uploaded logo is usually a full lockup — mark ABOVE wordmark above
+  // tagline — so it needs far more height than a bare wordmark to stay legible.
+  // The mark was capped at 36px while the nav beside it ran at 18px, which put
+  // the wordmark inside the lockup at roughly 5px and inverted the hierarchy:
+  // the menu read louder than the brand.
+  //
+  // These boxes look large because a lockup export is mostly margin — the
+  // current one is 306x244 of artwork on a 768x373 canvas, so only 65% of the
+  // height and 40% of the width is ink. A 64px box therefore draws a ~42px
+  // logo. The surrounding margin is flat brand navy identical to the header
+  // band, so the extra box height is invisible and costs no layout.
+  // Replacing the asset with a tightly cropped transparent export would make
+  // the same box draw a ~50% larger mark.
   const imgMaxHeight =
-    size === 'lg' ? 'max-h-[60px]' : size === 'md' ? 'max-h-9' : 'max-h-6';
+    size === 'lg' ? 'max-h-[88px]' : size === 'md' ? 'max-h-16' : 'max-h-11';
 
   return (
     <Link

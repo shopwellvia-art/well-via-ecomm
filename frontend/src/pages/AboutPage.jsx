@@ -57,7 +57,7 @@ export default function AboutPage() {
       {page.intro?.length > 0 && (
         <WSection>
           <div className="rounded-xl2 border border-wline bg-wcard p-6 shadow-sm sm:p-8">
-            <WSectionLabel className="mb-5">Our story</WSectionLabel>
+            <WSectionLabel className="mb-5">{page.story_label || 'Our story'}</WSectionLabel>
             <div className="max-w-3xl">
               <WProse text={page.intro.join('\n\n')} />
             </div>
@@ -68,7 +68,7 @@ export default function AboutPage() {
       {/* ── Values ────────────────────────────────────────────────────── */}
       {page.values?.length > 0 && (
         <WSection>
-          <WSectionLabel className="mb-5">What we value</WSectionLabel>
+          <WSectionLabel className="mb-5">{page.values_label || 'What we value'}</WSectionLabel>
           <motion.div
             variants={staggerContainer(0.06)}
             initial="hidden"
@@ -108,10 +108,12 @@ export default function AboutPage() {
             <div className="relative overflow-hidden rounded-xl2 border border-wline bg-wcard p-6 shadow-sm sm:p-10">
               {/* Left gold accent bar */}
               <div className="absolute inset-y-0 left-0 w-1 rounded-r bg-wgold" />
-              <p className="font-display text-[11px] font-semibold uppercase tracking-[0.22em] text-wgold">
-                Our mission
-              </p>
-              <h2 className="mt-3 max-w-2xl font-wserif text-xl leading-snug text-wink">
+              {/* The eyebrow used to be a hardcoded "Our mission", which printed
+                  the words twice because mission.heading defaults to the same
+                  text — and it shadowed the admin's heading, so renaming the
+                  section in /admin/pages changed nothing visible. The
+                  admin-managed heading is now the only label. */}
+              <h2 className="max-w-2xl font-display text-[11px] font-semibold uppercase tracking-[0.22em] text-wgold">
                 {page.mission.heading}
               </h2>
               <div className="mt-4 max-w-2xl">

@@ -27,6 +27,15 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
+    # Payment config sanity. CRITICAL, never fatal: a crash-loop here would
+    # take the whole store down over a config mistake, with no remote rollback
+    # once the deploy has already recreated the containers. Money movement is
+    # protected separately — PaymentService.checkout refuses gateway payments
+    # while the return URL is dev-shaped.
+    from app.core.config import payment_config_problems
+
+    for problem in payment_config_problems():
+        logger.critical("PAYMENT CONFIG: %s", problem)
     # Bootstrap RBAC. Idempotent so it's safe on every boot. Failures don't
     # abort startup — the API still works; the admin just sees no perms.
     try:

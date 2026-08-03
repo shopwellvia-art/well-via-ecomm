@@ -305,7 +305,7 @@ class TestCodOtpGate:
                 customer_phone=self._PHONE,
             )
             svc = PaymentService(db)
-            order, mtid, redirect = svc.checkout(user, req)
+            order, mtid, redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
 
             # Order must be PAID immediately for full COD.
@@ -616,7 +616,7 @@ class TestSplitCod:
                 return_value=mock_provider,
             ):
                 svc = PaymentService(db)
-                order, mtid, redirect = svc.checkout(user, req)
+                order, mtid, redirect, _checkout = svc.checkout(user, req)
 
             order_ids.append(order.id)
 

@@ -42,6 +42,10 @@ from app.models.base import Base
 class PaymentEventType:
     WEBHOOK_RECEIVED = "webhook_received"
     WEBHOOK_SIGNATURE_INVALID = "webhook_signature_invalid"
+    # A browser-supplied Standard Checkout signature failed verification, or
+    # referenced a different gateway order than the one recorded at checkout —
+    # the client verify path's analogue of WEBHOOK_SIGNATURE_INVALID.
+    CLIENT_SIGNATURE_INVALID = "client_signature_invalid"
     WEBHOOK_UNCONFIRMED = "webhook_unconfirmed"
     STATUS_POLL = "status_poll"
     STATUS_APPLIED = "status_applied"

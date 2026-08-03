@@ -75,12 +75,13 @@ export const SITE_PAGES_DEFAULTS = {
       'Wellvia was founded to reimagine everyday wellness — nutrition and self-care that actually taste good, work as promised, and are easy to stick with. What started with a handful of thoughtfully formulated gummies is now a community that believes small daily habits create lasting change.',
       "Today we help people across India take better care of themselves, but our promise hasn't changed: clean, effective formulas, honest labels, and support from real people who genuinely care about your wellbeing.",
     ],
-    stats: [
-      { value: '1M+', label: 'Happy customers' },
-      { value: '50+', label: 'Wellness formulas' },
-      { value: '4.8/5', label: 'Average rating' },
-      { value: '100%', label: 'Clean ingredients' },
-    ],
+    story_label: 'Our story',
+    values_label: 'What we value',
+    // Ships EMPTY, and the page hides the row when it is. These were template
+    // placeholders — "1M+ Happy customers", "50+ Wellness formulas",
+    // "4.8/5 Average rating" — on a store with no orders, nine products and
+    // zero reviews. Claim nothing by default; an admin adds real figures.
+    stats: [],
     values: [
       {
         icon: 'Heart',
@@ -111,14 +112,25 @@ export const SITE_PAGES_DEFAULTS = {
 
   contact: {
     enabled: true,
-    // hero: {
-    //   eyebrow: 'Contact Us',
-    //   title: "We'd love to hear from you",
-    //   subtitle: 'Questions about an order, a product, or a partnership? Our team is here to help.',
-    // },
-    // intro:
-    //   "Reach us through any of the channels below kavya, or drop us a message and 
-    //   we'll get back within one business day.",
+    // hero must stay defined: AdminPagesPage's HeroEditor reads hero.eyebrow
+    // directly, so a missing default crashes /admin/pages the moment the
+    // site_pages row is absent or reset.
+    //
+    // The text fields ship EMPTY on purpose: hero-contact.png already carries
+    // "Contact Us" and the supporting line as pixels, so overlaying the same
+    // words would print them twice. Upload a text-free banner and the fields
+    // start rendering.
+    hero: {
+      eyebrow: '',
+      title: '',
+      subtitle: '',
+      image: '/hero-contact.png',
+    },
+    intro:
+      "Reach us through any of the channels below, or drop us a message and we'll get back within one business day.",
+    // Support-hours block on the page. Editable from Admin → Pages → Contact.
+    hours: 'Monday – Saturday (9:00 AM – 6:00 PM IST)',
+    response_note: 'We aim to respond to all queries within 24–48 business hours.',
     methods: [
       {
         icon: 'Mail',

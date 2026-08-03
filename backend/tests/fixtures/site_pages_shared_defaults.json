@@ -1,0 +1,19 @@
+{
+  "_comment": "Canonical copy of the site-page default content that exists in BOTH backend/app/schemas/site_pages.py (DEFAULT_SITE_PAGES) and frontend/src/features/site-pages/defaults.js (SITE_PAGES_DEFAULTS). The API value wins the frontend's merge, so the two copies must not drift. Both test suites assert against this file: backend/tests/test_site_pages_defaults_parity.py and frontend/src/features/site-pages/__tests__/defaultsParity.test.js. Editing a default? Change all three places in one commit — either side's CI fails otherwise.",
+  "about": {
+    "story_label": "Our story",
+    "values_label": "What we value",
+    "stats": []
+  },
+  "contact": {
+    "hero": {
+      "eyebrow": "",
+      "title": "",
+      "subtitle": "",
+      "image": "/hero-contact.png"
+    },
+    "intro": "Reach us through any of the channels below, or drop us a message and we'll get back within one business day.",
+    "hours": "Monday – Saturday (9:00 AM – 6:00 PM IST)",
+    "response_note": "We aim to respond to all queries within 24–48 business hours."
+  }
+}

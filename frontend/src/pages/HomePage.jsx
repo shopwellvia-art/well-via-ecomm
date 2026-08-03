@@ -2,6 +2,9 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useProducts, useBestsellers } from '@/features/products/hooks.js';
 import HeroSection from '@/components/storefront/HeroSection';
+import PageMeta from '@/components/storefront/PageMeta.jsx';
+import JsonLd from '@/components/storefront/JsonLd.jsx';
+import { buildOrganizationSchema, buildWebSiteSchema } from '@/lib/productSchema.js';
 import WImage from '@/components/storefront/WImage';
 import { Stars } from '@/components/storefront/Icons';
 import { Heart, ShoppingCart } from "lucide-react";
@@ -760,6 +763,14 @@ useEffect(() => {
       transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
       className="overflow-hidden"
     >
+      <PageMeta
+        title="Wellvia — Wellness Redefined"
+        description="Clean-label wellness gummies crafted in small batches — immunity, gut health, sleep, beauty and daily multivitamins, designed for your everyday ritual."
+        canonicalPath="/"
+        image="/multi-gummies.png"
+      />
+      <JsonLd id="organization" data={buildOrganizationSchema({ logo: '/favicon.svg' })} />
+      <JsonLd id="website" data={buildWebSiteSchema()} />
       {sections.map((s) => {
         const render = sectionRenderers[s.key];
         if (!render) return null;

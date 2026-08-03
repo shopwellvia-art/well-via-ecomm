@@ -1,8 +1,17 @@
-"""Razorpay Payment Links integration.
+"""Razorpay integration — Standard Checkout (Orders API) with Payment Links
+legacy support.
 
-Uses the Payment Links API so we don't need a custom checkout page.
+New checkouts create an Order (`order_...`) and hand the SPA an embedded
+checkout payload for checkout.js; settlement arrives via the browser's
+verify callback (server-side signature + gateway re-check) or the S2S
+webhook. Orders placed before this switch carry `plink_...` provider refs,
+so fetch_status / refund / parse_webhook keep their Payment Links branches
+alive until those rows age out.
+
 References:
-  https://razorpay.com/docs/api/payment-links/
+  https://razorpay.com/docs/api/orders/
+  https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/
+  https://razorpay.com/docs/api/payment-links/   (legacy rows only)
 """
 from __future__ import annotations
 
@@ -28,11 +37,20 @@ logger = logging.getLogger(__name__)
 
 _BASE = "https://api.razorpay.com/v1"
 
-# Razorpay payment-link status strings.
+# Razorpay payment-link status strings (legacy plink_ rows).
 _STATUS_MAP = {
     "paid": PaymentStatus.SUCCESS,
     "cancelled": PaymentStatus.FAILED,
     "expired": PaymentStatus.FAILED,
+}
+
+# Razorpay payment-entity status strings (pay_ refs). Deliberately narrow:
+# "authorized" and "created" stay PENDING — money isn't ours until capture —
+# and "refunded" stays out because a refunded payment on a still-PENDING
+# order is an operator problem, not a settlement signal.
+_PAYMENT_STATUS_MAP = {
+    "captured": PaymentStatus.SUCCESS,
+    "failed": PaymentStatus.FAILED,
 }
 
 # Razorpay refund-entity status strings. Refunds commonly settle
@@ -57,6 +75,11 @@ class RazorpayProvider:
                 "Fill them in Admin → Settings → Payments."
             )
         self._auth = (key_id, key_secret)
+        # Kept individually as well: key_id is embedded in the checkout.js
+        # payload the SPA renders, and key_secret signs/verifies the
+        # order|payment signature Standard Checkout hands back.
+        self._key_id = key_id
+        self._key_secret = key_secret
         self._webhook_secret = webhook_secret
 
     # ------------------------------------------------------------------
@@ -64,36 +87,141 @@ class RazorpayProvider:
     # ------------------------------------------------------------------
 
     def initiate(self, req: InitiateRequest) -> InitiateResponse:
+        """Create a Razorpay Order for Standard Checkout.
+
+        Replaces the old Payment Links initiation: instead of a hosted page we
+        get an ``order_...`` id and hand the SPA a ``checkout`` payload for
+        checkout.js, which renders the payment sheet inside our own page.
+        ``redirect_url`` is "" — there is nowhere to redirect to.
+
+        Both ``receipt`` and ``notes.mtid`` carry our merchant transaction id
+        so every downstream artefact (payment entity, order entity, webhook
+        payload) can be traced back to the order without a DB join on the
+        provider ref. Settlement lands via /payments/razorpay/verify
+        (signature + gateway re-check) or the payment.captured / order.paid
+        webhook — never from the browser's word alone.
+        """
         payload = {
             "amount": req.amount_minor,
             "currency": req.currency,
-            "reference_id": req.merchant_transaction_id,
-            "callback_url": req.return_url,
-            "callback_method": "get",
+            "receipt": req.merchant_transaction_id,
+            "notes": {"mtid": req.merchant_transaction_id},
         }
-        resp = self._post("/payment_links", payload)
-        redirect = resp.get("short_url") or resp.get("url") or ""
-        if not redirect:
+        resp = self._post("/orders", payload)
+        order_id = resp.get("id")
+        if not order_id:
             raise RazorpayError(
-                "Razorpay did not return a redirect URL.",
+                "Razorpay did not return an order id.",
                 details={"resp": resp},
             )
         return InitiateResponse(
-            redirect_url=redirect,
-            provider_transaction_id=resp.get("id"),
+            redirect_url="",
+            provider_transaction_id=order_id,
             raw=resp,
+            checkout={
+                "provider": "razorpay",
+                "key_id": self._key_id,
+                "order_id": order_id,
+                "amount": req.amount_minor,
+                "currency": req.currency,
+                "name": "Wellvia",
+                "description": f"Order {req.merchant_transaction_id}",
+                "prefill": {"email": req.user_email or ""},
+                "notes": {"mtid": req.merchant_transaction_id},
+            },
         )
+
+    def verify_signature(
+        self, order_id: str, payment_id: str, signature: str | None
+    ) -> bool:
+        """True iff ``signature`` is Razorpay's HMAC for this order/payment pair.
+
+        Standard Checkout's success handler gives the browser
+        ``razorpay_signature`` = HMAC-SHA256(key_secret, "order_id|payment_id").
+        Verifying it server-side proves Razorpay minted the pair under our key
+        — it does NOT prove money moved or that the pair belongs to any
+        particular order of ours; callers must still re-fetch the payment from
+        the gateway before settling. Missing/empty inputs are a hard False.
+        """
+        if not order_id or not payment_id or not signature:
+            return False
+        digest = hmac.new(
+            self._key_secret.encode(),
+            f"{order_id}|{payment_id}".encode(),
+            hashlib.sha256,
+        ).hexdigest()
+        return hmac.compare_digest(digest, signature)
+
+    def fetch_payment(self, payment_id: str) -> dict:
+        """GET the raw payment entity (``pay_...``) from the gateway.
+
+        The verify path uses it as the source of truth for status + amount
+        after the signature check passes. May raise RazorpayError on HTTP
+        failure — callers decide whether that blocks settlement (it should).
+        """
+        return self._get(f"/payments/{payment_id}")
 
     def fetch_status(
         self, merchant_transaction_id: str, provider_ref: str | None = None
     ) -> StatusResponse:
+        """Resolve the payment status behind whatever ref we recorded.
+
+        Three ref generations coexist in the orders table, so branch on the
+        prefix:
+
+          ``pay_``   — a captured-payment id (stamped at settlement by the
+                       verify path / new webhooks). GET the payment entity.
+          ``order_`` — a Standard Checkout order id (stamped at initiate,
+                       before any payment exists). GET the order's payments
+                       and scan for a captured one; the pay_ id becomes the
+                       provider_transaction_id so _apply_status can upgrade
+                       the stored ref. No captured payment → PENDING, NOT
+                       FAILED: an abandoned or failed attempt on an order
+                       doesn't preclude a retry inside the same checkout.
+          ``plink_`` — legacy Payment Links rows; unchanged behavior.
+        """
         if not provider_ref:
-            # Without the provider ref we cannot look up the link.
+            # Without the provider ref we cannot look anything up.
             return StatusResponse(
                 merchant_transaction_id=merchant_transaction_id,
                 status=PaymentStatus.PENDING,
             )
-        resp = self._get(f"/payment_links/{provider_ref}")
+        ref = provider_ref.strip()
+
+        if ref.startswith("pay_"):
+            resp = self._get(f"/payments/{ref}")
+            rzp_status = (resp.get("status") or "").lower()
+            status_ = _PAYMENT_STATUS_MAP.get(rzp_status, PaymentStatus.PENDING)
+            return StatusResponse(
+                merchant_transaction_id=merchant_transaction_id,
+                status=status_,
+                provider_transaction_id=ref,
+                amount_minor=(
+                    resp.get("amount") if status_ == PaymentStatus.SUCCESS else None
+                ),
+                raw=resp,
+            )
+
+        if ref.startswith("order_"):
+            resp = self._get(f"/orders/{ref}/payments")
+            for p in resp.get("items") or []:
+                if (p.get("status") or "").lower() == "captured":
+                    return StatusResponse(
+                        merchant_transaction_id=merchant_transaction_id,
+                        status=PaymentStatus.SUCCESS,
+                        provider_transaction_id=p.get("id"),
+                        amount_minor=p.get("amount"),
+                        raw=resp,
+                    )
+            return StatusResponse(
+                merchant_transaction_id=merchant_transaction_id,
+                status=PaymentStatus.PENDING,
+                provider_transaction_id=ref,
+                raw=resp,
+            )
+
+        # Legacy Payment Links ref (plink_ and anything unrecognized).
+        resp = self._get(f"/payment_links/{ref}")
         rzp_status = (resp.get("status") or "").lower()
         status_ = _STATUS_MAP.get(rzp_status, PaymentStatus.PENDING)
         amount_minor: int | None = None
@@ -102,7 +230,7 @@ class RazorpayProvider:
         return StatusResponse(
             merchant_transaction_id=merchant_transaction_id,
             status=status_,
-            provider_transaction_id=provider_ref,
+            provider_transaction_id=ref,
             amount_minor=amount_minor,
             raw=resp,
         )
@@ -213,25 +341,80 @@ class RazorpayProvider:
         return hmac.compare_digest(digest, signature)
 
     def parse_webhook(self, body: bytes) -> StatusResponse:
+        """Extract the resolved status from a (signature-verified) webhook.
+
+        Handles both checkout generations:
+          ``payment_link.paid``               — legacy Payment Links rows.
+          ``payment.captured`` / ``order.paid`` — Standard Checkout. The mtid
+            travels in ``payment.entity.notes.mtid`` (stamped at initiate)
+            with ``order.entity.receipt`` / ``order.entity.notes.mtid`` as
+            fallbacks, and the ``pay_...`` id becomes the
+            provider_transaction_id so settlement finally records the
+            captured-payment id (the plink_-era rows never carried it).
+
+        Unknown events resolve to PENDING with whatever mtid is recoverable —
+        handle_webhook treats PENDING as a no-op. A payload with NO recoverable
+        mtid also resolves to PENDING (with an empty mtid handle_webhook acks
+        without correlating): raising here would 502 the webhook route, Razorpay
+        would redeliver the same uncorrelatable event forever, and sustained
+        failures get the whole webhook disabled — one stray event must never
+        cost us the delivery channel.
+        """
         payload = json.loads(body)
         event = payload.get("event", "")
-        entity = (payload.get("payload", {}).get("payment_link", {}) or {}).get(
-            "entity", {}
+        entities = payload.get("payload", {}) or {}
+        link = (entities.get("payment_link", {}) or {}).get("entity", {}) or {}
+        payment = (entities.get("payment", {}) or {}).get("entity", {}) or {}
+        order = (entities.get("order", {}) or {}).get("entity", {}) or {}
+
+        mtid = (
+            link.get("reference_id")
+            or (payment.get("notes") or {}).get("mtid")
+            or order.get("receipt")
+            or (order.get("notes") or {}).get("mtid")
+            or ""
         )
-        mtid = entity.get("reference_id") or ""
         if not mtid:
-            raise RazorpayError("Webhook payload missing reference_id.")
+            logger.warning(
+                "razorpay webhook event %r carries no merchant transaction id "
+                "(payment=%s) — acking as a no-op",
+                event, payment.get("id") or link.get("id") or order.get("id"),
+            )
+            return StatusResponse(
+                merchant_transaction_id="",
+                status=PaymentStatus.PENDING,
+                provider_transaction_id=(
+                    payment.get("id") or link.get("id") or order.get("id")
+                ),
+                raw=payload,
+            )
+
         if event == "payment_link.paid":
-            status_ = PaymentStatus.SUCCESS
-            amount_minor = entity.get("amount_paid") or entity.get("amount")
-        else:
-            status_ = PaymentStatus.PENDING
-            amount_minor = None
+            return StatusResponse(
+                merchant_transaction_id=mtid,
+                status=PaymentStatus.SUCCESS,
+                provider_transaction_id=link.get("id"),
+                amount_minor=link.get("amount_paid") or link.get("amount"),
+                raw=payload,
+            )
+
+        if event in ("payment.captured", "order.paid"):
+            # Both events carry the payment entity — its pay_ id and amount
+            # are what settlement stores and amount-guards against.
+            return StatusResponse(
+                merchant_transaction_id=mtid,
+                status=PaymentStatus.SUCCESS,
+                provider_transaction_id=payment.get("id") or order.get("id"),
+                amount_minor=payment.get("amount") or order.get("amount_paid"),
+                raw=payload,
+            )
+
         return StatusResponse(
             merchant_transaction_id=mtid,
-            status=status_,
-            provider_transaction_id=entity.get("id"),
-            amount_minor=amount_minor,
+            status=PaymentStatus.PENDING,
+            provider_transaction_id=(
+                payment.get("id") or link.get("id") or order.get("id")
+            ),
             raw=payload,
         )
 
@@ -243,14 +426,16 @@ class RazorpayProvider:
         """Resolve the captured ``pay_...`` id for a refund request.
 
         ``req.original_transaction_id`` is whatever we recorded at settlement:
-        ideally the captured payment id itself, but for the Payment Links flow
-        it is usually the ``plink_...`` id. Resolution order:
+        ideally the captured payment id itself, but legacy rows carry the
+        ``plink_...`` id and Standard Checkout rows settled before the verify
+        callback landed may still carry the ``order_...`` id. Resolution order:
 
           1. Already a ``pay_...`` id → use it directly.
-          2. ``plink_...`` → GET the payment link; scan its ``payments`` array
-             for a captured entry.
-          3. Still nothing → GET the link's underlying order's payments
-             (``/orders/{order_id}/payments``) and pick the captured one.
+          2. ``order_...`` (Standard Checkout) → GET the order's payments
+             (``/orders/{id}/payments``) and pick the captured one.
+          3. ``plink_...`` → GET the payment link; scan its ``payments`` array
+             for a captured entry; fall back to the link's underlying order's
+             payments.
 
         Returns None when no captured payment exists (unpaid/expired link,
         authorized-but-never-captured, refunded already under a different id)
@@ -260,6 +445,12 @@ class RazorpayProvider:
         ref = (req.original_transaction_id or "").strip()
         if ref.startswith("pay_"):
             return ref
+        if ref.startswith("order_"):
+            resp = self._get(f"/orders/{ref}/payments")
+            for p in resp.get("items") or []:
+                if (p.get("status") or "").lower() == "captured":
+                    return p.get("id")
+            return None
         if not ref.startswith("plink_"):
             return None
 

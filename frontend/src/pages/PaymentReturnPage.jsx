@@ -12,16 +12,28 @@ import Logo from '@/components/storefront/Logo.jsx';
 
 const TERMINAL_STATES = new Set(['paid', 'cancelled', 'refunded']);
 
+/**
+ * react-query refetchInterval callback for the status poll.
+ *
+ * Exported for tests (regression: 2026-08-03 an errored poll — 401 after the
+ * gateway redirect landed on an expired session — refetched every 1.5s
+ * forever; the customer stared at "Confirming your payment" while each 401
+ * tick also cleared their stored session via the apiClient interceptor).
+ * Error and terminal states stop the poll; anything else keeps it at 1.5s.
+ */
+export function pollIntervalFor(query) {
+  if (query.state.status === 'error') return false;
+  const status = query.state.data?.order_status;
+  return status && TERMINAL_STATES.has(status) ? false : 1500;
+}
+
 export default function PaymentReturnPage() {
   const [params] = useSearchParams();
   const mtid = params.get('mtid');
 
   const { data, isLoading, isError } = usePaymentStatus(mtid, {
     enabled: !!mtid,
-    refetchInterval: (query) => {
-      const status = query.state.data?.order_status;
-      return status && TERMINAL_STATES.has(status) ? false : 1500;
-    },
+    refetchInterval: pollIntervalFor,
   });
 
   if (!mtid) {

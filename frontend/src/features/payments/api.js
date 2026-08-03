@@ -69,6 +69,14 @@ export const paymentsApi = {
   orderForPayment: (mtid) =>
     apiClient.get(`/payments/${mtid}/order`).then((r) => r.data),
 
+  // Razorpay Standard Checkout: the modal's success handler posts the signed
+  // triplet here so the backend can HMAC-verify and mark the order paid
+  // immediately. Best-effort from the client's side — the return page still
+  // polls /payments/{mtid}/status as the single source of truth, so callers
+  // must navigate there even when this request fails.
+  verifyRazorpay: (payload) =>
+    apiClient.post('/payments/razorpay/verify', payload).then((r) => r.data),
+
   // Mock simulator only — equivalent to PhonePe's signed webhook.
   mockDecision: (mtid, action) =>
     apiClient

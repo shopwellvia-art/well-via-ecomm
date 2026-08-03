@@ -80,7 +80,7 @@ export default function Footer() {
               <img
                 src={mediaUrl(brand.logo_url)}
                 alt={brand.brand_name}
-                className="max-h-[64px] w-auto object-contain mb-1.5"
+                className="max-h-[76px] w-auto object-contain mb-1.5"
               />
             ) : (
               <>
@@ -93,9 +93,15 @@ export default function Footer() {
                 </div>
               </>
             )}
-            <div className="text-[10px] tracking-[0.42em] uppercase text-wpaper/60 mt-1 mb-6">
-              {brand.tagline}
-            </div>
+            {/* An uploaded lockup already carries the tagline as part of the
+                artwork, so printing brand.tagline underneath repeated
+                "WELLNESS REDEFINED" twice in a row. Only the text fallback,
+                which has no tagline of its own, needs this line. */}
+            {!brand.logo_url && (
+              <div className="text-[10px] tracking-[0.42em] uppercase text-wpaper/60 mt-1 mb-6">
+                {brand.tagline}
+              </div>
+            )}
 
             <p className="font-wserif text-[17px] leading-[1.55] text-wpaper/90 m-0 mb-7 max-w-[360px]">
               {TAGLINE}

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { mediaUrl } from '@/lib/utils';
+import { isPageTitleClaimed } from '@/lib/pageMeta.js';
 import { useStorefrontConfigWithDefaults } from '@/features/storefront-config/hooks.js';
 
 /**
@@ -13,6 +14,10 @@ export default function SiteMeta() {
   const faviconUrl = config.favicon_url ? mediaUrl(config.favicon_url) : '';
 
   useEffect(() => {
+    // SiteMeta sits above the pages, so its effect runs after theirs. Without
+    // this guard it would overwrite a PageMeta title every time the storefront
+    // config re-rendered, and every route would show the site name again.
+    if (isPageTitleClaimed()) return;
     if (siteTitle && document.title !== siteTitle) {
       document.title = siteTitle;
     }
