@@ -65,7 +65,13 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          # 22 (LTS), not 20: the jsdom-env vitest files (pageMeta,
+          # razorpayCheckout) pull an undici whose webidl.util needs a newer
+          # Node — on 20 jsdom fails to LOAD, vitest reports the remaining
+          # files green and still exits 1 on the unhandled loader errors.
+          # The frontend IMAGE build stays on node:20-alpine (vite build only,
+          # no jsdom) — this pin is test-environment-only.
+          node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
