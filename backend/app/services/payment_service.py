@@ -20,7 +20,7 @@ from typing import Tuple
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.core.config import payment_return_url_is_dev_shaped, settings
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError, ValidationError
 from app.integrations.payments import (
     InitiateRequest,
@@ -79,6 +79,26 @@ class PaymentService:
             as the webhook SUCCESS path), redirect URL points to the return
             page so the SPA can read /payments/{mtid}/order and confirm.
         """
+        # Refuse gateway checkouts while production carries a dev-shaped return
+        # URL. The payment link would embed that URL as its callback, so the
+        # customer PAYS and is then redirected to their own localhost — money
+        # captured, order stranded PENDING (live incident 2026-08-03). Raising
+        # here, before any rows exist, keeps the failure loud, cheap and safe.
+        # COD is deliberately NOT blocked: no money moves through the gateway,
+        # so a broken confirm-redirect is a nuisance, not a strand — and
+        # blocking it would mean zero orders sitewide over a config mistake.
+        method_early = (data.payment_method or "prepaid").lower()
+        if method_early != "cod" and payment_return_url_is_dev_shaped():
+            logger.critical(
+                "checkout refused: PAYMENT_RETURN_URL is dev-shaped (%r) in "
+                "production — fix the environment before taking gateway payments",
+                settings.PAYMENT_RETURN_URL,
+            )
+            raise ValidationError(
+                "Online payment is temporarily unavailable. Please try again "
+                "shortly or choose Cash on Delivery."
+            )
+
         # Resolve the shipping address BEFORE _enforce_cod_availability and
         # _build_order so that data.shipping_pincode and data.shipping_address
         # are populated from the structured source when downstream code reads them.
