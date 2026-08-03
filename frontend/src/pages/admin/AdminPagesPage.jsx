@@ -336,6 +336,20 @@ function ContactEditor({ page, set }) {
           <HeroEditor hero={page.hero} onChange={(v) => set('hero', v)} />
         </div>
         <div className="mt-4">
+          <Input
+            label="Banner image"
+            value={page.hero?.image ?? ''}
+            placeholder="/hero-contact.png"
+            onChange={(e) => set('hero', { ...page.hero, image: e.target.value })}
+          />
+          <p className="mt-1.5 text-xs text-ink-tertiary">
+            The default banner already has &ldquo;Contact Us&rdquo; and its sub-line
+            printed into the image, which is why the title fields above are empty —
+            filling them would show the same words twice. Point this at a banner
+            without text and the title/subtitle will render over it.
+          </p>
+        </div>
+        <div className="mt-4">
           <Textarea
             label="Intro"
             rows={2}
@@ -378,6 +392,25 @@ function ContactEditor({ page, set }) {
             label="Success message"
             value={page.form.success}
             onChange={(e) => set('form', { ...page.form, success: e.target.value })}
+          />
+        </div>
+      </SectionCard>
+      <SectionCard
+        title="Support hours"
+        description="Shown under the enquiry form. Clear both fields to hide the block."
+      >
+        <div className="grid gap-4">
+          <Input
+            label="Hours"
+            value={page.hours ?? ''}
+            placeholder="Monday – Saturday (9:00 AM – 6:00 PM IST)"
+            onChange={(e) => set('hours', e.target.value)}
+          />
+          <Input
+            label="Response note"
+            value={page.response_note ?? ''}
+            placeholder="We aim to respond within 24–48 business hours."
+            onChange={(e) => set('response_note', e.target.value)}
           />
         </div>
       </SectionCard>

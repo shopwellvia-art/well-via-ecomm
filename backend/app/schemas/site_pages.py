@@ -21,13 +21,21 @@ from app.schemas._validators import validate_safe_url
 
 
 class Hero(BaseModel):
-    """The page header — eyebrow line, big title, supporting subtitle."""
+    """The page header — eyebrow line, big title, supporting subtitle.
+
+    `image` is the optional banner behind the copy. It exists so a page whose
+    header is photography rather than text can still be changed from the admin:
+    without it the only way to alter the banner is to redeploy the frontend.
+    `title` allows "" because a banner with the wording already baked into the
+    artwork must be able to render with no text overlaid on top of it.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     eyebrow: str = ""
-    title: str
+    title: str = ""
     subtitle: str = ""
+    image: str = ""
 
 
 class FeatureItem(BaseModel):
@@ -192,6 +200,12 @@ class ContactPage(BaseModel):
     intro: str = ""
     methods: list[ContactMethod] = []
     form: ContactForm
+    # Support-hours block under the enquiry form. Both default to "" so an
+    # admin can clear them to hide the block. They must exist here: Pydantic
+    # drops unknown keys silently, so a field the admin form sends but the
+    # schema does not declare would appear to save and then vanish.
+    hours: str = ""
+    response_note: str = ""
     offices: list[Office] = []
 
 
@@ -326,10 +340,16 @@ DEFAULT_SITE_PAGES: dict = {
     },
     "contact": {
         "enabled": True,
+        # hero-contact.png already carries "Contact Us" and the supporting line
+        # as pixels, so the text fields ship EMPTY — filling them here would
+        # print the same words twice, once from the artwork and once from the
+        # overlay. They remain fully editable; an admin who uploads a text-free
+        # banner can then set them and they render.
         "hero": {
-            "eyebrow": "Contact Us",
-            "title": "We'd love to hear from you",
-            "subtitle": "Questions about an order, a product, or a partnership? Our team is here to help.",
+            "eyebrow": "",
+            "title": "",
+            "subtitle": "",
+            "image": "/hero-contact.png",
         },
         "intro": (
             "Reach us through any of the channels below, or drop us a message "
@@ -367,6 +387,11 @@ DEFAULT_SITE_PAGES: dict = {
             "note": "We typically reply within one business day.",
             "success": "Thanks for reaching out — we'll be in touch shortly.",
         },
+        # Support-hours block. Must match the frontend defaults exactly: the API
+        # value wins the frontend's merge, so an empty string here would blank
+        # the block on the live page even though the frontend has copy for it.
+        "hours": "Monday – Saturday (9:00 AM – 6:00 PM IST)",
+        "response_note": "We aim to respond to all queries within 24–48 business hours.",
         # Office addresses are left empty on purpose — an admin adds the real ones.
         "offices": [],
     },

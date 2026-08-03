@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { MapPin, Mail, Phone, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { useSitePages } from '@/features/site-pages/hooks.js';
-import { SITE_PAGES_DEFAULTS } from '@/features/site-pages/defaults.js';
+import { SITE_PAGES_DEFAULTS, resolvePageIcon } from '@/features/site-pages/defaults.js';
 import { useSubmitContactMessage } from '@/features/contact/hooks.js';
 import { toast } from '@/components/ui/Toaster.jsx';
-import { cn } from '@/lib/utils.js';
+import { cn, mediaUrl } from '@/lib/utils.js';
 
 // ── Message form ─────────────────────────────────────────────────────────────
 
@@ -22,6 +22,11 @@ const labelCls =
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const EMPTY_FORM = { name: '', email: '', phone: '', subject: '', message: '' };
+
+// Shipped contact banner. Its wording is part of the artwork, so the page must
+// not overlay hero copy while this is the active image. Swap Admin -> Pages ->
+// Contact -> Banner image to a text-free file to unlock the hero title fields.
+const STOCK_BANNER = '/hero-contact.png';
 
 // Mirrors the backend ContactMessageCreate schema:
 // name 1–120 (required), email (required), phone ≤20 (optional),
@@ -300,24 +305,28 @@ export default function ContactPage() {
     );
   }
 
-  // Contact details from the admin-managed contact methods (with fallbacks).
-  const methods = page.methods ?? [];
-  const findDetail = (...keys) =>
-    methods.find((m) =>
-      keys.some(
-        (k) =>
-          (m.icon || '').toLowerCase().includes(k) ||
-          (m.title || '').toLowerCase().includes(k),
-      ),
-    )?.detail;
+  // Render the admin's contact methods as they were entered. The previous
+  // version fuzzy-matched icon/title text to pull out exactly three hardcoded
+  // rows, so renaming "Email us" or adding a fifth method changed nothing on
+  // the page, and "Live chat" never appeared at all. Methods with no detail
+  // filled in are skipped rather than rendering an empty row.
+  const methods = (page.methods ?? []).filter((m) => m && (m.detail || '').trim());
+  const offices = (page.offices ?? []).filter((o) => o && (o.city || (o.lines ?? []).length));
 
-  const address = findDetail('mappin', 'visit', 'address') || 'Bengaluru, Karnataka, India';
-  const email = findDetail('mail', 'email') || 'care@shopwellvia.in';
-  const phone = findDetail('phone', 'call') || '+91 90000 00000';
+  const hours = page.hours;
+  const responseNote = page.response_note;
+  const hero = page.hero ?? {};
 
-  const hours = page.hours || 'Monday – Saturday (9:00 AM – 6:00 PM IST)';
-  const responseNote =
-    page.responseNote || 'We aim to respond to all queries within 24–48 business hours.';
+  // The stock banner has "Contact Us" and its sub-line printed into the PNG, so
+  // overlaying hero copy on top of it prints the same words twice. Suppress the
+  // overlay while that banner is in use, and honour it the moment an admin
+  // points hero.image at their own (presumed text-free) artwork. Keying off the
+  // image rather than the copy keeps this correct no matter what the API
+  // returns, so the page never depends on a backend deploy landing first.
+  const heroImage = hero.image || STOCK_BANNER;
+  const bannerCarriesItsOwnCopy = heroImage === STOCK_BANNER;
+  const hasHeroText =
+    !bannerCarriesItsOwnCopy && Boolean(hero.eyebrow || hero.title || hero.subtitle);
 
   // Admin-managed form copy; merged field-by-field so a partial override from
   // the API keeps the remaining defaults.
@@ -333,45 +342,87 @@ export default function ContactPage() {
       {/* Hero banner */}
      <div className="relative overflow-hidden min-h-[180px] sm:min-h-[300px] px-6 py-10 sm:py-20 flex flex-col justify-center items-center text-center">
   <img
-    src="/hero-contact.png"
+    src={mediaUrl(heroImage)}
     alt=""
     className="absolute inset-0 w-full h-full object-cover object-center"
   />
 
-  {/* Optional overlay for better text readability */}
-  <div className="absolute inset-0 bg-black/20" />
+  {/* Scrim only when copy is overlaid — otherwise it just dims the artwork */}
+  {hasHeroText && <div className="absolute inset-0 bg-black/35" />}
 
-  {/* <h1 className="relative z-10 font-wserif font-semibold text-[clamp(30px,4vw,42px)] text-white m-0">
-    Contact Us
-  </h1>
-
-  <p className="relative z-10 mt-3 max-w-md mx-auto font-wserif text-[clamp(15px,1.6vw,18px)] text-white">
-    {page.intro ||
-      "We're here to help! Reach out for any queries, feedback or support."}
-  </p> */}
+  {hasHeroText && hero.eyebrow && (
+    <p className="relative z-10 m-0 mb-2 text-[11px] font-medium uppercase tracking-[0.18em] text-white/80">
+      {hero.eyebrow}
+    </p>
+  )}
+  {hasHeroText && hero.title && (
+    <h1 className="relative z-10 m-0 font-wserif font-semibold text-[clamp(30px,4vw,42px)] text-white">
+      {hero.title}
+    </h1>
+  )}
+  {hasHeroText && hero.subtitle && (
+    <p className="relative z-10 mt-3 max-w-xl mx-auto text-[clamp(14px,1.6vw,17px)] text-white/90">
+      {hero.subtitle}
+    </p>
+  )}
 </div>
 
       <div className="max-w-[620px] mx-auto px-5 sm:px-10 mt-10 lg:mt-14">
-        <p className="text-center font-wserif text-[19px] text-wink mb-6">
-          Feel free to reach out to us at any time.
-        </p>
+        {page.intro && (
+          <p className="text-center font-wserif text-[19px] text-wink mb-6">{page.intro}</p>
+        )}
 
-        {/* Contact details block */}
-        <div className="rounded-2xl border border-wline bg-wcard px-6 py-6 sm:px-10 sm:py-8 flex flex-col gap-4">
-          {[
-            { label: 'Mail id', value: email, Icon: Mail },
-            { label: 'Phone', value: phone, Icon: Phone },
-            { label: 'Address', value: address, Icon: MapPin },
-          ].map(({ label, value, Icon }) => (
-            <div key={label} className="flex items-start gap-3 text-[15px]">
-              <Icon className="size-[17px] mt-0.5 text-wgreen shrink-0" strokeWidth={1.6} aria-hidden="true" />
-              <p className="m-0 text-wink">
-                <span className="font-medium">{label} :</span>{' '}
-                <span className="text-wmuted">{value}</span>
-              </p>
-            </div>
-          ))}
-        </div>
+        {/* Contact details block — one row per admin-configured method */}
+        {methods.length > 0 && (
+          <div className="rounded-2xl border border-wline bg-wcard px-6 py-6 sm:px-10 sm:py-8 flex flex-col gap-4">
+            {methods.map((m, i) => {
+              const Icon = resolvePageIcon(m.icon);
+              return (
+                <div key={`${m.title || m.detail}-${i}`} className="flex items-start gap-3 text-[15px]">
+                  <Icon
+                    className="size-[17px] mt-0.5 text-wgreen shrink-0"
+                    strokeWidth={1.6}
+                    aria-hidden="true"
+                  />
+                  <p className="m-0 text-wink">
+                    {m.title && <span className="font-medium">{m.title} : </span>}
+                    {m.href ? (
+                      <a
+                        href={m.href}
+                        className="text-wmuted underline underline-offset-2 hover:text-wgreen transition-colors"
+                      >
+                        {m.detail}
+                      </a>
+                    ) : (
+                      <span className="text-wmuted">{m.detail}</span>
+                    )}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Offices — admin-managed, hidden entirely when none are configured */}
+        {offices.length > 0 && (
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            {offices.map((o, i) => (
+              <div
+                key={`${o.city}-${i}`}
+                className="rounded-2xl border border-wline bg-wcard px-5 py-4"
+              >
+                {o.city && (
+                  <p className="m-0 mb-1 font-wserif text-[16px] text-wink">{o.city}</p>
+                )}
+                {(o.lines ?? []).map((line, j) => (
+                  <p key={j} className="m-0 text-[13.5px] leading-relaxed text-wmuted">
+                    {line}
+                  </p>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Message form */}
         <div className="mt-10">
@@ -384,12 +435,16 @@ export default function ContactPage() {
           <ContactForm copy={formCopy} />
         </div>
 
-        {/* Support hours */}
-        <div className="text-center mt-10">
-          <p className="font-wserif text-[18px] text-wink m-0 mb-1">Customer Support Hours:</p>
-          <p className="text-[15px] font-medium text-wink m-0">{hours}</p>
-          <p className="text-[13px] text-wmuted mt-2 max-w-sm mx-auto">{responseNote}</p>
-        </div>
+        {/* Support hours — whole block disappears if an admin clears both fields */}
+        {(hours || responseNote) && (
+          <div className="text-center mt-10">
+            <p className="font-wserif text-[18px] text-wink m-0 mb-1">Customer Support Hours:</p>
+            {hours && <p className="text-[15px] font-medium text-wink m-0">{hours}</p>}
+            {responseNote && (
+              <p className="text-[13px] text-wmuted mt-2 max-w-sm mx-auto">{responseNote}</p>
+            )}
+          </div>
+        )}
 
         {/* Sage track-order box */}
         <div className="bg-wsage rounded-xl2 px-5 py-4 mt-10 mb-4 text-center">
