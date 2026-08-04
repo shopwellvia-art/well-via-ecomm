@@ -131,7 +131,9 @@ export function CustomerReviewsSection({ product }) {
 
           {/* Sort + count row */}
           <div className="flex items-center justify-between gap-3 border-b border-wline pb-4">
-            <p className="text-sm text-wmuted">
+            {/* div, not p: the loading branch renders Skeleton's div, which is
+                invalid inside <p> and trips validateDOMNesting on every PDP. */}
+            <div className="text-sm text-wmuted">
               {isLoading ? (
                 <Skeleton className="inline-block h-3.5 w-32" />
               ) : ratingCount > 0 ? (
@@ -145,7 +147,7 @@ export function CustomerReviewsSection({ product }) {
               ) : (
                 'No reviews yet'
               )}
-            </p>
+            </div>
             <SortMenu value={sort} onChange={(v) => { setSort(v); setPage(1); }} />
           </div>
 
