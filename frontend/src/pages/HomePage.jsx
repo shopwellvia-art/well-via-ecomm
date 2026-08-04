@@ -551,7 +551,7 @@ useEffect(() => {
         <div className="flex-1 min-w-0">
           <Link to={target} className="block" aria-label={combo?.name ?? r.label}>
             <img
-              src={`/home/routine-${r.key}.jpg`}
+              src={`/routine-${r.key}.png`}
               alt={combo?.name ?? `${r.label} gummies bundle`}
               loading="lazy"
               className="w-full max-w-[420px] mx-auto h-auto rounded-xl2"
