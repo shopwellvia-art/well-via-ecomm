@@ -56,21 +56,23 @@ export default function FilterSidebar({ filters, onChange }) {
   return (
     <div className="bg-wcard border border-wline rounded-xl2 p-5">
       {/* ── Goal (categories) ── */}
-      {/* GOALS are {label, slug} objects (see lib/catalogOptions.js), so the
-          slug drives the filter and the label is what renders. */}
-      <Section title="Goal">
-        {GOALS.map((goal) => (
-          <CheckRow
-            key={goal.slug}
-            checked={filters.goals?.includes(goal.slug) ?? false}
-            onChange={() =>
-              onChange({ goals: toggleIn(filters.goals || [], goal.slug) })
-            }
-          >
-            {goal.label}
-          </CheckRow>
-        ))}
-      </Section>
+{/* GOALS are {label, slug} objects (see lib/catalogOptions.js), so the
+    slug drives the filter and the label is what renders. */}
+<Section title="Goal">
+  {GOALS.map((goal) => (
+    <CheckRow
+      key={goal.slug}
+      checked={filters.goals?.includes(goal.slug) ?? false}
+      onChange={() =>
+        onChange({
+          goals: toggleIn(filters.goals || [], goal.slug),
+        })
+      }
+    >
+      {goal.label}
+    </CheckRow>
+  ))}
+</Section>
 
       {/* ── Flavour ── */}
       <Section title="Flavour">
