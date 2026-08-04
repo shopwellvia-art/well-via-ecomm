@@ -16,7 +16,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+from app.schemas.base import AppSchema
 
 
 class WarningCode:
@@ -44,14 +45,14 @@ class WarningCode:
     REFUND_TIMING_APPROXIMATE = "REFUND_TIMING_APPROXIMATE"
 
 
-class AnalyticsWarning(BaseModel):
+class AnalyticsWarning(AppSchema):
     code: str
     severity: str = Field(default="warn", pattern="^(info|warn|error)$")
     message: str
     detail: dict[str, Any] = Field(default_factory=dict)
 
 
-class SourceRef(BaseModel):
+class SourceRef(AppSchema):
     """Provenance for one input. Rendered as the view's source footnote.
 
     `through` is the newest bucket the source actually holds — the difference
@@ -66,7 +67,7 @@ class SourceRef(BaseModel):
     through: date | None = None
 
 
-class KpiValue(BaseModel):
+class KpiValue(AppSchema):
     """One metric, with everything needed to judge it.
 
     `value` is nullable on purpose. Null means *not computable* — a missing cost
@@ -85,7 +86,7 @@ class KpiValue(BaseModel):
     inputs_missing: list[str] = Field(default_factory=list)
 
 
-class TableBlock(BaseModel):
+class TableBlock(AppSchema):
     rows: list[dict[str, Any]] = Field(default_factory=list)
     total_rows: int = 0
     #: True when the row cap bit. Surfaced so a reader knows the table is a
@@ -93,14 +94,14 @@ class TableBlock(BaseModel):
     truncated: bool = False
 
 
-class ViewMeta(BaseModel):
+class ViewMeta(AppSchema):
     module: str
     view: str
     number: int
     title: str
 
 
-class ResolvedFilters(BaseModel):
+class ResolvedFilters(AppSchema):
     """What the server ACTUALLY used, echoed back.
 
     Not what was requested — a client that omitted a filter, or sent one this
@@ -121,13 +122,13 @@ class ResolvedFilters(BaseModel):
     ignored: list[str] = Field(default_factory=list)
 
 
-class CacheMeta(BaseModel):
+class CacheMeta(AppSchema):
     hit: bool = False
     ttl_sec: int = 0
     generation: int = 0
 
 
-class AnalyticsViewEnvelope(BaseModel):
+class AnalyticsViewEnvelope(AppSchema):
     """The single response shape for every analytics view."""
 
     view: ViewMeta
@@ -161,7 +162,7 @@ class AnalyticsViewEnvelope(BaseModel):
     limitation: str = ""
 
 
-class GatedViewEnvelope(BaseModel):
+class GatedViewEnvelope(AppSchema):
     """Returned for INTEGRATION_REQUIRED / FEATURE_REQUIRED / NOT_APPLICABLE.
 
     A distinct, deliberately small shape: no `kpis`, no `series`, no `tables`.

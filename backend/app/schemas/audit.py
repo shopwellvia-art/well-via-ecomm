@@ -1,17 +1,18 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
+from app.schemas.base import AppSchema
 
 
-class AuditActorBrief(BaseModel):
+class AuditActorBrief(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     email: str
 
 
-class AuditEventRead(BaseModel):
+class AuditEventRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -28,7 +29,7 @@ class AuditEventRead(BaseModel):
     created_at: datetime
 
 
-class AuditEventListPage(BaseModel):
+class AuditEventListPage(AppSchema):
     items: list[AuditEventRead]
     total: int
     page: int

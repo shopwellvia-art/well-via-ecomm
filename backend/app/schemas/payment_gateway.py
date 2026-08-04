@@ -2,15 +2,16 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from app.models.payment_gateway import PaymentGatewayConfig
+from app.schemas.base import AppSchema
 
 # Sentinel the UI sends back for an unchanged secret — "keep what's stored".
 SALT_KEY_KEEP = "***"
 
 
-class PaymentGatewayRead(BaseModel):
+class PaymentGatewayRead(AppSchema):
     """Safe view of the gateway config. Never exposes the salt key (not even
     the ciphertext) — only whether one is on file."""
 
@@ -31,7 +32,7 @@ class PaymentGatewayRead(BaseModel):
         )
 
 
-class PaymentGatewayUpdate(BaseModel):
+class PaymentGatewayUpdate(AppSchema):
     """Partial update. Any omitted field is left unchanged. For the salt key,
     omitting it OR sending the '***' sentinel keeps the stored value; an empty
     string clears it; any other value replaces it."""

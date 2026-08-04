@@ -25,7 +25,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+from app.schemas.base import AppSchema
 
 #: Hard ceiling on an uploaded settlement file. A year of settlements for this
 #: store is well under a megabyte; 10 MiB accommodates a big exporter without
@@ -33,7 +34,7 @@ from pydantic import BaseModel, Field
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 
-class SettlementUploadResponse(BaseModel):
+class SettlementUploadResponse(AppSchema):
     """What one upload did — every number is a fact about this call."""
 
     gateway: str
@@ -61,7 +62,7 @@ class SettlementUploadResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
-class SettlementLastUpload(BaseModel):
+class SettlementLastUpload(AppSchema):
     """Provenance of the most recently ingested settlement line."""
 
     source_file: str
@@ -70,7 +71,7 @@ class SettlementLastUpload(BaseModel):
     rows_in_file: int
 
 
-class SettlementGatewayStatus(BaseModel):
+class SettlementGatewayStatus(AppSchema):
     """Match-rate and coverage for one gateway's ingested lines."""
 
     gateway: str
@@ -87,7 +88,7 @@ class SettlementGatewayStatus(BaseModel):
     settled_through: date | None
 
 
-class SettlementStatusResponse(BaseModel):
+class SettlementStatusResponse(AppSchema):
     """Everything the admin UI needs to say where the settlement feed stands.
 
     ``api`` is `settlements.api_availability()` verbatim: the reasons the

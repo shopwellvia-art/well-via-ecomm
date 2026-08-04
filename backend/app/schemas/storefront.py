@@ -9,16 +9,17 @@ frontend/src/features/storefront-config/defaults.js.
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import ConfigDict, field_validator
 
 from app.schemas._validators import validate_safe_url
+from app.schemas.base import AppSchema
 
 
 # ---------------------------------------------------------------------------
 # Nested models
 # ---------------------------------------------------------------------------
 
-class NavItem(BaseModel):
+class NavItem(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     label: str
@@ -49,7 +50,7 @@ class NavItem(BaseModel):
         return v
 
 
-class HomepageSection(BaseModel):
+class HomepageSection(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     key: str
@@ -119,7 +120,7 @@ SECTION_KEYS: tuple[str, ...] = tuple(
 # Top-level document schemas
 # ---------------------------------------------------------------------------
 
-class StorefrontConfigRead(BaseModel):
+class StorefrontConfigRead(AppSchema):
     """Full config document returned by GET /storefront-config."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -133,13 +134,13 @@ class StorefrontConfigRead(BaseModel):
     homepage_sections: list[HomepageSection]
 
 
-class ImageUploadResponse(BaseModel):
+class ImageUploadResponse(AppSchema):
     """Returned by POST /storefront-config/image after a successful upload."""
 
     url: str
 
 
-class StorefrontConfigUpdate(BaseModel):
+class StorefrontConfigUpdate(AppSchema):
     """PUT body — full replace semantics.
 
     Every field defaults to the canonical default so a client that omits a

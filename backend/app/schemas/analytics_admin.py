@@ -24,7 +24,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
+from app.schemas.base import AppSchema
 
 #: Widest window any single request may name, in days. Not a performance limit —
 #: a mistyped year ("2016-01-01") is the realistic way a 3,000-day window gets
@@ -46,7 +47,7 @@ INLINE_MAX_DAYS_CAP = 14
 INLINE_MAX_DAYS_DEFAULT = 7
 
 
-class _WindowMixin(BaseModel):
+class _WindowMixin(AppSchema):
     """Shared half-open `[date_from, date_to)` window with its validation.
 
     Subclassed rather than repeated so a new route cannot ship with the window
@@ -178,7 +179,7 @@ class AggregateRequest(_WindowMixin):
 # ---------------------------------------------------------------------------
 # Responses
 # ---------------------------------------------------------------------------
-class RecomputeResponse(BaseModel):
+class RecomputeResponse(AppSchema):
     """202 body. `job_ids` are `analytics_recompute_queue` row ids.
 
     They are returned rather than just a count because enqueue is an *upsert*:
@@ -195,7 +196,7 @@ class RecomputeResponse(BaseModel):
     date_to: date
 
 
-class BackfillResponse(BaseModel):
+class BackfillResponse(AppSchema):
     """202 body for one backfill page.
 
     `date_from`/`date_to` describe the page that was *enqueued*, which is not
@@ -220,7 +221,7 @@ class BackfillResponse(BaseModel):
     )
 
 
-class AggregateEnqueuedResponse(BaseModel):
+class AggregateEnqueuedResponse(AppSchema):
     """202 body for the default (enqueue) path of /admin/aggregate."""
 
     job: str
@@ -231,7 +232,7 @@ class AggregateEnqueuedResponse(BaseModel):
     date_to: date
 
 
-class AggregateInlineResponse(BaseModel):
+class AggregateInlineResponse(AppSchema):
     """200 body for `?inline=true` — work that already happened.
 
     200 rather than 202 on purpose: 202 means "accepted, not yet done", and
@@ -263,7 +264,7 @@ class AggregateInlineResponse(BaseModel):
     error: str | None = None
 
 
-class SyncRunRead(BaseModel):
+class SyncRunRead(AppSchema):
     """One `analytics_sync_runs` row — what GET /admin/jobs/{run_id} returns.
 
     `watermark_date` is the field that matters operationally: it is a *data*
@@ -292,7 +293,7 @@ class SyncRunRead(BaseModel):
     finished_at: datetime | None = None
 
 
-class JobHealth(BaseModel):
+class JobHealth(AppSchema):
     """Per-job health line for GET /admin/health."""
 
     job: str
@@ -319,7 +320,7 @@ class JobHealth(BaseModel):
     oldest_pending_bucket: date | None = None
 
 
-class QueueDepth(BaseModel):
+class QueueDepth(AppSchema):
     """Queue rows by `RecomputeStatus`, across all jobs."""
 
     pending: int = 0
@@ -329,7 +330,7 @@ class QueueDepth(BaseModel):
     total: int = 0
 
 
-class AnalyticsHealthResponse(BaseModel):
+class AnalyticsHealthResponse(AppSchema):
     """GET /admin/health — the one page an on-call person reads.
 
     Deliberately answers "are the numbers current?" and not "did the process

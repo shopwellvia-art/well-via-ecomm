@@ -9,20 +9,21 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+from app.schemas.base import AppSchema
 
 
 # ---- Customer-side ---------------------------------------------------------
 
 
-class ReturnItemCreate(BaseModel):
+class ReturnItemCreate(AppSchema):
     """One line of the return: which OrderItem, how many units back."""
 
     order_item_id: int
     quantity: int = Field(gt=0)
 
 
-class ReturnCreateRequest(BaseModel):
+class ReturnCreateRequest(AppSchema):
     order_id: int
     items: list[ReturnItemCreate] = Field(min_length=1)
     # Controlled vocabulary; the frontend renders the same list as radio
@@ -32,7 +33,7 @@ class ReturnCreateRequest(BaseModel):
     customer_notes: str | None = Field(default=None, max_length=2000)
 
 
-class ReturnItemRead(BaseModel):
+class ReturnItemRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -40,7 +41,7 @@ class ReturnItemRead(BaseModel):
     quantity: int
 
 
-class ReturnRead(BaseModel):
+class ReturnRead(AppSchema):
     """Customer-visible return record. Hides admin_notes."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -71,7 +72,7 @@ class ReturnRead(BaseModel):
 # ---- Admin-side ------------------------------------------------------------
 
 
-class AdminReturnCustomerBrief(BaseModel):
+class AdminReturnCustomerBrief(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -88,7 +89,7 @@ class AdminReturnRead(ReturnRead):
     customer: AdminReturnCustomerBrief
 
 
-class AdminReturnDecisionRequest(BaseModel):
+class AdminReturnDecisionRequest(AppSchema):
     """Body for approve / reject. `refund_amount` only matters on approve;
     defaults to the sum of returned-item subtotals when omitted.
     `admin_notes` is the rejection/approval rationale shown in the audit
@@ -98,7 +99,7 @@ class AdminReturnDecisionRequest(BaseModel):
     refund_amount: Decimal | None = Field(default=None, ge=0, decimal_places=2)
 
 
-class AdminReturnInspectRequest(BaseModel):
+class AdminReturnInspectRequest(AppSchema):
     """Body for the post-receipt inspection action.
 
     `passed` is the verdict: True = the item matches the customer's claim and

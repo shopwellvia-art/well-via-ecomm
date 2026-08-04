@@ -1,11 +1,12 @@
 from typing import Generic, TypeVar
 
 from pydantic import BaseModel, Field
+from app.schemas.base import AppSchema
 
 T = TypeVar("T")
 
 
-class PaginationParams(BaseModel):
+class PaginationParams(AppSchema):
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=20, ge=1, le=100)
 
@@ -21,7 +22,7 @@ class Page(BaseModel, Generic[T]):
     page_size: int
 
 
-class Token(BaseModel):
+class Token(AppSchema):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"

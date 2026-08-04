@@ -29,7 +29,7 @@ import { Input } from '@/components/ui/Input.jsx';
 import { Textarea } from '@/components/ui/Textarea.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
-import { cn, formatPrice } from '@/lib/utils.js';
+import { cn, formatPrice, countryName, formatPhone } from '@/lib/utils.js';
 import {
   useAdminOrder,
   useCancelOrder,
@@ -774,14 +774,21 @@ function AddressBlock({ addr }) {
   const email = addr.email || null;
   const gst = addr.gst_number || null;
 
+  // Kept in step with the customer-facing AddressBlock in OrderDetailPage.jsx:
+  // staff read this while reciting an address to a courier, so it must match
+  // what the customer sees character for character.
+  const locality = [[city, state].filter(Boolean).join(', '), pincode]
+    .filter(Boolean)
+    .join(' – ');
+
   const lines = [
     name,
     line1,
     line2,
     landmark,
-    [city, state, pincode].filter(Boolean).join(', '),
-    country,
-    phone ? `Phone: ${phone}` : null,
+    locality,
+    countryName(country),
+    phone ? `Phone: ${formatPhone(phone)}` : null,
     email ? `Email: ${email}` : null,
     gst ? `GST: ${gst}` : null,
   ].filter(Boolean);

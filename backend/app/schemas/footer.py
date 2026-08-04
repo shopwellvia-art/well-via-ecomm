@@ -6,16 +6,17 @@ service falls back to it when no row exists or when a top-level key is absent.
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import ConfigDict, field_validator
 
 from app.schemas._validators import validate_safe_url
+from app.schemas.base import AppSchema
 
 
 # ---------------------------------------------------------------------------
 # Nested models
 # ---------------------------------------------------------------------------
 
-class TrustFeature(BaseModel):
+class TrustFeature(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     icon: str
@@ -23,7 +24,7 @@ class TrustFeature(BaseModel):
     sub: str
 
 
-class Brand(BaseModel):
+class Brand(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     name: str
@@ -38,7 +39,7 @@ class Brand(BaseModel):
         return validate_safe_url(v)
 
 
-class Newsletter(BaseModel):
+class Newsletter(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     enabled: bool
@@ -47,35 +48,35 @@ class Newsletter(BaseModel):
     success: str
 
 
-class FooterLink(BaseModel):
+class FooterLink(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     label: str
     to: str
 
 
-class LinkColumn(BaseModel):
+class LinkColumn(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     title: str
     links: list[FooterLink]
 
 
-class MailUs(BaseModel):
+class MailUs(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     heading: str
     lines: list[str]
 
 
-class Phone(BaseModel):
+class Phone(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     display: str
     tel: str
 
 
-class RegisteredOffice(BaseModel):
+class RegisteredOffice(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     heading: str
@@ -84,7 +85,7 @@ class RegisteredOffice(BaseModel):
     phones: list[Phone]
 
 
-class SocialLink(BaseModel):
+class SocialLink(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     icon: str
@@ -97,7 +98,7 @@ class SocialLink(BaseModel):
         return validate_safe_url(v)
 
 
-class BottomLink(BaseModel):
+class BottomLink(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     icon: str
@@ -193,7 +194,7 @@ DEFAULT_FOOTER: dict = {
 # Top-level document schemas
 # ---------------------------------------------------------------------------
 
-class FooterConfigRead(BaseModel):
+class FooterConfigRead(AppSchema):
     """Full footer document returned by GET /footer."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -210,13 +211,13 @@ class FooterConfigRead(BaseModel):
     copyright: str
 
 
-class LogoUploadResponse(BaseModel):
+class LogoUploadResponse(AppSchema):
     """Returned by POST /footer/logo after a successful upload."""
 
     url: str
 
 
-class FooterConfigUpdate(BaseModel):
+class FooterConfigUpdate(AppSchema):
     """PUT body — full replace semantics.
 
     Every top-level field defaults to the canonical default so a client that

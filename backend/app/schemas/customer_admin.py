@@ -20,10 +20,11 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import EmailStr, Field
+from app.schemas.base import AppSchema
 
 
-class CustomerSnapshotBrief(BaseModel):
+class CustomerSnapshotBrief(AppSchema):
     """Per-customer analytics, read off `agg_customer_snapshot`.
 
     Every field is "as of" the parent payload's `snapshot_date`, NOT live. A
@@ -51,7 +52,7 @@ class CustomerSnapshotBrief(BaseModel):
     monetary: Decimal | None = None
 
 
-class CustomerRow(BaseModel):
+class CustomerRow(AppSchema):
     """One line in the customer directory."""
 
     id: int
@@ -71,7 +72,7 @@ class CustomerRow(BaseModel):
     snapshot: CustomerSnapshotBrief | None = None
 
 
-class CustomerPage(BaseModel):
+class CustomerPage(AppSchema):
     items: list[CustomerRow]
     total: int
     page: int
@@ -109,7 +110,7 @@ class CustomerDetail(CustomerRow):
     money_visible: bool = False
 
 
-class ActivityEventRead(BaseModel):
+class ActivityEventRead(AppSchema):
     occurred_at: datetime
     kind: str
     ref_id: int
@@ -118,14 +119,14 @@ class ActivityEventRead(BaseModel):
     meta: dict[str, Any] = Field(default_factory=dict)
 
 
-class ActivityPage(BaseModel):
+class ActivityPage(AppSchema):
     items: list[ActivityEventRead]
     total: int
     page: int
     page_size: int
 
 
-class AdminCustomerUpdate(BaseModel):
+class AdminCustomerUpdate(AppSchema):
     """Body of PATCH /customers/{id}. Same two fields the staff editor allows —
     this route exists so `customers.manage` can support a shopper without also
     being able to touch a staff account."""
@@ -134,7 +135,7 @@ class AdminCustomerUpdate(BaseModel):
     is_active: bool | None = None
 
 
-class StaffInvite(BaseModel):
+class StaffInvite(AppSchema):
     """Body of POST /users/invite."""
 
     email: EmailStr
@@ -144,7 +145,7 @@ class StaffInvite(BaseModel):
     role_ids: list[int] = Field(default_factory=list)
 
 
-class StaffInviteResponse(BaseModel):
+class StaffInviteResponse(AppSchema):
     id: int
     email: EmailStr
     detail: str

@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+from app.schemas.base import AppSchema
 
 
-class ServiceabilityResponse(BaseModel):
+class ServiceabilityResponse(AppSchema):
     """Result of `GET /shipping/serviceability/{pincode}`.
 
     Public endpoint — never returns provider-specific raw payloads so a
@@ -32,14 +33,14 @@ class ServiceabilityResponse(BaseModel):
     provider: str
 
 
-class RateQuoteItem(BaseModel):
+class RateQuoteItem(AppSchema):
     """Single cart line as the rate-quote endpoint sees it."""
 
     product_id: int
     quantity: int = Field(gt=0)
 
 
-class RateQuoteRequest(BaseModel):
+class RateQuoteRequest(AppSchema):
     """Body of POST /shipping/rate-quote.
 
     We only take the destination pin + the cart; weights + prices are read
@@ -50,7 +51,7 @@ class RateQuoteRequest(BaseModel):
     items: list[RateQuoteItem] = Field(min_length=1)
 
 
-class RateQuoteResponse(BaseModel):
+class RateQuoteResponse(AppSchema):
     amount: Decimal
     currency: str = "INR"
     chargeable_weight_grams: int
@@ -61,7 +62,7 @@ class RateQuoteResponse(BaseModel):
     eta_days_max: int | None = None
 
 
-class PincodeLookupResponse(BaseModel):
+class PincodeLookupResponse(AppSchema):
     """Result of GET /shipping/pincode/{pincode}.
 
     Always returns HTTP 200 — `found=False` is the degraded-but-safe response
@@ -76,7 +77,7 @@ class PincodeLookupResponse(BaseModel):
     state: str | None = None
 
 
-class ReverseGeocodeResponse(BaseModel):
+class ReverseGeocodeResponse(AppSchema):
     """Result of GET /shipping/geocode/reverse?lat=&lng=.
 
     Always returns HTTP 200 — `found=False` is the degraded-but-safe response

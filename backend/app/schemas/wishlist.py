@@ -1,10 +1,11 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
+from app.schemas.base import AppSchema
 
 
-class WishlistItemRead(BaseModel):
+class WishlistItemRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -15,5 +16,5 @@ class WishlistItemRead(BaseModel):
     created_at: datetime
 
 
-class WishlistAdd(BaseModel):
+class WishlistAdd(AppSchema):
     product_id: int

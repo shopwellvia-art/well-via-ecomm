@@ -13,7 +13,7 @@ import {
   readApiErrorMessage,
 } from '@/features/orders/api.js';
 import CancelOrderModal from '@/features/orders/components/CancelOrderModal.jsx';
-import { formatPrice, cn } from '@/lib/utils.js';
+import { formatPrice, cn, countryName, formatPhone } from '@/lib/utils.js';
 
 // ── Status pill styles (no @/components/ui/Badge) ────────────────────────────
 
@@ -267,14 +267,20 @@ function AddressBlock({ addr }) {
   const phone    = addr.phone || null;
   const landmark = addr.landmark || null;
 
+  // "Davangere, Karnataka – 577530" reads as one locality line, the way
+  // Flipkart/Amazon set it, rather than three comma-separated fragments.
+  const locality = [[city, state].filter(Boolean).join(', '), pincode]
+    .filter(Boolean)
+    .join(' – ');
+
   const lines = [
     name,
     line1,
     line2,
     landmark,
-    [city, state, pincode].filter(Boolean).join(', '),
-    country,
-    phone ? `Phone: ${phone}` : null,
+    locality,
+    countryName(country),
+    phone ? `Phone: ${formatPhone(phone)}` : null,
   ].filter(Boolean);
 
   return (
@@ -597,12 +603,19 @@ export default function OrderDetailPage() {
                 <dd className="text-wink">{formatPrice(order.tax_amount, order.currency)}</dd>
               </div>
             )}
-            {Number(order.shipping_amount) > 0 && (
-              <div className="flex justify-between text-wmuted">
-                <dt>Shipping</dt>
-                <dd className="text-wink">{formatPrice(order.shipping_amount, order.currency)}</dd>
-              </div>
-            )}
+            {/* Always shown, unlike the other rows: "Delivery — FREE" is a
+                thing the customer paid attention to at checkout, and silently
+                omitting it reads as though a charge is missing. */}
+            <div className="flex justify-between text-wmuted">
+              <dt>Delivery</dt>
+              {Number(order.shipping_amount) > 0 ? (
+                <dd className="text-wink">
+                  {formatPrice(order.shipping_amount, order.currency)}
+                </dd>
+              ) : (
+                <dd className="text-wgreen font-medium">FREE</dd>
+              )}
+            </div>
             {Number(order.discount_amount) > 0 && (
               <div className="flex justify-between text-wgreen">
                 <dt>
@@ -771,9 +784,20 @@ export default function OrderDetailPage() {
                         {formatPrice(p.amount, p.currency || order.currency)}
                       </span>
                     </div>
+                    {/* The gateway's payment id is the reference a customer can
+                        actually quote to us or to their bank. `Ref:` alone used
+                        to show our internal merchant txn id, which looks like a
+                        random token and means nothing to them — so label both. */}
+                    {p.gateway_payment_id && (
+                      <p className="text-[11px] text-wmuted">
+                        Payment ID:{' '}
+                        <span className="font-mono">{p.gateway_payment_id}</span>
+                      </p>
+                    )}
                     {p.transaction_reference && (
-                      <p className="font-mono text-[11px] text-wmuted">
-                        Ref: {p.transaction_reference}
+                      <p className="text-[11px] text-wmuted">
+                        Order ref:{' '}
+                        <span className="font-mono">{p.transaction_reference}</span>
                       </p>
                     )}
                     {p.paid_at && (

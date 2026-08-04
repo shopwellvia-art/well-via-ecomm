@@ -1,12 +1,13 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
 from app.schemas._validators import validate_safe_url
+from app.schemas.base import AppSchema
 
 
-class Perk(BaseModel):
+class Perk(AppSchema):
     """A single trust feature shown on a sale slide (icon + label)."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -15,7 +16,7 @@ class Perk(BaseModel):
     label: str
 
 
-class HeroSlideRead(BaseModel):
+class HeroSlideRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -41,7 +42,7 @@ class HeroSlideRead(BaseModel):
     updated_at: datetime
 
 
-class HeroSlideUpdate(BaseModel):
+class HeroSlideUpdate(AppSchema):
     alt: str | None = None
     sort_order: int | None = None
     is_active: bool | None = None
@@ -66,5 +67,5 @@ class HeroSlideUpdate(BaseModel):
         return validate_safe_url(v)
 
 
-class HeroSlideReorder(BaseModel):
+class HeroSlideReorder(AppSchema):
     ids: list[int]

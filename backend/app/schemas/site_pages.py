@@ -11,16 +11,17 @@ The shape here is mirrored 1:1 by the frontend at
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import ConfigDict, field_validator
 
 from app.schemas._validators import validate_safe_url
+from app.schemas.base import AppSchema
 
 # ---------------------------------------------------------------------------
 # Shared building blocks
 # ---------------------------------------------------------------------------
 
 
-class Hero(BaseModel):
+class Hero(AppSchema):
     """The page header — eyebrow line, big title, supporting subtitle.
 
     `image` is the optional banner behind the copy. It exists so a page whose
@@ -38,7 +39,7 @@ class Hero(BaseModel):
     image: str = ""
 
 
-class FeatureItem(BaseModel):
+class FeatureItem(AppSchema):
     """Icon + title + body — used for values, perks, etc."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -48,14 +49,14 @@ class FeatureItem(BaseModel):
     text: str = ""
 
 
-class Stat(BaseModel):
+class Stat(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     value: str
     label: str
 
 
-class ProseSection(BaseModel):
+class ProseSection(AppSchema):
     """A heading + a body. Body paragraphs are separated by blank lines."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -64,7 +65,7 @@ class ProseSection(BaseModel):
     body: str
 
 
-class ContactMethod(BaseModel):
+class ContactMethod(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     icon: str = "Mail"
@@ -78,7 +79,7 @@ class ContactMethod(BaseModel):
         return validate_safe_url(v)
 
 
-class ContactForm(BaseModel):
+class ContactForm(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     heading: str
@@ -86,14 +87,14 @@ class ContactForm(BaseModel):
     success: str
 
 
-class Office(BaseModel):
+class Office(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     city: str
     lines: list[str] = []
 
 
-class JobOpening(BaseModel):
+class JobOpening(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     title: str
@@ -108,7 +109,7 @@ class JobOpening(BaseModel):
         return validate_safe_url(v)
 
 
-class Story(BaseModel):
+class Story(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     title: str
@@ -124,7 +125,7 @@ class Story(BaseModel):
         return validate_safe_url(v)
 
 
-class PressRelease(BaseModel):
+class PressRelease(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     date: str = ""
@@ -138,7 +139,7 @@ class PressRelease(BaseModel):
         return validate_safe_url(v)
 
 
-class PressContact(BaseModel):
+class PressContact(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     heading: str
@@ -146,7 +147,7 @@ class PressContact(BaseModel):
     phone: str = ""
 
 
-class Leader(BaseModel):
+class Leader(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     name: str
@@ -154,7 +155,7 @@ class Leader(BaseModel):
     image: str = ""
 
 
-class Download(BaseModel):
+class Download(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     label: str
@@ -166,7 +167,7 @@ class Download(BaseModel):
         return validate_safe_url(v)
 
 
-class CorporateEntity(BaseModel):
+class CorporateEntity(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     name: str
@@ -181,7 +182,7 @@ class CorporateEntity(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class AboutPage(BaseModel):
+class AboutPage(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     enabled: bool = True
@@ -197,7 +198,7 @@ class AboutPage(BaseModel):
     mission: ProseSection
 
 
-class ContactPage(BaseModel):
+class ContactPage(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     enabled: bool = True
@@ -214,7 +215,7 @@ class ContactPage(BaseModel):
     offices: list[Office] = []
 
 
-class CareersPage(BaseModel):
+class CareersPage(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     enabled: bool = True
@@ -225,7 +226,7 @@ class CareersPage(BaseModel):
     culture: ProseSection
 
 
-class StoriesPage(BaseModel):
+class StoriesPage(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     enabled: bool = True
@@ -234,7 +235,7 @@ class StoriesPage(BaseModel):
     posts: list[Story] = []
 
 
-class PressPage(BaseModel):
+class PressPage(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     enabled: bool = True
@@ -250,7 +251,7 @@ class PressPage(BaseModel):
         return validate_safe_url(v)
 
 
-class CorporatePage(BaseModel):
+class CorporatePage(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     enabled: bool = True
@@ -261,7 +262,7 @@ class CorporatePage(BaseModel):
     downloads: list[Download] = []
 
 
-class PolicyPage(BaseModel):
+class PolicyPage(AppSchema):
     """Legal / customer-care policy page — a hero, an optional "last updated"
     line, and a list of heading+body sections. Shared by the Privacy, Terms,
     Refund/Cancellation and Shipping pages."""
@@ -858,7 +859,7 @@ DEFAULT_SITE_PAGES: dict = {
 # ---------------------------------------------------------------------------
 
 
-class SitePagesRead(BaseModel):
+class SitePagesRead(AppSchema):
     """Full company-pages document returned by GET /site-pages."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -875,7 +876,7 @@ class SitePagesRead(BaseModel):
     shipping: PolicyPage
 
 
-class SitePagesUpdate(BaseModel):
+class SitePagesUpdate(AppSchema):
     """PUT body — full replace semantics.
 
     Every top-level page defaults to its canonical default so a client that

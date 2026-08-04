@@ -6,12 +6,12 @@ KPI-card and time-series contracts stay identical across both surfaces.
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
 
 from app.schemas.dashboard import IntMetricDelta, MetricDelta, RevenuePoint
+from app.schemas.base import AppSchema
 
 
-class SalesSummary(BaseModel):
+class SalesSummary(AppSchema):
     """The four KPI cards at the top of the Sales & Revenue page."""
 
     revenue: MetricDelta
@@ -20,7 +20,7 @@ class SalesSummary(BaseModel):
     discounts: MetricDelta
 
 
-class CategoryRevenue(BaseModel):
+class CategoryRevenue(AppSchema):
     """One slice of the 'Revenue by category' breakdown.
 
     `revenue` is line-item revenue (quantity x unit_price) so it can be
@@ -32,7 +32,7 @@ class CategoryRevenue(BaseModel):
     pct: float
 
 
-class DayOfWeekPoint(BaseModel):
+class DayOfWeekPoint(AppSchema):
     """One bar of the 'Sales by day of week' chart. `dow` is Mon..Sun."""
 
     dow: str
@@ -40,7 +40,7 @@ class DayOfWeekPoint(BaseModel):
     orders: int
 
 
-class SalesAnalytics(BaseModel):
+class SalesAnalytics(AppSchema):
     period: str
     granularity: str
     period_start: datetime
@@ -56,7 +56,7 @@ class SalesAnalytics(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class CostConfig(BaseModel):
+class CostConfig(AppSchema):
     """The five operator-configured cost parameters actually used for this
     report period — echoed so the UI can show what assumptions drove the
     numbers."""
@@ -68,7 +68,7 @@ class CostConfig(BaseModel):
     monthly_ad_spend: float
 
 
-class WaterfallStep(BaseModel):
+class WaterfallStep(AppSchema):
     """One bar of the contribution-margin waterfall chart.
 
     `kind` controls colour / treatment in the chart:
@@ -83,7 +83,7 @@ class WaterfallStep(BaseModel):
     kind: Literal["start", "cost", "subtotal", "result"]
 
 
-class ProductMarginRow(BaseModel):
+class ProductMarginRow(AppSchema):
     """Per-product gross-margin summary for the period."""
 
     product_id: int
@@ -96,7 +96,7 @@ class ProductMarginRow(BaseModel):
     margin_pct: float | None  # null when revenue is 0
 
 
-class CategoryMarginRow(BaseModel):
+class CategoryMarginRow(AppSchema):
     """Per-category gross-margin summary for the period."""
 
     category: str
@@ -106,7 +106,7 @@ class CategoryMarginRow(BaseModel):
     margin_pct: float | None  # null when revenue is 0
 
 
-class ProfitAnalytics(BaseModel):
+class ProfitAnalytics(AppSchema):
     """Full contribution-margin report for a period window."""
 
     period: str

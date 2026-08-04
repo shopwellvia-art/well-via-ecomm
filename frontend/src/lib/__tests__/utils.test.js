@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { cn, formatPrice, mediaUrl, stockLabel } from '@/lib/utils.js';
+import {
+  cn,
+  countryName,
+  formatPhone,
+  formatPrice,
+  mediaUrl,
+  stockLabel,
+} from '@/lib/utils.js';
 
 // Intl for en-IN/INR emits a non-breaking space in some ICU builds — normalise
 // so the assertions don't depend on the node build's ICU whitespace choice.
@@ -72,5 +79,71 @@ describe('cn', () => {
   it('merges conditional classes and resolves Tailwind conflicts', () => {
     expect(cn('p-2', 'p-4')).toBe('p-4'); // later utility wins
     expect(cn('a', undefined, null, ['c', { d: true, e: false }])).toBe('a c d');
+  });
+});
+
+describe('countryName', () => {
+  it('expands the ISO code stored on addresses', () => {
+    expect(countryName('IN')).toBe('India');
+  });
+
+  it('is case-insensitive', () => {
+    expect(countryName('in')).toBe('India');
+  });
+
+  it('leaves an already-spelled-out country alone', () => {
+    expect(countryName('India')).toBe('India');
+  });
+
+  it('passes through empty/nullish values untouched', () => {
+    expect(countryName('')).toBe('');
+    expect(countryName(null)).toBe(null);
+    expect(countryName(undefined)).toBe(undefined);
+  });
+
+  it('returns an unassigned 2-letter code as-is rather than blanking it', () => {
+    expect(countryName('QQ')).toBe('QQ');
+    expect(countryName('XX')).toBe('XX');
+  });
+
+  // "ZZ" is not unassigned — CLDR defines it as the Unknown Region code, so
+  // expanding it is correct behaviour, not a fallback failure.
+  it('expands ZZ, which CLDR genuinely defines', () => {
+    expect(countryName('ZZ')).toBe('Unknown Region');
+  });
+});
+
+describe('formatPhone', () => {
+  it('formats a bare 10-digit Indian mobile', () => {
+    expect(formatPhone('7643793833')).toBe('+91 76437 93833');
+  });
+
+  it('strips an existing +91 / 91 prefix instead of doubling it', () => {
+    expect(formatPhone('+917643793833')).toBe('+91 76437 93833');
+    expect(formatPhone('917643793833')).toBe('+91 76437 93833');
+  });
+
+  it('tolerates spaces and dashes in the stored value', () => {
+    expect(formatPhone('76437-93833')).toBe('+91 76437 93833');
+    expect(formatPhone('+91 76437 93833')).toBe('+91 76437 93833');
+  });
+
+  // A mangled phone number on a shipping label costs a delivery, so anything
+  // not recognisably an Indian mobile must survive untouched.
+  it('leaves a landline / non-mobile 10-digit number alone', () => {
+    expect(formatPhone('0801234567')).toBe('0801234567');
+  });
+
+  it('leaves an international number alone', () => {
+    expect(formatPhone('+1 415 555 0123')).toBe('+1 415 555 0123');
+  });
+
+  it('leaves a part-entered number alone', () => {
+    expect(formatPhone('76437')).toBe('76437');
+  });
+
+  it('passes through nullish values', () => {
+    expect(formatPhone(null)).toBe(null);
+    expect(formatPhone('')).toBe('');
   });
 });

@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+from app.schemas.base import AppSchema
 
 
-class PaymentInstrumentItem(BaseModel):
+class PaymentInstrumentItem(AppSchema):
     # Stable enum key — also what we persist on `orders.payment_instrument`.
     code: str  # 'upi' | 'netbanking' | 'card' | 'wallet'
     label: str
@@ -21,5 +22,5 @@ class PaymentInstrumentItem(BaseModel):
     suggested: bool = False
 
 
-class PaymentInstrumentsResponse(BaseModel):
+class PaymentInstrumentsResponse(AppSchema):
     items: list[PaymentInstrumentItem] = Field(default_factory=list)

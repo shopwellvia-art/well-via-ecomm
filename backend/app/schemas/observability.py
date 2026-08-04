@@ -3,26 +3,27 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
+from app.schemas.base import AppSchema
 
 
 # ---- Overview (KPIs + charts) ----
 
 
-class LatencyPoint(BaseModel):
+class LatencyPoint(AppSchema):
     bucket: str  # time bucket label, e.g. "2026-06-19 03:51:00"
     avg_ms: float
     max_ms: int
     count: int
 
 
-class SlowestRoute(BaseModel):
+class SlowestRoute(AppSchema):
     route: str
     avg_ms: float
     count: int
 
 
-class ObservabilityOverview(BaseModel):
+class ObservabilityOverview(AppSchema):
     period: str
     requests: int
     error_rate: float  # % of requests with status >= 500
@@ -36,7 +37,7 @@ class ObservabilityOverview(BaseModel):
 # ---- Request Logs tab ----
 
 
-class RequestLogItem(BaseModel):
+class RequestLogItem(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -52,7 +53,7 @@ class RequestLogItem(BaseModel):
     ip: str | None
 
 
-class RequestLogPage(BaseModel):
+class RequestLogPage(AppSchema):
     items: list[RequestLogItem]
     total: int
     page: int
@@ -62,7 +63,7 @@ class RequestLogPage(BaseModel):
 # ---- Aggregated Logs tab ----
 
 
-class RouteAggregate(BaseModel):
+class RouteAggregate(AppSchema):
     route: str
     count: int
     avg_ms: float
@@ -74,7 +75,7 @@ class RouteAggregate(BaseModel):
 # ---- Slow Queries tab ----
 
 
-class SlowQueryFingerprint(BaseModel):
+class SlowQueryFingerprint(AppSchema):
     fingerprint_hash: str
     sql_normalized: str
     table_name: str | None
@@ -84,14 +85,14 @@ class SlowQueryFingerprint(BaseModel):
     max_ms: int
 
 
-class SlowQueryByTable(BaseModel):
+class SlowQueryByTable(AppSchema):
     table_name: str | None
     count: int
     avg_ms: float
     max_ms: int
 
 
-class SlowQueryRecentItem(BaseModel):
+class SlowQueryRecentItem(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -104,7 +105,7 @@ class SlowQueryRecentItem(BaseModel):
     request_id: str | None
 
 
-class SlowQueryResponse(BaseModel):
+class SlowQueryResponse(AppSchema):
     view: str  # "queries" | "table" | "recent"
     fingerprints: list[SlowQueryFingerprint] = []
     tables: list[SlowQueryByTable] = []

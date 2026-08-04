@@ -1,14 +1,15 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
 from app.models.order import OrderStatus
 from app.schemas.address import AddressCreate
 from app.schemas.order import OrderItemCreate
+from app.schemas.base import AppSchema
 
 
-class CheckoutRequest(BaseModel):
+class CheckoutRequest(AppSchema):
     """Cart -> order + payment in one call. Same shape as OrderCreate plus a
     `currency` override (kept for symmetry; defaults to INR for PhonePe)."""
 
@@ -73,7 +74,7 @@ class CheckoutRequest(BaseModel):
         return stripped or None
 
 
-class CheckoutResponse(BaseModel):
+class CheckoutResponse(AppSchema):
     order_id: int
     merchant_transaction_id: str
     redirect_url: str
@@ -89,7 +90,7 @@ class CheckoutResponse(BaseModel):
     checkout: dict | None = None
 
 
-class RazorpayVerifyRequest(BaseModel):
+class RazorpayVerifyRequest(AppSchema):
     """Browser callback from Razorpay Standard Checkout.
 
     checkout.js hands the SPA this triplet in its success handler; the server
@@ -104,7 +105,7 @@ class RazorpayVerifyRequest(BaseModel):
     razorpay_signature: str = Field(max_length=256)
 
 
-class PaymentStatusResponse(BaseModel):
+class PaymentStatusResponse(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     order_id: int
@@ -115,14 +116,14 @@ class PaymentStatusResponse(BaseModel):
     updated_at: datetime
 
 
-class MockWebhookRequest(BaseModel):
+class MockWebhookRequest(AppSchema):
     """Body for the mock simulator's "Approve" / "Decline" buttons."""
 
     merchant_transaction_id: str
     action: str = Field(pattern="^(approve|decline)$")
 
 
-class ReconcilePendingRequest(BaseModel):
+class ReconcilePendingRequest(AppSchema):
     """Optional body for POST /payments/admin/reconcile-pending."""
 
     older_than_minutes: int = Field(
@@ -139,7 +140,7 @@ class ReconcilePendingRequest(BaseModel):
     )
 
 
-class ReconcilePendingResponse(BaseModel):
+class ReconcilePendingResponse(AppSchema):
     """Summary returned by POST /payments/admin/reconcile-pending."""
 
     checked: int

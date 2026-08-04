@@ -2,7 +2,8 @@ import re
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
+from app.schemas.base import AppSchema
 
 # Indian HSN codes are 4, 6 or 8 digits — nothing else is a legal granularity,
 # so 5 and 7 are rejected rather than padded. `[0-9]` rather than `\d`: Python's
@@ -49,7 +50,7 @@ def _normalize_brand(value: str | None) -> str | None:
     return value.strip() or None
 
 
-class ProductImageRead(BaseModel):
+class ProductImageRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -58,13 +59,13 @@ class ProductImageRead(BaseModel):
     is_primary: bool
 
 
-class ProductImageReorder(BaseModel):
+class ProductImageReorder(AppSchema):
     """New gallery order — every image id of the product, exactly once."""
 
     image_ids: list[int] = Field(min_length=1)
 
 
-class ProductTaxBrief(BaseModel):
+class ProductTaxBrief(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -72,7 +73,7 @@ class ProductTaxBrief(BaseModel):
     rate: Decimal
 
 
-class ProductBase(BaseModel):
+class ProductBase(AppSchema):
     sku: str = Field(min_length=1, max_length=64)
     name: str = Field(min_length=1, max_length=255)
     description: str | None = None
@@ -128,7 +129,7 @@ class ProductBase(BaseModel):
         return self
 
 
-class ProductOpsFields(BaseModel):
+class ProductOpsFields(AppSchema):
     """Internal inventory settings. NEVER on a public response model.
 
     `products.py`'s read routes (`GET /products`, `/{id}`, `/bestsellers`,
@@ -162,7 +163,7 @@ class ProductCreate(ProductBase, ProductOpsFields):
     pass
 
 
-class ProductUpdate(BaseModel):
+class ProductUpdate(AppSchema):
     name: str | None = None
     description: str | None = None
     price: Decimal | None = None

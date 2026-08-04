@@ -7,13 +7,14 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
 from app.models.address import AddressLabel
 from app.schemas._validators import normalize_phone
+from app.schemas.base import AppSchema
 
 
-class AddressCreate(BaseModel):
+class AddressCreate(AppSchema):
     full_name: str = Field(min_length=1, max_length=120)
     phone: str
     line1: str = Field(min_length=1, max_length=255)
@@ -54,7 +55,7 @@ class AddressCreate(BaseModel):
         return v.lower() if isinstance(v, str) else v
 
 
-class AddressUpdate(BaseModel):
+class AddressUpdate(AppSchema):
     """Same fields as AddressCreate but all optional; None means 'unchanged'."""
 
     full_name: str | None = Field(default=None, min_length=1, max_length=120)
@@ -90,7 +91,7 @@ class AddressUpdate(BaseModel):
         return v.lower() if isinstance(v, str) else v
 
 
-class AddressRead(BaseModel):
+class AddressRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int

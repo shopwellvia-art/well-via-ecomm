@@ -1,20 +1,21 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
 from app.models.order import OrderStatus
 from app.models.order_address import OrderAddressType
 from app.models.order_payment import PaymentTxnStatus
 from app.models.shipment import ShipmentStatus
+from app.schemas.base import AppSchema
 
 
-class OrderItemCreate(BaseModel):
+class OrderItemCreate(AppSchema):
     product_id: int
     quantity: int = Field(gt=0)
 
 
-class OrderItemRead(BaseModel):
+class OrderItemRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -42,7 +43,7 @@ class OrderItemRead(BaseModel):
 # backward compatibility; new clients should prefer these.
 
 
-class OrderPaymentRead(BaseModel):
+class OrderPaymentRead(AppSchema):
     """One payment attempt / money movement against the order."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -61,7 +62,7 @@ class OrderPaymentRead(BaseModel):
     created_at: datetime
 
 
-class ShipmentRead(BaseModel):
+class ShipmentRead(AppSchema):
     """One carrier shipment for the order."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -88,7 +89,7 @@ class ShipmentRead(BaseModel):
     created_at: datetime
 
 
-class OrderAddressRead(BaseModel):
+class OrderAddressRead(AppSchema):
     """A frozen SHIPPING or BILLING address snapshot for the order."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -108,12 +109,12 @@ class OrderAddressRead(BaseModel):
     gst_number: str | None = None
 
 
-class OrderCreate(BaseModel):
+class OrderCreate(AppSchema):
     items: list[OrderItemCreate] = Field(min_length=1)
     shipping_address: str | None = None
 
 
-class OrderRead(BaseModel):
+class OrderRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -170,7 +171,7 @@ class OrderRead(BaseModel):
 # ---- Admin schemas ----
 
 
-class AdminCustomerBrief(BaseModel):
+class AdminCustomerBrief(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -178,7 +179,7 @@ class AdminCustomerBrief(BaseModel):
     full_name: str | None
 
 
-class AdminOrderRow(BaseModel):
+class AdminOrderRow(AppSchema):
     """Slim list-row payload — what AdminOrdersPage renders per row."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -192,7 +193,7 @@ class AdminOrderRow(BaseModel):
     created_at: datetime
 
 
-class AdminOrderListPage(BaseModel):
+class AdminOrderListPage(AppSchema):
     items: list[AdminOrderRow]
     total: int
     page: int
@@ -200,7 +201,7 @@ class AdminOrderListPage(BaseModel):
     counts_by_status: dict[str, int]
 
 
-class AdminOrderRead(BaseModel):
+class AdminOrderRead(AppSchema):
     """Full order payload for the detail view. Carries fulfillment metadata
     and admin-only notes that we don't surface to the customer."""
 
@@ -262,12 +263,12 @@ class AdminOrderRead(BaseModel):
     updated_at: datetime
 
 
-class ShipRequest(BaseModel):
+class ShipRequest(AppSchema):
     tracking_number: str | None = Field(default=None, max_length=120)
     carrier: str | None = Field(default=None, max_length=60)
 
 
-class SchedulePickupRequest(BaseModel):
+class SchedulePickupRequest(AppSchema):
     """Body of POST /orders/admin/{id}/schedule-pickup.
 
     `pickup_date` is an ISO date (YYYY-MM-DD). Carriers in India typically
@@ -282,7 +283,7 @@ class SchedulePickupRequest(BaseModel):
     expected_package_count: int = Field(default=1, ge=1, le=999)
 
 
-class RefundOrCancelRequest(BaseModel):
+class RefundOrCancelRequest(AppSchema):
     reason: str = Field(min_length=3, max_length=255)
 
 
@@ -297,12 +298,12 @@ class AdminRefundRequest(RefundOrCancelRequest):
     force_manual: bool = False
 
 
-class CustomerCancelRequest(BaseModel):
+class CustomerCancelRequest(AppSchema):
     """Optional body of POST /orders/{id}/cancel (customer self-service).
     Omitted/blank reason falls back to "Cancelled by customer"."""
 
     reason: str | None = Field(default=None, max_length=255)
 
 
-class NotesRequest(BaseModel):
+class NotesRequest(AppSchema):
     internal_notes: str | None = Field(default=None, max_length=4000)

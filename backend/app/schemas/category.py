@@ -1,19 +1,20 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+from app.schemas.base import AppSchema
 
 
-class CategoryCreate(BaseModel):
+class CategoryCreate(AppSchema):
     name: str = Field(min_length=1, max_length=120)
     slug: str | None = Field(default=None, max_length=140)
     parent_id: int | None = None
 
 
-class CategoryUpdate(BaseModel):
+class CategoryUpdate(AppSchema):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     slug: str | None = Field(default=None, max_length=140)
     parent_id: int | None = None
 
 
-class CategoryRead(BaseModel):
+class CategoryRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int

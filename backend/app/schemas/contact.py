@@ -1,9 +1,10 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import ConfigDict, EmailStr, Field
+from app.schemas.base import AppSchema
 
 
-class ContactMessageCreate(BaseModel):
+class ContactMessageCreate(AppSchema):
     name: str = Field(min_length=1, max_length=120)
     email: EmailStr
     phone: str | None = Field(default=None, max_length=20)
@@ -11,7 +12,7 @@ class ContactMessageCreate(BaseModel):
     message: str = Field(min_length=10, max_length=5000)
 
 
-class ContactMessageRead(BaseModel):
+class ContactMessageRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -24,5 +25,5 @@ class ContactMessageRead(BaseModel):
     created_at: datetime
 
 
-class NewsletterSubscribeIn(BaseModel):
+class NewsletterSubscribeIn(AppSchema):
     email: EmailStr

@@ -1,11 +1,12 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
+from app.schemas.base import AppSchema
 
 # Default scope keeps the original single-button behaviour working: a request
 # with no scope means the full "DELETE EVERYTHING" wipe.
 EVERYTHING_SCOPE = "everything"
 
 
-class TruncateRequest(BaseModel):
+class TruncateRequest(AppSchema):
     # Which domain group to wipe; "everything" (default) is the full reset.
     scope: str = Field(default=EVERYTHING_SCOPE, description="Domain group key or 'everything'.")
     # Must equal the scope's confirm phrase exactly (e.g. "DELETE ORDERS" /
@@ -14,7 +15,7 @@ class TruncateRequest(BaseModel):
     confirm: str = Field(..., description="Confirmation phrase echoed back by the caller.")
 
 
-class TruncateResponse(BaseModel):
+class TruncateResponse(AppSchema):
     scope: str = EVERYTHING_SCOPE
     tables_truncated: int
     # Full blast radius actually emptied (primary + FK-dependent tables).
@@ -31,18 +32,18 @@ class TruncateResponse(BaseModel):
     detail: str
 
 
-class SeedRequest(BaseModel):
+class SeedRequest(AppSchema):
     scope: str = Field(..., description="Domain group key to load sample data for.")
 
 
-class SeedResponse(BaseModel):
+class SeedResponse(AppSchema):
     scope: str
     # {table: rows_created}
     created: dict[str, int] = {}
     detail: str
 
 
-class DatabaseGroup(BaseModel):
+class DatabaseGroup(AppSchema):
     key: str
     label: str
     description: str
@@ -54,5 +55,5 @@ class DatabaseGroup(BaseModel):
     ends_session: bool
 
 
-class DatabaseGroupsResponse(BaseModel):
+class DatabaseGroupsResponse(AppSchema):
     groups: list[DatabaseGroup]

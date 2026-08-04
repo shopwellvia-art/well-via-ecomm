@@ -25,7 +25,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
+from app.schemas.base import AppSchema
 
 #: Widest span of buckets one write may enqueue for recompute. A rate that took
 #: effect two years ago is legitimate; enqueuing 730 days × every cost-consuming
@@ -44,7 +45,7 @@ MAX_PAGE_SIZE = 500
 # ===========================================================================
 # Cost rules
 # ===========================================================================
-class CostRuleRead(BaseModel):
+class CostRuleRead(AppSchema):
     """One `analytics_cost_rules` row.
 
     `effective_to = null` means "still in force" — an open-ended rule, which is
@@ -71,7 +72,7 @@ class CostRuleRead(BaseModel):
     created_at: datetime
 
 
-class CostRuleListResponse(BaseModel):
+class CostRuleListResponse(AppSchema):
     """A page of rules, plus the vocabularies the form needs.
 
     The four constant lists ride along with the list response so the admin UI
@@ -88,7 +89,7 @@ class CostRuleListResponse(BaseModel):
     qualities: list[str]
 
 
-class _CostRuleFieldsMixin(BaseModel):
+class _CostRuleFieldsMixin(AppSchema):
     """Fields shared by create and supersede, so the two cannot drift apart."""
 
     value: Decimal = Field(
@@ -193,7 +194,7 @@ class CostRuleSupersedeRequest(_CostRuleFieldsMixin):
     """
 
 
-class CostRuleWriteResponse(BaseModel):
+class CostRuleWriteResponse(AppSchema):
     """201/200 body for a create or supersede.
 
     `recompute` is not decoration. A rate change that did not enqueue anything
@@ -230,7 +231,7 @@ class CostRuleWriteResponse(BaseModel):
 # ===========================================================================
 # Marketing spend
 # ===========================================================================
-class MarketingSpendRead(BaseModel):
+class MarketingSpendRead(AppSchema):
     """One `analytics_marketing_spend` row, as stored."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -252,7 +253,7 @@ class MarketingSpendRead(BaseModel):
     updated_at: datetime
 
 
-class MarketingSpendUpsert(BaseModel):
+class MarketingSpendUpsert(AppSchema):
     """Record what was spent on a channel in a period.
 
     Idempotent on `(grain, period_start, channel, campaign)`: submitting June/Meta
@@ -316,7 +317,7 @@ class MarketingSpendUpsert(BaseModel):
         return v.upper()
 
 
-class SpendDayAllocation(BaseModel):
+class SpendDayAllocation(AppSchema):
     """One store-local day's share of a spend row, for a daily view.
 
     `quality` is ALLOCATED for every day derived from a monthly lump, whatever
@@ -337,7 +338,7 @@ class SpendDayAllocation(BaseModel):
     spend_id: int
 
 
-class MarketingSpendListResponse(BaseModel):
+class MarketingSpendListResponse(AppSchema):
     """A page of spend rows, optionally with the daily allocation preview.
 
     `daily` is populated only when the caller asks for it, because computing it
@@ -360,7 +361,7 @@ class MarketingSpendListResponse(BaseModel):
     )
 
 
-class MarketingSpendWriteResponse(BaseModel):
+class MarketingSpendWriteResponse(AppSchema):
     """201/200 body for a spend upsert."""
 
     spend: MarketingSpendRead

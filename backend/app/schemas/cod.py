@@ -9,22 +9,23 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+from app.schemas.base import AppSchema
 
 
-class CodCheckItem(BaseModel):
+class CodCheckItem(AppSchema):
     product_id: int
     quantity: int = Field(gt=0)
 
 
-class CodCheckRequest(BaseModel):
+class CodCheckRequest(AppSchema):
     items: list[CodCheckItem] = Field(min_length=1)
     # Optional. Skipping the pincode means we can't run the carrier
     # serviceability gate — we treat it as "unknown" rather than refuse.
     destination_pincode: str | None = Field(default=None, min_length=3, max_length=10)
 
 
-class CodCheckResponse(BaseModel):
+class CodCheckResponse(AppSchema):
     available: bool
     # All failed gates, not just the first one — UI shows them as a list so
     # the customer sees every blocker at once (e.g. "Not available below

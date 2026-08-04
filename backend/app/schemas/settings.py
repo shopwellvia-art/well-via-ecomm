@@ -1,7 +1,8 @@
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import ConfigDict, EmailStr
+from app.schemas.base import AppSchema
 
 
-class SettingItem(BaseModel):
+class SettingItem(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     key: str
@@ -13,22 +14,22 @@ class SettingItem(BaseModel):
     is_secret: bool
 
 
-class SettingsListResponse(BaseModel):
+class SettingsListResponse(AppSchema):
     items: list[SettingItem]
 
 
-class SettingsUpdateRequest(BaseModel):
+class SettingsUpdateRequest(AppSchema):
     """Map of {key: new_value}. Unknown keys are ignored server-side. Passing
     the literal "***" value for a secret means "no change"."""
 
     updates: dict[str, str | None]
 
 
-class TestEmailRequest(BaseModel):
+class TestEmailRequest(AppSchema):
     to: EmailStr
 
 
-class TestSmsRequest(BaseModel):
+class TestSmsRequest(AppSchema):
     # Loose validation — Twilio accepts E.164 or pre-formatted numbers; we
     # don't try to second-guess.
     to: str
