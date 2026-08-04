@@ -8,7 +8,7 @@ import { buildOrganizationSchema, buildWebSiteSchema } from '@/lib/productSchema
 import WImage from '@/components/storefront/WImage';
 import { Stars } from '@/components/storefront/Icons';
 import { Heart, ShoppingCart } from "lucide-react";
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from "framer-motion";
 import { formatPrice } from '@/lib/utils';
 import { useStorefrontConfigWithDefaults } from '@/features/storefront-config/hooks.js';
@@ -252,6 +252,86 @@ function BestsellerCard({ product }) {
   );
 }
 
+/**
+ * AutoScrollRail — horizontal rail that advances one card every few seconds
+ * and loops back to the start after the last one.
+ *
+ * Holds still while the shopper is on it (hover, focused card) and for a
+ * grace period after any scroll input, so it never fights a browsing finger.
+ * Only runs while the rail is actually on screen, and sits out entirely under
+ * prefers-reduced-motion.
+ */
+const AUTO_SCROLL_MS = 3500;
+const RESUME_AFTER_MS = 5000;
+
+function AutoScrollRail({ className, children }) {
+  const railRef = useRef(null);
+  const reduce = useReducedMotion();
+
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail || reduce) return undefined;
+
+    let hovered = false;
+    let focused = false;
+    let visible = false;
+    let lastInput = 0;
+
+    const markInput = () => { lastInput = Date.now(); };
+    const onEnter = () => { hovered = true; };
+    const onLeave = () => { hovered = false; };
+    const onFocusIn = () => { focused = true; };
+    const onFocusOut = () => { focused = false; };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => { visible = entry.isIntersecting; },
+      { threshold: 0.4 },
+    );
+    observer.observe(rail);
+
+    rail.addEventListener('pointerenter', onEnter);
+    rail.addEventListener('pointerleave', onLeave);
+    rail.addEventListener('focusin', onFocusIn);
+    rail.addEventListener('focusout', onFocusOut);
+    rail.addEventListener('pointerdown', markInput);
+    rail.addEventListener('wheel', markInput, { passive: true });
+    rail.addEventListener('touchstart', markInput, { passive: true });
+    rail.addEventListener('touchmove', markInput, { passive: true });
+
+    const timer = setInterval(() => {
+      if (hovered || focused || !visible) return;
+      if (Date.now() - lastInput < RESUME_AFTER_MS) return;
+      const cards = rail.children;
+      if (cards.length < 2) return;
+      // Card width + flex gap, measured rather than hardcoded per breakpoint.
+      const step = cards[1].offsetLeft - cards[0].offsetLeft;
+      const atEnd =
+        rail.scrollLeft + rail.clientWidth >= rail.scrollWidth - step / 2;
+      if (atEnd) rail.scrollTo({ left: 0, behavior: 'smooth' });
+      else rail.scrollBy({ left: step, behavior: 'smooth' });
+    }, AUTO_SCROLL_MS);
+
+    return () => {
+      clearInterval(timer);
+      observer.disconnect();
+      rail.removeEventListener('pointerenter', onEnter);
+      rail.removeEventListener('pointerleave', onLeave);
+      rail.removeEventListener('focusin', onFocusIn);
+      rail.removeEventListener('focusout', onFocusOut);
+      rail.removeEventListener('pointerdown', markInput);
+      rail.removeEventListener('wheel', markInput);
+      rail.removeEventListener('touchstart', markInput);
+      rail.removeEventListener('touchmove', markInput);
+    };
+  }, [reduce]);
+
+  return (
+    <div ref={railRef} className={className}>
+      {children}
+    </div>
+  );
+}
+
 /* ── Page ────────────────────────────────────────────────────────────────── */
 
 export default function HomePage() {
@@ -272,7 +352,7 @@ useEffect(() => {
     isLoading: bestsellersLoading,
     isError: bestsellersError,
     refetch: refetchBestsellers,
-  } = useBestsellers(8);
+  } = useBestsellers(12);
   const bestsellers = bestsellersData ?? [];
 
   const { data: combosData } = useProducts({
@@ -363,11 +443,11 @@ useEffect(() => {
             <InlineError onRetry={refetchBestsellers} />
           ) : (
             /* Horizontal scroll on every breakpoint, with a visible slim thumb */
-            <div className="flex gap-3 md:gap-4 lg:gap-6 overflow-x-auto snap-x snap-mandatory -mx-5 px-5 md:mx-auto md:px-0 pb-4 max-w-[1080px] lg:max-w-[1280px] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
+            <AutoScrollRail className="flex gap-3 md:gap-4 lg:gap-6 overflow-x-auto snap-x snap-mandatory -mx-5 px-5 md:mx-auto md:px-0 pb-4 max-w-[1080px] lg:max-w-[1280px] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
               {bestsellers.map((p) => (
                 <BestsellerCard key={p.id} product={p} />
               ))}
-            </div>
+            </AutoScrollRail>
           )}
         </section>
       ),
