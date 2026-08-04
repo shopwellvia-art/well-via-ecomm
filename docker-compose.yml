@@ -27,6 +27,24 @@
 #  volumes) on the EC2 uses. Adding one would orphan those volumes.
 # =============================================================================
 
+# Public origin of the live store. Everything customer-facing derives from it.
+#
+# These live HERE, in git, rather than only in the host's backend/.env because
+# that file is untracked, is never written by the pipeline, and drifting back to
+# the localhost code defaults is not a cosmetic bug: the backend REFUSES every
+# prepaid checkout ("Online payment is temporarily unavailable") while
+# PAYMENT_RETURN_URL is dev-shaped in production. That is exactly what happened
+# on 2026-08-03 (payment captured, order stranded) and again on 2026-08-04.
+# Compose `environment:` overrides `env_file:`, so these win even if a stale
+# host .env still carries localhost values.
+#
+# Secrets (PAYMENT_RECONCILE_TOKEN, keys) deliberately stay in backend/.env.
+x-public-origin: &public-origin
+  PAYMENT_RETURN_URL: https://shopwellvia.in/payments/return
+  PAYMENT_WEBHOOK_URL: https://shopwellvia.in/api/v1/payments/webhook/razorpay
+  FRONTEND_URL: https://shopwellvia.in
+  CORS_ORIGINS: '["https://shopwellvia.in","https://www.shopwellvia.in"]'
+
 services:
   redis:
     image: redis:7-alpine
@@ -53,6 +71,7 @@ services:
     restart: always
     env_file: ./backend/.env
     environment:
+      <<: *public-origin
       # backend/.env.example defaults REDIS_URL to localhost for bare-metal dev;
       # inside compose the Redis service is reachable only by its service name.
       REDIS_URL: redis://redis:6379/0
@@ -96,6 +115,7 @@ services:
         condition: service_healthy
     env_file: ./backend/.env
     environment:
+      <<: *public-origin
       REDIS_URL: redis://redis:6379/0
       ANALYTICS_WORKER_ROLE: rollup
     # Exactly one replica. A Redis lease plus a DB status guard makes a second
@@ -132,6 +152,7 @@ services:
         condition: service_healthy
     env_file: ./backend/.env
     environment:
+      <<: *public-origin
       REDIS_URL: redis://redis:6379/0
       ANALYTICS_WORKER_ROLE: delivery
     deploy:

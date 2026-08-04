@@ -15,16 +15,21 @@ env facts the pipeline cannot fix; (b) is fixed in code on this branch.
 
 ## Phase 0 — before the push (owner: whoever holds EC2 SSH)
 
-1. **Verify/patch the EC2 `backend/.env`** (the deploy never touches it):
-   - `PAYMENT_RETURN_URL=https://<customer-facing origin>/payments/return`
-     (today that origin is `http://<EC2-IP>:8090` until TLS lands — see
-     DEPLOY.md §TLS. It must NEVER contain localhost/127.0.0.1.)
-   - `PAYMENT_RECONCILE_TOKEN=<mint fresh: openssl rand -hex 32>` — do NOT
+1. **Public-origin URLs are now pinned in `docker-compose.yml`** (the
+   `x-public-origin` anchor, applied to backend + both analytics workers), so
+   they no longer depend on the untracked host `.env`. The live origin is
+   **`https://shopwellvia.in`**. Compose `environment:` beats `env_file:`, so a
+   stale host `.env` carrying localhost values can no longer strand checkout.
+   If the domain ever changes, edit that anchor — not the host `.env`.
+   - Still host-only (secrets never go in git):
+     `PAYMENT_RECONCILE_TOKEN=<mint fresh: openssl rand -hex 32>` — do NOT
      reuse a token that appeared in any chat/log/local .env.
-   - Sanity: `FRONTEND_URL` should also be the customer-facing origin.
    - Check: after the deploy (phase 2), backend boot log contains **zero**
      `PAYMENT CONFIG:` CRITICAL lines. Code refuses gateway checkout while
      the return URL is dev-shaped, so a miss here is loud, not silent.
+   - 2026-08-04: this exact miss recurred — prepaid checkout was refused
+     sitewide because the host `.env` had no `PAYMENT_RETURN_URL`. Pinning it
+     in compose is the fix for the recurrence, not just the symptom.
 2. **Remote-DB schema pre-check** (deploys never migrate — DEPLOY.md §6):
    - `SHOW COLUMNS FROM categories LIKE 'parent_id'` — if absent, apply
      `backend/scripts/sql/2026-07-28_categories_parent_id.sql` first.
