@@ -108,16 +108,20 @@ class ProductService:
         )
 
     def bestsellers(self, *, limit: int = 8) -> list[Product]:
-        """Top sellers, with a graceful fallback for fresh catalogs.
+        """Top sellers, topped up with newest products when sales are sparse.
 
-        On a brand-new store with zero qualifying orders, returning an empty
-        list would make the homepage section disappear. Fall back to the most
-        recently added products instead, so the section is never empty.
+        On a young store only a few products have qualifying orders, and
+        ranking alone would render a near-empty homepage rail (a single card
+        when only one product has ever sold). Real bestsellers keep their
+        sales order at the front; the remaining slots fill with the most
+        recently added products so the rail always shows the catalog.
         """
         items = self.repo.bestsellers(limit=limit)
-        if items:
+        if len(items) >= limit:
             return items
-        return self.repo.newest(limit=limit)
+        ranked_ids = {p.id for p in items}
+        fill = [p for p in self.repo.newest(limit=limit) if p.id not in ranked_ids]
+        return items + fill[: limit - len(items)]
 
     def co_purchased(self, product_id: int, *, limit: int = 12) -> list[Product]:
         """Items bought in the same orders as this one. Falls back to related
