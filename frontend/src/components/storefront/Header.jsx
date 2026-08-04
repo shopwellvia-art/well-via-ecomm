@@ -621,9 +621,20 @@ export default function Header() {
                 </form>
               </div>
 
+              {/* Scrollable body: primary nav AND the account block share ONE
+                  scroll region.
+                  Previously <nav> was the only flex-1 overflow-y-auto element
+                  while the account block sat below it as shrink-0. With an
+                  avatar plus up to 7 account rows pinned, the nav was starved to
+                  a ~165px window for ~192px of links, so the last item ("About")
+                  was clipped behind a stubby nested scrollbar and looked broken.
+                  Scrolling the whole body — the way the Amazon/Flipkart drawers
+                  behave — means no menu item can ever be hidden by a taller
+                  account section, at any viewport height. */}
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
               {/* Nav links */}
               <nav
-                className="flex flex-col px-5 py-4 gap-1 overflow-y-auto flex-1"
+                className="flex flex-col px-5 py-4 gap-1"
                 aria-label="Mobile navigation"
               >
                 {navItems.map((n) => {
@@ -700,8 +711,9 @@ export default function Header() {
                 })}
               </nav>
 
-              {/* Account / sign-in section */}
-              <div className="border-t border-wline px-5 py-4 shrink-0">
+              {/* Account / sign-in section — inside the shared scroller above,
+                  so it no longer competes with the nav for vertical space. */}
+              <div className="border-t border-wline px-5 py-4">
                 {user ? (
                   <div>
                     {/* Avatar + name */}
@@ -759,6 +771,7 @@ export default function Header() {
                     Sign In
                   </Link>
                 )}
+              </div>
               </div>
             </motion.div>
           </>
