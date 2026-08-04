@@ -8,7 +8,7 @@ import { buildOrganizationSchema, buildWebSiteSchema } from '@/lib/productSchema
 import WImage from '@/components/storefront/WImage';
 import { Stars } from '@/components/storefront/Icons';
 import { Heart, ShoppingCart } from "lucide-react";
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from "framer-motion";
 import { formatPrice } from '@/lib/utils';
 import { useStorefrontConfigWithDefaults } from '@/features/storefront-config/hooks.js';
@@ -239,6 +239,88 @@ function BestsellerCard({ product }) {
   );
 }
 
+/**
+ * AutoScrollRail — horizontal rail that advances one card every few seconds
+ * and loops back to the start after the last one.
+ *
+ * Holds still while the shopper is on it (hover, focused card) and for a
+ * grace period after any scroll input, so it never fights a browsing finger.
+ * Only runs while the rail is actually on screen, and sits out entirely under
+ * prefers-reduced-motion.
+ */
+const AUTO_SCROLL_MS = 3500;
+const RESUME_AFTER_MS = 5000;
+
+function AutoScrollRail({ className, children }) {
+  const railRef = useRef(null);
+  const reduce = useReducedMotion();
+
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail || reduce) return undefined;
+
+    let hovered = false;
+    let focused = false;
+    let visible = false;
+    let lastInput = 0;
+
+    const markInput = () => { lastInput = Date.now(); };
+    const onEnter = () => { hovered = true; };
+    const onLeave = () => { hovered = false; };
+    const onFocusIn = () => { focused = true; };
+    const onFocusOut = () => { focused = false; };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => { visible = entry.isIntersecting; },
+      { threshold: 0.4 },
+    );
+    observer.observe(rail);
+
+    rail.addEventListener('pointerenter', onEnter);
+    rail.addEventListener('pointerleave', onLeave);
+    rail.addEventListener('focusin', onFocusIn);
+    rail.addEventListener('focusout', onFocusOut);
+    rail.addEventListener('pointerdown', markInput);
+    rail.addEventListener('wheel', markInput, { passive: true });
+    rail.addEventListener('touchstart', markInput, { passive: true });
+    rail.addEventListener('touchmove', markInput, { passive: true });
+
+    const timer = setInterval(() => {
+      if (hovered || focused || !visible) return;
+      if (Date.now() - lastInput < RESUME_AFTER_MS) return;
+      const cards = rail.children;
+      if (cards.length < 2) return;
+      // Card width + flex gap, measured rather than hardcoded per breakpoint.
+      const step = cards[1].offsetLeft - cards[0].offsetLeft;
+      const atEnd =
+        rail.scrollLeft + rail.clientWidth >= rail.scrollWidth - step / 2;
+      if (atEnd) rail.scrollTo({ left: 0, behavior: 'smooth' });
+      else rail.scrollBy({ left: step, behavior: 'smooth' });
+    }, AUTO_SCROLL_MS);
+
+    return () => {
+      clearInterval(timer);
+      observer.disconnect();
+      rail.removeEventListener('pointerenter', onEnter);
+      rail.removeEventListener('pointerleave', onLeave);
+      rail.removeEventListener('focusin', onFocusIn);
+      rail.removeEventListener('focusout', onFocusOut);
+      rail.removeEventListener('pointerdown', markInput);
+      rail.removeEventListener('wheel', markInput);
+      rail.removeEventListener('touchstart', markInput);
+      rail.removeEventListener('touchmove', markInput);
+    };
+  }, [reduce]);
+
+  return (
+    <div ref={railRef} className={className}>
+      {children}
+    </div>
+  );
+}
+
+/* ── Page ────────────────────────────────────────────────────────────────── */
+
 export default function HomePage() {
   const reduce = useReducedMotion();
   const [reviewIndex, setReviewIndex] = useState(0);
@@ -256,7 +338,7 @@ export default function HomePage() {
     isLoading: bestsellersLoading,
     isError: bestsellersError,
     refetch: refetchBestsellers,
-  } = useBestsellers(8);
+  } = useBestsellers(12);
   const bestsellers = bestsellersData ?? [];
 
   const { data: combosData } = useProducts({
@@ -336,11 +418,12 @@ export default function HomePage() {
           ) : bestsellersError ? (
             <InlineError onRetry={refetchBestsellers} />
           ) : (
-            <div className="flex gap-3 md:gap-4 lg:gap-6 overflow-x-auto snap-x snap-mandatory -mx-5 px-5 md:mx-auto md:px-0 pb-4 max-w-[1080px] lg:max-w-[1280px] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
+            /* Horizontal scroll on every breakpoint, with a visible slim thumb */
+            <AutoScrollRail className="flex gap-3 md:gap-4 lg:gap-6 overflow-x-auto snap-x snap-mandatory -mx-5 px-5 md:mx-auto md:px-0 pb-4 max-w-[1080px] lg:max-w-[1280px] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
               {bestsellers.map((p) => (
                 <BestsellerCard key={p.id} product={p} />
               ))}
-            </div>
+            </AutoScrollRail>
           )}
         </section>
       ),
@@ -406,59 +489,57 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10 lg:gap-14 max-w-[1140px] mx-auto">
-          {ROUTINES.map((r, i) => {
-            const right = r.align === 'right';
-            const combo = combos[i] ?? null;
-            const target = combo ? `/products/${combo.id}` : '/categories';
-            return (
-              <div
-                key={r.key}
-                className={`flex items-center gap-3 md:gap-6 ${right ? 'flex-row-reverse' : ''}`}
-              >
-                <div className={`shrink-0 max-w-[42%] md:max-w-[190px] ${right ? 'text-right' : ''}`}>
-                  <div className="font-wserif text-[11px] sm:text-[13px] md:text-[15px] text-wink/70 underline underline-offset-4 mb-1.5 md:mb-2.5">
-                    {r.label}
-                  </div>
-                  <div className="font-wserif font-semibold text-[15px] sm:text-[19px] md:text-[24px] leading-[1.2] text-wink mb-1 md:mb-1.5">
-                    {r.lines.map((l, li) => (
-                      <span key={li}>
-                        {li === r.lines.length - 1 ? (
-                          <span className="text-wgreen">{l}</span>
-                        ) : (
-                          l
-                        )}
-                        {li < r.lines.length - 1 && <br />}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="text-[10px] sm:text-[12px] md:text-[13.5px] text-wmuted m-0 mb-2 md:mb-4">{r.sub}</p>
-                  <Link
-                    to={target}
-                    className="inline-block border border-[#08112C]/60 text-[#08112C] no-underline rounded-[10px] px-3 py-1.5 md:px-4 md:py-2 text-[10px] sm:text-[12px] md:text-[13px] tracking-wide hover:bg-[#010E37] hover:text-white transition-colors whitespace-nowrap"
-                  >
-                    {right ? "← See What's Inside" : "See What's Inside →"}
-                  </Link>
-                </div>
+     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10 lg:gap-14 max-w-[1140px] mx-auto">
+  {ROUTINES.map((r, i) => {
+    const right = r.align === 'right';
+    const combo = combos[i] ?? null;
+    const target = combo ? `/products/${combo.id}` : '/categories';
+    return (
+      <div
+        key={r.key}
+        className={`flex items-center gap-3 md:gap-6 ${right ? 'flex-row-reverse' : ''}`}
+      >
+        {/* Caption block */}
+        <div className={`shrink-0 max-w-[42%] md:max-w-[190px] ${right ? 'text-right' : ''}`}>
+          <div className="font-wserif text-[11px] sm:text-[13px] md:text-[15px] text-wink/70 underline underline-offset-4 mb-1.5 md:mb-2.5">
+            {r.label}
+          </div>
+          <div className="font-wserif font-semibold text-[15px] sm:text-[19px] md:text-[24px] leading-[1.2] text-wink mb-1 md:mb-1.5">
+            {r.lines.map((l, li) => (
+              <span key={li}>
+                {li === r.lines.length - 1 ? (
+                  <span className="text-wgreen">{l}</span>
+                ) : (
+                  l
+                )}
+                {li < r.lines.length - 1 && <br />}
+              </span>
+            ))}
+          </div>
+          <p className="text-[10px] sm:text-[12px] md:text-[13.5px] text-wmuted m-0 mb-2 md:mb-4">{r.sub}</p>
+          <Link
+            to={target}
+            className="inline-block border border-[#08112C]/60 text-[#08112C] no-underline rounded-[10px] px-3 py-1.5 md:px-4 md:py-2 text-[10px] sm:text-[12px] md:text-[13px] tracking-wide hover:bg-[#010E37] hover:text-white transition-colors whitespace-nowrap"
+          >
+            {right ? "← See What's Inside" : "See What's Inside →"}
+          </Link>
+        </div>
 
-                <div className={`flex-1 min-w-0 ${i === 1 ? 'md:-mt-10' : ''}`}>
-                  <Link to={target} className="block" aria-label={combo?.name ?? r.label}>
-                    <img
-                      src={`/routine-${r.key}.png`}
-                      alt={combo?.name ?? `${r.label} gummies bundle`}
-                      loading="lazy"
-                      className="w-full max-w-[420px] mx-auto h-auto rounded-xl2"
-                    />
-                  </Link>
-                  {combo && (
-                    <div className="mt-2 text-center font-wserif text-[15px] text-wink">
-                      {combo.name}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+        {/* Bundle visual */}
+        <div className="flex-1 min-w-0">
+          <Link to={target} className="block" aria-label={combo?.name ?? r.label}>
+            <img
+              src={`/routine-${r.key}.png`}
+              alt={combo?.name ?? `${r.label} gummies bundle`}
+              loading="lazy"
+              className="w-full max-w-[420px] mx-auto h-auto rounded-xl2"
+            />
+          </Link>
+          {combo && (
+            <div className="mt-2 text-center font-wserif text-[15px] text-wink">
+              {combo.name}
+            </div>
+          )}
         </div>
       </section>
     ),
