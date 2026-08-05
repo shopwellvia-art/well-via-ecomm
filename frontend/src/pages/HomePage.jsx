@@ -541,9 +541,14 @@ export default function HomePage() {
             </div>
           )}
         </div>
+      </div>
+    );
+  })}
+</div>
       </section>
     ),
 
+    /* 6. Wellness, without the confusion — static blog cards */
     blog: (title) => (
       <section className="px-5 sm:px-10 lg:px-16 py-12 lg:py-[84px]">
         <div className="grid grid-cols-2 gap-4 md:gap-8 items-start max-w-[1140px] mx-auto mb-4 lg:mb-2">
