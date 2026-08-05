@@ -1,11 +1,74 @@
 from decimal import Decimal
 
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.orm import aliased, selectinload
 
 from app.models.order import Order, OrderItem, OrderStatus
-from app.models.product import Product
-from app.repositories.base import BaseRepository
+from app.models.product import Category, Product
+from app.repositories.base import LIKE_ESCAPE, BaseRepository, like_pattern
+
+# Columns a free-text query is matched against, widest-reaching last. Ordered:
+# this same order drives the relevance ranking below.
+#
+# JSON columns (`benefits`, `highlights`) are deliberately NOT searched. MySQL
+# would coerce the document to text for LIKE, which matches key names as
+# readily as values ("title" hits every row) and cannot use an index.
+# `description` already carries the same wording in prose.
+def _match_columns() -> tuple:
+    return (
+        Product.name,
+        Product.sku,
+        Product.brand,
+        Product.flavour,
+        Product.badge,
+        Product.short_description,
+        Product.description,
+    )
+
+
+def product_search_predicate(q: str):
+    """OR-ed match of `q` across the product text columns and its category name.
+
+    Category name is reached with a scalar subquery rather than a JOIN so the
+    caller's `select(Product)` and its `count()` twin stay structurally
+    identical — a JOIN would have to be added to both, and an outer one at that
+    (`category_id` is nullable). This is what makes a search for a goal word
+    like "sleep" find the products filed under the Sleep category even when the
+    word appears nowhere in their own copy.
+    """
+    pattern = like_pattern(q)
+    clauses = [col.ilike(pattern, escape=LIKE_ESCAPE) for col in _match_columns()]
+    clauses.append(
+        Product.category_id.in_(
+            select(Category.id).where(Category.name.ilike(pattern, escape=LIKE_ESCAPE))
+        )
+    )
+    return or_(*clauses)
+
+
+def product_relevance_order(q: str):
+    """Rank hits so the closest match to what was typed comes first.
+
+    Buckets, best to worst: exact name, name prefix, name contains, then each
+    remaining column in `_match_columns` order, then a category-only match.
+    In-stock products win ties — a shopper cannot buy the sold-out one, so
+    surfacing it above an available match would be actively unhelpful.
+    """
+    pattern = like_pattern(q)
+    prefix = like_pattern(q, prefix_only=True)
+    ranked: list = [
+        (func.lower(Product.name) == q.strip().lower(), 0),
+        (Product.name.ilike(prefix, escape=LIKE_ESCAPE), 1),
+    ]
+    ranked += [
+        (col.ilike(pattern, escape=LIKE_ESCAPE), i + 2)
+        for i, col in enumerate(_match_columns())
+    ]
+    return (
+        case(*ranked, else_=len(ranked) + 2),
+        case((Product.stock > 0, 0), else_=1),
+    )
+
 
 # Orders only count toward bestseller rank once they're confirmed paid. PENDING
 # is a cart-abandonment risk; CANCELLED/REFUNDED clearly shouldn't count.
@@ -57,8 +120,9 @@ class ProductRepository(BaseRepository[Product]):
         limit: int = 20,
     ) -> tuple[list[Product], int]:
         conditions = []
+        q = q.strip() if q else None
         if q:
-            conditions.append(Product.name.ilike(f"%{q}%"))
+            conditions.append(product_search_predicate(q))
         if category_id is not None:
             conditions.append(Product.category_id == category_id)
         if category_ids:
@@ -89,6 +153,13 @@ class ProductRepository(BaseRepository[Product]):
             count_stmt = count_stmt.where(*conditions)
 
         order_by = self._SORTS.get(sort_by, self._SORTS["newest"])
+        # A free-text search ranks by relevance; the requested sort becomes the
+        # tiebreak within a relevance bucket. Skipped for the explicit
+        # price/rating sorts, where the shopper has asked for a specific order
+        # and relevance ranking would appear to ignore them. "newest" is the
+        # default the storefront sends when nothing is chosen, so it yields.
+        if q and sort_by not in ("price_asc", "price_desc", "rating"):
+            order_by = (*product_relevance_order(q), *order_by)
         total = self.db.execute(count_stmt).scalar_one()
         items = list(
             self.db.execute(stmt.order_by(*order_by).offset(offset).limit(limit))

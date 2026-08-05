@@ -36,6 +36,7 @@ from app.api.v1.endpoints import (
     returns,
     reviews,
     roles,
+    search,
     settings,
     shipping,
     site_pages,
@@ -49,6 +50,10 @@ api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(categories.router, prefix="/categories", tags=["categories"])
 api_router.include_router(products.router, prefix="/products", tags=["products"])
+# Global search: GET /search?q=… — products AND categories in one response, for
+# the header's suggestions dropdown. Its own prefix rather than /products/search
+# because it is not products-only.
+api_router.include_router(search.router, prefix="/search", tags=["search"])
 api_router.include_router(hero_slides.router, prefix="/hero-slides", tags=["hero-slides"])
 api_router.include_router(cart.router, prefix="/cart", tags=["cart"])
 api_router.include_router(orders.router, prefix="/orders", tags=["orders"])

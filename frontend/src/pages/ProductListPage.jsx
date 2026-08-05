@@ -132,12 +132,34 @@ function toApiParams(f, goalCategoryIds = []) {
   };
 }
 
+/** The text columns GET /search and GET /products?q= match server-side.
+ *
+ * Kept in step with `_match_columns()` in
+ * `backend/app/repositories/product_repository.py`. The local filter has to
+ * agree with the server's notion of a match: when it only checked `name`, a
+ * search for "sleep" that the API answered by matching a description or a
+ * category would have every one of those hits thrown away again here, and the
+ * bestsellers/new-arrivals views would show "no results" for a term that
+ * demonstrably has some. `category_name` is not on the product payload, so a
+ * category-only match still cannot be reproduced client-side — an accepted gap,
+ * and the reason this list errs toward matching rather than filtering. */
+const Q_FIELDS = ['name', 'sku', 'brand', 'flavour', 'badge', 'short_description', 'description'];
+
+export function matchesQuery(product, q) {
+  const term = q.trim().toLowerCase();
+  if (!term) return true;
+  return Q_FIELDS.some((field) => {
+    const value = product[field];
+    return typeof value === 'string' && value.toLowerCase().includes(term);
+  });
+}
+
 /** Same predicates applied client-side (bestsellers mode fetches a plain list).
  * Goals compare via the same slug→category-id resolution as toApiParams. */
 function applyFiltersLocally(items, f, goalCategoryIds = []) {
   const categoryIds = [...new Set([...f.categoryIds, ...goalCategoryIds])];
   let out = items.filter((p) => {
-    if (f.q && !p.name.toLowerCase().includes(f.q.toLowerCase())) return false;
+    if (f.q && !matchesQuery(p, f.q)) return false;
     if (categoryIds.length && !categoryIds.includes(p.category_id)) return false;
     if (f.flavours.length && !f.flavours.includes(p.flavour)) return false;
     if (f.minPrice != null && Number(p.price) < f.minPrice) return false;
