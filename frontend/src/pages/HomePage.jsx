@@ -21,7 +21,7 @@ import {
 } from '@/features/wishlist/hooks';
 import { toast } from '@/components/ui/Toaster.jsx';
 
-/* ── Static content (no blog/review backends exist — copy from the mockup) ── */
+/* ── Static content ── */
 
 const BLOG_POSTS = [
   {
@@ -40,37 +40,41 @@ const BLOG_POSTS = [
     image: '/home/blog-habits.jpg',
   },
 ];
+
 const REVIEWS = [
   {
-    quote:
-      "Finally, a wellness routine I actually stick to. Tastes great and fits effortlessly into my day.",
+    quote: "Finally, a wellness routine I actually stick to. Tastes great and fits effortlessly into my day.",
     name: "Priya S.",
     stars: 5,
   },
   {
-    quote:
-      "The gummies are delicious and I've actually been consistent for the first time.",
-    name: "Ananya R.",
-    stars: 5,
-  },
-  {
-    quote:
-      "Loved the packaging, the taste, and the results. Highly recommend!",
+    quote: "Loved the packaging, the taste, and the results. Highly recommend!",
     name: "Rohan M.",
     stars: 4,
   },
   {
-    quote:
-      "My sleep quality improved within a couple of weeks. Amazing experience.",
-    name: "Sneha K.",
+    quote: "The gummies are delicious and I've actually been consistent for the first time.",
+    name: "Ananya R.",
     stars: 5,
   },
   {
-    quote:
-      "Simple, effective, and something I genuinely look forward to every day.",
+    quote: "My sleep quality improved within a couple of weeks. Amazing experience.",
+    name: "Vatsal G.",
+    stars: 5,
+  },
+  {
+    quote: "Simple, effective, and something I genuinely look forward to every day.",
     name: "Aarav P.",
     stars: 5,
   },
+];
+
+const AVATARS = [
+  { id: 0, name: "Priya S.", image: "/female1.png" },
+  { id: 1, name: "Rohan M.", image: "/male1.png" },
+  { id: 2, name: "Ananya R.", image: "/femalee-2.png" },
+  { id: 3, name: "Vatsal G.", image: "/male2.png" },
+  { id: 4, name: "Aarav P.", image: "/male3.png" },
 ];
 
 const ROUTINES = [
@@ -92,8 +96,6 @@ const ROUTINES = [
   },
 ];
 
-/* ── Small shared pieces ─────────────────────────────────────────────────── */
-
 function RailSkeleton({ count = 4 }) {
   return (
     <div className="flex gap-[18px] overflow-hidden">
@@ -113,7 +115,7 @@ function RailSkeleton({ count = 4 }) {
     </div>
   );
 }
-//
+
 function InlineError({ onRetry }) {
   return (
     <div className="py-16 text-center">
@@ -130,11 +132,6 @@ function InlineError({ onRetry }) {
   );
 }
 
-/**
- * BestsellerCard — homepage rail card over a real API product.
- * Same wiring as ProductCard (cart, wishlist, guest behaviour) with the
- * homepage's own card design.
- */
 function BestsellerCard({ product }) {
   const addToCart = useAddToCart();
   const inWishlist = useIsInWishlist(product.id);
@@ -145,14 +142,12 @@ function BestsellerCard({ product }) {
   const location = useLocation();
 
   const { id, name, price, compare_at_price, image_url, stock } = product;
-  const isDiscounted =
-    compare_at_price != null && Number(compare_at_price) > Number(price);
+  const isDiscounted = compare_at_price != null && Number(compare_at_price) > Number(price);
   const outOfStock = stock <= 0;
 
   const handleWishlist = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    // Wishlist is server-only by design — guests are sent to sign in.
     if (!isSignedIn) {
       navigate(`/login?next=${encodeURIComponent(location.pathname + location.search)}`);
       return;
@@ -183,14 +178,8 @@ function BestsellerCard({ product }) {
     );
   };
 
-  /* Card chrome is Kavya's design from the kavya branch (bordered tile, tinted
-     image box, full-bleed dark CTA with a cart icon). Her version rendered a
-     hardcoded DEMO_PRODUCTS array and its buttons were stubs
-     (`console.log("Add to cart")`, a <Link to="/wishlist">), so only the
-     styling was taken — the behaviour below is the real wiring. */
   return (
     <div className="shrink-0 w-[60%] sm:w-[35%] md:w-[260px] lg:w-[280px] snap-start border border-[#EBE8E0] bg-[#FAF9F6] rounded-xl shadow-[0_2px_6px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col">
-      {/* Product image box */}
       <div className="relative aspect-[4/3] md:aspect-[16/9] w-full bg-[#F3F2EE] flex items-center justify-center p-2.5">
         <Link to={`/products/${id}`} className="block w-full h-full">
           <WImage
@@ -200,7 +189,6 @@ function BestsellerCard({ product }) {
           />
         </Link>
 
-        {/* Wishlist — a real mutation, with the guest redirect */}
         <button
           onClick={handleWishlist}
           aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
@@ -212,7 +200,6 @@ function BestsellerCard({ product }) {
         </button>
       </div>
 
-      {/* Card body */}
       <div className="flex-grow flex flex-col justify-between pt-2.5 lg:pt-2">
         <div className="text-left px-3 pb-2 lg:px-4 lg:pb-2">
           <Link to={`/products/${id}`} className="no-underline">
@@ -338,15 +325,14 @@ export default function HomePage() {
   const reduce = useReducedMotion();
   const [reviewIndex, setReviewIndex] = useState(0);
 
-useEffect(() => {
-  const interval = setInterval(() => {
-    setReviewIndex((prev) => (prev + 1) % REVIEWS.length);
-  }, 5000);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setReviewIndex((prev) => (prev + 1) % REVIEWS.length);
+    }, 5000);
 
-  return () => clearInterval(interval);
-}, []);
+    return () => clearInterval(interval);
+  }, []);
 
-  /* Real data */
   const {
     data: bestsellersData,
     isLoading: bestsellersLoading,
@@ -361,8 +347,6 @@ useEffect(() => {
   });
   const combos = combosData?.items ?? [];
 
-  /* Admin-managed section order/visibility. A non-empty cfg title overrides a
-     section's heading (hero copy comes from hero-slides instead). */
   const { config } = useStorefrontConfigWithDefaults();
   const sections = (config.homepage_sections ?? []).filter(
     (s) => s.visible !== false,
@@ -370,50 +354,44 @@ useEffect(() => {
   const whyWeExistVisible = sections.some((s) => s.key === 'why-we-exist');
 
   const sectionRenderers = {
-    /* 1. Hero */
     hero: () => <HeroSection showWhyButton={whyWeExistVisible} />,
 
-    /* 2. Why we Exist — spilled-gummies visual left, right-aligned copy */
     'why-we-exist': (title) => (
       <section
-  id="why-we-exist"
-  className="grid grid-cols-[1.7fr_1fr] md:grid-cols-[1.2fr_1fr] gap-2 sm:gap-6 lg:gap-12 items-center md:items-start pl-0 pr-3 sm:pr-10 lg:pr-16 py-6 lg:py-[40px]"
->
-  <div className="flex flex-col items-start w-full">
-    {/* Small gummy accent that overlaps the pouch shot below it */}
-    <img
-      src="/gummy3.png"
-      alt=""
-      aria-hidden="true"
-      className="w-[105px] sm:w-[130px] md:w-[210px] lg:w-[250px] -mb-12 md:-mb-28 lg:-mb-32 ml-2 sm:ml-16 md:ml-20 lg:ml-24 relative z-10"
-    />
+        id="why-we-exist"
+        className="grid grid-cols-[1.7fr_1fr] md:grid-cols-[1.2fr_1fr] gap-2 sm:gap-6 lg:gap-12 items-center md:items-start pl-0 pr-3 sm:pr-10 lg:pr-16 py-6 lg:py-[40px]"
+      >
+        <div className="flex flex-col items-start w-full">
+          <img
+            src="/gummy3.png"
+            alt=""
+            aria-hidden="true"
+            className="w-[105px] sm:w-[130px] md:w-[210px] lg:w-[250px] -mb-12 md:-mb-28 lg:-mb-32 ml-2 sm:ml-16 md:ml-20 lg:ml-24 relative z-10"
+          />
+          <img
+            src="/homepage2.png"
+            alt="Wellvia Immunity gummies spilling from the pouch"
+            loading="lazy"
+            className="block w-[115%] max-w-none sm:w-full sm:max-w-[440px] md:w-[110%] md:max-w-[620px] lg:max-w-[720px] h-auto rounded-r-xl2 md:rounded-r-2xl -ml-[7.5%] sm:ml-0"
+          />
+        </div>
 
-    {/* Tilted pouch with berry spill — bleeds off the left edge on mobile */}
-    <img
-      src="/homepage2.png"
-      alt="Wellvia Immunity gummies spilling from the pouch"
-      loading="lazy"
-      className="block w-[115%] max-w-none sm:w-full sm:max-w-[440px] md:w-[110%] md:max-w-[620px] lg:max-w-[720px] h-auto rounded-r-xl2 md:rounded-r-2xl -ml-[7.5%] sm:ml-0"
-    />
-  </div>
-
-  <div className="text-right pl-0 sm:pl-6 lg:pl-12 md:mt-24 lg:mt-36">
-    <h2 className="font-cormorant font-semibold text-[24px] sm:text-[28px] md:text-[clamp(32px,3.5vw,48px)] text-[#08112C] m-0 mb-1.5 md:mb-5 lg:mb-12">
-      {title || 'Why we Exist?'}
-    </h2>
-    <p className="font-cormorant font-semibold text-[16px] sm:text-[20px] md:text-[clamp(24px,2.5vw,34px)] text-wink m-0 mb-1 md:mb-4 lg:mb-8 whitespace-nowrap">
-      It started with one belief.
-    </p>
-    <p className="font-cormorant text-[14px] sm:text-[16px] md:text-[clamp(20px,2vw,28px)] leading-[1.3] md:leading-[1.55] text-wink/85 m-0 max-w-[280px] xs:max-w-[320px] sm:max-w-full md:max-w-[580px] ml-auto">
-      Taking care of your health shouldn&apos;t feel like a chore. That&apos;s
-      why we created gummies that are enjoyable to take, thoughtfully
-      formulated, and made to fit effortlessly into your day.
-    </p>
-  </div>
-</section>
+        <div className="text-right pl-0 sm:pl-6 lg:pl-12 md:mt-24 lg:mt-36">
+          <h2 className="font-cormorant font-semibold text-[24px] sm:text-[28px] md:text-[clamp(32px,3.5vw,48px)] text-[#08112C] m-0 mb-1.5 md:mb-5 lg:mb-12">
+            {title || 'Why we Exist?'}
+          </h2>
+          <p className="font-cormorant font-semibold text-[16px] sm:text-[20px] md:text-[clamp(24px,2.5vw,34px)] text-wink m-0 mb-1 md:mb-4 lg:mb-8 whitespace-nowrap">
+            It started with one belief.
+          </p>
+          <p className="font-cormorant text-[14px] sm:text-[16px] md:text-[clamp(20px,2vw,28px)] leading-[1.3] md:leading-[1.55] text-wink/85 m-0 max-w-[280px] xs:max-w-[320px] sm:max-w-full md:max-w-[580px] ml-auto">
+            Taking care of your health shouldn&apos;t feel like a chore. That&apos;s
+            why we created gummies that are enjoyable to take, thoughtfully
+            formulated, and made to fit effortlessly into your day.
+          </p>
+        </div>
+      </section>
     ),
 
-    /* 3. Product rail — bestsellers (hidden entirely when the API returns none) */
     'bestsellers-rail': (title) =>
       (bestsellersLoading || bestsellersError || bestsellers.length > 0) && (
         <section className="px-5 sm:px-10 lg:px-16 py-8 lg:pt-0 lg:pb-[48px] lg:-mt-44">
@@ -427,8 +405,6 @@ useEffect(() => {
                 </>
               )}
             </h2>
-
-            {/* Floating gummy accent */}
             <img
               src="/gummy2.png"
               alt=""
@@ -452,54 +428,56 @@ useEffect(() => {
         </section>
       ),
 
-    /* 4. New Launches — pale-green band (frontend-3) */
     'new-launches': (title) => (
       <section className="px-5 sm:px-10 lg:px-16 py-12 lg:py-[76px]">
-        <div className="text-center mb-6 md:mb-10">
-          <h2 className="font-wserif font-semibold text-[26px] sm:text-[32px] md:text-[clamp(30px,3.6vw,46px)] text-wink m-0 mb-3 md:mb-5">
-            {title || 'New Launches'}
-          </h2>
-          <Link
-            to="/new-arrivals"
-            className="hidden md:inline-block bg-[#08112C] text-white no-underline rounded-full px-8 py-[11px] font-wserif text-[16px] tracking-wide hover:bg-[#010E37] transition-colors"
-          >
-            Explore All
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-4 md:gap-10 items-center max-w-[1100px] mx-auto">
-          {/* Limited-collection trio — brand shot from the design file */}
-          <div className="order-2 md:order-1 flex items-center justify-center">
-            <img
-              src="/home/launch-trio.jpg"
-              alt="Core Omega, Beauty Boost and Sleep gummies — the limited collection"
-              loading="lazy"
-              className="w-full max-w-[620px] h-auto rounded-xl2"
-            />
+        <div className="max-w-[1100px] mx-auto flex flex-col items-center">
+          <div className="flex flex-col items-center justify-center mb-8 md:mb-12 text-center w-full max-w-[600px]">
+            <h2 className="font-wserif text-[24px] sm:text-[32px] md:text-[clamp(32px,3.5vw,48px)] text-wink/85 m-0 mb-3 md:mb-4 leading-tight">
+              {title || 'New Launches'}
+            </h2>
+            <Link
+              to="/products"
+              className="hidden md:inline-flex items-center gap-1.5 md:gap-2 bg-[#08112C] text-white rounded-full px-5 py-2 md:px-7 md:py-2.5 text-[13px] md:text-[16px] font-wserif hover:opacity-90 transition-opacity"
+            >
+              Explore all
+              <span className="text-[13px] md:text-[16px]">↗</span>
+            </Link>
           </div>
 
-          {/* Limited collection copy */}
-        {/* Limited collection copy — text + button in a row on mobile */}
-    <div className="order-1 md:order-2 flex flex-row items-center justify-between gap-3 md:block md:text-left">
-      <h3 className="font-wserif font-semibold text-[16px] sm:text-[20px] md:text-[clamp(26px,2.8vw,38px)] leading-[1.15] text-wgreen-deep m-0 md:mb-7 max-w-[60%] md:max-w-none">
-        The Wellness Gummy
-        <br className="hidden md:block" />
-        {' '}Limited Collection
-      </h3>
-      <Link
-        to="/new-arrivals"
-        className="shrink-0 inline-block bg-transparent border border-[#08112C] text-[#08112C] no-underline rounded-[10px] md:rounded-[12px] px-4 py-2 md:px-10 md:py-3.5 font-wserif text-[13px] md:text-[18px] tracking-wide hover:bg-[#010E37] hover:text-white transition-colors whitespace-nowrap"
-      >
-        Shop Now!
-      </Link>
-    </div>
-  </div>
-</section>
+          <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 lg:gap-16 items-center justify-items-center">
+            <div className="order-2 md:order-1 flex items-center justify-center relative isolate w-full">
+              <img
+                src="/launches-bg.png"
+                alt=""
+                aria-hidden="true"
+                className="absolute z-0 w-[110%] max-w-none h-auto top-[78%] left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-80 md:w-[150%] md:left-[48%] md:origin-center"
+              />
+              <img
+                src="/launches.png"
+                alt="Core Omega, Beauty Boost and Sleep gummies — the limited collection"
+                loading="lazy"
+                className="w-full max-w-[520px] h-auto rounded-xl2 relative z-10 mx-auto"
+              />
+            </div>
+
+            <div className="order-1 md:order-2 flex flex-row items-center justify-between gap-3 md:flex-col md:items-start md:justify-center w-full">
+              <h3 className="font-wserif font-semibold text-[16px] sm:text-[20px] md:text-[clamp(26px,2.8vw,38px)] leading-[1.15] text-wgreen-deep m-0 md:mb-7 max-w-[60%] md:max-w-none">
+                The Wellness Gummy
+                <br className="hidden md:block" />{' '}
+                Limited Collection
+              </h3>
+              <Link
+                to="/new-arrivals"
+                className="shrink-0 inline-block bg-transparent border border-[#08112C] text-[#08112C] no-underline rounded-[10px] md:rounded-[12px] px-4 py-2 md:px-10 md:py-3.5 font-wserif text-[13px] md:text-[18px] tracking-wide hover:bg-[#010E37] hover:text-white transition-colors whitespace-nowrap"
+              >
+                Shop Now!
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
     ),
 
-    /* 5. Build Your Daily Routine — brand imagery from the design file;
-           each card links to its real combo product when one exists,
-           falling back to /categories until combos are added in admin. */
     'daily-routine': (title) => (
       <section className="px-5 sm:px-10 lg:px-16 py-12 lg:py-[76px]">
         <div className="text-center mb-10 lg:mb-14">
@@ -563,20 +541,13 @@ useEffect(() => {
             </div>
           )}
         </div>
-      </div>
-    );
-  })}
-</div>
       </section>
     ),
 
-    /* 6. Wellness, without the confusion — static blog cards */
     blog: (title) => (
       <section className="px-5 sm:px-10 lg:px-16 py-12 lg:py-[84px]">
-  {/* Tighter desktop gap under the header, and the intro copy bottom-aligned
-      to the heading, so the band does not carry dead space (kavya branch). */}
-  <div className="grid grid-cols-2 gap-4 md:gap-8 items-start max-w-[1140px] mx-auto mb-4 lg:mb-2">
-    <h2 className="font-cormorant text-[18px] sm:text-[24px] md:text-[clamp(26px,3vw,40px)] leading-[1.3] tracking-[0.04em] text-wink m-0">
+        <div className="grid grid-cols-2 gap-4 md:gap-8 items-start max-w-[1140px] mx-auto mb-4 lg:mb-2">
+          <h2 className="font-cormorant text-[18px] sm:text-[24px] md:text-[clamp(26px,3vw,40px)] leading-[1.3] tracking-[0.04em] text-wink m-0">
             {title || (
               <>
                 WELLNESS,
@@ -593,88 +564,115 @@ useEffect(() => {
           </p>
         </div>
 
-       <div className="flex sm:grid sm:grid-cols-3 gap-4 lg:gap-9 max-w-[1140px] mx-auto overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none -mx-5 px-5 sm:mx-auto sm:px-0 pb-2 scrollbar-hide">
-    {BLOG_POSTS.map((post) => (
-      <article key={post.title} className="shrink-0 w-[70%] sm:w-auto snap-start">
-        <img
-          src={post.image}
-          alt=""
-          loading="lazy"
-          className="w-full h-[160px] sm:h-[clamp(220px,24vw,300px)] object-contain sm:object-cover bg-wcanvas rounded-xl2 mb-3 sm:mb-5"
-        />
-        <h3 className="font-wserif font-semibold text-[15px] sm:text-[clamp(20px,1.9vw,26px)] leading-[1.25] text-wink m-0 mb-1 sm:mb-1.5">
-          {post.title}
-        </h3>
-        <div className="font-wserif text-[11px] sm:text-[14.5px] text-wmuted mb-1.5 sm:mb-2">{post.date}</div>
-        <Link
-          to="/stories"
-          className="font-wserif text-[13px] sm:text-[16px] text-[#08112C] no-underline hover:underline underline-offset-4"
-        >
-          Read more→
-        </Link>
+        <div className="flex sm:grid sm:grid-cols-3 gap-4 lg:gap-9 max-w-[1140px] mx-auto overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none -mx-5 px-5 sm:mx-auto sm:px-0 pb-2 scrollbar-hide">
+          {BLOG_POSTS.map((post) => (
+            <article
+              key={post.title}
+              className="shrink-0 w-[70%] sm:w-auto snap-start"
+            >
+              <img
+                src={post.image}
+                alt=""
+                loading="lazy"
+                className="w-full h-[260px] sm:h-[300px] lg:h-[380px] xl:h-[420px] object-cover rounded-xl2 mb-3 sm:mb-5"
+              />
+              <h3 className="font-wserif font-semibold text-[15px] sm:text-[clamp(20px,1.9vw,26px)] leading-[1.25] text-wink m-0 mb-1 sm:mb-1.5">
+                {post.title}
+              </h3>
+              <div className="font-wserif text-[11px] sm:text-[14.5px] text-wmuted mb-1.5 sm:mb-2">
+                {post.date}
+              </div>
+              <Link
+                to="/stories"
+                className="font-wserif text-[13px] sm:text-[16px] text-[#08112C] no-underline hover:underline underline-offset-4"
+              >
+                Read more→
+              </Link>
             </article>
           ))}
         </div>
       </section>
     ),
 
-    /* 7. The Reviews Behind the Routine — static testimonial */
     reviews: (title) => (
       <section className="px-5 sm:px-10 lg:px-16 py-12 lg:py-[76px]">
         <h2 className="font-wserif font-semibold text-[clamp(28px,3.4vw,44px)] text-wink text-center m-0 mb-10">
           {title || 'The Reviews Behind the Routine'}
         </h2>
 
-        <div className="max-w-[1080px] mx-auto border border-wgreen/40 rounded-xl3 bg-wcard/40 p-4 sm:p-6 md:p-10 grid grid-cols-[0.8fr_1.2fr] md:grid-cols-[1fr_1.25fr] gap-3 sm:gap-6 md:gap-8 items-center">
-  {/* Avatar cluster — now visible on mobile too */}
-  <div className="flex items-center justify-center" aria-hidden="true">
-    <img
-      src="/home/avatars.jpg"
-      alt=""
-      loading="lazy"
-      className="w-full max-w-[110px] sm:max-w-[180px] md:max-w-[340px] h-auto rounded-xl2"
-    />
-  </div>
+        <div className="max-w-[1080px] mx-auto border border-wgreen/40 rounded-xl3 bg-wcard/40 p-3 sm:p-6 md:p-10 grid grid-cols-[0.95fr_1.05fr] md:grid-cols-[1fr_1.25fr] gap-3 sm:gap-6 md:gap-8 items-center">
+          <div className="flex items-center justify-center" aria-hidden="true">
+            <div className="relative aspect-square w-full max-w-[140px] sm:max-w-[180px] md:max-w-[340px] rounded-xl2">
+              {AVATARS.map((avatar, index) => {
+                const positions = [
+                  'top-[10%] left-[8%] w-[22%]',
+                  'top-[25%] right-[8%] w-[24%]',
+                  'top-[42%] left-[34%] w-[18%]',
+                  'bottom-[8%] left-[8%] w-[22%]',
+                  'bottom-[8%] right-[12%] w-[22%]',
+                ];
 
-  {/* Quote card */}
-  <div className="relative bg-white rounded-xl2 shadow-[0_28px_60px_-34px_rgba(30,30,26,0.45)] px-4 pt-4 pb-0 sm:px-6 sm:pt-6 sm:pb-1 md:px-9 md:pt-9 md:pb-2">
-    <span
-      className="absolute top-2 right-3 sm:top-5 sm:right-7 font-wserif text-[32px] sm:text-[48px] md:text-[64px] leading-none text-wline select-none"
-      aria-hidden="true"
-    >
-      &rdquo;
-    </span>
+                const isActive = index === reviewIndex;
+                const isFemalee2 = index === 2;
 
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={reviewIndex}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -20 }}
-        transition={{ duration: 0.7 }}
-      >
-        <Stars count={REVIEWS[reviewIndex].stars} className="text-[14px] sm:text-[18px] md:text-[22px]" />
+                return (
+                  <img
+                    key={avatar.id}
+                    src={avatar.image}
+                    alt={avatar.name}
+                    className={`absolute rounded-full aspect-square object-cover transition-all duration-500 ${positions[index]} ${
+                      isFemalee2 ? 'scale-[1.3] object-center' : ''
+                    }`}
+                    style={{
+                      boxShadow: isActive ? "0 0 16px 8px rgba(135, 182, 169, 0.6)" : "none",
+                      border: isActive ? "3px solid #87B6A9" : "3px solid transparent",
+                      outline: "none",
+                      zIndex: isActive ? 10 : 1,
+                      opacity: isActive ? 1 : 0.85,
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
 
-        <blockquote className="font-wserif font-medium text-[13px] sm:text-[17px] md:text-[clamp(18px,1.8vw,23px)] leading-[1.4] md:leading-[1.5] text-wink m-0 mt-2 sm:mt-4 mb-2 sm:mb-5">
-          &ldquo;{REVIEWS[reviewIndex].quote}&rdquo;
-        </blockquote>
+          <div className="relative bg-white rounded-xl2 shadow-[0_28px_60px_-34px_rgba(30,30,26,0.45)] px-3 py-3 sm:px-6 sm:pt-10 sm:pb-1 md:px-9 md:pt-14 md:pb-2">
+            <img 
+              src="/up-quote.png" 
+              alt="" 
+              aria-hidden="true"
+              className="absolute top-2 right-3 sm:top-5 sm:right-7 w-6 sm:w-8 md:w-10 h-auto pointer-events-none select-none"
+            />
 
-        <div className="font-wserif text-[12px] sm:text-[15px] md:text-[17px] text-wink/80">
-  {REVIEWS[reviewIndex].name}
-</div>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={reviewIndex}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.7 }}
+              >
+                <Stars count={REVIEWS[reviewIndex].stars} className="text-[11px] sm:text-[18px] md:text-[22px]" />
+                <blockquote className="font-wserif font-medium text-[11px] sm:text-[17px] md:text-[clamp(18px,1.8vw,23px)] leading-[1.25] sm:leading-[1.3] md:leading-[1.5] text-wink m-0 my-0.5 sm:mt-4 sm:mb-5">
+                  “{REVIEWS[reviewIndex].quote}”
+                </blockquote>
+                <div className="font-wserif text-[10px] sm:text-[15px] md:text-[17px] text-wink/80">
+                  {REVIEWS[reviewIndex].name}
+                </div>
+              </motion.div>
+            </AnimatePresence>
 
-<div className="flex justify-start mt-2">
-  <span
-    className="font-wserif text-[42px] sm:text-[56px] md:text-[72px] leading-none text-wline/60 select-none"
-    aria-hidden="true"
-  >
-    &ldquo;
-  </span>
-</div>
-      </motion.div>
-    </AnimatePresence>
-  </div>
-</div>
+            <div className="flex justify-start mt-1 sm:mt-4">
+              <img 
+                src="/down-quote.png" 
+                alt="" 
+                aria-hidden="true"
+                className="w-7 sm:w-9 md:w-20 lg:w-24 h-auto opacity-40 pointer-events-none select-none"
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="text-center mt-4">
           <Link
             to="/products"
@@ -686,153 +684,134 @@ useEffect(() => {
       </section>
     ),
 
-    /* 8. Brand philosophy — the puzzle piece */
     'brand-philosophy': (title) => (
       <section className="px-5 sm:px-10 lg:px-16 pt-2 pb-12 lg:pt-8 lg:pb-[60px]">
-  {/* 8a. the piece that brings it all together */}
-  <div className="grid grid-cols-2 md:grid-cols-2 gap-4 md:gap-10 items-center max-w-[1140px] mx-auto mb-8 md:mb-16 lg:mb-24">
-    <div>
-      <h2 className="font-wserif text-[18px] sm:text-[26px] md:text-[clamp(32px,3.8vw,52px)] leading-[1.2] md:leading-[1.15] text-wink/85 m-0 mb-2 md:mb-5">
-        {title || (
-          <>
-            the piece that brings
-            <br />
-            it all together.
-          </>
-        )}
-      </h2>
-      <p className="font-wserif text-[11px] sm:text-[15px] md:text-[clamp(17px,1.6vw,22px)] leading-[1.4] md:leading-[1.5] text-wmuted m-0 max-w-[340px]">
-        &ldquo;sometimes, the smallest things make the biggest
-        difference.&rdquo;
-      </p>
-    </div>
+        <div className="grid grid-cols-2 md:grid-cols-2 gap-4 md:gap-10 items-center max-w-[1140px] mx-auto mb-2 md:mb-6 lg:mb-8">
+          <div className="pl-0 md:pl-16 lg:pl-24">
+            <h2 className="font-wserif text-[18px] sm:text-[26px] md:text-[clamp(32px,3.8vw,52px)] leading-[1.2] md:leading-[1.15] text-wink/85 m-0 mb-2 md:mb-5">
+              {title || (
+                <>
+                  the piece that brings
+                  <br />
+                  it all together.
+                </>
+              )}
+            </h2>
+            <p className="font-wserif text-[15px] sm:text-[18px] md:text-[clamp(20px,1.9vw,26px)] leading-[1.4] md:leading-[1.5] text-wmuted m-0 max-w-[340px] md:max-w-[420px] mb-4">
+              &ldquo;sometimes, the smallest things make the biggest difference.&rdquo;
+            </p>
+            <div className="h-px bg-wline w-full max-w-[340px] md:max-w-[420px] my-3" />
+          </div>
 
-    <div className="flex justify-center" aria-hidden="true">
-      <img
-        src="/home/puzzle-piece.jpg"
-        alt=""
-        loading="lazy"
-        className="w-full max-w-[160px] sm:max-w-[260px] md:max-w-[400px] h-auto rounded-xl2"
-      />
-    </div>
-  </div>
+          <div className="flex justify-center" aria-hidden="true">
+            <div className="relative flex items-center justify-center p-2 sm:p-4">
+              <img
+                src="/huge-puzzle bg.png"
+                alt=""
+                aria-hidden="true"
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85%] max-w-[130px] sm:max-w-[210px] md:max-w-[320px] h-auto object-contain pointer-events-none select-none z-0"
+              />
+              <img
+                src="/huge-puzzle.png"
+                alt=""
+                loading="lazy"
+                className="relative z-10 w-full max-w-[160px] sm:max-w-[260px] md:max-w-[400px] h-auto rounded-xl2"
+              />
+            </div>
+          </div>
+        </div>
 
-  <div className="flex justify-center items-center gap-4 sm:gap-8 md:gap-16 mt-4 md:mt-8">
-    <img
-      src="/homepage download.png"
-      alt=""
-      className="w-24 sm:w-32 md:w-52 translate-y-20 md:translate-y-32"
-    />
-
-    <div className="text-center">
-      <p className="font-cormorant text-[11px] sm:text-[14px] md:text-[17px] leading-[1.3] md:leading-none text-wink mb-2 md:mb-5 max-w-[600px]">
-        Science backed supplements for everyday
-      </p>
-
-      <Link
-        to="/products"
-        className="inline-flex items-center gap-1.5 md:gap-2.5 bg-[#08112C] text-white rounded-full pl-4 pr-1.5 py-1.5 md:pl-6 md:pr-2 md:py-2 text-[11px] md:text-[15px]"
-      >
-        Shop now
-        <span className="w-6 h-6 md:w-8 md:h-8 rounded-full border border-white/40 grid place-items-center text-[11px] md:text-base">
-          ↗
-        </span>
-      </Link>
-    </div>
-
-    <div className="flex flex-col items-center">
-  <img
-    src="/homepage question.png"
-    alt=""
-    className="w-16 sm:w-24 md:w-40 translate-y-20 md:translate-y-32"
-  />
-
-  {/* Mobile only */}
-  <h2 className="block md:hidden mt-1 font-cormorant text-[20px] text-wink/85 text-center mt-20">
-    together with what?
-  </h2>
-</div>
-  </div>
-
- {/* 8b. together with what? */}
-<div className="max-w-[1140px] mx-auto mt-12 md:mt-0 mb-16 lg:mb-24">
-
-  <div className="grid grid-cols-2 md:grid-cols-[1.15fr_1fr] gap-14 md:gap-12 items-center">
-
-    {/* Left - Puzzle Image */}
-<div className="flex flex-col items-center md:block md:justify-start md:mt-80">
-  <img
-    src="/Puzzle.png"
-    alt=""
-    loading="lazy"
-    className="w-full max-w-[160px] sm:max-w-[220px] md:max-w-[500px] h-auto rounded-xl2"
-  />
-</div>
-
-    {/* Right */}
-    <div className="flex flex-col justify-center text-left md:text-right w-full h-full">
-
-      {/* Desktop heading only */}
-      <h2 className="hidden md:block relative -top-24 font-cormorant text-[clamp(30px,3.4vw,46px)] text-wink/85 m-0 mb-3 mt-10">
-        together with what?
-      </h2>
-
-      <div className="hidden md:block h-px bg-wline mt-10 mb-9" />
-
-      <div className="mr-0 md:mt-40 md:mr-60">
-        <ul className="m-0 p-0 list-none font-wserif text-[15px] sm:text-[19px] md:text-[clamp(20px,2vw,28px)] text-wink/85 space-y-2 md:space-y-7">
-
-          <li>Healthy habits</li>
-
+        <div className="flex justify-center items-center gap-4 sm:gap-8 md:gap-16 mt-0">
           <img
-            src="/upVector.png"
+            src="/homepage download.png"
             alt=""
-            className="w-8 md:w-20 ml-6 md:ml-auto"
+            className="w-24 sm:w-32 md:w-64 translate-y-4 md:translate-y-16 lg:translate-y-20 md:-translate-x-16 lg:-translate-x-20"
           />
 
-          <li>Daily routine</li>
+          <div className="text-center md:text-left z-10 flex flex-col items-center md:items-start md:-mt-36 lg:-mt-48">
+            <p className="font-cormorant text-[13px] sm:text-[14px] md:text-[22px] leading-[1.3] md:leading-snug text-wink mb-2 md:mb-2 max-w-[600px] md:max-w-[200px] text-center md:text-left">
+              Science backed supplements for everyday
+            </p>
+            <Link
+              to="/products"
+              className="inline-flex items-center gap-1.5 md:gap-2.5 bg-[#08112C] text-white rounded-full pl-4 pr-1.5 py-1.5 md:pl-6 md:pr-2 md:py-2 text-[11px] md:text-[15px]"
+            >
+              Shop now
+              <span className="w-6 h-6 md:w-8 md:h-8 rounded-full border border-white/40 grid place-items-center text-[11px] md:text-base">
+                ↗
+              </span>
+            </Link>
+          </div>
 
-          <img
-            src="/downVector.png"
-            alt=""
-            className="w-8 md:w-20 ml-6 md:ml-auto"
-          />
+          <div className="flex flex-col items-center">
+            <img
+              src="/homepage question.png"
+              alt=""
+              className="w-16 sm:w-24 md:w-52 translate-y-0 md:translate-y-16 lg:translate-y-20"
+            />
+            <h2 className="block md:hidden font-cormorant text-[15px] sm:text-[18px] text-wink/85 text-center -mt-2 sm:mt-0 p-0 leading-tight mb-2 whitespace-nowrap">
+              together with what?
+            </h2>
+            <div className="block md:hidden h-px bg-wline w-28 mb-6" />
+          </div>
+        </div>
 
-          <li>Choices you make</li>
+        <div className="max-w-[1140px] mx-auto mt-4 md:mt-4 mb-10 lg:mb-16">
+          <div className="flex flex-row md:grid md:grid-cols-[1fr_auto] justify-center items-center gap-3 sm:gap-6 md:gap-8 max-w-[420px] sm:max-w-none mx-auto pr-0 md:pr-4">
+            <div className="flex flex-col items-center justify-center md:block md:justify-start md:mt-12 shrink-0">
+              <img
+                src="/Puzzle.png"
+                alt=""
+                loading="lazy"
+                className="w-full max-w-[240px] sm:max-w-[280px] md:max-w-[620px] h-auto rounded-xl2"
+              />
+            </div>
 
-        </ul>
-      </div>
+            <div className="flex flex-col justify-start text-left w-full h-full md:pl-4">
+              <h2 className="hidden md:block font-cormorant text-[clamp(30px,3.4vw,46px)] text-wink/85 m-0 mb-3 mt-0">
+                together with what?
+              </h2>
+              <div className="hidden md:block h-px bg-wline mt-3 mb-12 lg:mb-16" />
 
-    </div>
+              <div className="md:mt-16 lg:mt-20">
+                <ul className="m-0 p-0 list-none font-wserif text-[13px] sm:text-[19px] md:text-[clamp(20px,2vw,28px)] text-wink/85 space-y-1.5 md:space-y-7">
+                  <li>Healthy habits</li>
+                  <img
+                    src="/upVector.png"
+                    alt=""
+                    className="w-6 sm:w-8 md:w-20 ml-2 md:ml-12"
+                  />
+                  <li>Daily routine</li>
+                  <img
+                    src="/downVector.png"
+                    alt=""
+                    className="w-6 sm:w-8 md:w-20 ml-2 md:ml-12"
+                  />
+                  <li>Choices you make</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
 
-  </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-10 items-center max-w-[1140px] mx-auto">
+          <blockquote className="font-wserif text-[18px] sm:text-[20px] md:text-[clamp(26px,3vw,42px)] leading-[1.1] md:leading-[1.3] text-wink/85 mb-2 md:mb-0 max-w-[300px] md:max-w-none">
+            &ldquo;Every healthy routine has its pieces.<br className="block md:hidden" /> This is one of them.&rdquo;
+          </blockquote>
 
-</div>
-
-  {/* 8c. Closing quote */}
-  {/* 8c. Closing quote */}
-<div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-10 items-center max-w-[1140px] mx-auto">
-
-  {/* Left - Quote */}
-  <blockquote className="font-wserif text-[18px] sm:text-[20px] md:text-[clamp(26px,3vw,42px)] leading-[1.1] md:leading-[1.3] text-wink/85 mb-2 md:mb-0 max-w-[300px] md:max-w-none">
-  &ldquo;Every healthy routine has its pieces. This is one of them.&rdquo;
-</blockquote>
-
-  {/* Right - Images */}
-<div className="grid grid-cols-2 md:grid-cols-2 gap-4 md:gap-4 mt-2 md:mt-0">
-  {['/home/lifestyle-1.jpg', '/home/lifestyle-2.jpg'].map((src) => (
-    <img
-      key={src}
-      src={src}
-      alt="Wellvia daily ritual"
-      loading="lazy"
-      className="w-full h-32 sm:h-40 md:h-[clamp(180px,20vw,260px)] object-cover rounded-xl2"
-    />
-  ))}
-</div>
-
-</div>
-</section>
+          <div className="grid grid-cols-2 md:grid-cols-2 gap-4 md:gap-4 mt-2 md:mt-0">
+            {['/eat.png', '/home/lifestyle-2.jpg'].map((src) => (
+              <img
+                key={src}
+                src={src}
+                alt="Wellvia daily ritual"
+                loading="lazy"
+                className="w-full h-32 sm:h-40 md:h-[clamp(180px,20vw,260px)] object-cover rounded-xl2"
+              />
+            ))}
+          </div>
+        </div>
+      </section>
     ),
   };
 

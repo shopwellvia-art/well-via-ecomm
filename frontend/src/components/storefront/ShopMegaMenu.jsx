@@ -127,19 +127,18 @@ export default function ShopMegaMenu({ linkClassName, label = 'Shop' }) {
             className="absolute left-1/2 top-full pt-3 -translate-x-1/2 w-[880px] max-w-[95vw] z-[100]"
           >
             <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-2xl">
-              {/* "ALL PRODUCTS ->" header */}
               {/* "ALL PRODUCTS ->" top left action inside ShopMegaMenu */}
-<div className="mb-5 flex items-center gap-1.5 pl-1">
-  <Link
-    to="/products"
-    onClick={() => setOpen(false)}
-    role="menuitem"
-    className="inline-flex items-center gap-1 text-[13px] font-semibold tracking-wider text-[#08112C] uppercase underline underline-offset-4 hover:text-[#08112C] transition-colors"
-  >
-    ALL PRODUCTS -&gt;
-  </Link>
-  <span className="size-2 rounded-full bg-[#be2254] inline-block ml-0.5" aria-hidden="true" />
-</div>
+              <div className="mb-5 flex items-center gap-1.5 pl-1">
+                <Link
+                  to="/products"
+                  onClick={() => setOpen(false)}
+                  role="menuitem"
+                  className="inline-flex items-center gap-1 text-[13px] font-semibold tracking-wider text-[#08112C] uppercase underline underline-offset-4 hover:text-[#08112C] transition-colors"
+                >
+                  ALL PRODUCTS -&gt;
+                </Link>
+                <span className="size-2 rounded-full bg-[#be2254] inline-block ml-0.5" aria-hidden="true" />
+              </div>
 
               {/* Pill-shaped Cards Grid — live catalog, newest first */}
               {isLoading ? (
@@ -161,7 +160,7 @@ export default function ShopMegaMenu({ linkClassName, label = 'Shop' }) {
                 </div>
               ) : (
                 /* Empty catalog, or the request failed — the "All Products"
-                   link above still works, so the header never dead-ends. */
+                    link above still works, so the header never dead-ends. */
                 <p className="m-0 px-1 text-[13.5px] text-wmuted">
                   {isError
                     ? 'Could not load products just now.'
