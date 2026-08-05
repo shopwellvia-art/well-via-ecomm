@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils.js';
 import { env } from '@/config/env.js';
 import { usePublicSettings } from '@/features/settings/public.js';
+import { trackRegistration } from '@/features/tracking/metaPixel.js';
 import { LeafMark } from '@/components/storefront/Logo.jsx';
 import {
   ShieldIcon,
@@ -171,6 +172,10 @@ export default function LoginPage() {
           referral_code: referralCode || undefined,
         });
         clearPendingReferralCode();
+        // Meta `CompleteRegistration` — after the account exists, before the
+        // login that follows it, so a login failure cannot un-create the account
+        // and leave the event unsent.
+        trackRegistration();
       }
       const resp = await authApi.login(form.email, form.password);
       if (resp.needs_totp) {

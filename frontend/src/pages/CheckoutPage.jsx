@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -34,6 +34,7 @@ import { useAuthStore } from '@/features/auth/store.js';
 import { useRateQuote } from '@/features/shipping/hooks.js';
 import FreeShippingNudge from '@/features/shipping/components/FreeShippingNudge.jsx';
 import { useCodCheck } from '@/features/cod/hooks.js';
+import { trackInitiateCheckout } from '@/features/tracking/metaPixel.js';
 import CodOtpModal from '@/features/cod/components/CodOtpModal.jsx';
 import { usePaymentInstruments } from '@/features/payments/instruments.js';
 import { useActivePaymentMethods } from '@/features/paymentMethods/hooks.js';
@@ -191,6 +192,28 @@ export default function CheckoutPage() {
         checkoutItems: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
       };
     }, [buyNowMode, buyNowProduct, buyNowQty, cart]);
+
+  /* ── Meta `InitiateCheckout` ──
+     Fires once the derived lines exist, not on mount: this page is reachable
+     with an empty cart and while the cart request is still in flight, and an
+     InitiateCheckout with no items is a funnel step that did not happen. Covers
+     both the cart and Buy-Now paths, which converge on the same derived `items`.
+
+     Deduped on the CONTENT of the cart, not on `items` identity: `items` is
+     rebuilt whenever the react-query cart object changes, which includes every
+     background refetch, so an identity-keyed effect would report the same
+     checkout several times. Keyed this way it re-fires exactly when the shopper
+     actually changes something here — a quantity, a coupon, the total. */
+  const initiatedCheckoutRef = useRef(null);
+  useEffect(() => {
+    if (!items.length) return;
+    const signature = `${items
+      .map((line) => `${line.product_id}x${line.quantity}`)
+      .join(',')}|${total}`;
+    if (initiatedCheckoutRef.current === signature) return;
+    initiatedCheckoutRef.current = signature;
+    trackInitiateCheckout({ items, total, currency: cart?.currency });
+  }, [items, total, cart?.currency]);
 
   /* ── Public settings (free-shipping threshold, COD OTP flag) ── */
   const { data: publicSettings } = usePublicSettings();

@@ -4,6 +4,7 @@ import { cartApi } from './api.js';
 import { useGuestCartStore } from './guestStore.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { useProductsByIds } from '@/features/products/hooks.js';
+import { trackAddToCart } from '@/features/tracking/metaPixel.js';
 
 const CART_KEY = ['cart'];
 
@@ -125,7 +126,21 @@ export function useAddToCart() {
       useGuestCartStore.getState().addItem(productId, quantity);
       return Promise.resolve();
     },
-    onSuccess: invalidate,
+    // Every add-to-cart button on the storefront goes through this one mutation
+    // — six of them at last count (product grids, homepage rail, PDP buy panel,
+    // PDP sticky bar, frequently-bought-together, wishlist rows). Reporting the
+    // Meta event here rather than at each button means none of them can be added
+    // later and silently miss it. `price` is optional; when a caller does not
+    // pass it the event carries the item and quantity but no value, which is
+    // better than a value of 0. Fires on success only — no event for a failed add.
+    onSuccess: (_data, variables) => {
+      invalidate();
+      trackAddToCart({
+        productId: variables?.productId,
+        quantity: variables?.quantity ?? 1,
+        price: variables?.price,
+      });
+    },
   });
 }
 

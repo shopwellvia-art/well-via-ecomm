@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Page } from '@/components/layout/Page.jsx';
 import PageMeta from '@/components/storefront/PageMeta.jsx';
@@ -14,6 +14,7 @@ import {
 } from '@/features/products/hooks.js';
 import { useCategories } from '@/features/categories/hooks.js';
 import { useTrackProductView } from '@/features/history/store.js';
+import { trackViewContent } from '@/features/tracking/metaPixel.js';
 
 // Feature components — logic 100% preserved, only page chrome re-skinned
 import { FrequentlyBoughtTogether } from '@/features/products/components/FrequentlyBoughtTogether.jsx';
@@ -45,6 +46,19 @@ export default function ProductDetailPage() {
   const { data: categories } = useCategories();
 
   useTrackProductView(id);
+
+  // Meta `ViewContent`. Fires when the product DATA arrives, not when the URL
+  // changes — a ViewContent for a product that turned out to 404 is a false
+  // signal. The ref makes it once per product rather than once per render: this
+  // page stays mounted across `/products/:id` changes, and `product` is a new
+  // object on every react-query refetch, so depending on it without the guard
+  // would report the same view repeatedly.
+  const viewedProductRef = useRef(null);
+  useEffect(() => {
+    if (!product?.id || viewedProductRef.current === product.id) return;
+    viewedProductRef.current = product.id;
+    trackViewContent(product);
+  }, [product]);
 
   const categoryName = useMemo(() => {
     if (!product?.category_id || !categories) return null;

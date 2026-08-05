@@ -88,7 +88,8 @@ export function LuxuryBuyPanel({ product }) {
     // login gate; the cart merges into the server cart at checkout login.
     setAdded(false);
     addToCart.mutate(
-      { productId: product.id, quantity: qty },
+      // `price` rides along for the Meta AddToCart value — see useAddToCart.
+      { productId: product.id, quantity: qty, price: product.price },
       {
         onSuccess: () => {
           // The button's own 2s "Added ✓" state stays: it confirms which

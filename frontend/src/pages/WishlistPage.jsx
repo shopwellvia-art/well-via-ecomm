@@ -151,7 +151,8 @@ function WishlistRow({ item, product }) {
   function handleAddToCart() {
     setAddErr(false);
     add.mutate(
-      { productId: item.product_id, quantity: 1 },
+      // `price` rides along for the Meta AddToCart value — see useAddToCart.
+      { productId: item.product_id, quantity: 1, price },
       {
         onSuccess: () =>
           showAdded({

@@ -621,11 +621,24 @@ DEFAULT_SITE_PAGES: dict = {
             },
             {
                 "heading": "Cookies & tracking",
+                # Kept byte-identical to the frontend copy in
+                # frontend/src/features/site-pages/defaults.js — the two are
+                # mirrored (see this module's docstring) and defaultsParity
+                # guards it. The Meta Pixel disclosure is a legal obligation, not
+                # marketing copy: naming the recipient, what it is told and how to
+                # opt out is what makes the consent we collect informed.
                 "body": (
                     "We use cookies and similar technologies to keep you signed "
                     "in, remember your cart, and understand how our store is used "
-                    "so we can improve it. You can control cookies through your "
-                    "browser settings."
+                    "so we can improve it. With your consent we also use the Meta "
+                    "Pixel, which tells Meta (Facebook and Instagram) that a "
+                    "visit, cart addition or purchase happened here, so we can "
+                    "measure whether our ads work and show relevant ads "
+                    "elsewhere. We do not send Meta your name, email, phone "
+                    "number or address. You can change your choice at any time "
+                    "through the cookie preferences link in our footer, control "
+                    "cookies through your browser settings, and manage Meta ad "
+                    "personalisation at facebook.com/adpreferences."
                 ),
             },
             {

@@ -5,6 +5,7 @@ import { CheckCircle2 } from 'lucide-react';
 import { useSitePages } from '@/features/site-pages/hooks.js';
 import { SITE_PAGES_DEFAULTS, resolvePageIcon } from '@/features/site-pages/defaults.js';
 import { useSubmitContactMessage } from '@/features/contact/hooks.js';
+import { trackLead } from '@/features/tracking/metaPixel.js';
 import { toast } from '@/components/ui/Toaster.jsx';
 import { cn, mediaUrl } from '@/lib/utils.js';
 
@@ -101,7 +102,13 @@ function ContactForm({ copy }) {
         message: form.message.trim(),
       },
       {
-        onSuccess: () => setSubmitted(true),
+        onSuccess: () => {
+          setSubmitted(true);
+          // Meta `Lead`. The category is a fixed string chosen here, never the
+          // customer's message — free text in an event parameter is how someone's
+          // enquiry ends up inside an ad platform.
+          trackLead('contact');
+        },
         onError: (err) =>
           toast.error(
             err?.response?.data?.error?.message ||

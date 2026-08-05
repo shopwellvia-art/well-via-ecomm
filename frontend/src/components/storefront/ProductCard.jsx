@@ -98,7 +98,9 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
   const handleAddToCart = () => {
     if (outOfStock) return;
     addToCart.mutate(
-      { productId: id, quantity: 1 },
+      // `price` is not used by the mutation itself — it rides along so the Meta
+      // AddToCart event in useAddToCart can carry a value.
+      { productId: id, quantity: 1, price },
       {
         // Confirmation fires on success only. Adding from a grid is otherwise
         // completely silent — the header badge ticks up off-screen and nothing

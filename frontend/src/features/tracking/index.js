@@ -21,6 +21,7 @@ import { Ev, pushEvent } from './dataLayer.js';
 import { getConsent, hasAnalyticsConsent, onConsentChange } from './consent.js';
 import { loadGtm, pushConsentDefaults, pushConsentUpdate } from './gtm.js';
 import { applyMaskingHints, loadClarity, setClarityTag } from './clarity.js';
+import { loadMetaPixel, metaPageView } from './metaPixel.js';
 import {
   SETTING_KEYS,
   isInternalRoute,
@@ -33,6 +34,7 @@ export * from './dataLayer.js';
 export * from './consent.js';
 export * from './gtm.js';
 export * from './clarity.js';
+export * from './metaPixel.js';
 export * from './purchase.js';
 export {
   SETTING_KEYS,
@@ -86,6 +88,10 @@ export function initTracking({ settings, pathname, consent = getConsent() } = {}
 
   const gtm = loadGtm({ settings, pathname: path, consent });
   const clarity = loadClarity({ settings, pathname: path, consent });
+  // Gated on MARKETING consent, not analytics — it is an advertising tag. Its
+  // own gates also require a production build and a non-internal route, so this
+  // call is a no-op in dev and on /admin. Idempotent, like the other loaders.
+  const metaPixel = loadMetaPixel({ settings, pathname: path, consent });
 
   // Re-run on every route: the fields on the page a moment ago are not the
   // fields on it now, and an unmasked checkout input is unmasked in the replay.
@@ -96,7 +102,17 @@ export function initTracking({ settings, pathname, consent = getConsent() } = {}
     setClarityTag('device_category', deviceCategory());
   }
 
-  return { gtm, clarity, page: trackPageView({ pathname: path }) };
+  return {
+    gtm,
+    clarity,
+    metaPixel,
+    page: trackPageView({ pathname: path }),
+    // Meta's own PageView. Separate from the GA4 one above because this app is a
+    // single-page app: `fbevents.js` reports a PageView when it first loads and
+    // never again, so every subsequent navigation needs this call or an entire
+    // visit collapses into one page view.
+    metaPage: metaPageView({ pathname: path }),
+  };
 }
 
 /**

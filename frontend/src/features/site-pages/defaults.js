@@ -321,7 +321,7 @@ export const SITE_PAGES_DEFAULTS = {
       },
       {
         heading: 'Cookies & tracking',
-        body: 'We use cookies and similar technologies to keep you signed in, remember your cart, and understand how our store is used so we can improve it. You can control cookies through your browser settings.',
+        body: 'We use cookies and similar technologies to keep you signed in, remember your cart, and understand how our store is used so we can improve it. With your consent we also use the Meta Pixel, which tells Meta (Facebook and Instagram) that a visit, cart addition or purchase happened here, so we can measure whether our ads work and show relevant ads elsewhere. We do not send Meta your name, email, phone number or address. You can change your choice at any time through the cookie preferences link in our footer, control cookies through your browser settings, and manage Meta ad personalisation at facebook.com/adpreferences.',
       },
       {
         heading: 'Sharing & disclosure',

@@ -186,7 +186,8 @@ function BestsellerCard({ product, focused = false }) {
   const handleAddToCart = () => {
     if (outOfStock) return;
     addToCart.mutate(
-      { productId: id, quantity: 1 },
+      // `price` rides along for the Meta AddToCart value — see useAddToCart.
+      { productId: id, quantity: 1, price },
       {
         onSuccess: () => showAdded({ id, name, image_url, price, quantity: 1 }),
         onError: (err) =>

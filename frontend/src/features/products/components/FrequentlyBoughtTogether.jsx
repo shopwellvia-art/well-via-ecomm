@@ -61,9 +61,14 @@ export function FrequentlyBoughtTogether({ product, related, isLoading }) {
     }
     setAddError(null);
     const chosen = all.filter((p) => selected.has(p.id));
-    const ids = chosen.map((p) => p.id);
     try {
-      await Promise.all(ids.map((productId) => addToCart.mutateAsync({ productId, quantity: 1 })));
+      // Mapped over the products, not the bare ids, so each add carries its
+      // price for the Meta AddToCart value — see useAddToCart.
+      await Promise.all(
+        chosen.map((p) =>
+          addToCart.mutateAsync({ productId: p.id, quantity: 1, price: p.price }),
+        ),
+      );
       setDoneAt(Date.now());
       // A bundle add names the first product and counts the rest, rather than
       // stacking one popup per line.

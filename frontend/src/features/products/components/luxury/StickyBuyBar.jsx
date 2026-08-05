@@ -57,7 +57,8 @@ export function StickyBuyBar({ product }) {
   // Guests use the client-side cart; checkout's bag step embeds login.
   function handleAdd() {
     addToCart.mutate(
-      { productId: product.id, quantity: 1 },
+      // `price` rides along for the Meta AddToCart value — see useAddToCart.
+      { productId: product.id, quantity: 1, price: product.price },
       {
         onSuccess: () => {
           setAdded(true);
