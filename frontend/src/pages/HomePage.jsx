@@ -8,9 +8,17 @@ import { buildOrganizationSchema, buildWebSiteSchema } from '@/lib/productSchema
 import WImage from '@/components/storefront/WImage';
 import { Stars } from '@/components/storefront/Icons';
 import { Heart, ShoppingCart } from "lucide-react";
-import { Fragment, useEffect, useRef, useState } from 'react';
+import {
+  Children,
+  Fragment,
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { AnimatePresence } from "framer-motion";
-import { formatPrice } from '@/lib/utils';
+import { cn, formatPrice } from '@/lib/utils';
 import { useStorefrontConfigWithDefaults } from '@/features/storefront-config/hooks.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { useAddToCart } from '@/features/cart/hooks';
@@ -133,7 +141,16 @@ function InlineError({ onRetry }) {
   );
 }
 
-function BestsellerCard({ product }) {
+/**
+ * One card in the bestsellers rail.
+ *
+ * `focused` is injected by AutoScrollRail for the card currently aligned to the
+ * rail's snap point — the product the shopper just scrolled to. It lifts that
+ * card forward and recesses the rest, so a rail that used to read as four
+ * equally-weighted cards with one clipped at the edge now has an obvious
+ * subject. Purely presentational: nothing about the card's behaviour changes.
+ */
+function BestsellerCard({ product, focused = false }) {
   const addToCart = useAddToCart();
   const showAdded = useAddedToCartModal((s) => s.showAdded);
   const inWishlist = useIsInWishlist(product.id);
@@ -182,7 +199,27 @@ function BestsellerCard({ product }) {
   };
 
   return (
-    <div className="shrink-0 w-[60%] sm:w-[35%] md:w-[260px] lg:w-[280px] snap-start border border-[#EBE8E0] bg-[#FAF9F6] rounded-xl shadow-[0_2px_6px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col">
+    <div
+      // aria-current marks the focused card for assistive tech, which cannot
+      // see the lift. The rail is a list of links, so "true" (rather than
+      // "page"/"step") is the right token for "this is the current one".
+      aria-current={focused ? 'true' : undefined}
+      className={cn(
+        'shrink-0 w-[60%] sm:w-[35%] md:w-[260px] lg:w-[280px] snap-start rounded-xl overflow-hidden flex flex-col',
+        // origin-bottom so the lift grows upward into the rail's pt-3 headroom
+        // instead of pushing down into the scrollbar track.
+        'origin-bottom transition-[transform,opacity,box-shadow,border-color] duration-300 ease-out',
+        // Kept modest on purpose: the rail's cross-axis overflow is `auto`, so a
+        // large scale or a wide shadow spread would clip or, worse, add a
+        // vertical scrollbar to a horizontal rail.
+        focused
+          ? 'border border-[#08112C]/25 bg-white shadow-[0_8px_20px_-10px_rgba(8,17,44,0.4)] scale-[1.02] opacity-100'
+          : 'border border-[#EBE8E0] bg-[#FAF9F6] shadow-[0_2px_6px_rgba(0,0,0,0.02)] opacity-80',
+        // Under prefers-reduced-motion the focus still reads through the border,
+        // background and shadow — only the movement is dropped.
+        'motion-reduce:transition-none motion-reduce:scale-100',
+      )}
+    >
       <div className="relative aspect-[4/3] md:aspect-[16/9] w-full bg-[#F3F2EE] flex items-center justify-center p-2.5">
         <Link to={`/products/${id}`} className="block w-full h-full">
           <WImage
@@ -254,9 +291,86 @@ function BestsellerCard({ product }) {
 const AUTO_SCROLL_MS = 3500;
 const RESUME_AFTER_MS = 5000;
 
+/**
+ * Index of the card sitting on the rail's snap line — the focused product.
+ *
+ * @param cardLefts viewport x of each card's left edge, in DOM order
+ * @param anchor    viewport x of the snap line (rail's left edge + scroll padding)
+ *
+ * Nearest edge wins, with the earlier card taking an exact tie, so a rail parked
+ * exactly between two cards resolves left-to-right rather than flickering.
+ * Extracted from the scroll handler because this is the whole decision — which
+ * product is current — and it is worth asserting without a DOM.
+ */
+export function focusedCardIndex(cardLefts, anchor) {
+  let best = 0;
+  let bestGap = Infinity;
+  cardLefts.forEach((left, i) => {
+    const gap = Math.abs(left - anchor);
+    if (gap < bestGap) {
+      bestGap = gap;
+      best = i;
+    }
+  });
+  return best;
+}
+
 function AutoScrollRail({ className, children }) {
   const railRef = useRef(null);
   const reduce = useReducedMotion();
+  const [activeIndex, setActiveIndex] = useState(0);
+  const cardCount = Children.count(children);
+
+  // ── Which card is in focus ──────────────────────────────────────────────────
+  // The rail is `snap-x snap-mandatory` with `snap-start` cards, so a scroll
+  // always settles with one card aligned to the scrollport's start edge. That
+  // card is the focused one: it is the product the shopper just scrolled to, and
+  // picking it by measurement rather than by counting pixels means it stays
+  // correct across the four card widths (60% / 35% / 260px / 280px) without
+  // knowing any of them.
+  //
+  // Runs regardless of prefers-reduced-motion — this is which card is current,
+  // not an animation. The card suppresses its own transform under that setting.
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return undefined;
+
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const cards = Array.from(rail.children);
+      if (!cards.length) return;
+      // The snap line, not the box edge: the rail carries horizontal padding on
+      // mobile (`px-5`), and `scroll-pl-*` moves the snap position in by the
+      // same amount. Measuring against the raw left edge would report the
+      // previous card as focused for the width of that padding.
+      const padding = parseFloat(getComputedStyle(rail).scrollPaddingLeft) || 0;
+      const anchor = rail.getBoundingClientRect().left + padding;
+      const next = focusedCardIndex(
+        cards.map((card) => card.getBoundingClientRect().left),
+        anchor,
+      );
+      setActiveIndex((prev) => (prev === next ? prev : next));
+    };
+
+    // Coalesced to one measurement per frame: a scroll fires far more often
+    // than the browser paints, and each pass reads layout for every card.
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+
+    measure();
+    rail.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      rail.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+    // Card COUNT, not `children`: the children array is a fresh identity on
+    // every HomePage render, which would tear down and re-attach the listener
+    // for no reason. Only a change in how many cards exist needs a re-measure.
+  }, [cardCount]);
 
   useEffect(() => {
     const rail = railRef.current;
@@ -317,7 +431,12 @@ function AutoScrollRail({ className, children }) {
 
   return (
     <div ref={railRef} className={className}>
-      {children}
+      {/* `focused` is injected rather than passed by the caller: only the rail
+          knows its own scroll position, and the caller renders the cards from a
+          plain .map(). A child that does not accept the prop simply ignores it. */}
+      {Children.map(children, (child, i) =>
+        isValidElement(child) ? cloneElement(child, { focused: i === activeIndex }) : child,
+      )}
     </div>
   );
 }
@@ -422,7 +541,13 @@ export default function HomePage() {
             <InlineError onRetry={refetchBestsellers} />
           ) : (
             /* Horizontal scroll on every breakpoint, with a visible slim thumb */
-            <AutoScrollRail className="flex gap-3 md:gap-4 lg:gap-6 overflow-x-auto snap-x snap-mandatory -mx-5 px-5 md:mx-auto md:px-0 pb-4 max-w-[1080px] lg:max-w-[1280px] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
+            /* scroll-pl-5 md:scroll-pl-0 mirrors px-5 md:px-0: without it
+               snap-start aligns cards to the raw scrollport edge, parking the
+               focused card underneath the rail's own padding.
+               pt-3 is headroom for the focused card's lift — the cross-axis
+               overflow is `auto`, so a card growing past the top edge would be
+               clipped and could raise a vertical scrollbar. */
+            <AutoScrollRail className="flex gap-3 md:gap-4 lg:gap-6 overflow-x-auto snap-x snap-mandatory scroll-pl-5 md:scroll-pl-0 -mx-5 px-5 md:mx-auto md:px-0 pt-3 pb-4 max-w-[1080px] lg:max-w-[1280px] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
               {bestsellers.map((p) => (
                 <BestsellerCard key={p.id} product={p} />
               ))}
