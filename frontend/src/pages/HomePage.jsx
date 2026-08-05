@@ -14,6 +14,7 @@ import { formatPrice } from '@/lib/utils';
 import { useStorefrontConfigWithDefaults } from '@/features/storefront-config/hooks.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { useAddToCart } from '@/features/cart/hooks';
+import { useAddedToCartModal } from '@/features/cart/addedModalStore.js';
 import {
   useIsInWishlist,
   useAddToWishlist,
@@ -134,6 +135,7 @@ function InlineError({ onRetry }) {
 
 function BestsellerCard({ product }) {
   const addToCart = useAddToCart();
+  const showAdded = useAddedToCartModal((s) => s.showAdded);
   const inWishlist = useIsInWishlist(product.id);
   const addWishlist = useAddToWishlist();
   const removeWishlist = useRemoveFromWishlist();
@@ -169,6 +171,7 @@ function BestsellerCard({ product }) {
     addToCart.mutate(
       { productId: id, quantity: 1 },
       {
+        onSuccess: () => showAdded({ id, name, image_url, price, quantity: 1 }),
         onError: (err) =>
           toast.error(
             err?.response?.data?.error?.message ||

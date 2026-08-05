@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Header from '@/components/storefront/Header';
 import Footer from '@/components/storefront/Footer';
 import CartDrawer from '@/components/storefront/CartDrawer';
+import AddedToCartModal from '@/components/storefront/AddedToCartModal';
 import PincodeModal from '@/features/shipping/components/PincodeModal.jsx';
 
 /**
@@ -70,6 +71,11 @@ export default function Layout() {
           {/* CartDrawer is fixed-position; mounting it here keeps it
               inside the .wellvia-root so Wellvia CSS tokens are in scope. */}
           <CartDrawer />
+          {/* Fires from every add-to-cart button on the storefront. Mounted
+              here, beside the drawer, so it is inside .wellvia-root and only
+              exists on chrome'd routes — the bare login/payment routes have no
+              add-to-cart surface. */}
+          <AddedToCartModal />
           <PincodeModal />
           <main id="main-content" className="flex-1">
             <Outlet />

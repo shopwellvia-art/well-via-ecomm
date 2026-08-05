@@ -15,6 +15,7 @@ import {
 } from '@/features/wishlist/hooks.js';
 import { useProductsByIds } from '@/features/products/hooks.js';
 import { useAddToCart } from '@/features/cart/hooks.js';
+import { useAddedToCartModal } from '@/features/cart/addedModalStore.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { formatPrice } from '@/lib/utils.js';
 
@@ -134,6 +135,7 @@ function SkeletonRow() {
 function WishlistRow({ item, product }) {
   const remove = useRemoveFromWishlist();
   const add = useAddToCart();
+  const showAdded = useAddedToCartModal((s) => s.showAdded);
   const [addErr, setAddErr] = useState(false);
   const added = add.isSuccess && add.variables?.productId === item.product_id;
 
@@ -150,7 +152,20 @@ function WishlistRow({ item, product }) {
     setAddErr(false);
     add.mutate(
       { productId: item.product_id, quantity: 1 },
-      { onError: () => setAddErr(true) },
+      {
+        onSuccess: () =>
+          showAdded({
+            id: item.product_id,
+            name: item.name,
+            // The enriched product (from /products/by-ids) is the better source
+            // for the image; the wishlist row's own copy is the fallback for
+            // when that request has not resolved yet.
+            image_url: product?.image_url || item.image_url,
+            price,
+            quantity: 1,
+          }),
+        onError: () => setAddErr(true),
+      },
     );
   }
 

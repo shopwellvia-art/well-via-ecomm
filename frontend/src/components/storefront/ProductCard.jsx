@@ -4,6 +4,7 @@ import { useAuthStore } from '@/features/auth/store.js';
 import WImage from '@/components/storefront/WImage';
 import { HeartIcon, Stars } from '@/components/storefront/Icons';
 import { useAddToCart } from '@/features/cart/hooks';
+import { useAddedToCartModal } from '@/features/cart/addedModalStore.js';
 import {
   useIsInWishlist,
   useAddToWishlist,
@@ -40,6 +41,7 @@ const BADGE_STYLES = {
  */
 export default function ProductCard({ product, buttonLabel = 'Add to Cart', badge }) {
   const addToCart = useAddToCart();
+  const showAdded = useAddedToCartModal((s) => s.showAdded);
   const inWishlist = useIsInWishlist(product?.id);
   const addWishlist = useAddToWishlist();
   const removeWishlist = useRemoveFromWishlist();
@@ -98,6 +100,10 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
     addToCart.mutate(
       { productId: id, quantity: 1 },
       {
+        // Confirmation fires on success only. Adding from a grid is otherwise
+        // completely silent — the header badge ticks up off-screen and nothing
+        // distinguishes a successful add from a dead button.
+        onSuccess: () => showAdded({ id, name, image_url, price, quantity: 1 }),
         onError: (err) =>
           toast.error(
             err?.response?.data?.error?.message ||
