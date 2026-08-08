@@ -19,3 +19,11 @@ htmlcov
 tests
 docs
 *.md
+
+# ---- Test-only scripts ---------------------------------------------------
+# `scripts/` as a whole IS shipped — seed.py, backfill_*.py, audit_*.py and
+# repair_*.py are run inside the container via
+# `docker compose run --rm backend python scripts/<x>.py`. These nine are not:
+# they are the shadow E2E suite (PROJECT_KT.md:119) and fire live API calls at
+# whatever host they find, so they have no business in a production image.
+scripts/test_*.py

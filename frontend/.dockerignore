@@ -7,3 +7,18 @@ dist
 .gitignore
 *.log
 coverage
+
+# ---- Test suites ---------------------------------------------------------
+# `vite build` reads none of this, and the runtime stage only copies
+# /app/dist — so nothing here ever reached the shipped nginx image anyway.
+# Excluding it keeps the build context small and stops an edit to a test file
+# from invalidating the `COPY . .` layer on every CI rebuild.
+# The suites still run in CI: .github/workflows/cicd.yml checks the repo out
+# and runs `npx vitest run` directly, it does not build an image to test.
+e2e
+src/test
+**/__tests__
+**/*.test.js
+**/*.test.jsx
+**/*.test.mjs
+vitest.config.js
