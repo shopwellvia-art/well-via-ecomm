@@ -27,6 +27,24 @@
 #  volumes) on the EC2 uses. Adding one would orphan those volumes.
 # =============================================================================
 
+# Public origin of the live store. Everything customer-facing derives from it.
+#
+# These live HERE, in git, rather than only in the host's backend/.env because
+# that file is untracked, is never written by the pipeline, and drifting back to
+# the localhost code defaults is not a cosmetic bug: the backend REFUSES every
+# prepaid checkout ("Online payment is temporarily unavailable") while
+# PAYMENT_RETURN_URL is dev-shaped in production. That is exactly what happened
+# on 2026-08-03 (payment captured, order stranded) and again on 2026-08-04.
+# Compose `environment:` overrides `env_file:`, so these win even if a stale
+# host .env still carries localhost values.
+#
+# Secrets (PAYMENT_RECONCILE_TOKEN, keys) deliberately stay in backend/.env.
+x-public-origin: &public-origin
+  PAYMENT_RETURN_URL: https://shopwellvia.in/payments/return
+  PAYMENT_WEBHOOK_URL: https://shopwellvia.in/api/v1/payments/webhook/razorpay
+  FRONTEND_URL: https://shopwellvia.in
+  CORS_ORIGINS: '["https://shopwellvia.in","https://www.shopwellvia.in"]'
+
 services:
   redis:
     image: redis:7-alpine
@@ -52,6 +70,11 @@ services:
     image: ghcr.io/shopwellvia-art/simple-com-backend:${IMAGE_TAG:-latest}
     restart: always
     env_file: ./backend/.env
+    environment:
+      <<: *public-origin
+      # backend/.env.example defaults REDIS_URL to localhost for bare-metal dev;
+      # inside compose the Redis service is reachable only by its service name.
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       redis:
         condition: service_healthy
@@ -70,6 +93,82 @@ services:
     # 4 uvicorn workers (Dockerfile) + the 20m upload path + reportlab PDF
     # generation need headroom; 512m risked OOM-kills under restart: always.
     mem_limit: 1g
+
+  # Analytics rollup worker. Runs the SAME backend image with a different
+  # command, so there is no new build target, no broker, and rollback is the
+  # existing IMAGE_TAG rollback.
+  #
+  # Why a dedicated process rather than an in-process scheduler: the backend runs
+  # 4 uvicorn workers, so an in-process scheduler would fire 4x and race on the
+  # same buckets. And heavy GROUP BY work inside a request worker competes with
+  # checkout for the connection pool.
+  #
+  # It exits 0 immediately unless ANALYTICS_ROLLUPS_ENABLED=true, so shipping
+  # this service while the flag is off costs one container start and nothing
+  # else — and turning the flag off is a rollback that needs no deploy.
+  #
+  # `on-failure`, not `always`: the flag-off path is a clean exit 0, and `always`
+  # restarts on *any* exit, so it reboots the process every 60s forever instead
+  # of the "one container start" above. on-failure still restarts a worker that
+  # dies mid-tick, which is the case the policy is actually there for.
+  analytics-rollup-worker:
+    image: ghcr.io/shopwellvia-art/simple-com-backend:${IMAGE_TAG:-latest}
+    command: ["python", "-m", "app.services.analytics.worker"]
+    restart: on-failure
+    depends_on:
+      backend:
+        condition: service_healthy
+    env_file: ./backend/.env
+    environment:
+      <<: *public-origin
+      REDIS_URL: redis://redis:6379/0
+      ANALYTICS_WORKER_ROLE: rollup
+    # Exactly one replica. A Redis lease plus a DB status guard makes a second
+    # one a no-op rather than a double-write, but there is no reason to pay for
+    # the contention.
+    deploy:
+      replicas: 1
+    # Aggregation holds result sets in memory while building rollup rows; it is
+    # heavier than the curl sidecars but much lighter than the API.
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Analytics delivery worker. Drains the GA4 outbox in near-real-time (~15-30s)
+  # rather than daily, so server-side purchase events land close to the browser
+  # session they belong to.
+  #
+  # Separate from the rollup worker on purpose: this one is network-bound with
+  # third-party retries, that one is database-bound. Sharing a process would let
+  # a GA4 outage stall rollups, and a slow rebuild delay conversion delivery.
+  #
+  # NOTE: delivery is a documented no-op until P8 wires the Measurement Protocol
+  # client. It does NOT mark outbox rows delivered in the meantime — a stub that
+  # discharged the debt without paying it would silently lose conversions.
+  analytics-delivery-worker:
+    image: ghcr.io/shopwellvia-art/simple-com-backend:${IMAGE_TAG:-latest}
+    command: ["python", "-m", "app.services.analytics.worker"]
+    # See the rollup worker above for why this is on-failure and not always.
+    restart: on-failure
+    depends_on:
+      backend:
+        condition: service_healthy
+    env_file: ./backend/.env
+    environment:
+      <<: *public-origin
+      REDIS_URL: redis://redis:6379/0
+      ANALYTICS_WORKER_ROLE: delivery
+    deploy:
+      replicas: 1
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   frontend:
     image: ghcr.io/shopwellvia-art/simple-com-frontend:${IMAGE_TAG:-latest}
@@ -113,6 +212,45 @@ services:
             http://backend:8000/api/v1/payments/admin/reconcile-pending \
             || echo "reconcile POST failed; will retry next cycle";
           sleep 600;
+        done
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    mem_limit: 64m
+
+  # Loyalty points-expiry sidecar (backend/docs/loyalty-cron.md). The sweep is
+  # an idempotent HTTP endpoint — the (reason, ref_type, ref_id) unique index
+  # makes same-day re-runs a no-op — so this loop just calls it once a day. The
+  # doc's snippet (alpine + apk-install curl + GNU-date "sleep until 3 AM UTC")
+  # is adapted to match payment-reconcile-cron: same curl image (no runtime
+  # package install), restart: always instead of unless-stopped, healthy-backend
+  # gating, and a plain sleep interval instead of 3 AM anchoring (the GNU
+  # `date -d 'tomorrow 03:00'` in the doc wouldn't work in busybox anyway).
+  # Auth differs from the reconcile sidecar by design: this endpoint checks a
+  # Bearer token carrying `loyalty.configure` (a long-lived service-account
+  # token), not a machine-auth header.
+  loyalty-cron:
+    image: curlimages/curl:8.11.1
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    # Same env file as the backend, so LOYALTY_CRON_TOKEN lives next to the
+    # other secrets (single source of truth). The container shell reads it from
+    # its own environment — $$ escapes compose interpolation so the value is
+    # expanded at runtime, not baked into the compose file.
+    env_file: ./backend/.env
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $${LOYALTY_CRON_TOKEN}" \
+            http://backend:8000/api/v1/loyalty/admin/expire-points \
+            || echo "expire-points POST failed; will retry next cycle";
+          sleep 86400;
         done
     logging:
       driver: json-file
