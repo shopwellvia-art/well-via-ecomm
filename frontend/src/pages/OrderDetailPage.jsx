@@ -1,12 +1,19 @@
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { apiClient } from '@/services/apiClient.js';
+import { FileDown, XCircle } from 'lucide-react';
 import AccountLayout from '@/components/storefront/AccountLayout.jsx';
 import WImage from '@/components/storefront/WImage.jsx';
 import { TruckIcon, Check } from '@/components/storefront/Icons.jsx';
+import { toast } from '@/components/ui/Toaster.jsx';
 import { useAuthStore } from '@/features/auth/store.js';
-import { formatPrice, cn } from '@/lib/utils.js';
+import { useOrderDetail, useDownloadInvoice } from '@/features/orders/hooks.js';
+import {
+  hasInvoice,
+  isOrderCancellable,
+  readApiErrorMessage,
+} from '@/features/orders/api.js';
+import CancelOrderModal from '@/features/orders/components/CancelOrderModal.jsx';
+import { formatPrice, cn, countryName, formatPhone } from '@/lib/utils.js';
 
 // ── Status pill styles (no @/components/ui/Badge) ────────────────────────────
 
@@ -260,14 +267,20 @@ function AddressBlock({ addr }) {
   const phone    = addr.phone || null;
   const landmark = addr.landmark || null;
 
+  // "Davangere, Karnataka – 577530" reads as one locality line, the way
+  // Flipkart/Amazon set it, rather than three comma-separated fragments.
+  const locality = [[city, state].filter(Boolean).join(', '), pincode]
+    .filter(Boolean)
+    .join(' – ');
+
   const lines = [
     name,
     line1,
     line2,
     landmark,
-    [city, state, pincode].filter(Boolean).join(', '),
-    country,
-    phone ? `Phone: ${phone}` : null,
+    locality,
+    countryName(country),
+    phone ? `Phone: ${formatPhone(phone)}` : null,
   ].filter(Boolean);
 
   return (
@@ -351,18 +364,6 @@ function TrackingDisclosure({ awb, events }) {
   );
 }
 
-// ── Data hook ────────────────────────────────────────────────────────────────
-
-function useOrderDetail(id) {
-  const token = useAuthStore((s) => s.accessToken);
-  return useQuery({
-    queryKey: ['order', id],
-    queryFn: () => apiClient.get(`/orders/${id}`).then((r) => r.data),
-    enabled: !!token && !!id,
-    retry: false,
-  });
-}
-
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function OrderDetailPage() {
@@ -370,6 +371,8 @@ export default function OrderDetailPage() {
   const user = useAuthStore((s) => s.user);
 
   const { data: order, isLoading, isError, error } = useOrderDetail(id);
+  const downloadInvoice = useDownloadInvoice();
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   if (!user) return <Navigate to="/login" replace />;
 
@@ -446,6 +449,22 @@ export default function OrderDetailPage() {
 
   const statusPillCls = STATUS_PILL[order.status] || 'bg-wcanvas text-wmuted border border-wline';
 
+  // Invoice exists only once there's a real supply behind the order
+  // (backend 409s for PENDING/CANCELLED); cancel only while we can still
+  // stop fulfilment (PENDING, or PAID with no carrier engagement yet).
+  const canDownloadInvoice = hasInvoice(order);
+  const canCancel = isOrderCancellable(order);
+
+  async function handleDownloadInvoice() {
+    try {
+      await downloadInvoice.mutateAsync(order.id);
+    } catch (err) {
+      toast.error(
+        await readApiErrorMessage(err, 'Could not download the invoice.'),
+      );
+    }
+  }
+
   return (
     <AccountLayout active="orders">
       {/* Back link */}
@@ -485,6 +504,33 @@ export default function OrderDetailPage() {
           </span>
         </div>
       </div>
+
+      {/* ── Actions row (invoice download / self-service cancel) ─────────── */}
+      {(canDownloadInvoice || canCancel) && (
+        <div className="mb-4 flex flex-wrap items-center justify-end gap-2.5">
+          {canDownloadInvoice && (
+            <button
+              type="button"
+              onClick={handleDownloadInvoice}
+              disabled={downloadInvoice.isPending}
+              className="flex items-center gap-1.5 rounded-full border border-wline bg-transparent px-5 py-2 text-[13px] text-wink transition-colors hover:border-wgreen hover:text-wgreen disabled:pointer-events-none disabled:opacity-50"
+            >
+              <FileDown className="size-3.5" aria-hidden="true" />
+              {downloadInvoice.isPending ? 'Preparing…' : 'Download invoice'}
+            </button>
+          )}
+          {canCancel && (
+            <button
+              type="button"
+              onClick={() => setShowCancelModal(true)}
+              className="flex items-center gap-1.5 rounded-full border border-wline bg-transparent px-5 py-2 text-[13px] text-wink transition-colors hover:border-red-400 hover:text-red-600"
+            >
+              <XCircle className="size-3.5" aria-hidden="true" />
+              Cancel order
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── b) Status timeline ───────────────────────────────────────────── */}
       <OrderProgress order={order} />
@@ -557,12 +603,19 @@ export default function OrderDetailPage() {
                 <dd className="text-wink">{formatPrice(order.tax_amount, order.currency)}</dd>
               </div>
             )}
-            {Number(order.shipping_amount) > 0 && (
-              <div className="flex justify-between text-wmuted">
-                <dt>Shipping</dt>
-                <dd className="text-wink">{formatPrice(order.shipping_amount, order.currency)}</dd>
-              </div>
-            )}
+            {/* Always shown, unlike the other rows: "Delivery — FREE" is a
+                thing the customer paid attention to at checkout, and silently
+                omitting it reads as though a charge is missing. */}
+            <div className="flex justify-between text-wmuted">
+              <dt>Delivery</dt>
+              {Number(order.shipping_amount) > 0 ? (
+                <dd className="text-wink">
+                  {formatPrice(order.shipping_amount, order.currency)}
+                </dd>
+              ) : (
+                <dd className="text-wgreen font-medium">FREE</dd>
+              )}
+            </div>
             {Number(order.discount_amount) > 0 && (
               <div className="flex justify-between text-wgreen">
                 <dt>
@@ -731,9 +784,20 @@ export default function OrderDetailPage() {
                         {formatPrice(p.amount, p.currency || order.currency)}
                       </span>
                     </div>
+                    {/* The gateway's payment id is the reference a customer can
+                        actually quote to us or to their bank. `Ref:` alone used
+                        to show our internal merchant txn id, which looks like a
+                        random token and means nothing to them — so label both. */}
+                    {p.gateway_payment_id && (
+                      <p className="text-[11px] text-wmuted">
+                        Payment ID:{' '}
+                        <span className="font-mono">{p.gateway_payment_id}</span>
+                      </p>
+                    )}
                     {p.transaction_reference && (
-                      <p className="font-mono text-[11px] text-wmuted">
-                        Ref: {p.transaction_reference}
+                      <p className="text-[11px] text-wmuted">
+                        Order ref:{' '}
+                        <span className="font-mono">{p.transaction_reference}</span>
                       </p>
                     )}
                     {p.paid_at && (
@@ -777,6 +841,14 @@ export default function OrderDetailPage() {
 
         </div>
       </div>
+
+      {/* Cancel-order confirm modal */}
+      {showCancelModal && (
+        <CancelOrderModal
+          order={order}
+          onClose={() => setShowCancelModal(false)}
+        />
+      )}
     </AccountLayout>
   );
 }

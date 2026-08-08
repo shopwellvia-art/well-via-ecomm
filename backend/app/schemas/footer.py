@@ -6,16 +6,17 @@ service falls back to it when no row exists or when a top-level key is absent.
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import ConfigDict, field_validator
 
 from app.schemas._validators import validate_safe_url
+from app.schemas.base import AppSchema
 
 
 # ---------------------------------------------------------------------------
 # Nested models
 # ---------------------------------------------------------------------------
 
-class TrustFeature(BaseModel):
+class TrustFeature(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     icon: str
@@ -23,7 +24,7 @@ class TrustFeature(BaseModel):
     sub: str
 
 
-class Brand(BaseModel):
+class Brand(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     name: str
@@ -38,7 +39,7 @@ class Brand(BaseModel):
         return validate_safe_url(v)
 
 
-class Newsletter(BaseModel):
+class Newsletter(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     enabled: bool
@@ -47,35 +48,35 @@ class Newsletter(BaseModel):
     success: str
 
 
-class FooterLink(BaseModel):
+class FooterLink(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     label: str
     to: str
 
 
-class LinkColumn(BaseModel):
+class LinkColumn(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     title: str
     links: list[FooterLink]
 
 
-class MailUs(BaseModel):
+class MailUs(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     heading: str
     lines: list[str]
 
 
-class Phone(BaseModel):
+class Phone(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     display: str
     tel: str
 
 
-class RegisteredOffice(BaseModel):
+class RegisteredOffice(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     heading: str
@@ -84,7 +85,7 @@ class RegisteredOffice(BaseModel):
     phones: list[Phone]
 
 
-class SocialLink(BaseModel):
+class SocialLink(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     icon: str
@@ -97,7 +98,7 @@ class SocialLink(BaseModel):
         return validate_safe_url(v)
 
 
-class BottomLink(BaseModel):
+class BottomLink(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     icon: str
@@ -109,14 +110,8 @@ class BottomLink(BaseModel):
 # Canonical defaults — single source of truth used by FooterService
 # ---------------------------------------------------------------------------
 
-_ADDRESS_LINES = [
-    "Lumen Internet Pvt. Ltd.,",
-    "Buildings Alyssa, Begonia &",
-    "Clove Embassy Tech Village,",
-    "Outer Ring Road, Devarabeesanahalli Village,",
-    "Bengaluru, 560103,",
-    "Karnataka, India",
-]
+# Admin-editable address blocks — hidden until real lines are filled in.
+_ADDRESS_LINES: list[str] = []
 
 DEFAULT_FOOTER: dict = {
     "trust_features": [
@@ -126,58 +121,45 @@ DEFAULT_FOOTER: dict = {
         {"icon": "Headphones", "title": "24/7 Support", "sub": "Real humans, anytime"},
     ],
     "brand": {
-        "name": "Lumen",
-        "tagline": (
-            "Modern essentials, thoughtfully sourced. "
-            "Join our newsletter for early drops and member-only pricing."
-        ),
+        "name": "WELLVIA",
+        "tagline": "Wellness Redefined",
         "logo_url": "",
     },
     "newsletter": {
         "enabled": True,
         "placeholder": "you@example.com",
         "note": "No spam. Unsubscribe anytime.",
-        "success": "You're on the list. Welcome to Lumen.",
+        "success": "You're on the list. Welcome to Wellvia.",
     },
     "link_columns": [
         {
-            "title": "About",
+            "title": "Shop",
             "links": [
-                {"label": "Contact Us", "to": "/contact"},
+                {"label": "All Products", "to": "/products"},
+                {"label": "Best Sellers", "to": "/bestsellers"},
+                {"label": "New Arrivals", "to": "/new-arrivals"},
+                {"label": "Combos", "to": "/categories"},
+                {"label": "Shop by Goal", "to": "/products"},
+            ],
+        },
+        {
+            "title": "Explore",
+            "links": [
                 {"label": "About Us", "to": "/about"},
-                {"label": "Careers", "to": "/careers"},
-                {"label": "Lumen Stories", "to": "/stories"},
-                {"label": "Press", "to": "/press"},
-                {"label": "Corporate Information", "to": "/corporate"},
+                {"label": "Blog", "to": "/stories"},
+                {"label": "FAQs", "to": "/contact"},
+                {"label": "Contact Us", "to": "/contact"},
+                {"label": "Track Order", "to": "/orders"},
             ],
         },
         {
-            "title": "Group",
+            "title": "Customer Care",
             "links": [
-                {"label": "Aura", "to": "/brands/aura"},
-                {"label": "Voyage", "to": "/brands/voyage"},
-                {"label": "Forge", "to": "/brands/forge"},
-            ],
-        },
-        {
-            "title": "Help",
-            "links": [
-                {"label": "Payments", "to": "/help/payments"},
-                {"label": "Shipping", "to": "/help/shipping"},
-                {"label": "Cancellation & Returns", "to": "/help/returns"},
-                {"label": "FAQ", "to": "/help/faq"},
-            ],
-        },
-        {
-            "title": "Consumer Policy",
-            "links": [
-                {"label": "Cancellation & Returns", "to": "/policy/returns"},
-                {"label": "Terms of Use", "to": "/terms"},
-                {"label": "Security", "to": "/security"},
-                {"label": "Privacy", "to": "/privacy"},
-                {"label": "Sitemap", "to": "/sitemap"},
-                {"label": "Grievance Redressal", "to": "/grievance"},
-                {"label": "EPR Compliance", "to": "/epr"},
+                {"label": "Shipping Policy", "to": "/shipping"},
+                {"label": "Refund & Cancellation", "to": "/refund"},
+                {"label": "Terms & Conditions", "to": "/terms"},
+                {"label": "Privacy Policy", "to": "/privacy"},
+                {"label": "Contact Us", "to": "/contact"},
             ],
         },
     ],
@@ -188,17 +170,14 @@ DEFAULT_FOOTER: dict = {
     "registered_office": {
         "heading": "Registered Office Address",
         "lines": _ADDRESS_LINES,
-        "cin": "U51109KA2026PTC066107",
-        "phones": [
-            {"display": "044-4561 4700", "tel": "+914445614700"},
-            {"display": "044-6741 5800", "tel": "+914467415800"},
-        ],
+        "cin": "",
+        "phones": [],
     },
     "social_links": [
-        {"icon": "Facebook", "label": "Facebook", "href": "https://facebook.com/lumen"},
-        {"icon": "Twitter", "label": "Twitter", "href": "https://twitter.com/lumen"},
-        {"icon": "Youtube", "label": "YouTube", "href": "https://youtube.com/lumen"},
-        {"icon": "Instagram", "label": "Instagram", "href": "https://instagram.com/lumen"},
+        {"icon": "Facebook", "label": "Facebook", "href": "https://facebook.com/wellvia"},
+        {"icon": "Twitter", "label": "Twitter", "href": "https://twitter.com/wellvia"},
+        {"icon": "Youtube", "label": "YouTube", "href": "https://youtube.com/wellvia"},
+        {"icon": "Instagram", "label": "Instagram", "href": "https://instagram.com/wellvia"},
     ],
     "bottom_links": [
         {"icon": "Store", "label": "Become a Seller", "to": "/sell"},
@@ -206,8 +185,8 @@ DEFAULT_FOOTER: dict = {
         {"icon": "Gift", "label": "Gift Cards", "to": "/gift-cards"},
         {"icon": "LifeBuoy", "label": "Help Center", "to": "/help"},
     ],
-    "payment_methods": ["VISA", "MC", "AmEx", "UPI", "RuPay", "Net Banking", "COD", "EMI"],
-    "copyright": "© 2007–{year} Lumen.com",
+    "payment_methods": ["VISA", "Mastercard", "RuPay", "UPI", "AMEX", "PayPal"],
+    "copyright": "© Wellvia. All rights reserved.",
 }
 
 
@@ -215,7 +194,7 @@ DEFAULT_FOOTER: dict = {
 # Top-level document schemas
 # ---------------------------------------------------------------------------
 
-class FooterConfigRead(BaseModel):
+class FooterConfigRead(AppSchema):
     """Full footer document returned by GET /footer."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -232,13 +211,13 @@ class FooterConfigRead(BaseModel):
     copyright: str
 
 
-class LogoUploadResponse(BaseModel):
+class LogoUploadResponse(AppSchema):
     """Returned by POST /footer/logo after a successful upload."""
 
     url: str
 
 
-class FooterConfigUpdate(BaseModel):
+class FooterConfigUpdate(AppSchema):
     """PUT body — full replace semantics.
 
     Every top-level field defaults to the canonical default so a client that

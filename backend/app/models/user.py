@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, String
+# Imported at runtime, not under TYPE_CHECKING: SQLAlchemy resolves the string
+# annotation on `Mapped[datetime | None]` when it maps the class, so the name
+# has to actually exist in this module's namespace.
+from datetime import datetime  # noqa: TC003
+
+from sqlalchemy import Boolean, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, IDMixin, TimestampMixin
@@ -31,6 +36,15 @@ class User(Base, IDMixin, TimestampMixin):
     # Legacy shortcut. True == bypass all permission checks. Kept so existing
     # code paths still work; new code should use require_permission().
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Last successful login (any method: password, 2FA completion, Google).
+    # Sessions live in Redis and expire, so without this column "when was this
+    # account last used" is unanswerable. Stamped in AuthService._issue_tokens,
+    # the single choke point every fresh login passes through. NULL means the
+    # account has not logged in since the column was added.
+    last_login_at: Mapped["datetime | None"] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Profile + denormalized loyalty totals now live on the `customers`
     # satellite (1:1). See the read proxies below for backwards-compatible

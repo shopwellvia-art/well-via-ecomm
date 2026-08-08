@@ -7,6 +7,7 @@ import {
   clearPendingReferralCode,
 } from '@/features/loyalty/referralCapture.js';
 import { env } from '@/config/env.js';
+import { trackRegistration } from '@/features/tracking/metaPixel.js';
 import { cn } from '@/lib/utils.js';
 
 const inputCls =
@@ -67,6 +68,9 @@ export default function LoginPanel({ onSuccess, defaultMode = 'login' }) {
           referral_code: referralCode || undefined,
         });
         clearPendingReferralCode();
+        // Meta `CompleteRegistration`. This panel is the checkout-embedded twin
+        // of LoginPage — both register, so both report it.
+        trackRegistration();
       }
       const resp = await authApi.login(form.email, form.password);
       if (resp.needs_totp) {

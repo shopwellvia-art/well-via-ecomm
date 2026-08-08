@@ -56,7 +56,6 @@ export default class ErrorBoundary extends Component {
       return;
     }
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
       console.error('ErrorBoundary caught an error', error, info);
     }
   }

@@ -9,14 +9,34 @@ from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
 
+from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from app.models.order import Order, OrderItem, OrderStatus
 from app.models.product import Product
 from app.models.review import Review
 from app.models.user import User
 from app.repositories.product_repository import ProductRepository
 from app.repositories.review_repository import ReviewRepository
+from app.services.settings_service import SettingsService
+
+# Order states that mean the purchase "really happened" — the same
+# committed-states semantics CODService._is_first_time_customer uses. Every
+# order (prepaid AND COD) must pass through PAID before it can be shipped
+# (see order_service transition map), so PAID is the earliest point at which
+# the purchase is committed. PENDING/CANCELLED are abandoned or reversed
+# checkouts; REFUNDED means the money went back, so it doesn't verify.
+_COMMITTED_ORDER_STATES = (
+    OrderStatus.PAID,
+    OrderStatus.SHIPPED,
+    OrderStatus.DELIVERED,
+)
+
+# Moderation switch. "true" (the default when the setting row is absent)
+# keeps today's behavior: user reviews publish immediately. "false" routes
+# new user reviews into the admin moderation queue (is_approved=False).
+_AUTO_APPROVE_KEY = "reviews.auto_approve"
 
 
 class ReviewService:
@@ -65,10 +85,17 @@ class ReviewService:
             rating=rating,
             title=title,
             body=body,
-            # Verified flag is derived later from the user's order history; for
-            # now we leave it false unless an admin flips it.
-            is_verified_purchase=False,
-            is_approved=True,
+            # Derived from the author's order history: a committed order
+            # (PAID/SHIPPED/DELIVERED) containing this product marks the
+            # review as a verified purchase. Admins can still flip it.
+            is_verified_purchase=self._has_purchased(user.id, product_id),
+            # Auto-approve unless moderation is switched on. Unapproved
+            # reviews sit in the existing admin queue (GET /reviews/admin
+            # ?approved=false) and are excluded from the public listing and
+            # the product's rating aggregates until an admin approves them.
+            is_approved=SettingsService(self.db).get_bool(
+                _AUTO_APPROVE_KEY, default=True
+            ),
         )
         self.reviews.add(review)
         self.db.flush()  # so review.id is set before loyalty references it
@@ -102,12 +129,33 @@ class ReviewService:
         review = self._must_get(review_id)
         if review.user_id != user.id and not user.is_admin:
             raise ForbiddenError("You can only edit your own review")
+        changed = False
         if rating is not None:
+            changed = changed or review.rating != rating
             review.rating = rating
         if title is not None:
+            changed = changed or review.title != title
             review.title = title
         if body is not None:
+            changed = changed or review.body != body
             review.body = body
+        # Moderation gate on edits: when auto-approve is OFF, an author's edit
+        # to an already-published review must re-enter the admin queue rather
+        # than re-publish instantly — otherwise "submit something innocuous,
+        # wait for approval, edit it into spam" bypasses moderation entirely.
+        # Admin edits skip the gate (admins ARE the moderators), and a no-op
+        # PATCH never dequeues a published review. The recompute below then
+        # drops the review from the product's public aggregates until an
+        # admin re-approves it.
+        if (
+            changed
+            and review.is_approved
+            and not user.is_admin
+            and not SettingsService(self.db).get_bool(
+                _AUTO_APPROVE_KEY, default=True
+            )
+        ):
+            review.is_approved = False
         self._recompute(self.products.get(review.product_id))
         self.db.commit()
         return self.reviews.get(review_id)  # type: ignore[return-value]
@@ -210,6 +258,19 @@ class ReviewService:
         self.db.commit()
 
     # ---- internals ----
+
+    def _has_purchased(self, user_id: int, product_id: int) -> bool:
+        """One EXISTS query: does this user have a committed order
+        (PAID/SHIPPED/DELIVERED) containing this product?"""
+        stmt = select(
+            exists().where(
+                Order.user_id == user_id,
+                Order.status.in_(_COMMITTED_ORDER_STATES),
+                OrderItem.order_id == Order.id,
+                OrderItem.product_id == product_id,
+            )
+        )
+        return bool(self.db.execute(stmt).scalar())
 
     def _must_get(self, review_id: int) -> Review:
         review = self.reviews.get(review_id)

@@ -4,6 +4,7 @@ import { useAuthStore } from '@/features/auth/store.js';
 import WImage from '@/components/storefront/WImage';
 import { HeartIcon, Stars } from '@/components/storefront/Icons';
 import { useAddToCart } from '@/features/cart/hooks';
+import { useAddedToCartModal } from '@/features/cart/addedModalStore.js';
 import {
   useIsInWishlist,
   useAddToWishlist,
@@ -40,6 +41,7 @@ const BADGE_STYLES = {
  */
 export default function ProductCard({ product, buttonLabel = 'Add to Cart', badge }) {
   const addToCart = useAddToCart();
+  const showAdded = useAddedToCartModal((s) => s.showAdded);
   const inWishlist = useIsInWishlist(product?.id);
   const addWishlist = useAddToWishlist();
   const removeWishlist = useRemoveFromWishlist();
@@ -56,21 +58,11 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
     compare_at_price,
     image_url,
     stock,
-    rating_avg,
     rating_count,
-    flavour,
-    short_description,
   } = product;
 
   const isDiscounted =
     compare_at_price != null && Number(compare_at_price) > Number(price);
-  const discountPct = isDiscounted
-    ? Math.round(
-        ((Number(compare_at_price) - Number(price)) /
-          Number(compare_at_price)) *
-          100
-      )
-    : 0;
   const outOfStock = stock <= 0;
 
   // Ribbon: listing context wins, then the admin's free-form product.badge,
@@ -82,8 +74,6 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
   const badgeStyle =
     BADGE_STYLES[(badge || product.badge || 'sale').toLowerCase()] ||
     BADGE_STYLES.default;
-
-  const subtitle = short_description || null;
 
   const handleWishlist = (e) => {
     e.preventDefault();
@@ -108,8 +98,14 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
   const handleAddToCart = () => {
     if (outOfStock) return;
     addToCart.mutate(
-      { productId: id, quantity: 1 },
+      // `price` is not used by the mutation itself — it rides along so the Meta
+      // AddToCart event in useAddToCart can carry a value.
+      { productId: id, quantity: 1, price },
       {
+        // Confirmation fires on success only. Adding from a grid is otherwise
+        // completely silent — the header badge ticks up off-screen and nothing
+        // distinguishes a successful add from a dead button.
+        onSuccess: () => showAdded({ id, name, image_url, price, quantity: 1 }),
         onError: (err) =>
           toast.error(
             err?.response?.data?.error?.message ||
@@ -172,12 +168,13 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
 
         {/* Product name */}
         {/* here here */}
-        <Link
-          to={`/products/${id}`}
-          className="font-inter font-bold text-[14px] lg:text-[18px] leading-tight mb-1 lg:mb-[5px] no-underline text-wink hover:text-wgreen transition-colors"
-        >
-          {name}
-        </Link>
+        {/* Product name */}
+<Link
+  to={`/products/${id}`}
+  className="font-inter font-bold text-[14px] lg:text-[18px] leading-tight mb-1 lg:mb-[5px] no-underline text-wink hover:text-[#08112C] transition-colors"
+>
+  {name}
+</Link>
 
         {/* Flavour tag */}
         {/* {flavour && (
@@ -198,9 +195,9 @@ export default function ProductCard({ product, buttonLabel = 'Add to Cart', badg
         {/* Price row */}
         {/* here here */}
         <div className="flex items-baseline gap-2.5 mb-[13px] flex-wrap">
-          <span className="font-inter text-[16px] lg:text-[20px] text-wink">
-            {formatPrice(price)}
-          </span>
+          <span className="font-inter text-[13px] lg:text-[16px] font-semibold text-wink">
+  {formatPrice(price)}
+</span>
           {/* {isDiscounted && (
             <>
               <span className="text-[13px] text-wmuted line-through">

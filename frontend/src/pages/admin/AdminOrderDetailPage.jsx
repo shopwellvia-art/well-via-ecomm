@@ -1,16 +1,14 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
-  Package,
   Truck,
   CheckCircle2,
   XCircle,
   RotateCcw,
   Mail,
   ShieldCheck,
-  Clock,
   CreditCard,
   TicketPercent,
   AlertTriangle,
@@ -31,7 +29,7 @@ import { Input } from '@/components/ui/Input.jsx';
 import { Textarea } from '@/components/ui/Textarea.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
-import { cn, formatPrice } from '@/lib/utils.js';
+import { cn, formatPrice, countryName, formatPhone } from '@/lib/utils.js';
 import {
   useAdminOrder,
   useCancelOrder,
@@ -264,6 +262,110 @@ function ReasonModal({ title, action, onClose, onSubmit, pending }) {
               }}
             >
               {action}
+            </Button>
+          </div>
+        </Card>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/**
+ * Refund-specific modal. Same shell as ReasonModal, plus the `force_manual`
+ * toggle: by default the backend performs a REAL refund through the payment
+ * gateway; checking the box only records the refund (for operators who already
+ * reversed the payment in the gateway dashboard).
+ */
+function RefundModal({ onClose, onSubmit, pending }) {
+  const [reason, setReason] = useState('');
+  const [forceManual, setForceManual] = useState(false);
+  const [error, setError] = useState(null);
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm"
+    >
+      <motion.div
+        variants={scaleIn}
+        initial="hidden"
+        animate="show"
+        className="w-full max-w-md"
+      >
+        <Card className="p-6 shadow-lg">
+          <p className="text-h3 font-semibold text-ink-primary">Refund order</p>
+          <p className="mt-1 text-xs text-ink-tertiary">
+            A short reason is recorded in the audit log + on the order. The
+            customer is not shown this verbatim.
+          </p>
+          <div className="mt-4">
+            <Textarea
+              label="Reason"
+              required
+              placeholder="Customer returned the item; order arrived damaged; etc."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <label
+            className={cn(
+              'mt-4 flex cursor-pointer items-start gap-3 rounded-md border px-4 py-3 text-sm transition-all duration-150',
+              forceManual
+                ? 'border-accent/30 bg-accent/8'
+                : 'border-line-subtle bg-bg-sunken hover:border-line-strong',
+            )}
+          >
+            <input
+              type="checkbox"
+              checked={forceManual}
+              onChange={(e) => setForceManual(e.target.checked)}
+              className="mt-0.5 size-4 rounded-sm border border-line-subtle bg-bg-elevated text-accent focus-visible:focus-ring"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-ink-primary">
+                Mark as refunded without charging the gateway
+              </span>
+              <span className="mt-0.5 block text-xs text-ink-secondary">
+                Use when the refund was already issued in the gateway dashboard.
+                No money moves — the order is only recorded as refunded.
+              </span>
+            </span>
+          </label>
+          <p
+            className={cn(
+              'mt-3 flex items-center gap-1.5 text-xs',
+              forceManual ? 'text-ink-tertiary' : 'text-warning',
+            )}
+          >
+            <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+            {forceManual
+              ? 'Record-only: the payment gateway will not be contacted.'
+              : 'This will issue a real refund via the payment gateway.'}
+          </p>
+          {error && (
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-danger">
+              <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+              {error}
+            </p>
+          )}
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="ghost" onClick={onClose} disabled={pending}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              loading={pending}
+              onClick={() => {
+                if (reason.trim().length < 3) {
+                  setError('Reason is required (at least 3 characters).');
+                  return;
+                }
+                onSubmit({ reason: reason.trim(), force_manual: forceManual });
+              }}
+            >
+              {forceManual ? 'Mark as refunded' : 'Issue gateway refund'}
             </Button>
           </div>
         </Card>
@@ -672,14 +774,21 @@ function AddressBlock({ addr }) {
   const email = addr.email || null;
   const gst = addr.gst_number || null;
 
+  // Kept in step with the customer-facing AddressBlock in OrderDetailPage.jsx:
+  // staff read this while reciting an address to a courier, so it must match
+  // what the customer sees character for character.
+  const locality = [[city, state].filter(Boolean).join(', '), pincode]
+    .filter(Boolean)
+    .join(' – ');
+
   const lines = [
     name,
     line1,
     line2,
     landmark,
-    [city, state, pincode].filter(Boolean).join(', '),
-    country,
-    phone ? `Phone: ${phone}` : null,
+    locality,
+    countryName(country),
+    phone ? `Phone: ${formatPhone(phone)}` : null,
     email ? `Email: ${email}` : null,
     gst ? `GST: ${gst}` : null,
   ].filter(Boolean);
@@ -1195,8 +1304,15 @@ export default function AdminOrderDetailPage() {
                   {order.customer.full_name}
                 </p>
               )}
+              {/* Straight to the customer record. This used to point at
+                  /admin/users?q=<email>, which after the customers/team split
+                  redirects to /admin/team — the STAFF directory, where a shopper
+                  cannot appear, with the ?q= dropped by the redirect and the
+                  page gated on users.view that a support operator may not hold.
+                  AdminCustomerBrief already carries `id`, so address the detail
+                  page directly and skip the search round-trip. */}
               <Link
-                to={`/admin/users?q=${encodeURIComponent(order.customer.email)}`}
+                to={`/admin/customers/${order.customer.id}`}
                 className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:underline focus-visible:focus-ring"
               >
                 View customer profile →
@@ -1242,14 +1358,12 @@ export default function AdminOrderDetailPage() {
         />
       )}
       {modal === 'refund' && (
-        <ReasonModal
-          title="Refund order"
-          action="Issue refund"
+        <RefundModal
           pending={refund.isPending}
           onClose={() => setModal(null)}
-          onSubmit={(reason) => {
+          onSubmit={({ reason, force_manual }) => {
             refund.mutate(
-              { id: orderId, reason },
+              { id: orderId, reason, force_manual },
               { onSuccess: () => setModal(null) },
             );
           }}

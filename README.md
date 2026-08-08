@@ -4,7 +4,7 @@ Production-ready ecommerce starter: FastAPI + React + MySQL + Redis, orchestrate
 
 ## Stack
 
-- **Backend:** FastAPI, SQLAlchemy 2, Alembic, Pydantic v2, JWT auth
+- **Backend:** FastAPI, SQLAlchemy 2, Alembic, Pydantic v2, PASETO v4.local auth
 - **Frontend:** React 18, Vite, React Query, Zustand, React Router
 - **Database:** MySQL 8.4
 - **Cache / queue:** Redis 7
@@ -57,10 +57,37 @@ docker run -d --name dev-redis -p 6379:6379 redis:7-alpine
 
 ## Tests
 
+**Backend** tests run from your local venv against the throwaway MySQL/Redis
+containers above — never inside Docker: `tests/` and pytest are deliberately
+excluded from the production image (see `backend/.dockerignore` and
+`requirements-dev.txt`), so there is nothing to `docker compose exec` into.
+
 ```bash
-cd backend && python -m pytest tests/ -v     # needs the throwaway DB above
-cd frontend && npm test -- --run
+cd backend
+source .venv/bin/activate
+pip install -r requirements-dev.txt   # requirements.txt + test tooling
+alembic upgrade head                  # against the throwaway DB ONLY
+python -m pytest tests/ -v
 ```
+
+`backend/tests/conftest.py` aborts the whole session unless `MYSQL_HOST` is a
+local host and `ENVIRONMENT` is `test`/`development`/`ci` — so a mispointed
+`.env` fails safe instead of touching the shared remote DB.
+
+**Frontend** checks are plain npm scripts:
+
+```bash
+cd frontend
+npm run lint          # ESLint
+npm test              # Vitest (watch mode; CI uses `npx vitest run`)
+npm run test:e2e      # Playwright end-to-end — needs the app running
+npm run build
+```
+
+CI (`.github/workflows/cicd.yml`) runs the same suites — frontend lint + Vitest
++ build, and the backend pytest suite against throwaway MySQL/Redis service
+containers — on every push to `production`, and blocks the deploy if any fail.
+E2E is local-only (it needs a live stack).
 
 ## Production
 
@@ -75,13 +102,3 @@ Deployment is automated — push to the `production` branch. See **DEPLOY.md**.
 - `schemas/` — Pydantic DTOs
 
 Dependency direction is one-way: `api → service → repository → model`.
-
-## Testing
-
-```bash
-# backend
-docker compose exec backend pytest
-
-# frontend
-docker compose exec frontend npm test
-```

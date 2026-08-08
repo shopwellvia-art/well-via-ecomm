@@ -399,7 +399,7 @@ function SaveBar({ dirty, saving, savedAt, onSave }) {
 
 // ─── CategoryEditor ───────────────────────────────────────────────────────────
 
-function CategoryEditor({ category, items, draft, dirty, onChange, onSave, saving, savedAt, extras }) {
+function CategoryEditor({ items, draft, dirty, onChange, onSave, saving, savedAt, extras }) {
   // Separate bool fields from input fields — bools span full width in their own group
   const boolItems = items.filter((it) => fieldType(it.key) === 'bool');
   const inputItems = items.filter((it) => fieldType(it.key) !== 'bool');
@@ -586,7 +586,7 @@ export default function AdminSettingsPage() {
             action={<Badge tone="info" size="sm">Test</Badge>}
           />
           <p className="mb-4 text-xs text-ink-secondary">
-            Sends "Test SMS from your Lumen admin panel." via the active backend.
+            Sends "Test SMS from your Wellvia admin panel." via the active backend.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input
@@ -600,7 +600,7 @@ export default function AdminSettingsPage() {
               onClick={() =>
                 testSms.mutate({
                   to: testSmsTo,
-                  body: 'Test SMS from your Lumen admin panel.',
+                  body: 'Test SMS from your Wellvia admin panel.',
                 })
               }
               loading={testSms.isPending}

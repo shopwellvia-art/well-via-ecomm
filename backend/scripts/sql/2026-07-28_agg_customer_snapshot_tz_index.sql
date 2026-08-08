@@ -1,0 +1,76 @@
+-- Manual DDL for the shared remote MySQL (applied in a reviewed window, NOT via
+-- `alembic upgrade` — the live lineage diverges from the repo; see DEPLOY.md §6).
+-- Mirrors alembic revision e1c5b7a04d92 EXACTLY: this file was generated from it
+-- with `alembic upgrade d7f3a9c2e814:e1c5b7a04d92 --sql`, so the two artifacts
+-- cannot silently disagree. Regenerate the same way if the revision changes.
+--
+-- WHAT THIS DOES
+--   Adds ONE secondary index, (bucket_date, tz_generation), to
+--   agg_customer_snapshot. No column, constraint or existing index is touched.
+--
+-- WHY
+--   AnalyticsRepository.distinct_tz_generations runs
+--     SELECT DISTINCT tz_generation FROM agg_customer_snapshot
+--      WHERE bucket_date >= ? AND bucket_date < ?
+--   on EVERY read of a view backed by this table (probe_source ->
+--   guard_tz_generation). docs/analytics/PERFORMANCE.md §5.4 measured it at up
+--   to 341 ms and EXPLAINed it against the 327 400-row table:
+--
+--     type: range   key: uq_agg_customer_snapshot_key   key_len: 3   rows: 167373
+--
+--   167 373 index entries scanned to return one distinct value. The UNIQUE key
+--   is (bucket_date, customer_key, tz_generation) and customer_key sits between
+--   the two columns the query needs, so MySQL cannot do a loose index scan.
+--   This index is a covering prefix for that query and turns it into one.
+--
+--   It is the only slow-query fingerprint that appeared on the READ path in
+--   that measurement, and it is why customers/customer-segmentation (547 ms,
+--   425 ms of it SQL, 4 queries) and customers/rfm-customer-analysis (353 ms,
+--   346 ms SQL) were the two slowest non-margin views.
+--
+-- COST
+--   Write amplification on the heaviest-writing rollup: customer_snapshot
+--   inserts ~11 000 rows per bucket at the measured volume and each now
+--   maintains a fourth secondary index. Two narrow columns (DATE + SMALLINT)
+--   against an INSERT measured at 274 ms per bucket, once a day, in exchange
+--   for a read that runs on every dashboard request.
+--
+-- SAFETY
+--   Purely additive and safe to apply BEFORE the code deploy (additive-first) —
+--   nothing reads the index by name; it only changes the plan MySQL picks.
+--
+--   MySQL 8 builds a secondary index on a table this size ONLINE by default
+--   (ALGORITHM=INPLACE, LOCK=NONE): concurrent reads and writes continue. It
+--   still costs a full pass over the table and temporary sort space, so run it
+--   in the reviewed window rather than at peak. At the measured 327 400 rows
+--   this is seconds, not minutes; size it against the live row count first:
+--     SELECT COUNT(*) FROM agg_customer_snapshot;
+--
+--   Re-running fails harmlessly with "Duplicate key name" and changes nothing.
+--   Verify first if unsure:
+--     SHOW INDEX FROM agg_customer_snapshot
+--      WHERE Key_name = 'ix_agg_customer_snapshot_bucket_date_tz_generation';
+--
+-- BEFORE RUNNING
+--   Take a backup: backend/scripts/backup_db.sh
+--
+-- PREREQUISITE
+--   agg_customer_snapshot must already exist — i.e.
+--   2026-07-28_analytics_v2_schema.sql has been applied. This file is a no-op
+--   follow-up to it and must not be applied first.
+--
+-- NOTE ON alembic_version
+--   The generated statement that stamps alembic_version has been REMOVED on
+--   purpose. The shared remote DB is on the `conpay001` lineage which this repo
+--   does not contain; stamping it with a revision id from this repo's chain
+--   would corrupt its migration state. Nothing here needs alembic to know.
+--
+-- ROLLBACK
+--   The index is invisible to application code, so leaving it in place is safe.
+--   To remove it:
+--     DROP INDEX ix_agg_customer_snapshot_bucket_date_tz_generation
+--       ON agg_customer_snapshot;
+
+-- Running upgrade d7f3a9c2e814 -> e1c5b7a04d92
+
+CREATE INDEX ix_agg_customer_snapshot_bucket_date_tz_generation ON agg_customer_snapshot (bucket_date, tz_generation);

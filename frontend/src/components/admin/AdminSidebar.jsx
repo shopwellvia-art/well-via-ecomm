@@ -13,6 +13,7 @@ import {
   TicketPercent,
   ShieldCheck,
   Users,
+  UserCog,
   Percent,
   Star,
   Coins,
@@ -30,8 +31,11 @@ import {
   PiggyBank,
   Activity,
   AlertOctagon,
+  Plug,
+  Calculator,
 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
+import { analyticsNavItems } from '@/features/analytics/registry.icons.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { authApi } from '@/features/auth/api.js';
 import { ThemeToggle } from '@/components/ui/ThemeToggle.jsx';
@@ -48,7 +52,12 @@ const NAV = [
   { to: '/admin/taxes', label: 'Taxes', icon: Percent, end: false, permission: 'taxes.view' },
   { to: '/admin/reviews', label: 'Reviews', icon: Star, end: false, permission: 'reviews.view' },
   { to: '/admin/loyalty', label: 'Loyalty', icon: Coins, end: false, permission: 'loyalty.view' },
-  { to: '/admin/users', label: 'Users', icon: Users, end: false, permission: 'users.view' },
+  // Two directories over one users table. Customers sits with the operational
+  // pages (it is a support tool); Team sits next to Roles because it is about
+  // who holds access. Keeping them apart is the point — the role-assign control
+  // must never render on a shopper's row.
+  { to: '/admin/customers', label: 'Customers', icon: Users, end: false, permission: 'customers.view' },
+  { to: '/admin/team', label: 'Team', icon: UserCog, end: false, permission: 'users.view' },
   { to: '/admin/roles', label: 'Roles', icon: ShieldCheck, end: false, permission: 'roles.view' },
   { to: '/admin/audit', label: 'Audit log', icon: History, end: false, permission: 'audit.view' },
   { to: '/admin/observability', label: 'Observability', icon: Activity, end: false, permission: 'observability.view' },
@@ -61,18 +70,39 @@ const FRONTEND_GROUP = {
   label: 'Frontend',
   icon: LayoutPanelTop,
   children: [
+    { to: '/admin/storefront', label: 'Storefront', icon: Store, end: false, permission: 'frontend.manage' },
     { to: '/admin/hero', label: 'Hero slides', icon: GalleryHorizontal, end: false, permission: 'hero_slides.manage' },
     { to: '/admin/footer', label: 'Footer', icon: LayoutTemplate, end: false, permission: 'frontend.manage' },
     { to: '/admin/pages', label: 'Company pages', icon: FileText, end: false, permission: 'frontend.manage' },
   ],
 };
 
+// ONE Analytics parent with exactly 12 module links — never 73. The 73 detailed
+// views are reached by tabs inside a module, not by the sidebar.
+//
+// The children are GENERATED from the registry contract rather than listed
+// here, so the sidebar cannot drift from the backend: renaming a module or
+// changing its permission is a backend edit that regenerates the contract, and
+// this file needs no change at all.
+//
+// The two legacy entries stay until shadow-mode reconciliation signs off on
+// retiring them, so an admin can compare old and new side by side. They are
+// marked so nobody mistakes them for part of the new section.
 const ANALYTICS_GROUP = {
   label: 'Analytics',
   icon: BarChart3,
   children: [
-    { to: '/admin/analytics/sales', label: 'Sales & Revenue', icon: TrendingUp, end: false, permission: 'dashboard.view' },
-    { to: '/admin/analytics/profit', label: 'Profitability', icon: PiggyBank, end: false, permission: 'dashboard.view' },
+    ...analyticsNavItems(),
+    // Not generated: this is the container/consent configuration, not a module.
+    // It carries the manage permission rather than analytics.view, so a viewer
+    // who may read every report still never sees the link to change the tags.
+    { to: '/admin/analytics/settings', label: 'Tracking settings', icon: Plug, end: true, permission: 'analytics.integrations.manage' },
+    // Also not generated: this is the margin *inputs*, not a report. Gated on
+    // analytics.finance.view because a cost rate is the store's margin
+    // structure — the same tier as the margin views it feeds.
+    { to: '/admin/analytics/cost-rules', label: 'Cost rules & spend', icon: Calculator, end: true, permission: 'analytics.finance.view' },
+    { to: '/admin/analytics/sales', label: 'Sales & Revenue (legacy)', icon: TrendingUp, end: true, permission: 'dashboard.view' },
+    { to: '/admin/analytics/profit', label: 'Profitability (legacy)', icon: PiggyBank, end: true, permission: 'dashboard.view' },
   ],
 };
 
@@ -221,7 +251,7 @@ function SidebarContent({ onNavigate }) {
         <span className="grid size-8 place-items-center rounded-sm bg-accent text-ink-inverse">
           <Sparkles className="size-4" aria-hidden="true" />
         </span>
-        <span className="text-h3">Lumen</span>
+        <span className="text-h3">Wellvia</span>
         <span className="rounded-full bg-fill-strong px-2 py-0.5 text-xs text-ink-secondary">
           Admin
         </span>

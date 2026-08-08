@@ -1,10 +1,11 @@
 """Pydantic schemas for the payment-method admin + public APIs."""
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+from app.schemas.base import AppSchema
 
 
-class PaymentMethodFieldRead(BaseModel):
+class PaymentMethodFieldRead(AppSchema):
     """One credential field definition with its current value/state."""
 
     key: str
@@ -19,7 +20,7 @@ class PaymentMethodFieldRead(BaseModel):
     set: bool
 
 
-class PaymentMethodRead(BaseModel):
+class PaymentMethodRead(AppSchema):
     """Full representation returned by GET/PUT /admin/payment-methods."""
 
     code: str
@@ -35,7 +36,7 @@ class PaymentMethodRead(BaseModel):
     fields: list[PaymentMethodFieldRead]
 
 
-class PaymentMethodUpdate(BaseModel):
+class PaymentMethodUpdate(AppSchema):
     """Body for PUT /admin/payment-methods/{code}."""
 
     enabled: bool | None = None
@@ -44,7 +45,7 @@ class PaymentMethodUpdate(BaseModel):
     credentials: dict[str, str] | None = None
 
 
-class PaymentMethodActiveRead(BaseModel):
+class PaymentMethodActiveRead(AppSchema):
     """Minimal public representation for GET /payment-methods/active."""
 
     code: str
@@ -52,11 +53,11 @@ class PaymentMethodActiveRead(BaseModel):
     description: str
 
 
-class PaymentMethodListResponse(BaseModel):
+class PaymentMethodListResponse(AppSchema):
     """Wrapper returned by both list endpoints."""
 
     items: list[PaymentMethodRead]
 
 
-class PaymentMethodActiveListResponse(BaseModel):
+class PaymentMethodActiveListResponse(AppSchema):
     items: list[PaymentMethodActiveRead]

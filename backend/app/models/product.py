@@ -19,6 +19,14 @@ class Category(Base, IDMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(120), unique=True, index=True, nullable=False)
     slug: Mapped[str] = mapped_column(String(140), unique=True, index=True, nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(512))
+    # One level of nesting only: a parent must itself be top-level. Enforced in
+    # CategoryService; the self-referential FK is the integrity safety net.
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), index=True)
+
+    parent: Mapped[Category | None] = relationship(
+        back_populates="children", remote_side="Category.id"
+    )
+    children: Mapped[list["Category"]] = relationship(back_populates="parent")
 
     products: Mapped[list["Product"]] = relationship(back_populates="category")
 
@@ -46,6 +54,45 @@ class Product(Base, IDMixin, TimestampMixin):
     # Denormalized primary image — kept in sync with the primary ProductImage
     # so listing/card queries stay cheap.
     image_url: Mapped[str | None] = mapped_column(String(512))
+
+    # ── Analytics & compliance attributes ──
+    # Four capture-only fields. None of them is shown to a shopper; each exists
+    # because a reporting column downstream is already built to consume it and
+    # is currently blank forever. All four are NULLABLE with NO server default,
+    # for the same reason `analytics_marketing_spend.amount` is: a product that
+    # predates the column has genuinely unknown values, and a default would
+    # assert a fact nobody entered.
+    #
+    # Reorder threshold in units. `agg_inventory_daily.reorder_gap` is
+    # `stock_close - reorder_point` and is NULL on every row today precisely
+    # because no product carries one. NULL here means "no reorder point
+    # configured"; 0 means "reorder only once the shelf is empty". Those are
+    # different statements and the rollup depends on telling them apart, which
+    # is why this must never be defaulted to 0.
+    reorder_point: Mapped[int | None] = mapped_column(Integer)
+    # Indian HSN code — 4, 6 or 8 digits, the granularity a GST invoice and a
+    # GSTR filing are keyed on. Stored as a STRING, not an INT: leading zeros
+    # are significant in the HSN tariff and an integer column would silently
+    # eat them. Width is 8 because 8 digits is the longest legal code, so an
+    # over-long value fails loudly at the column rather than being truncated.
+    # NULL = not classified yet; view 70 (Tax and GST) must keep declaring
+    # itself NOT compliance-grade until coverage exists.
+    hsn_code: Mapped[str | None] = mapped_column(String(8))
+    # Manufacturer / house brand. Width matches
+    # `analytics_order_line.brand_snapshot` (String(120)) exactly — that column
+    # was reserved for this field and snapshots it at order time, so a wider
+    # value here would truncate on the way into the fact table. Empty string is
+    # normalised to NULL in the schema layer so "no brand" is one value, not
+    # two indistinguishable ones. Not indexed: the brand dimension is queried
+    # off the fact table's snapshot, never off this row.
+    brand: Mapped[str | None] = mapped_column(String(120))
+    # Shelf life in days. The `days_of_inventory` KPI carries the caveat that
+    # "shelf life is not modelled; a supplement can have plenty of cover and
+    # still expire before it sells" — this is the column that answers it.
+    # NULL = not tracked, which is most of the catalog and must stay
+    # distinguishable from a short-dated product. 0 is rejected upstream: a
+    # zero-day shelf life is not a sellable product, it is a typo.
+    shelf_life_days: Mapped[int | None] = mapped_column(Integer)
 
     # ── Storefront merchandising fields (all optional) ──
     # Flavour tag shown on cards/PDP and used by the listing flavour filter.

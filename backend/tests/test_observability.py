@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models.observability import RequestLog, SlowQuery
+from tests.conftest import TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +133,7 @@ def _get_admin_token(client: TestClient) -> str:
     try:
         resp = client.post(
             "/api/v1/auth/login",
-            json={"email": "vinay@gmail.com", "password": "vinay@123"},
+            json={"email": TEST_ADMIN_EMAIL, "password": TEST_ADMIN_PASSWORD},
         )
         assert resp.status_code == 200, f"Admin login failed: {resp.text}"
         return resp.json()["access_token"]

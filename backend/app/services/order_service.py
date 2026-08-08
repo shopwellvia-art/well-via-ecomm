@@ -2,15 +2,19 @@ import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.order import Order, OrderItem, OrderStatus
+from app.models.order_payment import OrderPayment, PaymentTxnStatus
+from app.models.payment_event import PaymentEvent, PaymentEventType
+from app.models.shipment import ShipmentStatus
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
 from app.schemas.order import OrderCreate
 from app.services import order_sync
+from app.services.analytics.order_line_facts import capture_order_lines
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +68,12 @@ class OrderService:
         self.db.flush()
         if not order.order_number:
             order.order_number = order_sync.make_order_number(order.id)
+        # Snapshot the line facts in THIS transaction, so they commit atomically
+        # with the order below and a rollback takes them with it. The call is
+        # savepoint-wrapped and never raises: an analytics failure must not cost
+        # a sale, and the resulting gap is logged and swept by
+        # scripts/backfill_order_lines.py. See order_line_facts' docstring.
+        capture_order_lines(self.db, order)
         self.db.commit()
         return self.orders.get_with_items(order.id)  # type: ignore[return-value]
 
@@ -115,8 +125,9 @@ class OrderService:
         tracking_number: str | None,
         carrier: str | None,
     ) -> Order:
-        self._lock_order(order_id)
-        order = self.admin_get(order_id)
+        order = self._lock_order(order_id)
+        if order is None:
+            raise NotFoundError("Order not found")
         self._assert_transition(order, OrderStatus.SHIPPED)
         order.status = OrderStatus.SHIPPED
         order.tracking_number = (tracking_number or "").strip() or None
@@ -128,8 +139,9 @@ class OrderService:
         return order
 
     def mark_delivered(self, order_id: int) -> Order:
-        self._lock_order(order_id)
-        order = self.admin_get(order_id)
+        order = self._lock_order(order_id)
+        if order is None:
+            raise NotFoundError("Order not found")
         self._assert_transition(order, OrderStatus.DELIVERED)
         order.status = OrderStatus.DELIVERED
         order.delivered_at = datetime.now(timezone.utc)
@@ -142,34 +154,83 @@ class OrderService:
         return order
 
     def cancel(self, order_id: int, *, reason: str) -> Order:
-        """Cancel an unshipped order. Restores stock + reverses loyalty points.
-        Use `refund` for shipped/delivered orders so the reporting distinction
-        is preserved."""
-        self._lock_order(order_id)
-        order = self.admin_get(order_id)
+        """Cancel an unshipped order (admin). Restores stock + reverses loyalty
+        points. Use `refund` for shipped/delivered orders so the reporting
+        distinction is preserved."""
+        order = self._lock_order(order_id)
+        if order is None:
+            raise NotFoundError("Order not found")
         self._assert_transition(order, OrderStatus.CANCELLED)
         if not reason.strip():
             raise ValidationError("Provide a reason — cancellations are audit-logged.")
-        order.status = OrderStatus.CANCELLED
-        order.cancelled_at = datetime.now(timezone.utc)
-        order.refund_reason = reason.strip()[:255]
-        order_sync.mark_payments_cancelled(order)
-        order_sync.cancel_shipments(order)
-        self._restore_stock(order)
-        self._reverse_loyalty(order)
-        self.db.flush()
-        self._notify(order, "order_cancelled")
+        self._cancel_core(order, reason=reason.strip())
         return order
 
-    def refund(self, order_id: int, *, reason: str) -> Order:
+    def refund(
+        self, order_id: int, *, reason: str, force_manual: bool = False
+    ) -> Order:
         """Refund a paid/shipped/delivered order. Same downstream effects as
         cancel but lands in REFUNDED so analytics can separate "never went
-        out" from "came back to us"."""
-        self._lock_order(order_id)
-        order = self.admin_get(order_id)
+        out" from "came back to us".
+
+        When the order has a captured gateway leg, the money is first sent
+        back through the original gateway (``provider.refund``, mirroring
+        ReturnService). If the provider lacks refund support, the call fails,
+        or ``force_manual`` is set, the refund is recorded as ``manual`` — the
+        operator completes the reversal offline — and the bookkeeping below
+        (status flip, payment legs, restock, loyalty) still runs unchanged.
+
+        Only the money still with us moves: amounts already reversed through
+        return-refunds are deducted, and the gateway call is skipped entirely
+        once the leg is fully reversed.
+        """
+        order = self._lock_order(order_id)
+        if order is None:
+            raise NotFoundError("Order not found")
         self._assert_transition(order, OrderStatus.REFUNDED)
         if not reason.strip():
             raise ValidationError("Provide a reason — refunds are audit-logged.")
+
+        leg = self._captured_gateway_leg(order)
+        if leg is not None:
+            # Refund only what is still with us: the leg amount minus anything
+            # already sent back through return-refunds (a PARTIALLY_REFUNDED
+            # leg keeps its ORIGINAL amount — nothing on OrderPayment tracks
+            # the cumulative reversed total). Without this, a full refund
+            # after a Rs 500 return-refund would re-present the full leg
+            # amount — rejected by the gateway, then recorded as a manual
+            # note telling the operator to over-pay.
+            amount = Decimal(leg.amount) - self._already_refunded_total(order)
+            if amount <= 0:
+                logger.info(
+                    "order #%s: leg %s already fully reversed via return-"
+                    "refunds — skipping gateway refund", order.id, leg.id,
+                )
+                leg = None
+        if leg is not None:
+            refund_method, refund_reference, raw = "manual", self._refund_reference(order, leg), None
+            if force_manual:
+                logger.info(
+                    "order #%s: force_manual set — skipping gateway refund (ref=%s)",
+                    order.id, refund_reference,
+                )
+            else:
+                refund_method, refund_reference, raw = self._attempt_gateway_refund(
+                    order,
+                    leg,
+                    amount=amount,
+                    refund_reference=refund_reference,
+                    reason=f"Admin refund: {reason.strip()}",
+                )
+            self._record_refund_outcome(
+                order,
+                amount=amount,
+                refund_method=refund_method,
+                refund_reference=refund_reference,
+                raw=raw,
+                context="admin refund",
+            )
+
         order.status = OrderStatus.REFUNDED
         order.refunded_at = datetime.now(timezone.utc)
         order.refund_reason = reason.strip()[:255]
@@ -180,6 +241,61 @@ class OrderService:
         self._notify(order, "order_refunded")
         return order
 
+    # ---- Customer state transitions ----
+
+    def cancel_for_customer(
+        self, user_id: int, order_id: int, *, reason: str | None = None
+    ) -> Order:
+        """Customer self-service cancellation.
+
+        Allowed only while we can still stop fulfillment: PENDING orders, or
+        PAID orders that have not been pushed to a carrier yet (no AWB /
+        tracking / pickup — the shipment fields order_sync maintains). 404 for
+        orders the caller doesn't own (never reveal other users' order ids).
+
+        For PAID prepaid orders the captured amount is sent back through the
+        original gateway first (same path as the admin refund); if the gateway
+        can't do it, the order still cancels but the refund is recorded as
+        ``manual`` so admins see it needs action.
+        """
+        order = self._lock_order(order_id)
+        if not order or order.user_id != user_id:
+            raise NotFoundError("Order not found")
+        if order.status not in (OrderStatus.PENDING, OrderStatus.PAID):
+            raise ConflictError(
+                "This order can no longer be cancelled "
+                f"(current status: {order.status.value})."
+            )
+        if order.status == OrderStatus.PAID and self._carrier_engaged(order):
+            raise ConflictError(
+                "This order is already with the courier and can't be "
+                "cancelled — you can request a return once it arrives."
+            )
+
+        leg = self._captured_gateway_leg(order)
+        if leg is not None:
+            amount = Decimal(leg.amount)
+            refund_method, refund_reference, raw = self._attempt_gateway_refund(
+                order,
+                leg,
+                amount=amount,
+                refund_reference=self._refund_reference(order, leg),
+                reason=f"Customer cancellation of order #{order.id}",
+            )
+            self._record_refund_outcome(
+                order,
+                amount=amount,
+                refund_method=refund_method,
+                refund_reference=refund_reference,
+                raw=raw,
+                context="customer cancellation",
+            )
+
+        self._cancel_core(
+            order, reason=(reason or "").strip() or "Cancelled by customer"
+        )
+        return order
+
     def update_notes(self, order_id: int, notes: str | None) -> Order:
         order = self.admin_get(order_id)
         order.internal_notes = (notes or None)
@@ -188,18 +304,261 @@ class OrderService:
 
     # ---- Internals ----
 
-    def _lock_order(self, order_id: int) -> None:
-        """Take a row lock on the order before a state transition.
+    def _cancel_core(self, order: Order, *, reason: str) -> None:
+        """Shared cancellation side effects (admin cancel + customer cancel):
+        status flip, payment-leg + shipment sync, stock restore, loyalty
+        reversal, customer notification. Callers hold the row lock and have
+        already validated the transition/ownership."""
+        order.status = OrderStatus.CANCELLED
+        order.cancelled_at = datetime.now(timezone.utc)
+        order.refund_reason = reason[:255]
+        order_sync.mark_payments_cancelled(order)
+        order_sync.cancel_shipments(order)
+        self._restore_stock(order)
+        self._reverse_loyalty(order)
+        self.db.flush()
+        self._notify(order, "order_cancelled")
 
-        The transitions below are check-then-act on order.status with no lock,
-        so two concurrent admin actions (or an admin action racing payment
-        settlement) could both read the same status and both apply their side
-        effects — double stock restore, double loyalty reversal. Acquiring the
-        row lock first serializes them; the lock releases on the request commit.
+    def _carrier_engaged(self, order: Order) -> bool:
+        """Has this order been pushed to a carrier? True once any carrier-side
+        identity exists — the flat AWB/tracking/pickup columns or a shipment
+        row that order_sync has advanced past the pre-carrier states."""
+        if (
+            order.shipping_awb
+            or order.tracking_number
+            or order.pickup_id
+            or order.shipment_created_at
+        ):
+            return True
+        for s in order.shipments:
+            if s.awb_number or s.tracking_number:
+                return True
+            if s.shipment_status not in (
+                ShipmentStatus.PENDING,
+                ShipmentStatus.READY_TO_SHIP,
+                ShipmentStatus.CANCELLED,
+            ):
+                return True
+        return False
+
+    def _captured_gateway_leg(self, order: Order) -> OrderPayment | None:
+        """The captured prepaid/gateway payment leg to reverse, or None when
+        there is nothing to send back (COD legs are skipped — no electronic
+        source to refund to; uncaptured legs never moved money). Mirrors
+        ReturnService._gateway_leg plus the captured-status guard."""
+        for p in order.payments:
+            if (p.payment_method or "").lower() == "cod":
+                continue
+            if p.payment_status in (
+                PaymentTxnStatus.PAID,
+                PaymentTxnStatus.PARTIALLY_REFUNDED,
+            ):
+                return p
+            return None
+        return None
+
+    def _already_refunded_total(self, order: Order) -> Decimal:
+        """Money already sent back to the customer for this order through
+        return-refunds. ReturnService only flips the leg's status
+        (PARTIALLY_REFUNDED) — the leg keeps its original amount and nothing
+        on OrderPayment accumulates the reversed total — so the sum lives on
+        the REFUNDED return rows."""
+        # Lazy import: keeps the service layers decoupled (mirrors the other
+        # cross-service imports in this module).
+        from app.models.return_request import ReturnRequest, ReturnStatus
+
+        total = self.db.execute(
+            select(func.coalesce(func.sum(ReturnRequest.refund_amount), 0)).where(
+                ReturnRequest.order_id == order.id,
+                ReturnRequest.status == ReturnStatus.REFUNDED,
+            )
+        ).scalar_one()
+        return Decimal(str(total or 0))
+
+    @staticmethod
+    def _refund_reference(order: Order, leg: OrderPayment) -> str:
+        """The merchant-side reference for the refund of THIS payment leg.
+
+        Deterministic (order id + leg id, no random suffix) so a retry after
+        a failed commit re-presents the SAME reference: the provider can then
+        find the refund it already issued under it (see
+        RazorpayProvider._find_existing_refund) instead of paying out twice.
+        Replaced by the provider's own id when returned. Same shape as
+        ReturnService's RFND refs, ORD-scoped."""
+        return f"RFNDORD{order.id}-{leg.id}"
+
+    def _attempt_gateway_refund(
+        self,
+        order: Order,
+        leg: OrderPayment,
+        *,
+        amount: Decimal,
+        refund_reference: str,
+        reason: str,
+    ) -> tuple[str, str, dict | None]:
+        """Try to reverse ``amount`` on the order's original gateway.
+
+        Returns ``(refund_method, refund_reference, raw)``:
+          * gateway accepted → ``(order.gateway_code, provider refund id, raw)``
+          * provider missing/unsupported/failed → ``("manual", our ref, raw)``
+            so the caller records an operator-actionable manual refund.
+
+        Never raises — a gateway hiccup must not abort the order transition.
+        Mirrors ReturnService._issue_refund's provider resolution.
         """
-        self.db.execute(
-            select(Order.id).where(Order.id == order_id).with_for_update()
-        ).first()
+        # Lazy imports: the payments factory has a known import cycle with the
+        # service layer, so it is resolved at call time.
+        from app.integrations.payments.base import PaymentStatus, RefundRequest
+        from app.integrations.payments.factory import get_provider_for_order
+
+        if not order.gateway_code:
+            return "manual", refund_reference, None
+
+        provider = None
+        try:
+            provider = get_provider_for_order(self.db, order)
+        except Exception as exc:  # noqa: BLE001 — gateway no longer configured
+            logger.warning(
+                "order #%s: could not build provider: %s — recording a manual "
+                "refund instead",
+                order.id, exc,
+            )
+        if provider is None or not hasattr(provider, "refund"):
+            logger.warning(
+                "order #%s: gateway %s has no automated refund API; recorded "
+                "for manual gateway processing (ref=%s)",
+                order.id, order.gateway_code, refund_reference,
+            )
+            return "manual", refund_reference, None
+
+        try:
+            result = provider.refund(
+                RefundRequest(
+                    order_id=order.id,
+                    amount_minor=int((amount * 100).to_integral_value()),
+                    currency=order.currency or "INR",
+                    merchant_transaction_id=order.payment_intent_id or "",
+                    refund_reference=refund_reference,
+                    original_transaction_id=(
+                        leg.gateway_payment_id or order.payment_provider_ref
+                    ),
+                    reason=reason[:255],
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 — provider raised; fall back
+            logger.warning(
+                "order #%s: gateway %s refund call failed: %s — recording a "
+                "manual refund instead (ref=%s)",
+                order.id, order.gateway_code, exc, refund_reference,
+            )
+            return "manual", refund_reference, None
+        if result.status == PaymentStatus.FAILED:
+            logger.warning(
+                "order #%s: gateway %s reported the refund FAILED — recording "
+                "a manual refund instead (ref=%s)",
+                order.id, order.gateway_code, refund_reference,
+            )
+            return "manual", refund_reference, result.raw
+        return order.gateway_code, (result.refund_id or refund_reference), result.raw
+
+    def _record_refund_outcome(
+        self,
+        order: Order,
+        *,
+        amount: Decimal,
+        refund_method: str,
+        refund_reference: str,
+        raw: dict | None,
+        context: str,
+    ) -> None:
+        """Persist how the money went back: an append-only payment_events row
+        plus an internal-notes line so a manual refund is visible on the admin
+        order page without digging through audit logs.
+
+        Unlike ReturnService, the event row is written through THIS session,
+        not payment_audit's independent one. The callers here hold a
+        FOR UPDATE lock on the orders row (`_lock_order`), so an
+        independent-session INSERT would block on the payment_events→orders
+        FK check against our own uncommitted lock until the client timeout —
+        stalling the request ~30s and silently losing the audit row. Writing
+        in-transaction commits the audit row atomically with the refund
+        transition it describes. ReturnService keeps the own-session write
+        because it never locks the orders row."""
+        message = f"{context}: refund of {amount} via {refund_method}"
+        self.db.add(
+            PaymentEvent(
+                event_type=PaymentEventType.REFUND_ATTEMPT,
+                order_id=order.id,
+                merchant_transaction_id=order.payment_intent_id,
+                gateway_code=order.gateway_code,
+                provider_ref=refund_reference,
+                amount_reported_minor=int((amount * 100).to_integral_value()),
+                # Same hygiene rules as payment_audit.record_payment_event:
+                # cap the message at the column limit; raw is a bounded
+                # provider-protocol payload (never secrets/signatures).
+                message=message[:500],
+                raw_payload=raw,
+            )
+        )
+        if refund_method == "manual":
+            note = (
+                f"Refund of {amount} {order.currency or 'INR'} NEEDS MANUAL "
+                f"PROCESSING — gateway refund not completed (ref {refund_reference})."
+            )
+        else:
+            note = (
+                f"Refund of {amount} {order.currency or 'INR'} issued via "
+                f"{refund_method} (ref {refund_reference})."
+            )
+        self._append_internal_note(order, note)
+        logger.info(
+            "order #%s %s: refund amount=%s method=%s ref=%s",
+            order.id, context, amount, refund_method, refund_reference,
+        )
+
+    @staticmethod
+    def _append_internal_note(order: Order, line: str) -> None:
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        entry = f"[{stamp}] {line}"
+        order.internal_notes = (
+            f"{order.internal_notes}\n{entry}" if order.internal_notes else entry
+        )
+
+    def _lock_order(self, order_id: int) -> Order | None:
+        """Take a row lock on the order (and its payment legs) before a state
+        transition, returning the freshly-locked Order (None when absent).
+
+        The transitions below are check-then-act on order.status, so two
+        concurrent admin actions (or an admin action racing payment
+        settlement) could both read the same status and both apply their side
+        effects — double stock restore, double gateway refund. Acquiring the
+        row lock first serializes them; the lock releases on the request commit.
+
+        The status/leg checks MUST run on the entity returned here, not on a
+        subsequent plain SELECT. Under MySQL's REPEATABLE READ the session's
+        read view is usually established before the lock wait (the auth
+        dependency already queried this session), so a non-locking re-read
+        after the lock returns the PRE-lock snapshot — the second waiter would
+        still see PAID and double-apply. The locking read is an InnoDB
+        *current* read (latest committed row), and populate_existing pushes
+        those fresh values over any stale identity-map instance — mirroring
+        payment_service._apply_status. The payment legs are locked+refreshed
+        the same way because _captured_gateway_leg keys off leg status.
+        """
+        order = self.db.execute(
+            select(Order)
+            .where(Order.id == order_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+        if order is not None:
+            self.db.execute(
+                select(OrderPayment)
+                .where(OrderPayment.order_id == order_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ).scalars().all()
+        return order
 
     def _assert_transition(self, order: Order, target: OrderStatus) -> None:
         allowed = _ALLOWED_TRANSITIONS.get(order.status, set())

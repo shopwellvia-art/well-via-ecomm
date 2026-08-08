@@ -3,6 +3,7 @@
 Routes:
   POST /checkout                          create order + initiate payment
   GET  /payments/{mtid}/status            what the return page polls
+  POST /payments/razorpay/verify          Razorpay Standard Checkout browser callback
   POST /payments/webhook/phonepe          S2S callback from PhonePe (signed)
   POST /payments/webhook/mock             local simulator (mock provider only)
   POST /payments/webhook/{gateway_code}   generic signed webhook for any gateway
@@ -26,6 +27,7 @@ from app.schemas.payment import (
     CheckoutResponse,
     MockWebhookRequest,
     PaymentStatusResponse,
+    RazorpayVerifyRequest,
     ReconcilePendingRequest,
     ReconcilePendingResponse,
 )
@@ -76,7 +78,7 @@ def start_checkout(
     db: Session = Depends(get_db),
 ):
     svc = PaymentService(db)
-    order, mtid, redirect_url = svc.checkout(user, payload)
+    order, mtid, redirect_url, checkout_payload = svc.checkout(user, payload)
     # `amount_minor` is what the gateway was asked to charge — for COD the
     # gateway wasn't called at all (0) and for Split COD it's only the
     # prepaid portion (total − balance). Prepaid orders carry the full total.
@@ -95,6 +97,7 @@ def start_checkout(
         provider=order.gateway_code or "mock",
         amount_minor=amount_minor,
         currency=order.currency,
+        checkout=checkout_payload,
     )
 
 
@@ -126,6 +129,32 @@ def order_for_payment(
     id)."""
     order = PaymentService(db).get_status(user.id, mtid)
     return order
+
+
+@payments_router.post("/razorpay/verify", response_model=PaymentStatusResponse)
+def verify_razorpay_payment(
+    payload: RazorpayVerifyRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Settle a Razorpay Standard Checkout payment from the browser callback.
+
+    checkout.js calls this with the (order_id, payment_id, signature) triplet
+    from its success handler. The service re-verifies the signature AND
+    re-fetches the payment from Razorpay before any state moves — the browser
+    is never trusted to settle an order. The response is the same shape the
+    return page polls at GET /payments/{mtid}/status, so the SPA can treat
+    both interchangeably.
+    """
+    order = PaymentService(db).verify_and_settle_razorpay(user, payload)
+    return PaymentStatusResponse(
+        order_id=order.id,
+        merchant_transaction_id=payload.merchant_transaction_id,
+        order_status=order.status,
+        total_amount=order.total_amount,
+        currency=order.currency,
+        updated_at=order.updated_at,
+    )
 
 
 @payments_router.post("/webhook/phonepe", status_code=status.HTTP_200_OK)

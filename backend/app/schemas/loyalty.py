@@ -1,12 +1,13 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
 from app.models.loyalty import PointsReason
+from app.schemas.base import AppSchema
 
 
-class PointsTransactionRead(BaseModel):
+class PointsTransactionRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -18,14 +19,14 @@ class PointsTransactionRead(BaseModel):
     created_at: datetime
 
 
-class TransactionListPage(BaseModel):
+class TransactionListPage(AppSchema):
     items: list[PointsTransactionRead]
     total: int
     page: int
     page_size: int
 
 
-class RedemptionTierRead(BaseModel):
+class RedemptionTierRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -38,7 +39,7 @@ class RedemptionTierRead(BaseModel):
     is_active: bool
 
 
-class RedemptionTierCreate(BaseModel):
+class RedemptionTierCreate(AppSchema):
     name: str = Field(min_length=2, max_length=120)
     cost_points: int = Field(ge=1)
     discount_type: str = Field(pattern="^(percent|fixed)$")
@@ -48,7 +49,7 @@ class RedemptionTierCreate(BaseModel):
     is_active: bool = True
 
 
-class RedemptionTierUpdate(BaseModel):
+class RedemptionTierUpdate(AppSchema):
     name: str | None = Field(default=None, min_length=2, max_length=120)
     cost_points: int | None = Field(default=None, ge=1)
     discount_type: str | None = Field(default=None, pattern="^(percent|fixed)$")
@@ -58,7 +59,7 @@ class RedemptionTierUpdate(BaseModel):
     is_active: bool | None = None
 
 
-class VipTierRead(BaseModel):
+class VipTierRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -70,7 +71,7 @@ class VipTierRead(BaseModel):
     sort_order: int
 
 
-class VipTierCreate(BaseModel):
+class VipTierCreate(AppSchema):
     name: str = Field(min_length=2, max_length=50)
     threshold_lifetime_points: int = Field(ge=0)
     earn_multiplier: Decimal = Field(ge=Decimal("1.00"), le=Decimal("10.00"))
@@ -79,7 +80,7 @@ class VipTierCreate(BaseModel):
     sort_order: int = 0
 
 
-class VipTierUpdate(BaseModel):
+class VipTierUpdate(AppSchema):
     name: str | None = Field(default=None, min_length=2, max_length=50)
     threshold_lifetime_points: int | None = Field(default=None, ge=0)
     earn_multiplier: Decimal | None = Field(default=None, ge=Decimal("1.00"), le=Decimal("10.00"))
@@ -88,7 +89,7 @@ class VipTierUpdate(BaseModel):
     sort_order: int | None = None
 
 
-class TierProgress(BaseModel):
+class TierProgress(AppSchema):
     """Storefront helper — the customer's current tier plus how close they are
     to the next one. `progress_pct` is 0–100 and `points_to_next` is the gap
     (null when already at the top)."""
@@ -99,7 +100,7 @@ class TierProgress(BaseModel):
     progress_pct: int = 0
 
 
-class EarnRuleRead(BaseModel):
+class EarnRuleRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -110,7 +111,7 @@ class EarnRuleRead(BaseModel):
     is_active: bool
 
 
-class EarnRuleUpdate(BaseModel):
+class EarnRuleUpdate(AppSchema):
     """Only value + active flag are tunable. The `key` is the machine ID and
     the display label is fixed in the seed."""
 
@@ -118,7 +119,7 @@ class EarnRuleUpdate(BaseModel):
     is_active: bool | None = None
 
 
-class LoyaltySummary(BaseModel):
+class LoyaltySummary(AppSchema):
     """The /loyalty/me payload — everything the rewards page needs in one hit."""
 
     balance: int
@@ -128,11 +129,11 @@ class LoyaltySummary(BaseModel):
     tier_progress: TierProgress = TierProgress()
 
 
-class RedeemRequest(BaseModel):
+class RedeemRequest(AppSchema):
     tier_id: int
 
 
-class RedeemResponse(BaseModel):
+class RedeemResponse(AppSchema):
     """Whatever the customer needs to actually use the reward at checkout."""
 
     coupon_code: str
@@ -142,12 +143,12 @@ class RedeemResponse(BaseModel):
     new_balance: int
 
 
-class AdminAdjustRequest(BaseModel):
+class AdminAdjustRequest(AppSchema):
     delta: int = Field(description="Positive = credit, negative = debit. Cannot be zero.")
     description: str = Field(min_length=3, max_length=200)
 
 
-class AdminUserLoyaltyRead(BaseModel):
+class AdminUserLoyaltyRead(AppSchema):
     """What the admin sees when they look up a single customer's loyalty record."""
 
     model_config = ConfigDict(from_attributes=True)

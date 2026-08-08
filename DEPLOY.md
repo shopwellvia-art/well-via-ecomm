@@ -5,7 +5,8 @@ There is exactly **one workflow** (`.github/workflows/cicd.yml`) and exactly
 
 The pipeline runs for the **`production` branch only** — no other branch, no Pull
 Requests. Push or merge into `production` and the whole thing runs end to end:
-the frontend build and the backend test suite go first, and **only if both pass**
+the frontend checks (lint, Vitest, build) and the backend pytest suite go first,
+and **only if both pass**
 does it build the backend & frontend Docker images, push them to **GHCR**, then
 SSH into your **EC2** to pull the new images and **restart both containers on the
 new code**. The app is served over **plain HTTP on port 8090** of the EC2's public
@@ -17,14 +18,16 @@ manually from reviewed SQL (see [§6](#6-migrations)).
 ```
 push / merge → `production`   (nothing runs on any other branch)
    ├─ frontend         ─┐
-   │  npm ci/build/test │
+   │  npm ci/lint/      │
+   │  vitest/build      │
    ├─ backend-tests    ─┤ BOTH must pass
    │  mysql+redis svc   │
    │  alembic+pytest    │
    │                    ▼
-   ├─── build-and-push → ghcr.io  (:latest and :<git-sha>)
+   ├─── build-and-push → ghcr.io  (:latest and :<git-sha>, full no-cache rebuild)
    │                    │
-   └─── deploy → ssh EC2 → compose pull → up -d  (recreates backend+frontend)
+   └─── deploy → ssh EC2 → compose pull → up -d --force-recreate backend+frontend
+                         → delete the superseded images from the host
                          → verify both run :<git-sha> and :8090 answers
                          (no alembic — see §6)
 
@@ -34,12 +37,15 @@ EC2 host:  [frontend+nginx :8090→:80] ─proxy─> [backend :8000] ─> shared
 ```
 
 **Why the containers pick up the new code:** every deploy tags the images with
-the commit SHA and pins `IMAGE_TAG=<sha>` on the host, so the running containers'
-image references no longer match after a pull — `docker compose up -d` therefore
-recreates the `backend` and `frontend` containers rather than leaving them alone.
-`redis` keeps the same image, so it stays up and its volume is untouched. A final
-verify step asserts both containers really report the new SHA and that the
-storefront answers on `:8090`, and fails the deploy if not.
+the commit SHA, pins `IMAGE_TAG=<sha>` on the host, and runs
+`docker compose up -d --force-recreate backend frontend` — the two app
+containers are destroyed and rebuilt from the new images on *every* deploy,
+without relying on the image reference having changed. `redis` is never named in
+the `pull`/`up` commands, so it stays up and its volume is untouched. The
+superseded backend/frontend images are then deleted from the host
+(`docker rmi` + `docker image prune -af`) to reclaim disk. A final verify step
+asserts both containers really report the new SHA and that the storefront
+answers on `:8090`, and fails the deploy if not.
 
 The backend suite runs against a **throwaway MySQL 8 + Redis 7** provided as
 GitHub Actions `services:` containers — never against the shared remote DB
@@ -61,11 +67,15 @@ In the repo: **Settings → Secrets and variables → Actions → New repository
 | `EC2_USER` | SSH user — `ubuntu` (Ubuntu AMI) or `ec2-user` (Amazon Linux) |
 | `SSH_PRIVATE_KEY` | **Full contents** of the private key (`.pem`) you SSH in with |
 | `EC2_APP_DIR` | App directory on the host, e.g. `/home/ubuntu/app` |
+| `GHCR_USER` | The GitHub **username** that owns `GHCR_PAT` (e.g. `9741Prajwalj`) — **not** the org `shopwellvia-art` |
 | `GHCR_PAT` | A GitHub **classic PAT** with the `read:packages` scope (used by the EC2 to pull images) |
 
 > `GHCR_PAT`: GitHub → Settings → Developer settings → Personal access tokens →
-> Tokens (classic) → Generate, tick **`read:packages`**. (Pushing from Actions
-> uses the built-in `GITHUB_TOKEN`; the PAT is only for the EC2 to pull.)
+> Tokens (classic) → Generate, tick **`read:packages`**. If the
+> `shopwellvia-art` org has SSO enabled, click **Configure SSO → Authorize** on
+> the token afterwards or GHCR answers `denied`. Fine-grained PATs do **not**
+> work here — it must be a classic token. (Pushing from Actions uses the
+> built-in `GITHUB_TOKEN`; the PAT is only for the EC2 to pull.)
 
 ---
 
@@ -135,8 +145,13 @@ Watch progress in the repo's **Actions** tab. On success the site is live at:
 
 ```
 http://<EC2-public-IP>:8090/          # storefront
-http://<EC2-public-IP>:8090/docs      # API docs
+http://<EC2-public-IP>:8090/version   # backend build stamp (verify the deploy)
 ```
+
+> There is **no `/docs` in production**: interactive API docs (Swagger/ReDoc and
+> the OpenAPI JSON) are disabled whenever `ENVIRONMENT=production` in
+> `backend/.env`. Use `/version` or `/health` to check the API is up; browse
+> `/docs` on a local dev run instead.
 
 Every deploy is tagged by git SHA in GHCR, so deploys are reproducible.
 
@@ -160,8 +175,13 @@ Images are tagged by commit SHA. To roll back to a previous good commit:
 
 ```bash
 ssh <user>@<EC2-IP> && cd ~/app
+IMAGE_TAG=<previous-git-sha> docker compose pull backend frontend   # re-download
 IMAGE_TAG=<previous-git-sha> docker compose up -d
 ```
+
+The explicit `pull` is required: each deploy deletes the superseded images from
+the host, so the old `:<sha>` is no longer cached locally — but it is still in
+GHCR, it just has to download again first.
 
 (Or revert the commit on `production` and let the pipeline redeploy.)
 
@@ -180,6 +200,75 @@ Schema changes are applied **manually, from reviewed SQL only**:
    `backend/scripts/sql/`).
 2. Take a backup first — `backend/scripts/backup_db.sh` (see [§7](#7-database-backups)).
 3. Apply it against the DB with a MySQL client during a maintenance window.
+
+### 6.1 Applied / pending ledger
+
+`backend/scripts/sql/` is an append-only pile of every schema change ever
+written. Nothing in it records what has actually been run against the shared
+remote MySQL, so **this table is the only place that knows.** Update it in the
+same commit that adds a script, and tick the box in the same session you apply
+it.
+
+Because the pipeline never migrates, a script that ships **after** the code that
+reads its column is not a degraded feature — it is an outage. Verify, don't
+remember: each row carries the exact `SHOW COLUMNS` check.
+
+| Script | Applied to remote? | Verify with | Breaks if missing |
+|---|---|---|---|
+| `2026-07-16_order_indexes_and_coupon_uniq.sql` | ✅ | `SHOW INDEX FROM orders` | slow order queries |
+| `2026-07-28_analytics_v2_schema.sql` | ✅ | `SHOW TABLES LIKE 'agg_%'` | all analytics |
+| `2026-07-28_categories_parent_id.sql` | ✅ | `SHOW COLUMNS FROM categories LIKE 'parent_id'` | category nav |
+| `2026-07-28_agg_customer_snapshot_tz_index.sql` | ✅ | `SHOW INDEX FROM agg_customer_snapshot` | snapshot perf |
+| `2026-07-29_*.sql` (5 analytics tables) | ✅ | `SHOW TABLES LIKE 'agg_%'` | those views |
+| `2026-07-31_users_last_login_at.sql` | ✅ verified 2026-07-31 | `SHOW COLUMNS FROM users LIKE 'last_login_at'` | 🔴 **every login 500s** |
+| `2026-07-31_product_analytics_fields.sql` | ✅ verified 2026-07-31 | `SHOW COLUMNS FROM products LIKE 'reorder_point'` | 🔴 **entire storefront 500s** |
+
+> ⚠️ **The two 2026-07-31 scripts are pre-deploy blockers for the
+> customers/team split.** Both were confirmed applied against the remote on
+> 2026-07-31 by running the checks below; this table had them recorded as
+> PENDING for several hours after they were already live. That direction of
+> drift is harmless (it delays a deploy). The opposite direction is an outage,
+> which is exactly why the rule is **run the query, do not trust this table.**
+>
+> `users.last_login_at` is a mapped column on the `User` model, so it is in every
+> `SELECT ... FROM users`, and `AuthService._issue_tokens` writes it on every
+> fresh login (password, 2FA and Google all converge there). Deploy the code
+> first and MySQL raises 1054 on every login — including yours, which removes the
+> in-app route to fix it.
+>
+> The four `products` columns are mapped the same way, so they land in every
+> product read, including anonymous storefront traffic.
+>
+> Re-confirm before every deploy that touches these models:
+>
+> ```bash
+> mysql -h "$MYSQL_HOST" -u "$MYSQL_USER" -p "$MYSQL_DB" \
+>   -e "SHOW COLUMNS FROM users LIKE 'last_login_at'; \
+>       SHOW COLUMNS FROM products LIKE 'reorder_point';"
+> # two rows back = safe to deploy. Zero rows = do not push to production.
+> ```
+>
+> No `mysql` client on your machine? `pymysql` is available to system python3,
+> and the backend container can reach the remote directly.
+
+> **Analytics v2** adds 23 tables, two worker containers and four environment
+> variables, and its schema step must be applied **one deploy before** the code
+> that reads it. It has its own runbook — read it first:
+> **[`docs/analytics/DEPLOYMENT.md`](docs/analytics/DEPLOYMENT.md)**.
+>
+> Two things worth knowing before you touch it: everything ships behind three
+> feature flags that default to `false`, so deploying it changes nothing until
+> you say so; and `backend/scripts/sql/2026-07-28_analytics_v2_schema.sql` was
+> *generated from* its Alembic revision rather than written alongside it, so the
+> two artifacts cannot drift (verified identical — 355 columns, 164 index rows).
+>
+> ⚠️ **Do not run `alembic revision --autogenerate` on this repo without reading
+> every line of the output.** The ORM models and the migration history have
+> drifted, so autogenerate currently proposes 23 destructive operations against
+> existing tables — including dropping the `orders` hot-path indexes that
+> revision `p1e2r3f4i5x6` exists to create, and the `uq_coupon_usages_coupon_order`
+> integrity constraint. Those were stripped by hand from the analytics migration;
+> the underlying drift is still unfixed.
 
 ---
 
@@ -203,8 +292,8 @@ bash ~/app/backend/scripts/backup_db.sh  # writes ./backups/<db>-<ts>.sql.gz
 | Symptom | Fix |
 |---------|-----|
 | Actions deploy step: `permission denied (publickey)` | `SSH_PRIVATE_KEY` must be the **entire** private key incl. `-----BEGIN/END-----`. `EC2_USER` correct (`ubuntu` vs `ec2-user`). |
-| EC2 `docker login` / pull fails | `GHCR_PAT` needs `read:packages`; or make the packages Public. |
-| Site loads but images 404 | `MEDIA_BASE_URL` in `backend/.env` must equal `http://<EC2-IP>:8090`; re-`up -d` the backend. |
+| EC2 `docker login` / pull fails with `denied: denied` | `GHCR_USER` must be a GitHub **username**, not the org. `GHCR_PAT` must be a **classic** PAT with `read:packages`, SSO-authorised for the org. Or make both packages Public and drop the login. |
+| Site loads but images 404 | Two known causes. **(1)** `MEDIA_BASE_URL` in `backend/.env` must equal `http://<EC2-IP>:8090`; re-`up -d` the backend. **(2) Legacy flat-layout uploads:** files uploaded before the structured media layout landed live *directly* in the uploads root (`uploads/<uuid>.jpg`), while newer uploads go under `uploads/products/<YYYY>/<MM>/…`, `uploads/categories/…`, etc. Old DB rows still reference the flat `/media/<uuid>.jpg` URLs, so if the uploads volume was recreated or only the new subfolders were copied over, exactly those older images 404. Fix: restore the flat files into the uploads root (or re-upload the affected images so the DB points at new structured paths). |
 | 413 on upload | Already handled (`client_max_body_size 20m` in the frontend nginx) — rebuild/pull the frontend image. |
 | Backend can't reach DB | EC2 must reach your MySQL host/port; check the DB firewall/security group and `MYSQL_*` in `backend/.env`. |
 | Port 8090 unreachable | Open inbound 8090 in the EC2 security group. |

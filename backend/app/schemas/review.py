@@ -1,10 +1,11 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
+from app.schemas.base import AppSchema
 
 
-class ReviewBase(BaseModel):
+class ReviewBase(AppSchema):
     rating: int = Field(ge=1, le=5)
     title: str | None = Field(default=None, max_length=160)
     body: str | None = None
@@ -14,7 +15,7 @@ class ReviewCreate(ReviewBase):
     """Body used by signed-in users to submit a review."""
 
 
-class ReviewUpdate(BaseModel):
+class ReviewUpdate(AppSchema):
     rating: int | None = Field(default=None, ge=1, le=5)
     title: str | None = Field(default=None, max_length=160)
     body: str | None = None
@@ -38,7 +39,7 @@ class AdminReviewCreate(ReviewBase):
         return self
 
 
-class AdminReviewUpdate(BaseModel):
+class AdminReviewUpdate(AppSchema):
     rating: int | None = Field(default=None, ge=1, le=5)
     author_name: str | None = Field(default=None, max_length=120)
     title: str | None = Field(default=None, max_length=160)
@@ -47,7 +48,7 @@ class AdminReviewUpdate(BaseModel):
     is_approved: bool | None = None
 
 
-class ReviewRead(BaseModel):
+class ReviewRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -91,14 +92,14 @@ class ReviewRead(BaseModel):
         )
 
 
-class ReviewListPage(BaseModel):
+class ReviewListPage(AppSchema):
     items: list[ReviewRead]
     total: int
     page: int
     page_size: int
 
 
-class ProductRatingSummary(BaseModel):
+class ProductRatingSummary(AppSchema):
     """Compact rating block — used by storefront for the histogram + stars."""
 
     rating_avg: Decimal

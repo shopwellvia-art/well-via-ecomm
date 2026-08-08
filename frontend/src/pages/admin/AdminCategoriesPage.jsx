@@ -1,9 +1,19 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Tags, Plus, Trash2, Upload, X, ImageOff } from 'lucide-react';
+import {
+  Tags,
+  Plus,
+  Trash2,
+  Upload,
+  X,
+  ImageOff,
+  FolderTree,
+  CornerDownRight,
+} from 'lucide-react';
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Card, CardHeader } from '@/components/ui/Card.jsx';
 import { Input } from '@/components/ui/Input.jsx';
+import { Select } from '@/components/ui/Select.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
@@ -12,6 +22,7 @@ import {
   useCategories,
   useCreateCategory,
   useDeleteCategory,
+  useUpdateCategory,
   useUploadCategoryImage,
   useRemoveCategoryImage,
 } from '@/features/categories/hooks.js';
@@ -39,18 +50,27 @@ function gradientFor(slug) {
   return GRADIENTS[h % GRADIENTS.length];
 }
 
-function CategoryRow({ category }) {
+function CategoryRow({ category, isChild, childCount, parentOptions }) {
   const fileRef = useRef(null);
   const [confirming, setConfirming] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const [removeError, setRemoveError] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+  const [editingParent, setEditingParent] = useState(false);
+  const [parentValue, setParentValue] = useState('');
+  const [parentError, setParentError] = useState(null);
 
   const del = useDeleteCategory();
+  const update = useUpdateCategory();
   const uploadImage = useUploadCategoryImage();
   const removeImage = useRemoveCategoryImage();
 
   const gradient = gradientFor(category.slug);
-  const anyPending = del.isPending || uploadImage.isPending || removeImage.isPending;
+  const hasChildren = childCount > 0;
+  const anyPending =
+    del.isPending || update.isPending || uploadImage.isPending || removeImage.isPending;
+  // Left inset that aligns row footers (errors, parent editor) with the text column
+  const insetClass = isChild ? 'ml-[8rem]' : 'ml-[4.75rem]';
 
   async function handleFileChange(e) {
     const file = e.target.files?.[0];
@@ -87,9 +107,44 @@ function CategoryRow({ category }) {
     }
   }
 
+  async function handleDelete() {
+    setDeleteError(null);
+    try {
+      await del.mutateAsync(category.id);
+    } catch (err) {
+      setDeleteError(
+        err.response?.data?.error?.message || 'Could not delete the category.',
+      );
+      setConfirming(false);
+    }
+  }
+
+  async function handleSaveParent() {
+    setParentError(null);
+    try {
+      await update.mutateAsync({
+        id: category.id,
+        data: { parent_id: parentValue === '' ? null : Number(parentValue) },
+      });
+      setEditingParent(false);
+    } catch (err) {
+      setParentError(
+        err.response?.data?.error?.message || 'Could not move the category.',
+      );
+    }
+  }
+
   return (
     <motion.li variants={fadeUp} className="flex flex-col gap-1">
-      <div className="flex items-center gap-4 px-5 py-3.5">
+      <div className={cn('flex items-center gap-4 px-5 py-3.5', isChild && 'pl-9')}>
+        {/* Connector for subcategories */}
+        {isChild && (
+          <CornerDownRight
+            className="size-4 shrink-0 text-ink-tertiary/70"
+            aria-hidden="true"
+          />
+        )}
+
         {/* Thumbnail */}
         <span
           className={cn(
@@ -115,12 +170,45 @@ function CategoryRow({ category }) {
 
         {/* Name + slug */}
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-ink-primary">{category.name}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-ink-primary">{category.name}</p>
+            {hasChildren && (
+              <span className="inline-flex shrink-0 items-center rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
+                {childCount} subcategor{childCount === 1 ? 'y' : 'ies'}
+              </span>
+            )}
+            {isChild && (
+              <span className="inline-flex shrink-0 items-center rounded-full border border-line-subtle bg-bg-sunken px-2 py-0.5 text-[11px] font-medium text-ink-tertiary">
+                Subcategory
+              </span>
+            )}
+          </div>
           <p className="text-xs text-ink-tertiary">/{category.slug}</p>
         </div>
 
-        {/* Image actions */}
+        {/* Parent + image actions */}
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label={`Change parent for ${category.name}`}
+            aria-expanded={editingParent}
+            disabled={anyPending}
+            onClick={() => {
+              setParentError(null);
+              setParentValue(
+                category.parent_id != null ? String(category.parent_id) : '',
+              );
+              setEditingParent((v) => !v);
+            }}
+            className={cn(
+              'grid size-8 place-items-center rounded-sm text-ink-tertiary',
+              'transition-colors hover:bg-accent/10 hover:text-accent',
+              'focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-40',
+              editingParent && 'bg-accent/10 text-accent',
+            )}
+          >
+            <FolderTree className="size-4" aria-hidden="true" />
+          </button>
           <input
             ref={fileRef}
             type="file"
@@ -193,7 +281,7 @@ function CategoryRow({ category }) {
               variant="destructive"
               size="sm"
               loading={del.isPending}
-              onClick={() => del.mutate(category.id)}
+              onClick={handleDelete}
             >
               Confirm
             </Button>
@@ -219,17 +307,66 @@ function CategoryRow({ category }) {
         )}
       </div>
 
+      {/* Inline parent editor */}
+      {editingParent && (
+        <div className={cn('flex items-start gap-2 pb-3 pr-5', insetClass)}>
+          <div className="w-64">
+            <Select
+              aria-label={`Parent category for ${category.name}`}
+              value={parentValue}
+              onChange={(e) => setParentValue(e.target.value)}
+              disabled={hasChildren || update.isPending}
+              error={parentError}
+              helper={
+                hasChildren
+                  ? 'Has subcategories — move them first'
+                  : 'Choose a parent, or none for top level.'
+              }
+            >
+              <option value="">None — top level</option>
+              {parentOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <Button
+            size="sm"
+            loading={update.isPending}
+            disabled={hasChildren}
+            onClick={handleSaveParent}
+          >
+            Save
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={update.isPending}
+            onClick={() => setEditingParent(false)}
+          >
+            Cancel
+          </Button>
+        </div>
+      )}
+
       {/* Per-row errors */}
       {uploadError && (
-        <p className="ml-[4.75rem] flex items-center gap-1.5 pb-1 text-xs text-danger">
+        <p className={cn('flex items-center gap-1.5 pb-1 text-xs text-danger', insetClass)}>
           <X className="size-3 shrink-0" aria-hidden="true" />
           {uploadError}
         </p>
       )}
       {removeError && (
-        <p className="ml-[4.75rem] flex items-center gap-1.5 pb-1 text-xs text-danger">
+        <p className={cn('flex items-center gap-1.5 pb-1 text-xs text-danger', insetClass)}>
           <X className="size-3 shrink-0" aria-hidden="true" />
           {removeError}
+        </p>
+      )}
+      {deleteError && (
+        <p className={cn('flex items-center gap-1.5 pb-1 text-xs text-danger', insetClass)}>
+          <X className="size-3 shrink-0" aria-hidden="true" />
+          {deleteError}
         </p>
       )}
     </motion.li>
@@ -240,7 +377,41 @@ export default function AdminCategoriesPage() {
   const { data: categories = [], isLoading } = useCategories();
   const create = useCreateCategory();
   const [name, setName] = useState('');
+  const [parentId, setParentId] = useState('');
   const [error, setError] = useState(null);
+
+  const topLevel = useMemo(
+    () => categories.filter((c) => c.parent_id == null),
+    [categories],
+  );
+
+  // One-level tree flattened for rendering: each top-level category followed by
+  // its children. A child whose parent is missing — or is itself a subcategory
+  // (possible via a concurrent-edit race) — renders as top-level so no row can
+  // ever disappear from the list.
+  const rows = useMemo(() => {
+    const rootIds = new Set(
+      categories.filter((c) => c.parent_id == null).map((c) => c.id),
+    );
+    const childrenOf = new Map();
+    const roots = [];
+    for (const c of categories) {
+      if (c.parent_id != null && rootIds.has(c.parent_id)) {
+        const siblings = childrenOf.get(c.parent_id) ?? [];
+        siblings.push(c);
+        childrenOf.set(c.parent_id, siblings);
+      } else {
+        roots.push(c);
+      }
+    }
+    return roots.flatMap((root) => {
+      const children = childrenOf.get(root.id) ?? [];
+      return [
+        { category: root, isChild: false, childCount: children.length },
+        ...children.map((child) => ({ category: child, isChild: true, childCount: 0 })),
+      ];
+    });
+  }, [categories]);
 
   async function handleAdd(e) {
     e.preventDefault();
@@ -250,8 +421,12 @@ export default function AdminCategoriesPage() {
       return;
     }
     try {
-      await create.mutateAsync({ name: name.trim() });
+      await create.mutateAsync({
+        name: name.trim(),
+        ...(parentId !== '' && { parent_id: Number(parentId) }),
+      });
       setName('');
+      setParentId('');
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Could not create the category.');
     }
@@ -263,7 +438,7 @@ export default function AdminCategoriesPage() {
       description="Group products for browsing and filtering. Each category can have an image shown in the storefront circles."
     >
       {/* Create form */}
-      <form onSubmit={handleAdd} className="mb-6 flex items-start gap-3">
+      <form onSubmit={handleAdd} className="mb-6 flex flex-wrap items-start gap-3">
         <div className="w-72">
           <Input
             placeholder="New category name — e.g. Accessories"
@@ -271,6 +446,21 @@ export default function AdminCategoriesPage() {
             onChange={(e) => setName(e.target.value)}
             error={error}
           />
+        </div>
+        <div className="w-56">
+          <Select
+            aria-label="Parent category"
+            value={parentId}
+            onChange={(e) => setParentId(e.target.value)}
+            helper="Parent category"
+          >
+            <option value="">None — top level</option>
+            {topLevel.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
         </div>
         <Button type="submit" loading={create.isPending}>
           <Plus className="size-4" aria-hidden="true" />
@@ -312,15 +502,23 @@ export default function AdminCategoriesPage() {
             animate="show"
             className="divide-y divide-line-subtle"
           >
-            {categories.map((c) => (
-              <CategoryRow key={c.id} category={c} />
+            {rows.map(({ category, isChild, childCount }) => (
+              <CategoryRow
+                key={category.id}
+                category={category}
+                isChild={isChild}
+                childCount={childCount}
+                parentOptions={topLevel.filter((p) => p.id !== category.id)}
+              />
             ))}
           </motion.ul>
         </Card>
       )}
 
       <p className="mt-4 text-xs text-ink-tertiary">
-        Deleting a category leaves its products uncategorized — they remain visible in the catalog.
+        Deleting a category leaves its products uncategorized — they remain visible in the
+        catalog. A category with subcategories can&apos;t be deleted until they are moved or
+        removed.
       </p>
     </AdminPage>
   );

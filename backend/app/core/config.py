@@ -164,6 +164,27 @@ class Settings(BaseSettings):
     # than blocking the request.
     OBS_BUFFER_MAX: int = 5000
 
+    # Analytics v2. Three independent kill switches, all OFF by default so the
+    # subsystem ships inert and is enabled deliberately, in this order:
+    #   ROLLUPS  — the analytics-worker container, the recompute queue, and every
+    #              write to an agg_* table. Write-only; nothing reads it yet, so
+    #              turning this on first is safe and lets rollups warm up.
+    #   V2       — the v2 API surface, the /admin/analytics routes and the
+    #              12-module sidebar group. The legacy Sales/Profit pages stay
+    #              primary while shadow-mode reconciliation runs.
+    #   TRACKING — data layer, GTM, GA4, Clarity and outbox delivery. Gated
+    #              separately because it also needs the relaxed CSP.
+    # Turning a flag off is the primary rollback and needs no deploy.
+    ANALYTICS_ROLLUPS_ENABLED: bool = False
+    ANALYTICS_V2_ENABLED: bool = False
+    ANALYTICS_TRACKING_ENABLED: bool = False
+    # Shared secret for machine-triggered analytics jobs, sent as X-Analytics-Token
+    # (same pattern as PAYMENT_RECONCILE_TOKEN). Blank disables machine auth; a
+    # human with analytics.jobs.run can still trigger runs. Note the normal path
+    # is the analytics-worker container, which calls the runner in-process and
+    # needs no token — this is for manual/admin-UI triggers and external cron.
+    ANALYTICS_CRON_TOKEN: str = ""
+
     @model_validator(mode="after")
     def _validate_secret_key_in_production(self) -> "Settings":
         """Refuse to boot in production with an insecure SECRET_KEY."""
@@ -194,3 +215,46 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+
+# Hostnames that mean "this URL was never pointed at production". A payment
+# link whose callback carries one of these sends the paying customer's browser
+# to THEIR OWN machine after they pay — the order then strands PENDING.
+# (2026-08-03: happened live; the return URL default above shipped into a real
+# captured payment's callback_url.)
+_DEV_HOST_MARKERS = ("localhost", "127.0.0.1", "0.0.0.0")
+
+
+def payment_return_url_is_dev_shaped() -> bool:
+    """True when production is about to hand customers a dev return URL.
+
+    Only ever True in production — dev/test/ci run on localhost by design.
+    """
+    if settings.ENVIRONMENT != "production":
+        return False
+    return any(m in settings.PAYMENT_RETURN_URL for m in _DEV_HOST_MARKERS)
+
+
+def payment_config_problems() -> list[str]:
+    """Dev-shaped payment config that must never reach production.
+
+    Logged CRITICAL at boot (never fatal: crash-looping the stack on a config
+    mistake would take the whole store down with no remote rollback path —
+    the checkout-time guard is what actually protects money movement).
+    """
+    if settings.ENVIRONMENT != "production":
+        return []
+    problems: list[str] = []
+    if payment_return_url_is_dev_shaped():
+        problems.append(
+            "PAYMENT_RETURN_URL points at a dev origin "
+            f"({settings.PAYMENT_RETURN_URL!r}) — paying customers would be "
+            "redirected off-site after paying and their orders strand PENDING"
+        )
+    if not settings.PAYMENT_RECONCILE_TOKEN:
+        problems.append(
+            "PAYMENT_RECONCILE_TOKEN is blank — the reconcile sidecar cannot "
+            "authenticate (403 every cycle) and captured payments will not "
+            "self-settle"
+        )
+    return problems

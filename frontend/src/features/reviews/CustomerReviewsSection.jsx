@@ -6,7 +6,7 @@ import { Button } from '@/components/storefront/ui/Button.jsx';
 import { Skeleton } from '@/components/storefront/ui/Skeleton.jsx';
 import { cn } from '@/lib/utils.js';
 import { useAuthStore } from '@/features/auth/store.js';
-import { listStagger, fadeUp, fadeIn } from '@/lib/motion.js';
+import { listStagger, fadeIn } from '@/lib/motion.js';
 import { useProductReviews } from './hooks.js';
 import { StarRating } from './StarRating.jsx';
 import { RatingHistogram } from './RatingHistogram.jsx';
@@ -131,7 +131,9 @@ export function CustomerReviewsSection({ product }) {
 
           {/* Sort + count row */}
           <div className="flex items-center justify-between gap-3 border-b border-wline pb-4">
-            <p className="text-sm text-wmuted">
+            {/* div, not p: the loading branch renders Skeleton's div, which is
+                invalid inside <p> and trips validateDOMNesting on every PDP. */}
+            <div className="text-sm text-wmuted">
               {isLoading ? (
                 <Skeleton className="inline-block h-3.5 w-32" />
               ) : ratingCount > 0 ? (
@@ -145,7 +147,7 @@ export function CustomerReviewsSection({ product }) {
               ) : (
                 'No reviews yet'
               )}
-            </p>
+            </div>
             <SortMenu value={sort} onChange={(v) => { setSort(v); setPage(1); }} />
           </div>
 

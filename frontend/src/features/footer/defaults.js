@@ -107,9 +107,10 @@ export const BOTTOM_ICON_NAMES = [
 ];
 
 // ---------------------------------------------------------------------------
-// Canonical default document — mirrors the exact current Footer.jsx values.
-// The first trust feature sub is updated to use ₹ instead of $.
-// The {year} token in copyright is replaced at render time.
+// Canonical default document — the live Wellvia footer content, rendered when
+// the footer API is unreachable. Must stay in sync with the backend footer
+// defaults. The {year} token in copyright is replaced at render time; without
+// the token the year is inserted after the © sign.
 // ---------------------------------------------------------------------------
 
 export const FOOTER_DEFAULTS = {
@@ -121,9 +122,8 @@ export const FOOTER_DEFAULTS = {
   ],
 
   brand: {
-    name: 'Lumen',
-    tagline:
-      'Modern essentials, thoughtfully sourced. Join our newsletter for early drops and member-only pricing.',
+    name: 'WELLVIA',
+    tagline: 'Wellness Redefined',
     // When set, the storefront shows this uploaded logo image in place of the
     // icon + wordmark in both the navbar and footer.
     logo_url: '',
@@ -133,31 +133,32 @@ export const FOOTER_DEFAULTS = {
     enabled: true,
     placeholder: 'you@example.com',
     note: 'No spam. Unsubscribe anytime.',
-    success: "You're on the list. Welcome to Lumen.",
+    success: "You're on the list. Welcome to Wellvia.",
   },
 
   link_columns: [
     {
-      title: 'About',
+      title: 'Shop',
       links: [
-        { label: 'Contact Us', to: '/contact' },
+        { label: 'All Products', to: '/products' },
+        { label: 'Best Sellers', to: '/bestsellers' },
+        { label: 'New Arrivals', to: '/new-arrivals' },
+        { label: 'Combos', to: '/categories' },
+        { label: 'Shop by Goal', to: '/products' },
+      ],
+    },
+    {
+      title: 'Explore',
+      links: [
         { label: 'About Us', to: '/about' },
-        { label: 'Careers', to: '/careers' },
-        { label: 'Lumen Stories', to: '/stories' },
-        { label: 'Press', to: '/press' },
-        { label: 'Corporate Information', to: '/corporate' },
+        { label: 'Blog', to: '/stories' },
+        { label: 'FAQs', to: '/contact' },
+        { label: 'Contact Us', to: '/contact' },
+        { label: 'Track Order', to: '/orders' },
       ],
     },
     {
-      title: 'Group',
-      links: [
-        { label: 'Aura', to: '/brands/aura' },
-        { label: 'Voyage', to: '/brands/voyage' },
-        { label: 'Forge', to: '/brands/forge' },
-      ],
-    },
-    {
-      title: 'Consumer Policy',
+      title: 'Customer Care',
       links: [
         { label: 'Shipping Policy', to: '/shipping' },
         { label: 'Refund & Cancellation', to: '/refund' },
@@ -168,40 +169,24 @@ export const FOOTER_DEFAULTS = {
     },
   ],
 
+  // Admin-editable address blocks — hidden until real lines are filled in.
   mail_us: {
     heading: 'Mail Us',
-    lines: [
-      'Lumen Internet Pvt. Ltd.,',
-      'Buildings Alyssa, Begonia &',
-      'Clove Embassy Tech Village,',
-      'Outer Ring Road, Devarabeesanahalli Village,',
-      'Bengaluru, 560103,',
-      'Karnataka, India',
-    ],
+    lines: [],
   },
 
   registered_office: {
     heading: 'Registered Office Address',
-    lines: [
-      'Lumen Internet Pvt. Ltd.,',
-      'Buildings Alyssa, Begonia &',
-      'Clove Embassy Tech Village,',
-      'Outer Ring Road, Devarabeesanahalli Village,',
-      'Bengaluru, 560103,',
-      'Karnataka, India',
-    ],
-    cin: 'U51109KA2026PTC066107',
-    phones: [
-      { display: '044-4561 4700', tel: '+914445614700' },
-      { display: '044-6741 5800', tel: '+914467415800' },
-    ],
+    lines: [],
+    cin: '',
+    phones: [],
   },
 
   social_links: [
-    { icon: 'Facebook', label: 'Facebook', href: 'https://facebook.com/lumen' },
-    { icon: 'Twitter', label: 'Twitter', href: 'https://twitter.com/lumen' },
-    { icon: 'Youtube', label: 'YouTube', href: 'https://youtube.com/lumen' },
-    { icon: 'Instagram', label: 'Instagram', href: 'https://instagram.com/lumen' },
+    { icon: 'Facebook', label: 'Facebook', href: 'https://facebook.com/wellvia' },
+    { icon: 'Twitter', label: 'Twitter', href: 'https://twitter.com/wellvia' },
+    { icon: 'Youtube', label: 'YouTube', href: 'https://youtube.com/wellvia' },
+    { icon: 'Instagram', label: 'Instagram', href: 'https://instagram.com/wellvia' },
   ],
 
   bottom_links: [
@@ -213,5 +198,5 @@ export const FOOTER_DEFAULTS = {
 
   payment_methods: ['VISA', 'Mastercard', 'RuPay', 'UPI', 'AMEX', 'PayPal'],
 
-  copyright: '© 2007–{year} Lumen.com',
+  copyright: '© Wellvia. All rights reserved.',
 };

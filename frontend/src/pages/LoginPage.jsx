@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils.js';
 import { env } from '@/config/env.js';
 import { usePublicSettings } from '@/features/settings/public.js';
+import { trackRegistration } from '@/features/tracking/metaPixel.js';
 import { LeafMark } from '@/components/storefront/Logo.jsx';
 import {
   ShieldIcon,
@@ -99,6 +100,16 @@ const inputCls =
   'w-full bg-wcard border border-wline rounded-xl px-[17px] py-[15px] text-[14px] text-wink ' +
   'placeholder:text-wmuted outline-none transition-colors focus:border-wgreen font-wsans';
 
+/**
+ * Only honour `next` when it is an internal path: exactly one leading "/".
+ * "//host" is a protocol-relative EXTERNAL url (and browsers normalise
+ * "/\host" to it); react-router's pushState fails cross-origin and falls back
+ * to window.location.assign(), which would make this an open redirect.
+ */
+export function sanitizeNext(raw) {
+  return raw && /^\/(?![/\\])/.test(raw) ? raw : null;
+}
+
 export default function LoginPage() {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [form, setForm] = useState({ email: '', password: '', full_name: '' });
@@ -143,7 +154,7 @@ export default function LoginPage() {
     } catch {
       /* profile is non-critical for storefront use */
     }
-    const safeNext = nextUrl && nextUrl.startsWith('/') ? nextUrl : null;
+    const safeNext = sanitizeNext(nextUrl);
     navigate(safeNext ?? (profile?.is_admin ? '/admin' : '/'));
   }
 
@@ -161,6 +172,10 @@ export default function LoginPage() {
           referral_code: referralCode || undefined,
         });
         clearPendingReferralCode();
+        // Meta `CompleteRegistration` — after the account exists, before the
+        // login that follows it, so a login failure cannot un-create the account
+        // and leave the event unsent.
+        trackRegistration();
       }
       const resp = await authApi.login(form.email, form.password);
       if (resp.needs_totp) {
@@ -218,7 +233,7 @@ export default function LoginPage() {
   }
 
   if (currentUser) {
-    const safeNext = nextUrl && nextUrl.startsWith('/') ? nextUrl : '/';
+    const safeNext = sanitizeNext(nextUrl) ?? '/';
     return <Navigate to={safeNext} replace />;
   }
 

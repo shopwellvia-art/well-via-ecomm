@@ -1,6 +1,10 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Page } from '@/components/layout/Page.jsx';
+import PageMeta from '@/components/storefront/PageMeta.jsx';
+import JsonLd from '@/components/storefront/JsonLd.jsx';
+import { absoluteUrl } from '@/lib/pageMeta.js';
+import { buildBreadcrumbSchema, buildProductSchema } from '@/lib/productSchema.js';
 import { Skeleton } from '@/components/storefront/ui/Skeleton.jsx';
 import {
   useProduct,
@@ -10,6 +14,7 @@ import {
 } from '@/features/products/hooks.js';
 import { useCategories } from '@/features/categories/hooks.js';
 import { useTrackProductView } from '@/features/history/store.js';
+import { trackViewContent } from '@/features/tracking/metaPixel.js';
 
 // Feature components — logic 100% preserved, only page chrome re-skinned
 import { FrequentlyBoughtTogether } from '@/features/products/components/FrequentlyBoughtTogether.jsx';
@@ -42,6 +47,19 @@ export default function ProductDetailPage() {
 
   useTrackProductView(id);
 
+  // Meta `ViewContent`. Fires when the product DATA arrives, not when the URL
+  // changes — a ViewContent for a product that turned out to 404 is a false
+  // signal. The ref makes it once per product rather than once per render: this
+  // page stays mounted across `/products/:id` changes, and `product` is a new
+  // object on every react-query refetch, so depending on it without the guard
+  // would report the same view repeatedly.
+  const viewedProductRef = useRef(null);
+  useEffect(() => {
+    if (!product?.id || viewedProductRef.current === product.id) return;
+    viewedProductRef.current = product.id;
+    trackViewContent(product);
+  }, [product]);
+
   const categoryName = useMemo(() => {
     if (!product?.category_id || !categories) return null;
     return categories.find((c) => c.id === product.category_id)?.name || null;
@@ -52,8 +70,39 @@ export default function ProductDetailPage() {
 
   const relatedProducts = likely?.length ? likely : coPurchased;
 
+  const canonical = absoluteUrl(`/products/${product.id}`);
+  const ogImage = product.image_url ? absoluteUrl(product.image_url) : undefined;
+  // Lead the description with what the product is for; the flavour and pack
+  // size are what shoppers scan for in a search snippet.
+  const metaDescription =
+    product.short_description ||
+    product.description ||
+    `${product.name} from Wellvia.`;
+
   return (
     <Page>
+      <PageMeta
+        title={product.name}
+        description={metaDescription}
+        canonicalPath={`/products/${product.id}`}
+        image={product.image_url}
+        type="product"
+      />
+      <JsonLd
+        id="product"
+        data={buildProductSchema(product, { canonical, image: ogImage })}
+      />
+      <JsonLd
+        id="breadcrumb"
+        data={buildBreadcrumbSchema([
+          { name: 'Home', path: '/' },
+          { name: 'Shop', path: '/products' },
+          ...(categoryName
+            ? [{ name: categoryName, path: `/products?category_id=${product.category_id}` }]
+            : []),
+          { name: product.name, path: `/products/${product.id}` },
+        ])}
+      />
 
       {/* ── BREADCRUMB ─────────────────────────────────────────────────────── */}
       <nav aria-label="Breadcrumb" className="mb-5">

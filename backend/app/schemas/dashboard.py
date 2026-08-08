@@ -1,10 +1,10 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from app.schemas.base import AppSchema
 
 
-class MetricDelta(BaseModel):
+class MetricDelta(AppSchema):
     """Single KPI card: current period value, previous period value, % change.
 
     `delta_pct` is None when previous was 0 — the UI shows "—" instead of
@@ -16,26 +16,26 @@ class MetricDelta(BaseModel):
     delta_pct: float | None
 
 
-class IntMetricDelta(BaseModel):
+class IntMetricDelta(AppSchema):
     current: int
     previous: int
     delta_pct: float | None
 
 
-class SummaryBlock(BaseModel):
+class SummaryBlock(AppSchema):
     revenue: MetricDelta
     orders: IntMetricDelta
     new_customers: IntMetricDelta
     aov: MetricDelta
 
 
-class RevenuePoint(BaseModel):
+class RevenuePoint(AppSchema):
     date: str
     revenue: float
     orders: int
 
 
-class TopProduct(BaseModel):
+class TopProduct(AppSchema):
     product_id: int
     name: str
     sku: str
@@ -43,7 +43,7 @@ class TopProduct(BaseModel):
     revenue: float
 
 
-class RecentOrder(BaseModel):
+class RecentOrder(AppSchema):
     id: int
     status: str
     total_amount: float
@@ -52,7 +52,7 @@ class RecentOrder(BaseModel):
     customer_email: str
 
 
-class LowStockProduct(BaseModel):
+class LowStockProduct(AppSchema):
     id: int
     name: str
     sku: str
@@ -60,7 +60,7 @@ class LowStockProduct(BaseModel):
     price: float
 
 
-class DashboardOverview(BaseModel):
+class DashboardOverview(AppSchema):
     period: str
     period_start: datetime
     period_end: datetime

@@ -47,6 +47,10 @@ class PaymentMethodConfigService:
         Rules:
         - credentials is a partial merge; key="" deletes that key; unknown
           keys (not in the registry for this gateway) raise ValidationError.
+        - Values are stripped of surrounding whitespace before storage — a
+          pasted trailing newline/space would otherwise poison the secret and
+          the gateway rejects every call with an auth error. A whitespace-only
+          value therefore behaves like "" (deletes the key).
         - enabled=True requires implemented=True and all required fields present
           after the merge.
         - Returns the updated PaymentMethodRead.
@@ -72,6 +76,7 @@ class PaymentMethodConfigService:
                     + ", ".join(sorted(unknown))
                 )
             for k, v in payload.credentials.items():
+                v = v.strip()
                 if v == "":
                     current_creds.pop(k, None)
                 else:

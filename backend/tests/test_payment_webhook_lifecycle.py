@@ -223,7 +223,7 @@ class TestPrepaidSuccess:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
 
             # Order is PENDING; stock already decremented by checkout.
@@ -295,7 +295,7 @@ class TestPrepaidFailure:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
 
             # Checkout decrements stock by 3.
@@ -380,7 +380,7 @@ class TestDuplicateWebhook:
                 coupon_code=coupon_code,
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
 
             # Verify the coupon was snapshotted on the order.
@@ -469,7 +469,7 @@ class TestWrongAmount:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
 
             assert order.status == OrderStatus.PENDING
@@ -621,7 +621,7 @@ class TestGatewayConfirmation:
             gateway_code="mock",
             payment_method="prepaid",
         )
-        order, mtid, _redirect = PaymentService(db).checkout(user, req)
+        order, mtid, _redirect, _checkout = PaymentService(db).checkout(user, req)
         order_ids.append(order.id)
         order.gateway_code = "razorpay"
         order.payment_provider_ref = self.PROVIDER_REF

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/Badge.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { cn } from '@/lib/utils.js';
-import { fadeUp, scaleIn, listStagger, staggerContainer } from '@/lib/motion.js';
+import { fadeUp, scaleIn, listStagger } from '@/lib/motion.js';
 import {
   useRoles,
   usePermissions,
@@ -482,7 +482,7 @@ export default function AdminRolesPage() {
 
           <p className="mt-4 flex items-center gap-2 text-xs text-ink-tertiary">
             <UsersIcon className="size-3.5" aria-hidden="true" />
-            Assign roles to individual staff from the Users page.
+            Assign roles to individual staff from the Team page.
           </p>
         </>
       )}

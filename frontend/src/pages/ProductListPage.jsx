@@ -8,6 +8,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { Page } from '@/components/layout/Page.jsx';
+import PageMeta from '@/components/storefront/PageMeta.jsx';
 import ProductGrid from '@/components/storefront/ProductGrid.jsx';
 import ProductCard from '@/components/storefront/ProductCard.jsx';
 import FilterSidebar, {
@@ -16,10 +17,8 @@ import FilterSidebar, {
 } from '@/features/products/components/FilterSidebar.jsx';
 import { useProducts, useBestsellers } from '@/features/products/hooks.js';
 import { useCategories } from '@/features/categories/hooks.js';
+import { GOALS, resolveGoalCategoryIds } from '@/lib/catalogOptions.js';
 import { cn } from '@/lib/utils.js';
-import { BESTSELLERS } from '../../public/products';
-import { NEW_ARRIVALS } from '../../public/products';
-import { ALL_PRODUCTS } from '../../public/products';
 
 const PAGE_SIZE = 12;
 const NEW_WINDOW_DAYS = 30;
@@ -37,6 +36,11 @@ const MODES = {
   all: {
     title: 'Wellness, Your Way.',
     sub: 'From better sleep to daily immunity, discover gummies crafted for every goal.',
+    // Hero copy sells; the SEO title has to say what the page IS so it can win
+    // a search for the category rather than for a slogan nobody types.
+    seoTitle: 'Shop All Wellness Gummies',
+    seoDescription:
+      'Browse the full Wellvia range of clean-label wellness gummies — immunity, gut, sleep, beauty, hormone balance and daily multivitamins.',
     badge: undefined,
     heroBg: 'linear-gradient(115deg,#eef3e4 0%,#f7f4ea 55%,#e9efdc 100%)',
     heroImage: '/product-hero.png',
@@ -45,6 +49,9 @@ const MODES = {
   bestsellers: {
     title: 'Customer Favorites, For a Reason.',
     sub: 'Discover the gummies our customers keep coming back for.',
+    seoTitle: 'Best Selling Wellness Gummies',
+    seoDescription:
+      'The Wellvia gummies our customers reorder most — clean-label formulas for immunity, sleep, gut health and everyday nutrition.',
     badge: 'bestseller',
     heroBg: 'linear-gradient(115deg,#efe4f0 0%,#f7f0f4 55%,#e7dcEC 100%)',
     heroImage: '/bestseller-hero.png',
@@ -54,6 +61,9 @@ const MODES = {
   'new-arrivals': {
     title: 'Fresh Drops, Feel Good Finds.',
     sub: 'Be the first to discover our latest wellness gummies.',
+    seoTitle: 'New Arrivals',
+    seoDescription:
+      'The newest Wellvia wellness gummies — be first to try our latest clean-label formulas.',
     badge: 'new',
     heroBg: 'linear-gradient(115deg,#e7efe0 0%,#f6f3e9 55%,#eae4d4 100%)',
     heroImage: '/product-hero.png',
@@ -99,11 +109,14 @@ function filtersToParams(f) {
   return sp;
 }
 
-/** Map UI filters → GET /products query params. */
-function toApiParams(f) {
+/** Map UI filters → GET /products query params. Goal slugs resolve to
+ * category ids (goals ARE categories — see catalogOptions.js) and merge
+ * into the `category_ids` param. */
+function toApiParams(f, goalCategoryIds = []) {
+  const categoryIds = [...new Set([...f.categoryIds, ...goalCategoryIds])];
   return {
     q: f.q || undefined,
-    category_ids: f.categoryIds.length ? f.categoryIds.join(',') : undefined,
+    category_ids: categoryIds.length ? categoryIds.join(',') : undefined,
     flavours: f.flavours.length ? f.flavours.join(',') : undefined,
     min_price: f.minPrice ?? undefined,
     max_price: f.maxPrice ?? undefined,
@@ -119,12 +132,35 @@ function toApiParams(f) {
   };
 }
 
-/** Same predicates applied client-side (bestsellers mode fetches a plain list). */
-function applyFiltersLocally(items, f) {
+/** The text columns GET /search and GET /products?q= match server-side.
+ *
+ * Kept in step with `_match_columns()` in
+ * `backend/app/repositories/product_repository.py`. The local filter has to
+ * agree with the server's notion of a match: when it only checked `name`, a
+ * search for "sleep" that the API answered by matching a description or a
+ * category would have every one of those hits thrown away again here, and the
+ * bestsellers/new-arrivals views would show "no results" for a term that
+ * demonstrably has some. `category_name` is not on the product payload, so a
+ * category-only match still cannot be reproduced client-side — an accepted gap,
+ * and the reason this list errs toward matching rather than filtering. */
+const Q_FIELDS = ['name', 'sku', 'brand', 'flavour', 'badge', 'short_description', 'description'];
+
+export function matchesQuery(product, q) {
+  const term = q.trim().toLowerCase();
+  if (!term) return true;
+  return Q_FIELDS.some((field) => {
+    const value = product[field];
+    return typeof value === 'string' && value.toLowerCase().includes(term);
+  });
+}
+
+/** Same predicates applied client-side (bestsellers mode fetches a plain list).
+ * Goals compare via the same slug→category-id resolution as toApiParams. */
+function applyFiltersLocally(items, f, goalCategoryIds = []) {
+  const categoryIds = [...new Set([...f.categoryIds, ...goalCategoryIds])];
   let out = items.filter((p) => {
-    if (f.q && !p.name.toLowerCase().includes(f.q.toLowerCase())) return false;
-    if (f.categoryIds.length && !f.categoryIds.includes(p.category_id)) return false;
-    if (f.goals.length && !f.goals.includes(p.goal)) return false;
+    if (f.q && !matchesQuery(p, f.q)) return false;
+    if (categoryIds.length && !categoryIds.includes(p.category_id)) return false;
     if (f.flavours.length && !f.flavours.includes(p.flavour)) return false;
     if (f.minPrice != null && Number(p.price) < f.minPrice) return false;
     if (f.maxPrice != null && Number(p.price) > f.maxPrice) return false;
@@ -206,47 +242,48 @@ export default function ProductListPage({ mode = 'all' }) {
   }, [filterOpen]);
 
   /* ── Data ── */
-  //BESTSELLERSSSSSSSSSSSSSSSSSSS
-  const serverQuery = useProducts(toApiParams(filters));
-  const bestsellersQuery = useBestsellers(24);
+  // Goal filters resolve to category ids once categories load (goals ARE
+  // category slugs — no separate backend field).
+  const goalCategoryIds = useMemo(
+    () => resolveGoalCategoryIds(filters.goals, categories),
+    [filters.goals, categories],
+  );
 
   const isBestsellers = mode === 'bestsellers';
-  const isNewArrivals = mode === "new-arrivals";
-  const isLoading = false;
-const isError = false;
-const refetch = () => {};
+  const isNewArrivals = mode === 'new-arrivals';
+
+  // /products paginates server-side; /new-arrivals pulls one newest-first
+  // page and applies the freshness window + local pagination client-side.
+  const serverQuery = useProducts(
+    isNewArrivals
+      ? {
+          ...toApiParams(filters, goalCategoryIds),
+          sort_by: 'newest',
+          page: 1,
+          page_size: 100,
+        }
+      : toApiParams(filters, goalCategoryIds),
+  );
+  const bestsellersQuery = useBestsellers(24);
+
+  const { isLoading, isError, refetch } = isBestsellers ? bestsellersQuery : serverQuery;
 
   let products, total, totalPages;
   if (isBestsellers) {
-  const filtered = applyFiltersLocally(BESTSELLERS, filters);
-
-  total = filtered.length;
-  totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  products = filtered.slice(
-    (filters.page - 1) * PAGE_SIZE,
-    filters.page * PAGE_SIZE
-  );
-} else if (isNewArrivals) {
-  const filtered = applyFiltersLocally(NEW_ARRIVALS, filters);
-
-  total = filtered.length;
-  totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  products = filtered.slice(
-    (filters.page - 1) * PAGE_SIZE,
-    filters.page * PAGE_SIZE
-  );
-} else {
-    const filtered = applyFiltersLocally(ALL_PRODUCTS, filters);
-
-total = filtered.length;
-totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-products = filtered.slice(
-  (filters.page - 1) * PAGE_SIZE,
-  filters.page * PAGE_SIZE
-);
+    const filtered = applyFiltersLocally(bestsellersQuery.data ?? [], filters, goalCategoryIds);
+    total = filtered.length;
+    totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    products = filtered.slice((filters.page - 1) * PAGE_SIZE, filters.page * PAGE_SIZE);
+  } else if (isNewArrivals) {
+    const fresh = (serverQuery.data?.items ?? []).filter(isNewProduct);
+    const filtered = applyFiltersLocally(fresh, filters, goalCategoryIds);
+    total = filtered.length;
+    totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    products = filtered.slice((filters.page - 1) * PAGE_SIZE, filters.page * PAGE_SIZE);
+  } else {
+    products = serverQuery.data?.items ?? [];
+    total = serverQuery.data?.total ?? 0;
+    totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   }
 
   const shown = products.length;
@@ -254,9 +291,17 @@ products = filtered.slice(
 
   /* Active filter chips (mockup: "Grape ×" "In Stock ×" next to the count) */
   const chips = [
+    ...filters.goals.map((goal) => ({
+    label: goal,
+    clear: () => update({ goals: filters.goals.filter((x) => x !== goal) }),
+  })),
     ...filters.categoryIds.map((id) => ({
       label: catName(id),
       clear: () => update({ categoryIds: filters.categoryIds.filter((x) => x !== id) }),
+    })),
+    ...filters.goals.map((slug) => ({
+      label: GOALS.find((g) => g.slug === slug)?.label ?? slug,
+      clear: () => update({ goals: filters.goals.filter((x) => x !== slug) }),
     })),
     ...filters.flavours.map((fl) => ({
       label: fl,
@@ -296,6 +341,20 @@ products = filtered.slice(
     return nums;
   }, [filters.page, totalPages]);
 
+  // Any search, facet or page beyond the first produces a thin near-duplicate of
+  // the clean listing. Those get noindex + a canonical back to the clean URL.
+  const isFilteredView =
+    Boolean(filters.q) ||
+    filters.categoryIds.length > 0 ||
+    filters.goals.length > 0 ||
+    filters.flavours.length > 0 ||
+    filters.offers.length > 0 ||
+    filters.minPrice != null ||
+    filters.maxPrice != null ||
+    Boolean(filters.minRating) ||
+    filters.inStock ||
+    filters.page > 1;
+
   const sidebar = (
     <FilterSidebar filters={filters} onChange={(patch) => update(patch)} categories={categories} />
   );
@@ -303,8 +362,16 @@ products = filtered.slice(
   return (
     // HERO BANNER OF ALL 3 PAGES
     <Page bleed>
+      {/* Filtered/paginated views are variants of one listing: they point their
+          canonical at the clean URL and stay out of the index, so Google sees a
+          single Shop page instead of dozens of thin near-duplicates. */}
+      <PageMeta
+        title={modeCfg.seoTitle ?? modeCfg.title}
+        description={modeCfg.seoDescription ?? modeCfg.sub}
+        canonicalPath={mode === 'all' ? '/products' : `/${mode}`}
+        noindex={isFilteredView}
+      />
       {/* ── HERO BAND ── */}
-     {/* ── HERO BAND ── */}
 <section
   className="border-b border-wline"
   style={{ background: modeCfg.heroBg }}
@@ -312,80 +379,78 @@ products = filtered.slice(
 >
 
   {/* BESTSELLERS */}
-  {mode === "bestsellers" && (
-    <div className="relative">
+{mode === "bestsellers" && (
+  <div className="relative overflow-hidden w-full">
+    <img
+      src={modeCfg.heroImage}
+      alt="Best Sellers"
+      className="w-full h-[160px] sm:h-[200px] md:h-auto object-cover object-left md:object-contain block"
+    />
+
+    <Link
+      to="/bestsellers"
+      className="absolute left-3.5 bottom-3 md:left-20 md:bottom-12 bg-[#08112C] text-white px-2.5 py-1.5 md:px-6 md:py-3 rounded-full font-serif text-[9px] sm:text-xs md:text-base leading-none shadow-md"
+    >
+      Shop for Bestsellers
+    </Link>
+  </div>
+)}
+
+  {/* ALL PRODUCTS */}
+  {mode === "all" && (
+    <div className="relative overflow-hidden w-full">
       <img
         src={modeCfg.heroImage}
-        alt="Best Sellers"
-        className="w-full block"
+        alt="Products"
+        className="w-full h-[160px] sm:h-[200px] md:h-auto object-cover object-center md:object-contain block"
       />
 
-      <Link
-        to="/bestsellers"
-        className="absolute left-4 bottom-2 md:bottom-12 md:left-36 md:bottom-12 bg-[#08112C] text-white px-1.5 py-1.5 md:px-6 md:py-3 rounded-full font-serif text-[8px] md:text-base leading-none"
-      >
-        Shop for Bestsellers
-      </Link>
+      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 max-w-[58%] md:left-12 md:max-w-none">
+        <h1 className="font-cormorant font-medium text-[clamp(15px,4.5vw,22px)] md:text-[clamp(30px,4.2vw,50px)] text-[#133F30] m-0 mb-0.5 md:mb-2 leading-[1.15] md:leading-[1.35] max-w-[220px] md:max-w-[420px]">
+          {modeCfg.title}
+        </h1>
+
+        <p className="font-cormorant text-[10px] sm:text-[12px] md:text-[14.5px] text-black m-0 font-light max-w-[140px] md:max-w-[380px] mb-2 md:mb-5 leading-[1.25] md:leading-normal">
+          {modeCfg.sub}
+        </p>
+
+        <Link
+          to="/products"
+          className="inline-block bg-[#08112C] text-white px-2.5 py-1.5 md:px-6 md:py-3 rounded-full font-serif text-[9px] sm:text-xs md:text-base leading-none"
+        >
+          Shop All Products
+        </Link>
+      </div>
     </div>
   )}
 
+  {/* NEW ARRIVALS */}
+  {mode === "new-arrivals" && (
+    <div className="relative overflow-hidden w-full">
+      <img
+        src={modeCfg.heroImage}
+        alt="New Arrivals"
+        className="w-full h-[160px] sm:h-[200px] md:h-auto object-cover object-center md:object-contain block"
+      />
 
- {/* ALL PRODUCTS */}
-{mode === "all" && (
-  <div className="relative">
-    <img
-      src={modeCfg.heroImage}
-      alt="Products"
-      className="w-full block"
-    />
+      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 max-w-[58%] md:left-12 md:max-w-none">
+        <h1 className="font-cormorant font-medium text-[clamp(15px,4.5vw,22px)] md:text-[clamp(30px,4.2vw,50px)] text-[#133F30] m-0 mb-1 md:mb-2 leading-[1.15] md:leading-[1.35] max-w-[140px] md:max-w-[380px]">
+          {modeCfg.title}
+        </h1>
 
-    <div className="absolute left-4 top-6 max-w-[55%] md:left-12 md:top-1/2 md:-translate-y-1/2 md:max-w-none">
-      <h1 className="font-cormorant font-medium text-[clamp(16px,4.5vw,22px)] md:text-[clamp(30px,4.2vw,50px)] text-[#133F30] m-0 mb-0.5 md:mb-2 leading-[1.2] md:leading-[1.35] max-w-[220px] md:max-w-[420px]">
-        {modeCfg.title}
-      </h1>
+        <p className="font-cormorant text-[10px] sm:text-[12px] md:text-[14.5px] text-black m-0 font-light max-w-[130px] md:max-w-[380px] mb-2 md:mb-5 leading-[1.25] md:leading-normal">
+          {modeCfg.sub}
+        </p>
 
-      <p className="font-cormorant text-[10.5px] md:text-[14.5px] text-black m-0 font-light max-w-[140px] md:max-w-[380px] mb-3 md:mb-5 leading-[1.3] md:leading-normal">
-        {modeCfg.sub}
-      </p>
-
-      <Link
-        to="/products"
-         className="absolute left-4 -bottom-4 md:static md:translate-y-0 md:ml-0 bg-[#08112C] text-white px-1.5 py-1.5 md:px-6 md:py-3 rounded-full font-serif text-[8px] md:text-base leading-none"
-      >
-        Shop All Products
-      </Link>
+        <Link
+          to="/new-arrivals"
+          className="inline-block bg-[#08112C] text-white px-2.5 py-1.5 md:px-6 md:py-3 rounded-full font-serif text-[9px] sm:text-xs md:text-base leading-none"
+        >
+          Shop New Arrivals
+        </Link>
+      </div>
     </div>
-  </div>
-)}
-
-{/* NEW ARRIVALS */}
-{mode === "new-arrivals" && (
-  <div className="relative">
-    <img
-      src={modeCfg.heroImage}
-      alt="New Arrivals"
-      className="w-full block"
-    />
-
-    <div className="absolute left-4 top-6 max-w-[55%] md:left-12 md:top-1/2 md:-translate-y-1/2 md:max-w-none">
-      <h1 className="font-cormorant font-medium text-[clamp(16px,4.5vw,22px)] md:text-[clamp(30px,4.2vw,50px)] text-[#133F30] m-0 mb-1 md:mb-2 leading-[1.2] md:leading-[1.35] max-w-[140px] md:max-w-[380px]">
-        {modeCfg.title}
-      </h1>
-
-      <p className="font-cormorant text-[10.5px] md:text-[14.5px] text-black m-0 font-light max-w-[130px] md:max-w-[380px] mb-3 md:mb-5 leading-[1.3] md:leading-normal">
-        {modeCfg.sub}
-      </p>
-
-      <Link
-        to="/new-arrivals"
-      className="absolute left-4 -bottom-4 md:static md:translate-y-0 md:ml-0 bg-[#08112C] text-white px-1.5 py-1.5 md:px-6 md:py-3 rounded-full font-serif text-[8px] md:text-base leading-none"
->
-        Shop New Arrivals
-      </Link>
-    </div>
-  </div>
-)}
-
+  )}
 
 </section>
 
@@ -419,7 +484,7 @@ products = filtered.slice(
             {isLoading ? 'Loading…' : `Showing ${shown} of ${total.toLocaleString('en-IN')}`}
           </p>
 </div>
-          <div className="mt-2 mb-4 flex flex-wrap items-center gap-2">
+          <div className="mt-5 mb-4 flex flex-wrap items-center gap-2">
             {chips.map((chip) => (
               <button
                 key={chip.label}
@@ -438,6 +503,7 @@ products = filtered.slice(
                   update({
                     q: '',
                     categoryIds: [],
+                    goals: [],
                     flavours: [],
                     minPrice: null,
                     maxPrice: null,
@@ -542,7 +608,7 @@ products = filtered.slice(
                 {hasFilters && (
                   <Link
                     to={mode === 'all' ? '/products' : `/${mode}`}
-                    className="inline-block bg-wgreen text-white no-underline rounded-full px-7 py-3 text-[13px] tracking-wide hover:bg-wgreen-dark transition-colors"
+                    className="inline-block bg-[#08112C] text-white no-underline rounded-full px-7 py-3 text-[13px] tracking-wide hover:bg-wgreen-dark transition-colors"
                   >
                     Clear filters
                   </Link>
@@ -678,7 +744,7 @@ products = filtered.slice(
             <div className="border-t border-wline px-4 py-4">
               <button
                 type="button"
-                className="w-full bg-wgreen text-white rounded-full py-3 text-[13px] tracking-wide hover:bg-wgreen-dark transition-colors"
+                className="w-full bg-[#08112C] text-white rounded-full py-3 text-[13px] tracking-wide hover:bg-wgreen-dark transition-colors"
                 onClick={() => setFilterOpen(false)}
               >
                 Apply

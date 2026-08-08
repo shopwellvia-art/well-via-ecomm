@@ -4,6 +4,7 @@ import { cartApi } from './api.js';
 import { useGuestCartStore } from './guestStore.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { useProductsByIds } from '@/features/products/hooks.js';
+import { trackAddToCart } from '@/features/tracking/metaPixel.js';
 
 const CART_KEY = ['cart'];
 
@@ -18,7 +19,7 @@ function useInvalidateCart() {
  * signed-out visitors. Lines whose product no longer exists are dropped.
  * Guest carts have no tax/coupon — those apply after login.
  */
-function buildGuestCart(lines, products) {
+export function buildGuestCart(lines, products) {
   const byId = new Map((products ?? []).map((p) => [p.id, p]));
   const items = lines
     .filter((l) => byId.has(l.product_id))
@@ -68,8 +69,17 @@ export function useCart() {
     retry: false,
   });
 
-  const ids = useMemo(() => guestLines.map((l) => l.product_id), [guestLines]);
-  const productsQuery = useProductsByIds(!token && ids.length ? ids : []);
+  // Product lookup: composes the guest cart when signed out; backfills
+  // image_url onto server cart lines when signed in (CartItemRead carries
+  // no image field).
+  const ids = useMemo(
+    () =>
+      token
+        ? (serverQuery.data?.items ?? []).map((i) => i.product_id)
+        : guestLines.map((l) => l.product_id),
+    [token, serverQuery.data, guestLines],
+  );
+  const productsQuery = useProductsByIds(ids.length ? ids : []);
 
   const guestData = useMemo(() => {
     if (token) return undefined;
@@ -78,7 +88,19 @@ export function useCart() {
     return buildGuestCart(guestLines, productsQuery.data);
   }, [token, guestLines, productsQuery.data]);
 
-  if (token) return serverQuery;
+  const serverData = useMemo(() => {
+    if (!token || !serverQuery.data) return serverQuery.data;
+    const byId = new Map((productsQuery.data ?? []).map((p) => [p.id, p]));
+    return {
+      ...serverQuery.data,
+      items: (serverQuery.data.items ?? []).map((i) => ({
+        ...i,
+        image_url: i.image_url ?? byId.get(i.product_id)?.image_url ?? null,
+      })),
+    };
+  }, [token, serverQuery.data, productsQuery.data]);
+
+  if (token) return { ...serverQuery, data: serverData };
   return {
     ...productsQuery,
     data: guestData,
@@ -104,7 +126,21 @@ export function useAddToCart() {
       useGuestCartStore.getState().addItem(productId, quantity);
       return Promise.resolve();
     },
-    onSuccess: invalidate,
+    // Every add-to-cart button on the storefront goes through this one mutation
+    // — six of them at last count (product grids, homepage rail, PDP buy panel,
+    // PDP sticky bar, frequently-bought-together, wishlist rows). Reporting the
+    // Meta event here rather than at each button means none of them can be added
+    // later and silently miss it. `price` is optional; when a caller does not
+    // pass it the event carries the item and quantity but no value, which is
+    // better than a value of 0. Fires on success only — no event for a failed add.
+    onSuccess: (_data, variables) => {
+      invalidate();
+      trackAddToCart({
+        productId: variables?.productId,
+        quantity: variables?.quantity ?? 1,
+        price: variables?.price,
+      });
+    },
   });
 }
 

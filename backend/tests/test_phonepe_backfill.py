@@ -165,7 +165,7 @@ def _settle_via_poll(db: Session, user: User, prod: Product) -> tuple[int, str, 
         payment_method="prepaid",
     )
     with _use(provider):
-        order, mtid, _redirect = PaymentService(db).checkout(user, req)
+        order, mtid, _redirect, _checkout = PaymentService(db).checkout(user, req)
     oid = order.id
     amount_minor = int((Decimal(str(order.total_amount)) * 100).to_integral_value())
     txn_id = "T_BF_" + _uid().upper()
@@ -305,7 +305,7 @@ class TestBackfillFromPaymentEvents:
                 payment_method="prepaid",
             )
             with _use(provider):
-                order, mtid, _r = PaymentService(db).checkout(user, req)
+                order, mtid, _r, _checkout = PaymentService(db).checkout(user, req)
             order_ids.append(order.id)
 
             with SessionLocal() as s:

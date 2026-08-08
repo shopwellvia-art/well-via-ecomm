@@ -26,7 +26,7 @@ import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { cn, formatPrice } from '@/lib/utils.js';
 import { useSalesAnalytics } from '@/features/analytics/hooks.js';
-import { fadeUp, listStagger } from '@/lib/motion.js';
+import { fadeUp } from '@/lib/motion.js';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

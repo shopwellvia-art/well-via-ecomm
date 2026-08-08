@@ -42,26 +42,52 @@ class SettingsService:
     # ---- Reads ----
 
     def get_raw(self, key: str, default: str | None = None) -> str | None:
-        """Internal read — returns the real value, including secrets."""
+        """Internal read — returns the real value, including secrets.
+
+        What gets cached is what the DATABASE holds, never what this particular
+        caller would fall back to. `default` is applied on the way out, on the
+        hit path and the miss path alike, so the answer does not depend on
+        whether the key happens to be cached or on who asked first.
+
+        It used to cache the resolved value, which broke that in both
+        directions for any key with no stored row:
+
+          * `get_raw("storage.s3_region", "ap-south-1")` cached "ap-south-1",
+            so a later bare `get_raw("storage.s3_region")` reported a region
+            nobody had configured — a fallback promoted to a setting.
+          * a bare `get_raw(k)` cached `__NONE__`, and the hit path returned
+            early on the sentinel, so the NEXT caller's default was dropped and
+            it got None — the same call returning two different things a minute
+            apart depending on cache timing.
+
+        A cache is allowed to make a read faster. It is not allowed to change
+        the answer.
+        """
         try:
             cached = self.redis.get(_cache_key(key))
             if cached is not None:
-                return cached if cached != "__NONE__" else None
+                return default if cached == "__NONE__" else cached
         except redis.RedisError as exc:
             logger.debug("settings cache read failed: %s", exc)
 
         row = self.repo.get_by_key(key)
-        value = row.value if row else None
-        if value is None or value == "":
-            value = default
+        stored = row.value if row else None
+        if stored == "":
+            # Empty means "unset" — the same contract `set_many` documents, so
+            # the env/argument fallback kicks back in.
+            stored = None
 
         try:
             # Sentinel allows us to cache the "absent" case too, otherwise
             # missing keys would hit the DB every call.
-            self.redis.setex(_cache_key(key), _CACHE_TTL, value if value is not None else "__NONE__")
+            self.redis.setex(
+                _cache_key(key),
+                _CACHE_TTL,
+                stored if stored is not None else "__NONE__",
+            )
         except redis.RedisError as exc:
             logger.debug("settings cache write failed: %s", exc)
-        return value
+        return stored if stored is not None else default
 
     def get_bool(self, key: str, default: bool = False) -> bool:
         v = self.get_raw(key)
@@ -121,11 +147,33 @@ class SettingsService:
             row.value = after
             changed.append((row, before, after))
         self.db.flush()
-        # Invalidate cache. We do this after the flush so a parallel reader
-        # observing the cache miss reads the new value from the DB.
-        for row, _b, _a in changed:
+        # Invalidate EVERY key in the batch, not only the ones whose value
+        # moved. We do this after the flush so a parallel reader observing the
+        # cache miss reads the new value from the DB.
+        #
+        # Invalidating only `changed` assumed the cache always agrees with the
+        # DB when a write is a no-op, and it does not:
+        #
+        #   * Writers that bypass this service exist and do not all bust the
+        #     cache. `analytics/integrations.py::ensure_rows` INSERTs settings
+        #     rows directly and commits with no invalidation at all;
+        #     `aggregation/jobs_ops.py` writes `analytics.inventory_history_since`
+        #     directly and only busts the cache best-effort, BEFORE the runner
+        #     commits, so a reader racing that window re-caches the stale answer
+        #     for another full TTL. Several test suites write the table in raw
+        #     SQL and bust nothing.
+        #   * A reader caches the ABSENT case as `__NONE__` for the full TTL, so
+        #     a key whose row was created by one of those writers inside that
+        #     window keeps reading as "not configured".
+        #
+        # In both cases the operator sees a saved value behaving as if it were
+        # not saved, and the one thing they will try — pressing Save again — was
+        # precisely the path that skipped the delete, because the second save
+        # changes nothing. A redundant delete costs one DB read on the next
+        # `get_raw`; the alternative costs a support ticket.
+        for key in updates:
             try:
-                self.redis.delete(_cache_key(row.key))
+                self.redis.delete(_cache_key(key))
             except redis.RedisError:
                 pass
         return changed

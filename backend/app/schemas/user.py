@@ -1,18 +1,19 @@
 from datetime import date, datetime
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field
+from pydantic import AliasChoices, ConfigDict, EmailStr, Field
 
 from app.models.customer import AccountStatus
+from app.schemas.base import AppSchema
 
 
-class RoleBrief(BaseModel):
+class RoleBrief(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     name: str
 
 
-class UserBase(BaseModel):
+class UserBase(AppSchema):
     email: EmailStr
     full_name: str | None = None
 
@@ -25,7 +26,7 @@ class UserCreate(UserBase):
     referral_code: str | None = Field(default=None, max_length=32)
 
 
-class UserUpdate(BaseModel):
+class UserUpdate(AppSchema):
     full_name: str | None = None
     # E.164-ish. Free-form so we accept any format the user enters; the
     # SMS backend handles whatever Twilio accepts.
@@ -33,7 +34,7 @@ class UserUpdate(BaseModel):
     password: str | None = Field(default=None, min_length=8, max_length=128)
 
 
-class ProfileUpdateRequest(BaseModel):
+class ProfileUpdateRequest(AppSchema):
     """Self-service profile editor. Password changes live on /auth/me/password
     (future) — this endpoint is for plain profile fields only."""
 
@@ -41,14 +42,14 @@ class ProfileUpdateRequest(BaseModel):
     phone: str | None = Field(default=None, max_length=32)
 
 
-class UserLogin(BaseModel):
+class UserLogin(AppSchema):
     # Accepts an email OR a phone number. The `email` alias keeps existing
     # clients that post {"email": ..., "password": ...} working unchanged.
     identifier: str = Field(validation_alias=AliasChoices("identifier", "email"))
     password: str
 
 
-class LoginResponse(BaseModel):
+class LoginResponse(AppSchema):
     """The login endpoint returns either a token pair OR (when the account has
     TOTP enabled) a pending_token + needs_totp flag. The frontend checks
     `needs_totp` first to decide whether to render the 2FA challenge."""
@@ -60,18 +61,18 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
 
 
-class LoginTotpRequest(BaseModel):
+class LoginTotpRequest(AppSchema):
     pending_token: str
     code: str
 
 
-class TotpConfirmRequest(BaseModel):
+class TotpConfirmRequest(AppSchema):
     """Body of POST /auth/me/totp/confirm — the code from the authenticator app."""
 
     code: str = Field(min_length=6, max_length=10)
 
 
-class RefreshRequest(BaseModel):
+class RefreshRequest(AppSchema):
     """Body of POST /auth/refresh. The refresh token is sent in the body
     rather than a header so it never ends up in an access log or referrer
     by accident."""
@@ -79,22 +80,42 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
-class LogoutRequest(BaseModel):
+class LogoutRequest(AppSchema):
     refresh_token: str | None = None
 
 
-class SessionsRevokedResponse(BaseModel):
+class SessionsRevokedResponse(AppSchema):
     revoked: int
 
 
-class ForgotPasswordRequest(BaseModel):
+class ForgotPasswordRequest(AppSchema):
     email: EmailStr
 
 
-class ResetPasswordRequest(BaseModel):
+class ResetPasswordRequest(AppSchema):
     email: EmailStr
     otp: str = Field(min_length=6, max_length=6)
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class AdminUserUpdate(AppSchema):
+    """Body of PATCH /users/{id} — the staff-facing user editor.
+
+    Partial update: only the fields actually provided change (PATCH
+    semantics via exclude_unset). Setting `is_active=false` also revokes
+    every session for the user so a disabled account is logged out
+    everywhere immediately.
+    """
+
+    full_name: str | None = Field(default=None, max_length=255)
+    is_active: bool | None = None
+
+
+class AdminPasswordResetResponse(AppSchema):
+    """Ack for POST /users/{id}/password-reset. Deliberately carries no
+    token/OTP — the reset code goes to the user's email only."""
+
+    detail: str
 
 
 class UserRead(UserBase):
@@ -122,10 +143,13 @@ class UserRead(UserBase):
     lifetime_points: int = 0
     # 2FA state — used by the Account/Security page to show whether TOTP is on.
     totp_enabled: bool = False
+    # Last successful login. None until the account logs in again after the
+    # column was introduced — absence is "unknown", never "never logged in".
+    last_login_at: datetime | None = None
     created_at: datetime
 
 
-class CustomerProfileUpdate(BaseModel):
+class CustomerProfileUpdate(AppSchema):
     """Body of PATCH /auth/me — the self-service profile editor.
 
     All fields optional; only the ones provided are changed. `email` and `phone`
@@ -142,7 +166,7 @@ class CustomerProfileUpdate(BaseModel):
     profile_image: str | None = Field(default=None, max_length=512)
 
 
-class CustomerRead(BaseModel):
+class CustomerRead(AppSchema):
     """Full customer profile + loyalty record (admin / dedicated profile view)."""
 
     model_config = ConfigDict(from_attributes=True)

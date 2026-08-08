@@ -1,6 +1,6 @@
 """Pydantic schemas for the storefront company/content pages.
 
-The six footer "About" links (Contact Us, About Us, Careers, Lumen Stories,
+The six footer "About" links (Contact Us, About Us, Careers, Wellvia Stories,
 Press, Corporate Information) are backed by a single JSON document stored in
 the `site_pages` table. DEFAULT_SITE_PAGES is the single source of truth for
 factory content — the service falls back to it when no row exists or when a
@@ -11,26 +11,35 @@ The shape here is mirrored 1:1 by the frontend at
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import ConfigDict, field_validator
 
 from app.schemas._validators import validate_safe_url
+from app.schemas.base import AppSchema
 
 # ---------------------------------------------------------------------------
 # Shared building blocks
 # ---------------------------------------------------------------------------
 
 
-class Hero(BaseModel):
-    """The page header — eyebrow line, big title, supporting subtitle."""
+class Hero(AppSchema):
+    """The page header — eyebrow line, big title, supporting subtitle.
+
+    `image` is the optional banner behind the copy. It exists so a page whose
+    header is photography rather than text can still be changed from the admin:
+    without it the only way to alter the banner is to redeploy the frontend.
+    `title` allows "" because a banner with the wording already baked into the
+    artwork must be able to render with no text overlaid on top of it.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     eyebrow: str = ""
-    title: str
+    title: str = ""
     subtitle: str = ""
+    image: str = ""
 
 
-class FeatureItem(BaseModel):
+class FeatureItem(AppSchema):
     """Icon + title + body — used for values, perks, etc."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -40,14 +49,14 @@ class FeatureItem(BaseModel):
     text: str = ""
 
 
-class Stat(BaseModel):
+class Stat(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     value: str
     label: str
 
 
-class ProseSection(BaseModel):
+class ProseSection(AppSchema):
     """A heading + a body. Body paragraphs are separated by blank lines."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -56,7 +65,7 @@ class ProseSection(BaseModel):
     body: str
 
 
-class ContactMethod(BaseModel):
+class ContactMethod(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     icon: str = "Mail"
@@ -70,7 +79,7 @@ class ContactMethod(BaseModel):
         return validate_safe_url(v)
 
 
-class ContactForm(BaseModel):
+class ContactForm(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     heading: str
@@ -78,14 +87,14 @@ class ContactForm(BaseModel):
     success: str
 
 
-class Office(BaseModel):
+class Office(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     city: str
     lines: list[str] = []
 
 
-class JobOpening(BaseModel):
+class JobOpening(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     title: str
@@ -100,7 +109,7 @@ class JobOpening(BaseModel):
         return validate_safe_url(v)
 
 
-class Story(BaseModel):
+class Story(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     title: str
@@ -116,7 +125,7 @@ class Story(BaseModel):
         return validate_safe_url(v)
 
 
-class PressRelease(BaseModel):
+class PressRelease(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     date: str = ""
@@ -130,7 +139,7 @@ class PressRelease(BaseModel):
         return validate_safe_url(v)
 
 
-class PressContact(BaseModel):
+class PressContact(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     heading: str
@@ -138,7 +147,7 @@ class PressContact(BaseModel):
     phone: str = ""
 
 
-class Leader(BaseModel):
+class Leader(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     name: str
@@ -146,7 +155,7 @@ class Leader(BaseModel):
     image: str = ""
 
 
-class Download(BaseModel):
+class Download(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     label: str
@@ -158,7 +167,7 @@ class Download(BaseModel):
         return validate_safe_url(v)
 
 
-class CorporateEntity(BaseModel):
+class CorporateEntity(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     name: str
@@ -173,18 +182,23 @@ class CorporateEntity(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class AboutPage(BaseModel):
+class AboutPage(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     enabled: bool = True
     hero: Hero
     intro: list[str] = []
+    # Section headings above the story and values blocks. They were fixed
+    # strings in the page, so an admin who repurposed either list could not
+    # retitle it.
+    story_label: str = "Our story"
+    values_label: str = "What we value"
     stats: list[Stat] = []
     values: list[FeatureItem] = []
     mission: ProseSection
 
 
-class ContactPage(BaseModel):
+class ContactPage(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     enabled: bool = True
@@ -192,10 +206,16 @@ class ContactPage(BaseModel):
     intro: str = ""
     methods: list[ContactMethod] = []
     form: ContactForm
+    # Support-hours block under the enquiry form. Both default to "" so an
+    # admin can clear them to hide the block. They must exist here: Pydantic
+    # drops unknown keys silently, so a field the admin form sends but the
+    # schema does not declare would appear to save and then vanish.
+    hours: str = ""
+    response_note: str = ""
     offices: list[Office] = []
 
 
-class CareersPage(BaseModel):
+class CareersPage(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     enabled: bool = True
@@ -206,7 +226,7 @@ class CareersPage(BaseModel):
     culture: ProseSection
 
 
-class StoriesPage(BaseModel):
+class StoriesPage(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     enabled: bool = True
@@ -215,7 +235,7 @@ class StoriesPage(BaseModel):
     posts: list[Story] = []
 
 
-class PressPage(BaseModel):
+class PressPage(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     enabled: bool = True
@@ -231,7 +251,7 @@ class PressPage(BaseModel):
         return validate_safe_url(v)
 
 
-class CorporatePage(BaseModel):
+class CorporatePage(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     enabled: bool = True
@@ -242,7 +262,7 @@ class CorporatePage(BaseModel):
     downloads: list[Download] = []
 
 
-class PolicyPage(BaseModel):
+class PolicyPage(AppSchema):
     """Legal / customer-care policy page — a hero, an optional "last updated"
     line, and a list of heading+body sections. Shared by the Privacy, Terms,
     Refund/Cancellation and Shipping pages."""
@@ -259,12 +279,9 @@ class PolicyPage(BaseModel):
 # Canonical defaults — single source of truth used by SitePagesService
 # ---------------------------------------------------------------------------
 
-_REGISTERED_ADDRESS = [
-    "Lumen Internet Pvt. Ltd.,",
-    "Buildings Alyssa, Begonia & Clove Embassy Tech Village,",
-    "Outer Ring Road, Devarabeesanahalli Village,",
-    "Bengaluru, 560103, Karnataka, India",
-]
+# Registered-office lines are statutory details — left empty on purpose so an
+# admin fills in the real address via Admin → Pages → Corporate Information.
+_REGISTERED_ADDRESS: list[str] = []
 
 DEFAULT_SITE_PAGES: dict = {
     "about": {
@@ -288,12 +305,14 @@ DEFAULT_SITE_PAGES: dict = {
             "our promise hasn't changed: clean, effective formulas, honest labels, "
             "and support from real people who genuinely care about your wellbeing.",
         ],
-        "stats": [
-            {"value": "1M+", "label": "Happy customers"},
-            {"value": "50+", "label": "Wellness formulas"},
-            {"value": "4.8/5", "label": "Average rating"},
-            {"value": "100%", "label": "Clean ingredients"},
-        ],
+        # Ships EMPTY, and the page hides the whole row when it is. These were
+        # template placeholders — "1M+ Happy customers", "50+ Wellness
+        # formulas", "4.8/5 Average rating" — published on a store with no
+        # orders, nine products and zero reviews. Unsubstantiated figures like
+        # a made-up average rating are exactly what the CCPA misleading-
+        # advertisement guidelines and the ASCI code target, so the default is
+        # to claim nothing. An admin adds real numbers once they exist.
+        "stats": [],
         "values": [
             {
                 "icon": "Heart",
@@ -329,10 +348,16 @@ DEFAULT_SITE_PAGES: dict = {
     },
     "contact": {
         "enabled": True,
+        # hero-contact.png already carries "Contact Us" and the supporting line
+        # as pixels, so the text fields ship EMPTY — filling them here would
+        # print the same words twice, once from the artwork and once from the
+        # overlay. They remain fully editable; an admin who uploads a text-free
+        # banner can then set them and they render.
         "hero": {
-            "eyebrow": "Contact Us",
-            "title": "We'd love to hear from you",
-            "subtitle": "Questions about an order, a product, or a partnership? Our team is here to help.",
+            "eyebrow": "",
+            "title": "",
+            "subtitle": "",
+            "image": "/hero-contact.png",
         },
         "intro": (
             "Reach us through any of the channels below, or drop us a message "
@@ -342,14 +367,15 @@ DEFAULT_SITE_PAGES: dict = {
             {
                 "icon": "Mail",
                 "title": "Email us",
-                "detail": "support@lumen.com",
-                "href": "mailto:support@lumen.com",
+                "detail": "support@shopwellvia.in",
+                "href": "mailto:support@shopwellvia.in",
             },
+            # Phone and office address are left blank for an admin to fill in.
             {
                 "icon": "Phone",
                 "title": "Call us",
-                "detail": "044-4561 4700",
-                "href": "tel:+914445614700",
+                "detail": "",
+                "href": "",
             },
             {
                 "icon": "MessageCircle",
@@ -360,7 +386,7 @@ DEFAULT_SITE_PAGES: dict = {
             {
                 "icon": "MapPin",
                 "title": "Visit us",
-                "detail": "Embassy Tech Village, Bengaluru",
+                "detail": "",
                 "href": "",
             },
         ],
@@ -369,31 +395,20 @@ DEFAULT_SITE_PAGES: dict = {
             "note": "We typically reply within one business day.",
             "success": "Thanks for reaching out — we'll be in touch shortly.",
         },
-        "offices": [
-            {
-                "city": "Bengaluru (HQ)",
-                "lines": [
-                    "Buildings Alyssa, Begonia & Clove",
-                    "Embassy Tech Village, Outer Ring Road,",
-                    "Devarabeesanahalli, Bengaluru 560103",
-                ],
-            },
-            {
-                "city": "Mumbai",
-                "lines": [
-                    "Level 12, Trade Centre,",
-                    "Bandra Kurla Complex,",
-                    "Mumbai 400051",
-                ],
-            },
-        ],
+        # Support-hours block. Must match the frontend defaults exactly: the API
+        # value wins the frontend's merge, so an empty string here would blank
+        # the block on the live page even though the frontend has copy for it.
+        "hours": "Monday – Saturday (9:00 AM – 6:00 PM IST)",
+        "response_note": "We aim to respond to all queries within 24–48 business hours.",
+        # Office addresses are left empty on purpose — an admin adds the real ones.
+        "offices": [],
     },
     "careers": {
         "enabled": True,
         "hero": {
             "eyebrow": "Careers",
-            "title": "Build the future of everyday essentials",
-            "subtitle": "Join a team that cares deeply about craft, customers and each other.",
+            "title": "Build the future of everyday wellness",
+            "subtitle": "Join a team that cares deeply about formulation, customers and each other.",
         },
         "intro": (
             "We're a curious, kind and ambitious bunch. If you want to do the "
@@ -428,25 +443,25 @@ DEFAULT_SITE_PAGES: dict = {
                 "department": "Engineering",
                 "location": "Bengaluru / Remote",
                 "type": "Full-time",
-                "url": "mailto:careers@lumen.com?subject=Senior%20Frontend%20Engineer",
+                "url": "mailto:careers@shopwellvia.in?subject=Senior%20Frontend%20Engineer",
             },
             {
                 "title": "Product Designer",
                 "department": "Design",
                 "location": "Bengaluru",
                 "type": "Full-time",
-                "url": "mailto:careers@lumen.com?subject=Product%20Designer",
+                "url": "mailto:careers@shopwellvia.in?subject=Product%20Designer",
             },
             {
                 "title": "Customer Experience Lead",
                 "department": "Operations",
                 "location": "Remote",
                 "type": "Full-time",
-                "url": "mailto:careers@lumen.com?subject=Customer%20Experience%20Lead",
+                "url": "mailto:careers@shopwellvia.in?subject=Customer%20Experience%20Lead",
             },
         ],
         "culture": {
-            "heading": "Life at Lumen",
+            "heading": "Life at Wellvia",
             "body": (
                 "We move quickly without losing the plot. We disagree openly, "
                 "decide clearly, and back each other once we commit.\n\n"
@@ -459,23 +474,23 @@ DEFAULT_SITE_PAGES: dict = {
     "stories": {
         "enabled": True,
         "hero": {
-            "eyebrow": "Lumen Stories",
+            "eyebrow": "Wellvia Stories",
             "title": "Ideas, people and behind-the-scenes",
-            "subtitle": "Notes from our makers, customers and the journey of building Lumen.",
+            "subtitle": "Notes from our formulators, customers and the journey of building Wellvia.",
         },
         "intro": "Long reads, short notes and everything in between.",
         "posts": [
             {
-                "title": "How we source materials we're proud of",
-                "excerpt": "A look inside the trips, tests and tough calls behind every Lumen product.",
+                "title": "How we choose ingredients we're proud of",
+                "excerpt": "A look inside the sourcing, testing and tough calls behind every Wellvia gummy.",
                 "image": "",
                 "category": "Behind the scenes",
                 "date": "2026-05-12",
                 "url": "",
             },
             {
-                "title": "Meet the makers: the Aura collection",
-                "excerpt": "The designers and craftspeople who brought our flagship line to life.",
+                "title": "Meet the formulators behind our sleep gummies",
+                "excerpt": "The nutritionists and food scientists who shaped our bestselling routine.",
                 "image": "",
                 "category": "People",
                 "date": "2026-04-28",
@@ -483,7 +498,7 @@ DEFAULT_SITE_PAGES: dict = {
             },
             {
                 "title": "Small changes, big impact: our packaging redesign",
-                "excerpt": "How we cut plastic by 60% without compromising on the unboxing.",
+                "excerpt": "How we rethought our jars and cartons without compromising on the unboxing.",
                 "image": "",
                 "category": "Sustainability",
                 "date": "2026-03-09",
@@ -495,34 +510,35 @@ DEFAULT_SITE_PAGES: dict = {
         "enabled": True,
         "hero": {
             "eyebrow": "Press",
-            "title": "Lumen in the news",
+            "title": "Wellvia in the news",
             "subtitle": "Announcements, media coverage and resources for journalists.",
         },
         "intro": "For interviews, assets or comment, reach our communications team below.",
+        # Placeholder announcements — replace with real coverage via Admin -> Pages.
         "releases": [
             {
-                "date": "2026-05-20",
-                "title": "Lumen crosses 10 million customers",
+                "date": "",
+                "title": "Announcement title",
                 "source": "Company announcement",
                 "url": "",
             },
             {
-                "date": "2026-02-14",
-                "title": "Lumen launches its most sustainable collection yet",
-                "source": "Business Standard",
+                "date": "",
+                "title": "Product launch announcement",
+                "source": "Company announcement",
                 "url": "",
             },
             {
-                "date": "2025-11-02",
-                "title": "Lumen named among the year's fastest-growing D2C brands",
-                "source": "The Economic Times",
+                "date": "",
+                "title": "Media coverage headline",
+                "source": "",
                 "url": "",
             },
         ],
         "contact": {
             "heading": "Media enquiries",
-            "email": "press@lumen.com",
-            "phone": "044-6741 5800",
+            "email": "press@shopwellvia.in",
+            "phone": "",
         },
         "kit_url": "",
     },
@@ -530,16 +546,17 @@ DEFAULT_SITE_PAGES: dict = {
         "enabled": True,
         "hero": {
             "eyebrow": "Corporate Information",
-            "title": "About the company behind Lumen",
+            "title": "About the company behind Wellvia",
             "subtitle": "Governance, leadership and statutory details.",
         },
         "sections": [
             {
                 "heading": "Company overview",
                 "body": (
-                    "Lumen Internet Pvt. Ltd. operates the Lumen.com storefront and "
-                    "associated brands. We are a private limited company incorporated "
-                    "in India.\n\n"
+                    "Wellvia is a direct-to-consumer wellness brand based in India, "
+                    "operating the shopwellvia.in storefront. We make wellness gummies "
+                    "across sleep, immunity, beauty, gut health, multivitamin and "
+                    "omega ranges.\n\n"
                     "This page brings together the statutory and governance "
                     "information required under applicable law."
                 ),
@@ -548,23 +565,22 @@ DEFAULT_SITE_PAGES: dict = {
                 "heading": "Compliance & grievance",
                 "body": (
                     "In accordance with the Consumer Protection (E-Commerce) Rules, "
-                    "our Grievance Officer can be reached at grievance@lumen.com. "
+                    "our Grievance Officer can be reached at grievance@shopwellvia.in. "
                     "We endeavour to acknowledge complaints within 48 hours and "
                     "resolve them within one month."
                 ),
             },
         ],
-        "leadership": [
-            {"name": "A. Sharma", "title": "Chief Executive Officer", "image": ""},
-            {"name": "R. Mehta", "title": "Chief Operating Officer", "image": ""},
-            {"name": "K. Iyer", "title": "Chief Financial Officer", "image": ""},
-        ],
+        # Leadership is left empty on purpose — an admin adds real names/photos.
+        "leadership": [],
+        # Statutory identifiers are intentionally blank: an admin fills in the
+        # registered legal name, CIN, office address and phone via Admin -> Pages.
         "entity": {
-            "name": "Lumen Internet Pvt. Ltd.",
-            "cin": "U51109KA2026PTC066107",
+            "name": "",
+            "cin": "",
             "address_lines": _REGISTERED_ADDRESS,
-            "email": "compliance@lumen.com",
-            "phone": "044-4561 4700",
+            "email": "compliance@shopwellvia.in",
+            "phone": "",
         },
         "downloads": [
             {"label": "Certificate of Incorporation", "url": ""},
@@ -605,11 +621,24 @@ DEFAULT_SITE_PAGES: dict = {
             },
             {
                 "heading": "Cookies & tracking",
+                # Kept byte-identical to the frontend copy in
+                # frontend/src/features/site-pages/defaults.js — the two are
+                # mirrored (see this module's docstring) and defaultsParity
+                # guards it. The Meta Pixel disclosure is a legal obligation, not
+                # marketing copy: naming the recipient, what it is told and how to
+                # opt out is what makes the consent we collect informed.
                 "body": (
                     "We use cookies and similar technologies to keep you signed "
                     "in, remember your cart, and understand how our store is used "
-                    "so we can improve it. You can control cookies through your "
-                    "browser settings."
+                    "so we can improve it. With your consent we also use the Meta "
+                    "Pixel, which tells Meta (Facebook and Instagram) that a "
+                    "visit, cart addition or purchase happened here, so we can "
+                    "measure whether our ads work and show relevant ads "
+                    "elsewhere. We do not send Meta your name, email, phone "
+                    "number or address. You can change your choice at any time "
+                    "through the cookie preferences link in our footer, control "
+                    "cookies through your browser settings, and manage Meta ad "
+                    "personalisation at facebook.com/adpreferences."
                 ),
             },
             {
@@ -843,7 +872,7 @@ DEFAULT_SITE_PAGES: dict = {
 # ---------------------------------------------------------------------------
 
 
-class SitePagesRead(BaseModel):
+class SitePagesRead(AppSchema):
     """Full company-pages document returned by GET /site-pages."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -860,7 +889,7 @@ class SitePagesRead(BaseModel):
     shipping: PolicyPage
 
 
-class SitePagesUpdate(BaseModel):
+class SitePagesUpdate(AppSchema):
     """PUT body — full replace semantics.
 
     Every top-level page defaults to its canonical default so a client that

@@ -102,6 +102,12 @@ DEFAULT_SETTINGS: list[tuple[str, str, str, str, bool]] = [
     ("returns.refund_timeline_days", "7", "returns",
      "Business days quoted to the customer for a refund to reflect in their account", False),
 
+    # ---- Reviews (seeded at boot only — no migration;
+    #      consumed by app/services/review_service.py) ----
+    ("reviews.auto_approve", "true", "reviews",
+     "Publish user reviews immediately; 'false' holds new and edited reviews "
+     "in the admin moderation queue until approved", False),
+
     # ---- COD (q2l3m4n5o6p7) ----
     ("cod.enabled", "true", "cod", "Allow Cash on Delivery as a checkout option", False),
     ("cod.flat_surcharge", "40", "cod", "Flat fee in INR added when the customer picks COD", False),
@@ -166,6 +172,39 @@ DEFAULT_SETTINGS: list[tuple[str, str, str, str, bool]] = [
     ("costs.monthly_ad_spend", "0", "costs",
      "Total monthly advertising / marketing spend (₹). Pro-rated to the analytics window for C3.", False),
 
+    # ---- Store identity / GST invoices (seeded at boot only — no migration;
+    #      consumed by app/services/invoice_service.py) ----
+    ("store.legal_name", "", "store",
+     "Registered legal name of the seller, printed on GST tax invoices", False),
+    ("store.address", "", "store",
+     "Registered address of the seller, printed on GST tax invoices", False),
+    ("store.gstin", "", "store",
+     "Seller GSTIN (15 characters), printed on GST tax invoices. "
+     "Leave blank if not GST-registered.", False),
+    ("store.state_code", "", "store",
+     "Seller GST state code (e.g. 29 for Karnataka). Drives the CGST/SGST "
+     "vs IGST split on invoices; blank renders a single GST line.", False),
+
+    # ---- Reporting configuration (seeded at boot only — no migration) ----
+    # Read by the analytics subsystem to bucket rollups on store-local calendar
+    # days instead of UTC. Containers run UTC and the only other timezone in the
+    # codebase is the hardcoded IST constant in invoice_service.py, so without
+    # these an evening-IST order lands in the next UTC day and "yesterday's
+    # sales" is wrong by 5.5 hours.
+    #
+    # store.timezone is NOT freely editable once rollups exist: changing it
+    # opens a new row in analytics_tz_generations and requires a full rebuild
+    # before the new generation goes active, because buckets built under two
+    # different zones must never be mixed. Edit it through the analytics
+    # integrations screen, which runs that procedure — not by hand.
+    ("store.timezone", "Asia/Kolkata", "store",
+     "IANA timezone used to bucket analytics reporting days (e.g. Asia/Kolkata). "
+     "Changing this requires a full analytics rollup rebuild.", False),
+    ("store.currency", "INR", "store",
+     "ISO-4217 reporting currency for analytics and exports (e.g. INR).", False),
+    ("store.week_start", "monday", "store",
+     "First day of the reporting week for weekly analytics buckets: monday | sunday.", False),
+
     # ---- Storage (l3m4n5o6p7q8, n5o6p7q8r9s0) ----
     # Credentials/endpoint rows are blank so the env fallback stays in effect.
     # Two rows ship with a concrete default on purpose: s3_root_prefix is
@@ -188,6 +227,24 @@ DEFAULT_SETTINGS: list[tuple[str, str, str, str, bool]] = [
      "Object ACL on upload — blank for modern buckets (Object Ownership = "
      "Bucket owner enforced / ACLs disabled); 'public-read' only for legacy "
      "ACL-enabled buckets.", False),
+
+    # ---- Storefront identity / layout (seeded at boot only — no migration;
+    #      consumed by app/services/storefront_service.py; blank = the shipped
+    #      DEFAULT_STOREFRONT value) ----
+    ("storefront.site_title", "", "storefront",
+     "Browser tab / document title of the storefront", False),
+    ("storefront.brand_name", "", "storefront",
+     "Brand wordmark shown in the navbar and footer", False),
+    ("storefront.tagline", "", "storefront",
+     "Short brand tagline shown next to the wordmark", False),
+    ("storefront.logo_url", "", "storefront",
+     "Uploaded logo URL rendered in place of the wordmark", False),
+    ("storefront.favicon_url", "", "storefront",
+     "Uploaded favicon URL", False),
+    ("storefront.nav_items", "", "storefront",
+     "JSON array of navbar links (label/to/visibility)", False),
+    ("storefront.homepage_sections", "", "storefront",
+     "JSON array of homepage sections (order/visibility/title)", False),
 ]
 
 

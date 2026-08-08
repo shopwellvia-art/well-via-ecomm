@@ -3,7 +3,7 @@
 GET /site-pages  — public, no auth required.
 PUT /site-pages  — requires the `frontend.manage` permission.
 
-Backs the footer "About" links: Contact Us, About Us, Careers, Lumen Stories,
+Backs the footer "About" links: Contact Us, About Us, Careers, Wellvia Stories,
 Press, and Corporate Information.
 """
 from fastapi import APIRouter, Depends

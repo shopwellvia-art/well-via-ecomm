@@ -230,3 +230,18 @@ class OrderItem(Base, IDMixin, TimestampMixin):
     def image_url(self) -> str | None:
         """Primary image of the purchased product (for display thumbnails)."""
         return self.product.image_url if self.product else None
+
+    @property
+    def sku(self) -> str | None:
+        """Current catalog SKU of the purchased product.
+
+        Read-through like `name` and `image_url`, with the same caveat: the order
+        line does not snapshot it, so this reflects the SKU as it is *today*, not
+        as it was at the time of sale. Analytics that must not move when a
+        product is re-SKU'd reads `analytics_order_line.sku_snapshot` instead.
+
+        Exposed because the GA4 tracking contract defines `item_id` as the SKU,
+        and the browser needs the same value the server sends — otherwise
+        item-level GA4 reports split one product into two populations.
+        """
+        return self.product.sku if self.product else None

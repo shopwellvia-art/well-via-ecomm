@@ -22,12 +22,12 @@ const ZOOM = 2.4;
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
 export function LuxuryGallery({ product }) {
+  // Gallery order is exactly the order the admin dragged the tiles into.
+  // `is_primary` deliberately does NOT hoist here: it marks the card/listing
+  // thumbnail, and hoisting it would silently override the drag order on the
+  // PDP — the admin would set an order and see a different one on the store.
   const images = useMemo(
-    () =>
-      [...(product.images || [])].sort(
-        (a, b) =>
-          Number(b.is_primary) - Number(a.is_primary) || a.position - b.position,
-      ),
+    () => [...(product.images || [])].sort((a, b) => a.position - b.position),
     [product.images],
   );
 
@@ -35,6 +35,17 @@ export function LuxuryGallery({ product }) {
   const [lens, setLens] = useState(null);
   const stageRef = useRef(null);
   const touchX = useRef(null);
+
+  // Touch taps synthesize a mousemove with no mouseleave to follow, which would
+  // leave the magnifier stuck on. Gate the whole affordance on a real pointer.
+  const [canHover, setCanHover] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const sync = () => setCanHover(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   // Tracks whether the main stage image failed to load (404 / CDN error).
   const [mainImgFailed, setMainImgFailed] = useState(false);
@@ -62,17 +73,12 @@ export function LuxuryGallery({ product }) {
   const currentIsVideo = isVideo(current.url);
 
   function onMouseMove(e) {
-    if (currentIsVideo) return;
+    if (currentIsVideo || !canHover) return;
     const rect = stageRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const { width: w, height: h } = rect;
-    const px = clamp(((e.clientX - rect.left) / w) * 100, 0, 100);
-    const py = clamp(((e.clientY - rect.top) / h) * 100, 0, 100);
-    const lensW = w / ZOOM;
-    const lensH = h / ZOOM;
-    const lx = clamp(e.clientX - rect.left - lensW / 2, 0, w - lensW);
-    const ly = clamp(e.clientY - rect.top - lensH / 2, 0, h - lensH);
-    setLens({ px, py, x: lx, y: ly, w: lensW, h: lensH });
+    const px = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
+    const py = clamp(((e.clientY - rect.top) / rect.height) * 100, 0, 100);
+    setLens({ px, py });
   }
 
   function step(dir) {
@@ -182,19 +188,27 @@ export function LuxuryGallery({ product }) {
                   alt={product.name}
                   fetchpriority="high"
                   draggable={false}
-                  className={cn('size-full object-contain', !lens && 'cursor-zoom-in')}
+                  className="size-full cursor-zoom-in object-contain"
                   onError={() => setMainImgFailed(true)}
                 />
               )}
             </motion.div>
           </AnimatePresence>
 
-          {/* Lens — tracks the cursor over the source image */}
+          {/* Magnifier — renders in place over the stage, which already clips
+              overflow. A side panel cannot fit: the PDP grid leaves only the
+              48px column gap to the buy rail, so it used to paint over the
+              title and the Add to cart / Buy now buttons. */}
           {lens && !currentIsVideo && (
             <div
-              className="pointer-events-none absolute z-[2] rounded-sm border border-wline bg-white/10 shadow-[0_0_0_2000px_rgba(0,0,0,0.18)]"
-              /* intentional vignette — no token equivalent */
-              style={{ left: lens.x, top: lens.y, width: lens.w, height: lens.h }}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 z-[2] bg-wcard"
+              style={{
+                backgroundImage: `url(${current.url})`,
+                backgroundRepeat: 'no-repeat',
+                backgroundSize: `${ZOOM * 100}%`,
+                backgroundPosition: `${lens.px}% ${lens.py}%`,
+              }}
             />
           )}
 
@@ -203,27 +217,13 @@ export function LuxuryGallery({ product }) {
             <WishlistButton productId={product.id} />
           </div>
 
-          {/* Zoom hint */}
-          {!currentIsVideo && (
+          {/* Zoom hint — the magnifier itself replaces it once zooming */}
+          {!currentIsVideo && !lens && (
             <div className="pointer-events-none absolute bottom-3 left-3 z-10 inline-flex items-center gap-1.5 rounded-xs bg-wink/75 px-2.5 py-1 text-xs text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
               <ZoomIn className="size-3.5" aria-hidden="true" /> Hover to zoom
             </div>
           )}
         </div>
-
-        {/* Magnifier panel — only shown at xl+ where there is sufficient horizontal space */}
-        {lens && !currentIsVideo && (
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute left-[calc(100%+1.25rem)] top-0 z-40 hidden aspect-square overflow-hidden rounded-sm border border-wline bg-wcard shadow-lg xl:block xl:w-[360px] 2xl:w-[460px]"
-            style={{
-              backgroundImage: `url(${current.url})`,
-              backgroundRepeat: 'no-repeat',
-              backgroundSize: `${ZOOM * 100}%`,
-              backgroundPosition: `${lens.px}% ${lens.py}%`,
-            }}
-          />
-        )}
 
         {/* Dots (mobile) — interactive tab buttons for screen readers */}
         <div role="tablist" aria-label="Image navigation" className="mt-3 flex justify-center gap-1.5">

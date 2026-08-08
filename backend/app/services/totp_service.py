@@ -34,13 +34,20 @@ from app.models.user_security import UserSecurity
 from app.services.settings_service import SettingsService
 
 _BACKUP_CODE_COUNT = 10
-_ISSUER_NAME = "Lumen"
+_ISSUER_NAME = "Wellvia"
 
 
 def _hash_backup(code: str) -> str:
     """Backup codes are stored as plain SHA-256 hashes — they're high-entropy
     one-time strings, no need for bcrypt overhead. Salted with a constant
-    string of the issuer name to keep them tied to this app."""
+    domain-separation prefix to keep them tied to this app.
+
+    NOTE: the "lumen:" prefix is a legacy value inherited from the template and
+    is deliberately NOT rebranded. It is baked into every backup-code hash
+    already stored in `user_security.backup_codes`; changing it would silently
+    invalidate every user's existing backup codes. It is never displayed
+    anywhere — only `_ISSUER_NAME` above is user-visible (in authenticator
+    apps). Change it only alongside a migration that re-issues backup codes."""
     return hashlib.sha256(f"lumen:{code}".encode("utf-8")).hexdigest()
 
 

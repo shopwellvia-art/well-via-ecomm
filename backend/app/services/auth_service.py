@@ -3,13 +3,20 @@ import hmac
 import logging
 import secrets
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 import redis
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.redis import get_redis
-from app.core.exceptions import ConflictError, TooManyRequestsError, UnauthorizedError
+from app.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    TooManyRequestsError,
+    UnauthorizedError,
+)
 from app.core.rate_limit import RateLimiter
 from app.core.security import (
     create_access_token,
@@ -23,7 +30,7 @@ from app.models.customer import AccountStatus, Customer
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import Token
-from app.schemas.user import UserCreate
+from app.schemas.user import AdminUserUpdate, UserCreate
 from app.services.loyalty_service import LoyaltyService
 from app.services.referral_service import ReferralService
 from app.services.session_service import SessionService
@@ -223,7 +230,18 @@ class AuthService:
     def _issue_tokens(self, user: User) -> Token:
         """Start a new refresh-token family for the user. Used on a fresh
         login (password or Google). Subsequent /auth/refresh calls rotate
-        within this family."""
+        within this family.
+
+        Also stamps `last_login_at`. This is the one place every fresh login
+        converges on — password, TOTP completion and Google all land here — so
+        it is the only place the timestamp can be written exactly once per
+        login. Deliberately NOT in `refresh()`: a rotating refresh token would
+        turn "last login" into "last API call".
+        """
+        user.last_login_at = datetime.now(timezone.utc)
+        # Owns its commit: the password path reaches here with no open write of
+        # its own, so leaving it to the caller would silently drop the stamp.
+        self.db.commit()
         sessions = SessionService(self.redis)
         family_id, jti = sessions.start_family(user.id)
         return Token(
@@ -331,6 +349,14 @@ class AuthService:
             f"It expires in {settings.OTP_TTL_MINUTES} minutes. "
             "If you didn't request this, you can ignore this email."
         )
+        # Rendering and delivery are separate failure domains and must be
+        # caught separately. Folding them into one try/except meant a delivery
+        # failure got logged as "template render failed" and then retried the
+        # send from inside the handler, where nothing was left to catch it —
+        # so a dead SMTP credential escaped as a 500 and turned the uniform
+        # "if that email is registered" reply into an account-existence oracle
+        # (unknown address → 202, real address → 500).
+        _subject, _html, _text = "Your password reset code", None, _plain_body
         try:
             from app.services.email_templates.catalog import password_reset_context
             from app.services.email_templates.renderer import render_email
@@ -339,22 +365,24 @@ class AuthService:
             if user.full_name:
                 first_name = user.full_name.split(" ")[0]
             _ctx = password_reset_context(first_name, otp, settings.OTP_TTL_MINUTES)
-            _subject, _html, _text = render_email(self.db, "password_reset", _ctx)
+            _s, _h, _t = render_email(self.db, "password_reset", _ctx)
+            _subject, _html, _text = _s or _subject, _h or None, _t or _plain_body
+        except Exception as _exc:  # noqa: BLE001
+            logger.warning("password_reset template render failed (%s); using plain text", _exc)
+
+        try:
             send_email(
                 to=email,
-                subject=_subject or "Your password reset code",
-                body=_text or _plain_body,
-                html=_html or None,
+                subject=_subject,
+                body=_text,
+                html=_html,
                 db=self.db,
             )
         except Exception as _exc:  # noqa: BLE001
-            logger.warning("password_reset template render failed (%s); using plain text", _exc)
-            send_email(
-                to=email,
-                subject="Your password reset code",
-                body=_plain_body,
-                db=self.db,
-            )
+            # Swallow deliberately: the caller's reply must not depend on
+            # whether delivery worked. Logged at error level because a silent
+            # failure here means real users stop receiving reset codes.
+            logger.error("password reset email delivery failed for %s: %s", normalised, _exc)
 
     def reset_password(self, email: str, otp: str, new_password: str) -> None:
         raw = self.redis.get(_otp_key(email))
@@ -442,3 +470,143 @@ class AuthService:
         elif not user.is_active:
             raise UnauthorizedError("Account disabled")
         return self._issue_tokens(user)
+
+    # ------------------------------------------------------------------
+    # Admin user management (staff actions from /api/v1/users).
+    #
+    # Deliberately separate from the self-service flows above: these run on
+    # a *target* user chosen by a staff actor, never on the caller. Both are
+    # guarded by the same superadmin shield — a non-superadmin staff member
+    # (RBAC-granted users.manage) can never touch an is_admin account, the
+    # same way role assignment shields privileged accounts.
+    # ------------------------------------------------------------------
+
+    def _get_managed_target(self, actor: User, user_id: int) -> User:
+        """Resolve + authorize the target of an admin user-management action.
+
+        Raises NotFoundError for an unknown id and ForbiddenError when a
+        non-superadmin targets a superadmin (is_admin=True) account.
+        """
+        target = self.users.get(user_id)
+        if not target:
+            raise NotFoundError("User not found")
+        if target.is_admin and not actor.is_admin:
+            raise ForbiddenError(
+                "Only a superadmin can modify a superadmin account"
+            )
+        return target
+
+    def admin_update_user(
+        self, actor: User, user_id: int, data: AdminUserUpdate
+    ) -> tuple[User, dict]:
+        """PATCH /users/{id}: display-name edit and activate/deactivate.
+
+        Deactivation also revokes every session via SessionService so a
+        disabled user is logged out everywhere immediately; reactivation
+        restores the login gates (is_active + customer.account_status).
+
+        Flushes but does NOT commit — the endpoint owns the commit so its
+        audit row lands in the same transaction (same shape as the roles
+        endpoints). Returns (user, changes-dict-for-audit).
+        """
+        target = self._get_managed_target(actor, user_id)
+        fields = data.model_dump(exclude_unset=True)
+        changes: dict = {}
+
+        if "full_name" in fields:
+            before_name = target.full_name
+            first, last = _split_name(fields["full_name"])
+            customer = self.users.get_or_create_customer(target.id)
+            customer.first_name = first
+            customer.last_name = last
+            if target.full_name != before_name:
+                changes["full_name"] = {
+                    "before": before_name,
+                    "after": target.full_name,
+                }
+
+        new_active = fields.get("is_active")
+        if new_active is not None and new_active != target.is_active:
+            customer = self.users.get_or_create_customer(target.id)
+            if new_active:
+                # Mirror of deactivation below — restore every gate the login
+                # path checks so the account actually works again.
+                target.is_active = True
+                customer.account_status = AccountStatus.ACTIVE
+                customer.deactivated_at = None
+                customer.deleted_at = None
+                changes["is_active"] = {"before": False, "after": True}
+            else:
+                # Never disable the last enabled superadmin — that locks every
+                # human out of the admin with no in-app way back in.
+                if (
+                    target.is_admin
+                    and self.users.count_active_superadmins(
+                        excluding_user_id=target.id
+                    )
+                    == 0
+                ):
+                    raise ForbiddenError(
+                        "This is the last active superadmin — disabling it "
+                        "would lock everyone out of the admin."
+                    )
+                # Mirror of the self-service deactivate flow, plus a forced
+                # logout everywhere: get_current_user already rejects
+                # is_active=False, revoking sessions kills refresh too.
+                target.is_active = False
+                customer.account_status = AccountStatus.DEACTIVATED
+                customer.deactivated_at = datetime.now(timezone.utc)
+                revoked = self.revoke_all_sessions(target.id)
+                changes["is_active"] = {"before": True, "after": False}
+                changes["sessions_revoked"] = revoked
+
+        self.db.flush()
+        return target, changes
+
+    def admin_invite_staff(self, email: str, full_name: str | None) -> User:
+        """Create a staff account that nobody knows the password to.
+
+        Mirrors `register` for the User + eager Customer row (every account is a
+        customer, even a staff one — the satellite carries the profile), but
+        seeds an unguessable random password instead of a chosen one. The
+        invitee never receives it: the caller follows this with
+        `request_password_reset`, and the emailed one-time code is the only way
+        in. That keeps the "admin sets a password and tells you over chat"
+        pattern — and its shared-secret problem — out of the flow entirely.
+
+        Flushes but does NOT commit; the endpoint owns the transaction so the
+        role grant and the audit row land with the account or not at all.
+        """
+        if self.users.get_by_email(email):
+            raise ConflictError("Email already registered")
+        user = User(
+            email=email,
+            # 64 URL-safe chars, discarded immediately. Not a placeholder anyone
+            # could guess, so the account is unusable until the reset lands.
+            hashed_password=hash_password(secrets.token_urlsafe(48)),
+            is_active=True,
+        )
+        self.users.add(user)
+        self.db.flush()
+        first, last = _split_name(full_name)
+        self.db.add(
+            Customer(
+                user_id=user.id,
+                first_name=first,
+                last_name=last,
+                account_status=AccountStatus.ACTIVE,
+            )
+        )
+        self.db.flush()
+        return user
+
+    def admin_trigger_password_reset(self, actor: User, user_id: int) -> User:
+        """POST /users/{id}/password-reset: email the user a one-time reset
+        code, reusing the self-service forgot-password machinery unchanged
+        (same OTP store, hashing, TTL, template, and per-email rate limit).
+        The code is emailed to the target only — never returned to the
+        caller, so a staff account can't capture it.
+        """
+        target = self._get_managed_target(actor, user_id)
+        self.request_password_reset(target.email)
+        return target

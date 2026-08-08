@@ -4,10 +4,14 @@ Complete, beginner-friendly documentation of how Continuous Integration (CI)
 and Continuous Deployment (CD) work in this repository, using **GitHub Actions**.
 
 > **TL;DR**
-> - Push code → GitHub automatically **checks** it (CI).
-> - Push to the **`production`** branch → if the checks pass, GitHub automatically **deploys** it to the EC2 server (CD).
+> - Push to the **`production`** branch → GitHub runs **both test suites**
+>   (frontend lint + Vitest + build, and the backend pytest/MySQL integration
+>   suite), then builds both Docker images **from scratch**, and **deploys** them
+>   to the EC2 server (CD). A red test run **blocks the deploy**.
 > - There is exactly **one** recipe: `.github/workflows/cicd.yml`.
 > - There is exactly **one** compose file: `docker-compose.yml` (production).
+> - ⚠️ CI runs **only on `production`** — working branches get no CI at all, so
+>   still run the checks locally before you merge ([§9](#9-running-the-same-checks-locally)).
 
 ---
 
@@ -33,7 +37,7 @@ Think of it as a **robot assistant** that watches your repository.
 
 | Term | Full name | Plain meaning |
 |------|-----------|---------------|
-| **CI** | Continuous **Integration** | Every time you push code, automatically **check it still works** (build it, run tests). Catches mistakes early. |
+| **CI** | Continuous **Integration** | Every time you push code, automatically **check it still works**. In *this* repo that means the frontend lint + unit tests + build **and** the backend integration suite against throwaway MySQL/Redis containers — on pushes to `production` only. |
 | **CD** | Continuous **Deployment** | When the checks pass on the release branch, automatically **ship the code to the server** so users get the new version — no manual SSH needed. |
 
 **GitHub Actions** is the tool that runs these checks. It executes your recipe on
@@ -49,26 +53,30 @@ Here is the journey of one code change, from your laptop to real users:
   You edit code on a working branch (e.g. vinay)
         │
         │  Nothing automatic happens here — the pipeline is
-        │  production-only. Run the checks yourself (§9).
+        │  production-only. Run the tests yourself (§9) so a
+        │  red suite doesn't ambush you at merge time.
         │
         │  git merge / PR-merge into `production`, then push
         ▼
- ┌──────────────────────────────────────────────────┐
- │  A push to `production` runs cicd.yml end to end. │
- │  First the quality gate:                          │
- │    • frontend      → npm ci, lint, build, vitest  │
- │    • backend-tests → mysql+redis, alembic, pytest │
- └──────────────────────────────────────────────────┘
+ ┌───────────────────────────────────────────────────┐
+ │  A push to `production` runs cicd.yml end to end.  │
+ │  Quality gates (run in parallel):                  │
+ │    • frontend      → npm ci, lint, vitest, build   │
+ │    • backend-tests → mysql8+redis7 services,       │
+ │        pip install, alembic upgrade head, pytest   │
+ └───────────────────────────────────────────────────┘
         │
-        │  ONLY if both are green:
+        │  ONLY if BOTH are green:
         ▼
- ┌──────────────────────────────────────────────────┐
- │    1. Build frontend + backend Docker images      │
- │    2. Push images to GHCR (image registry)        │
- │    3. SSH into EC2 → pull → recreate containers   │
- │    4. Verify both run the new SHA + site answers  │
- │       (NO DB migrations — see DEPLOY.md §6)       │
- └──────────────────────────────────────────────────┘
+ ┌───────────────────────────────────────────────────┐
+ │    1. Build BOTH images from scratch (--no-cache)  │
+ │    2. Push images to GHCR (image registry)         │
+ │    3. SSH into EC2 → pull → force-recreate the     │
+ │       backend+frontend containers, then DELETE     │
+ │       the superseded images (redis untouched)      │
+ │    4. Verify both run the new SHA + site answers   │
+ │       (NO DB migrations — see DEPLOY.md §6)        │
+ └───────────────────────────────────────────────────┘
         │
         ▼
    🌐 Live site updated
@@ -78,7 +86,7 @@ Here is the journey of one code change, from your laptop to real users:
 
 | Branch | Role | What happens on push |
 |--------|------|----------------------|
-| `production` | the release branch | The **whole** pipeline runs: tests → build → deploy to EC2. |
+| `production` | the release branch | The **whole** pipeline runs: frontend + backend test gates → image build → deploy to EC2. |
 | `vinay`, `main`, anything else | working branches | **Nothing.** No CI, no deploy. |
 
 > The pipeline is deliberately **`production`-only** (`on.push.branches:
@@ -92,58 +100,84 @@ Here is the journey of one code change, from your laptop to real users:
 
 Everything lives in a single file: **`.github/workflows/cicd.yml`**. It has four
 jobs, all of which only ever run for `production`. The first two are the quality
-gate; the last two are the delivery half and run **only if the first two pass**.
+gates (they run in parallel); the last two are the delivery half and run **only
+if both gates pass**.
 
-### 3.1 `frontend` — build & test the SPA
+### 3.1 `frontend` — lint, test and build the SPA
 
 - **When:** push/merge to `production`, or a manual run on `production`.
-- **What:** Node 20 → `npm ci` → `npm run lint` → `npm run build` → `vitest`.
-- The **build** is the real gate. Lint is **non-blocking** because ESLint v9 needs
-  a flat `eslint.config.js` this repo does not have yet; remove the
-  `continue-on-error` once that lands.
+- **What:** Node 20 → `npm ci` → `npm run lint` → `npx vitest run` →
+  `npm run build`.
+- **All four steps are blocking.** Lint is a real gate (no `continue-on-error`),
+  and the unit tests run via `npx vitest run` — a single pass, no watch mode.
+- The **build** is the last gate: if it doesn't compile, nothing ships. This job
+  also doubles as a cheap *pre-flight* — it fails a broken frontend in ~2 min
+  instead of ~8 min into the no-cache Docker build.
 - **Deploys?** No.
 
-### 3.2 `backend-tests` — the integration suite
+### 3.2 `backend-tests` — the pytest integration suite
 
-- **When:** same triggers as `frontend`; the two run in parallel.
-- **What:** GitHub spins up **`services:` containers** for MySQL 8 and Redis 7,
-  then on the runner itself: `pip install -r requirements-dev.txt` → wait for
-  MySQL → write a CI `backend/.env` → `alembic upgrade head` → `pytest tests/ -v`.
-- **Why `services:` and not compose?** These *are* integration tests (live DB via
-  `SessionLocal` + FastAPI `TestClient`), so they need real services — but GitHub
-  can supply those directly. That is what lets this repo keep **one** compose file
-  reserved purely for production.
-- The DB here is a **throwaway container** destroyed with the runner.
-  `backend/tests/conftest.py` aborts the whole session if it is ever pointed at a
-  non-local host or a production `ENVIRONMENT`, so it cannot touch the shared
-  remote MySQL.
+- **When:** push/merge to `production`, or a manual run on `production` (runs in
+  parallel with `frontend`).
+- **What:** spins up **throwaway MySQL 8 + Redis 7** as GitHub Actions
+  `services:` containers, then: Python 3.12 →
+  `pip install -r requirements-dev.txt` (which pulls in `requirements.txt`) →
+  wait for MySQL to accept connections → synthesize a CI `backend/.env` →
+  `alembic upgrade head` → `python -m pytest tests/ -v` (the **full** suite).
+- The synthesized `.env` uses `ENVIRONMENT=ci` and `MYSQL_HOST=127.0.0.1`, which
+  is exactly what `backend/tests/conftest.py`'s guard demands — the session
+  hard-aborts if it is ever pointed at a non-local host or a production
+  environment, so this job **cannot** touch the shared remote MySQL.
+- `alembic upgrade head` is safe **here and only here**: the service DB is an
+  empty container destroyed with the runner. Never run it against the remote DB
+  (`DEPLOY.md` §6).
 - **Deploys?** No.
 
-### 3.3 `build-and-push` — build images, push to GHCR
+### 3.3 `build-and-push` — build images from scratch, push to GHCR
 
 - **When:** `needs: [frontend, backend-tests]` **and**
-  `github.ref == 'refs/heads/production'`. (The workflow only triggers on
-  `production` anyway; the `if:` also blocks a manual run launched from some
-  other branch in the Actions UI.)
+  `github.ref == 'refs/heads/production'`.
+  (The workflow only triggers on `production` anyway; the `if:` also blocks a
+  manual run launched from some other branch in the Actions UI.)
 - **What:** builds both Docker images and pushes them to **GHCR** tagged with both
-  `latest` and the exact git commit SHA, using a GitHub Actions build cache.
+  `latest` and the exact git commit SHA.
   - Images: `ghcr.io/<owner>/simple-com-backend` and `.../simple-com-frontend`
+- **Every build is a full rebuild**, by design:
+
+  | Flag | Effect |
+  |------|--------|
+  | `no-cache: true` | Every Dockerfile layer re-executes. `pip install` and `npm ci` genuinely re-resolve instead of restoring a cached layer. |
+  | `pull: true` | Re-pulls the `FROM` base image, so a patched python/node/nginx base is actually picked up. |
+  | *(no `cache-from`/`cache-to`)* | The GitHub Actions layer cache was removed — there is nothing to fall back on. |
+  | `provenance: false` | Pushes a plain image manifest instead of an attestation index, which keeps `docker pull` on the host simple. |
+
+  **Cost:** ~6–10 min per run instead of ~2. If that ever becomes too slow, delete
+  `no-cache`/`pull` and restore `cache-from: type=gha` + `cache-to: type=gha,mode=max`.
 - **Deploys?** Not yet — it only publishes images.
 
-### 3.4 `deploy` — restart the containers on the new code
+### 3.4 `deploy` — recreate the containers and delete the old images
 
 - **When:** `needs: build-and-push`.
 - **What:** copies `docker-compose.yml` to the EC2 host, then SSHes in and:
   1. `docker login ghcr.io`
   2. writes `IMAGE_TAG=<sha>` into the compose project's root `.env`, so the tag
      is pinned for later manual `docker compose` calls on the host too
-  3. `docker compose pull` — fetches the new backend + frontend images
-  4. `docker compose up -d --remove-orphans` — **this is the restart.** Because
-     `IMAGE_TAG` changed, the backend and frontend image references no longer
-     match what is running, so compose stops those two containers and starts
-     fresh ones on the new code. `redis` keeps the same image, so it is left
-     running and its volume is untouched.
-  5. `docker image prune -f` — reclaims disk from the superseded layers
+  3. **records the image IDs of the currently running** `backend`/`frontend`
+     containers — captured *before* the pull, while the old `:latest` still resolves
+  4. `docker compose pull backend frontend` — scoped to those two services **on
+     purpose**: `redis` must not be re-pulled or restarted, because carts,
+     refresh-token sessions and OTPs live in it
+  5. `docker compose up -d --force-recreate --remove-orphans backend frontend` —
+     **this is the restart.** `--force-recreate` means the containers are destroyed
+     and rebuilt from the new images *every* deploy; it no longer relies on the
+     image reference having changed. `redis` is not named, so it keeps running and
+     its volume is never touched.
+  6. `docker rmi -f` on the image IDs recorded in step 3 — **this is the "delete the
+     old images" step.** It runs only *after* the new containers are up, and Docker
+     refuses to remove an image backing a running container, so it can never pull
+     the live stack out from under itself.
+  7. `docker image prune -af` + `docker builder prune -af` — sweeps dangling layers
+     and older `:<sha>` tags from previous deploys, then prints `docker images`.
 - Then a separate **verify** step re-SSHes and asserts the deploy really landed:
   every app container must report `:<sha>` as its image, and
   `curl http://localhost:8090/` must answer (retried for a minute). If either
@@ -154,6 +188,17 @@ gate; the last two are the delivery half and run **only if the first two pass**.
   SQL. See `DEPLOY.md` §6.
 - **Deploys?** **Yes — to the live EC2 server.** This is the only job that changes
   production.
+
+> ⚠️ **Two consequences of the aggressive cleanup, worth knowing:**
+>
+> 1. **`docker image prune -af` is host-wide, not project-scoped.** It removes *any*
+>    image on that EC2 with no container attached — including one another project
+>    pulled but never ran. Images backing a running *or stopped* container are safe,
+>    as are `redis:7-alpine` and the two new app images.
+> 2. **Rollback now costs a re-pull.** Old `:<sha>` images used to linger on the host,
+>    so `IMAGE_TAG=<old-sha> docker compose up -d` was instant. They are deleted now.
+>    Rollback still works — the images are still in GHCR — it just has to download
+>    again first.
 
 ---
 
@@ -227,14 +272,15 @@ and the workflow reads them with `${{ secrets.NAME }}`.
 | `EC2_USER` | SSH username on that server | `ubuntu` or `ec2-user` |
 | `EC2_APP_DIR` | Folder on EC2 that holds the compose file | `/home/ubuntu/well-via` |
 | `SSH_PRIVATE_KEY` | Private key that can SSH into EC2 | contents of your `.pem` / `id_ed25519` |
-| `GHCR_PAT` | GitHub token used **on the EC2** to pull private images | a Personal Access Token with `read:packages` |
+| `GHCR_USER` | GitHub **username** that owns `GHCR_PAT` — **not** the org name | `9741Prajwalj` |
+| `GHCR_PAT` | GitHub token used **on the EC2** to pull private images | a **classic** PAT with `read:packages` (SSO-authorised if the org requires it) |
 
 > `GITHUB_TOKEN` (used to **push** images to GHCR inside the Actions runner) is
 > provided **automatically** by GitHub — you do **not** create it. It only needs
 > `packages: write` permission, which the job already declares.
 
-The `frontend` and `backend-tests` jobs need **no secrets** — that's why they're a
-safe place to start.
+The `frontend` and `backend-tests` jobs need **no secrets** — the test DB is a
+throwaway service container with hardcoded CI-only credentials.
 
 ### How to add a secret (click-by-click)
 
@@ -270,7 +316,7 @@ made anywhere else are inert until they are merged in.
 
 **Prerequisites (do these once):**
 
-1. All five deploy secrets from [section 5](#5-secrets) are set.
+1. All six deploy secrets from [section 5](#5-secrets) are set.
 2. On the EC2 host, `EC2_APP_DIR` exists, holds a filled-in `backend/.env`, and
    Docker + Docker Compose are installed.
 3. The updated `cicd.yml` exists **on the `production` branch** (the gotcha).
@@ -278,15 +324,16 @@ made anywhere else are inert until they are merged in.
 **To release (every time):**
 
 ```bash
-# 1. Run the checks locally first (see §9) — the pipeline does NOT run on
-#    working branches, so this is your only pre-merge signal.
+# 1. Run the checks locally first (see §9). Working branches get no CI, so this
+#    is the only feedback you get before the merge — a broken suite discovered
+#    on `production` blocks the deploy until it's fixed.
 git checkout vinay
 git push origin vinay            # no CI fires; this is just backup/sharing
 
 # 2. Merge the reviewed changes into production and push.
 git checkout production
 git merge --ff-only vinay        # or open & merge a Pull Request on GitHub
-git push origin production       # ← THIS is the deploy trigger
+git push origin production       # ← tests run first; deploy fires only if green
 
 # 3. Back to work.
 git checkout vinay
@@ -296,14 +343,17 @@ A **merge is just a push**, so merging a PR into `production` on GitHub triggers
 the exact same pipeline — you don't have to push from the terminal.
 
 Then open **Actions → "CI/CD"** and watch the four jobs. `build-and-push` and
-`deploy` only start once `frontend` and `backend-tests` are both green. If the
-`deploy` job is green, the live site is updated. If it's red, see
+`deploy` only start once **both** `frontend` and `backend-tests` are green.
+Expect the run to take **~15–20 minutes** — the two test suites run first, then
+the images are rebuilt with `--no-cache` every time. If the `deploy` job is
+green, the live site is updated. If it's red, see
 [Troubleshooting](#10-troubleshooting).
 
 > You can also redeploy the current `production` code **without a new commit** via
 > **Actions → CI/CD → Run workflow** (that's what `workflow_dispatch` enables) —
-> pick the `production` branch. The test gate still applies: a manual run does
-> **not** bypass it.
+> pick the `production` branch. Because builds are `--no-cache`, a manual re-run
+> genuinely rebuilds both images from scratch (fresh `npm ci` / `pip install` and a
+> re-pulled base image) rather than reusing anything from the previous run.
 
 ---
 
@@ -353,19 +403,26 @@ jobs:
 
 ## 9. Running the same checks locally
 
-Run the exact commands the pipeline runs, **before** you push — it's faster than
-waiting for the runner.
+> CI runs both suites on every push to `production` — but **working branches get
+> no CI at all**, so run the same checks locally *before* you merge. A failure
+> you could have caught at your desk otherwise surfaces only after the merge,
+> where it blocks the deploy until fixed.
 
 **Frontend (mirrors the `frontend` job):**
 ```bash
 cd frontend
 npm ci
-npm run build          # the real gate
-npm run lint           # optional (needs an ESLint v9 config to pass)
-npm test -- --run --passWithNoTests
+npm run lint           # blocking in CI too
+npx vitest run         # same single-pass invocation CI uses (npm test = watch mode)
+npm run build
+npm run test:e2e       # Playwright end-to-end — NOT run in CI (needs a live stack)
 ```
 
 **Backend integration tests (mirrors the `backend-tests` job):**
+
+The `backend-tests` job does exactly this on every push to `production`. To
+reproduce it locally:
+
 ```bash
 # 1. Throwaway services, same images/credentials the CI job uses.
 docker run -d --name ci-mysql -p 3306:3306 \
@@ -377,10 +434,11 @@ docker run -d --name ci-redis -p 6379:6379 redis:7-alpine
 #    (conftest.py aborts the run if you do.) Use MYSQL_HOST=127.0.0.1,
 #    REDIS_URL=redis://127.0.0.1:6379/0, ENVIRONMENT=ci.
 
-# 3. Run it.
+# 3. Run it — in a local venv, not in Docker: the production image does not
+#    contain tests/ or pytest (both are excluded on purpose).
 cd backend
 pip install -r requirements-dev.txt
-alembic upgrade head
+alembic upgrade head        # safe ONLY against the throwaway DB above
 python -m pytest tests/ -v
 
 # 4. Clean up.
@@ -396,12 +454,22 @@ docker rm -f ci-mysql ci-redis
 | Nothing runs after a push | You pushed to a branch other than `production` | Expected — the pipeline is `production`-only by design. Run the checks locally (§9), then merge. |
 | Nothing runs after a push **to `production`** | The `cicd.yml` on `production` is an older copy without the `production` trigger | Merge the current `cicd.yml` into `production`. |
 | Frontend job red at "Build" | Real build error (bad import, syntax) | Reproduce with `npm run build` locally; fix the error. |
-| Lint step red | ESLint v9 needs a flat `eslint.config.js` | It's currently `continue-on-error` (non-blocking). Add the config to make it a real gate. |
-| `backend-tests` red at "Wait for MySQL to accept connections" | The MySQL service container never came up | Open the job's **Set up job** log → the mysql service section; usually a bad `services:` env or an image pull failure. |
-| `backend-tests` red at "Apply migrations" | Migration error against a clean DB | Reproduce locally with the throwaway container in section 9. |
-| `build-and-push`/`deploy` skipped | Not on `production`, or a quality job failed | Both are gated on `needs: [frontend, backend-tests]` **and** `github.ref == 'refs/heads/production'`. Fix the red job or push to `production`. |
+| Frontend job red at "Lint" | ESLint violations — the step is **blocking** | Reproduce with `npm run lint` locally; fix the findings (or add a justified per-line disable). |
+| Frontend job red at "Unit tests" | A failing Vitest test | Reproduce with `npx vitest run` locally. |
+| `backend-tests` red immediately (exit 3, "Refusing to run tests") | The conftest.py guard tripped: `ENVIRONMENT`/`MYSQL_HOST` in the synthesized `.env` don't look local | The job's "Write CI backend/.env" step must keep `ENVIRONMENT=ci` + `MYSQL_HOST=127.0.0.1` — if you edited it, restore those. |
+| `backend-tests` red at "Wait for MySQL" or "Apply migrations" | The MySQL service container never became healthy, or a migration is broken | Rerun once (service startup flake). If reproducible, run §9 locally — `alembic upgrade head` against the throwaway DB shows the real error. |
+| `backend-tests` red at "Run test suite" | A failing backend test | Reproduce locally with §9. The deploy is blocked until it's green — there is no bypass. |
+| `build-and-push` red in the **backend** build | Broken `requirements.txt`, a pinned version that no longer resolves, or a Python error at image build time | Reproduce with `docker build --no-cache ./backend`. (Test failures show up earlier, in `backend-tests` — this job only catches image-build breakage.) |
+| `build-and-push` red in the **frontend** build | Build error the `frontend` job somehow passed (different Node version, or a Docker-only step) | Reproduce with `docker build --no-cache ./frontend`. |
+| Runs got much slower (~15–20 min) | **Expected.** The two test suites run first, and `no-cache: true` + `pull: true` mean nothing is reused between builds | Working as designed. To trade freshness for speed, restore `cache-from`/`cache-to: type=gha` and drop `no-cache`/`pull` in `build-and-push`. |
+| A broken test reached production | Should be impossible now — both suites gate the deploy | If it happened, the breakage isn't covered by any test. Add a test for it; CI will hold the line from then on. |
+| `build-and-push`/`deploy` skipped | Not on `production`, or a quality job failed | Gated on `needs: [frontend, backend-tests]` **and** `github.ref == 'refs/heads/production'`. Fix the red job or push to `production`. |
 | Deploy red at "Copy compose file"/SSH step | Missing/wrong secret (`EC2_HOST`, `SSH_PRIVATE_KEY`, …) | Re-check the 5 secrets in section 5; confirm the key can SSH manually. |
-| Deploy red at "Pull images" | EC2 can't authenticate to GHCR | `GHCR_PAT` invalid or lacks `read:packages`; regenerate it. |
+| Deploy red at the pull/recreate step with `Get "https://ghcr.io/v2/": denied: denied` | EC2 can't authenticate to GHCR | `GHCR_USER` must be a GitHub **username** (not the org `shopwellvia-art`). `GHCR_PAT` must be a **classic** PAT with `read:packages`, and SSO-authorised for the org if SSO is on. `unauthorized` instead of `denied` means the token is wrong/expired — regenerate it. |
+| Deploy log says `keeping <id> (still in use)` | **Not an error.** The old image is still backing a running container, so Docker declined to delete it | Normal, e.g. when redeploying the same SHA. The following `docker image prune -af` cleans up whatever is genuinely unreferenced. |
+| An unrelated image vanished from the EC2 | `docker image prune -af` is **host-wide** — it removes any image with no container attached | Re-pull it. If that host holds images worth keeping, scope the cleanup to the two GHCR repos by tag instead of a blanket prune. |
+| Rollback is slow now | Old `:<sha>` images are deleted from the host after each deploy | Expected. The images are still in GHCR: `IMAGE_TAG=<old-sha> docker compose pull backend frontend && docker compose up -d` — it just has to download first. |
+| Carts/logins were lost after a deploy | Should **not** happen — the deploy never touches `redis` or its volume | Check whether someone ran `docker compose down` or pruned volumes manually. The pipeline only names `backend frontend` in its `pull`/`up` commands. |
 | Pushed to `production` but nothing deployed | The `cicd.yml` on `production` is an older copy (the gotcha) | Merge the updated `cicd.yml` into `production`. |
 | Deploy red at "Verify the new code is live" | Containers didn't come back on the new SHA, or the site didn't answer on `:8090` | The step prints each container's actual image and dumps 50 log lines. Usually a crash-looping backend (bad `backend/.env`) or an unreachable DB. |
 | Deploy succeeds but site unchanged | Browser cache — the verify step already proved the new SHA is running | Hard refresh (Ctrl/Cmd-Shift-R). Note the pipeline runs **no** migrations — pending schema changes are applied manually (`DEPLOY.md` §6). |

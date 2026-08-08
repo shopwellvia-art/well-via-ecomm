@@ -21,8 +21,7 @@ import {
 import { AdminPage } from '@/components/admin/AdminPage.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Badge } from '@/components/ui/Badge.jsx';
-import { Input } from '@/components/ui/Input.jsx';
-import { Card, CardHeader, CardBody } from '@/components/ui/Card.jsx';
+import { CardHeader } from '@/components/ui/Card.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { cn } from '@/lib/utils.js';
@@ -111,19 +110,6 @@ function valuesToPayload(v) {
       .map((p) => ({ icon: p.icon || 'ShieldCheck', label: (p.label || '').trim() }))
       .filter((p) => p.label),
   };
-}
-
-// ─── KindBadge ────────────────────────────────────────────────────────────────
-
-function KindBadge({ kind }) {
-  return (
-    <Badge
-      tone={kind === 'sale' ? 'warning' : 'info'}
-      size="sm"
-    >
-      {kind === 'sale' ? 'Sale' : 'Photo'}
-    </Badge>
-  );
 }
 
 // ─── PerksEditor ──────────────────────────────────────────────────────────────

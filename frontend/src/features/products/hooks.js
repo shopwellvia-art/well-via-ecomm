@@ -17,6 +17,17 @@ export function useProduct(id) {
   });
 }
 
+// Separate cache key from `useProduct` on purpose: the two responses have
+// different shapes, and sharing a key would let a storefront read of the same
+// product evict the admin copy (or vice versa) and drop the ops fields.
+export function useProductForAdmin(id) {
+  return useQuery({
+    queryKey: ['product', id, 'admin'],
+    queryFn: () => productsApi.getForAdmin(id),
+    enabled: !!id,
+  });
+}
+
 export function useRelatedProducts(id, limit = 8) {
   return useQuery({
     queryKey: ['product', id, 'related', limit],
@@ -52,6 +63,25 @@ export function useProductsByIds(ids) {
     queryKey: ['products', 'by-ids', key],
     queryFn: () => productsApi.byIds(ids),
     enabled: Array.isArray(ids) && ids.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Products for the header "Shop" mega menu.
+ *
+ * `enabled` is gated on the menu actually being open so the header does not
+ * fetch a catalog page for every visitor who never opens it. The query key is
+ * the ordinary ['products', params] shape, so once open it shares React Query's
+ * cache with the listing page rather than refetching.
+ */
+export function useShopMenuProducts(limit = 9, enabled = true) {
+  const params = { page_size: limit, sort_by: 'newest' };
+  return useQuery({
+    queryKey: ['products', params],
+    queryFn: () => productsApi.list(params),
+    enabled,
+    // The nav rarely changes mid-session; keep reopening the menu instant.
     staleTime: 5 * 60 * 1000,
   });
 }

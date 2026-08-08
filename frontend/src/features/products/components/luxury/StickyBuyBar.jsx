@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ShoppingCart, Zap, Check } from 'lucide-react';
 import { formatPrice } from '@/lib/utils.js';
 import { useAddToCart } from '@/features/cart/hooks.js';
+import { useAddedToCartModal } from '@/features/cart/addedModalStore.js';
 import { ProductMedia } from '../ProductMedia.jsx';
 
 /**
@@ -21,6 +22,7 @@ export function StickyBuyBar({ product }) {
   const navigate = useNavigate();
   const reduce = useReducedMotion();
   const addToCart = useAddToCart();
+  const showAdded = useAddedToCartModal((s) => s.showAdded);
   const [desktopVisible, setDesktopVisible] = useState(false);
   const [added, setAdded] = useState(false);
 
@@ -55,8 +57,20 @@ export function StickyBuyBar({ product }) {
   // Guests use the client-side cart; checkout's bag step embeds login.
   function handleAdd() {
     addToCart.mutate(
-      { productId: product.id, quantity: 1 },
-      { onSuccess: () => setAdded(true) },
+      // `price` rides along for the Meta AddToCart value — see useAddToCart.
+      { productId: product.id, quantity: 1, price: product.price },
+      {
+        onSuccess: () => {
+          setAdded(true);
+          showAdded({
+            id: product.id,
+            name: product.name,
+            image_url: product.image_url,
+            price: product.price,
+            quantity: 1,
+          });
+        },
+      },
     );
   }
 

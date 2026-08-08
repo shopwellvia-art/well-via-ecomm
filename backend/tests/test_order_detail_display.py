@@ -95,11 +95,43 @@ def db():
 
 class TestOrderDetailDisplayDB:
     def _seed_user_and_product(self, db):
+        """Reuse ambient rows when present, otherwise create our own.
+
+        Same fix as `test_order_normalization.py`: asserting on whatever was
+        already in the database passed locally (a dev DB has products) and
+        failed on a clean CI database, where `alembic upgrade head` builds the
+        schema and nothing else. This test also needs the product to carry a
+        name and image_url, since that is exactly what it asserts gets
+        surfaced on the order line.
+        """
+        import uuid
+
+        from app.core.security import hash_password
         from app.models.user import User
 
         user = db.query(User).first()
+        if user is None:
+            user = User(
+                email=f"orddetail-{uuid.uuid4().hex[:10]}@example.com",
+                hashed_password=hash_password("TestPass123!"),
+                is_active=True,
+            )
+            db.add(user)
+            db.flush()
+
         product = db.query(Product).filter(Product.stock > 0).first()
-        assert user is not None and product is not None, "seed data missing"
+        if product is None:
+            uid = uuid.uuid4().hex[:10]
+            product = Product(
+                sku=f"SKU-ORDDETAIL-{uid}",
+                name=f"OrdDetailTestProd-{uid}",
+                price=Decimal("100.00"),
+                stock=50,
+                image_url="/static/test-product.png",
+            )
+            db.add(product)
+            db.flush()
+
         return user, product
 
     def _create_order(self, db, user, product):

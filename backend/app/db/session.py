@@ -19,6 +19,18 @@ engine = create_engine(
         "connect_timeout": settings.DB_CONNECT_TIMEOUT,
         "read_timeout": settings.DB_READ_TIMEOUT,
         "write_timeout": settings.DB_READ_TIMEOUT,
+        # Pin every connection to UTC. `TimestampMixin` fills created_at /
+        # updated_at with server_default=func.now() and onupdate=func.now(),
+        # which MySQL evaluates in the SERVER's time_zone — while all Python
+        # writes use datetime.now(timezone.utc). Without this pin, whether a
+        # row's timestamp is UTC depends on which of the two wrote it and on a
+        # shared remote MySQL's `time_zone` setting we do not control, so the
+        # naive-UTC invariant that analytics day-bucketing relies on (see
+        # services/analytics/timebox.py) holds only by luck.
+        #
+        # Set on the session, not the server: it needs no privileges and cannot
+        # affect the other applications sharing that MySQL host.
+        "init_command": "SET time_zone = '+00:00'",
     },
     future=True,
 )

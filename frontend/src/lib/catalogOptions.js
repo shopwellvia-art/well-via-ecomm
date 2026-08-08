@@ -10,6 +10,8 @@
  * categories seeded via Admin → Categories.
  */
 
+// Kept in sync with the flavour printed on the pack artwork — a flavour that
+// ships but is missing here is a product the filter can never surface.
 export const FLAVOURS = [
   'Grape',
   'Green Apple',
@@ -17,6 +19,9 @@ export const FLAVOURS = [
   'Mixed Berry',
   'Orange',
   'Mixed Fruit',
+  'Strawberry',
+  'Cherry',
+  'Blueberry',
 ];
 
 export const GOALS = [
@@ -27,3 +32,15 @@ export const GOALS = [
   { label: 'Daily Wellness', slug: 'daily-wellness' },
   { label: 'Energy & Vitality', slug: 'energy-vitality' },
 ];
+
+/**
+ * Resolve goal slugs → category ids against the loaded category list.
+ * Goals ARE categories, so a goal filter is just a category filter once the
+ * slug is looked up. Unknown slugs (category not seeded yet, or categories
+ * still loading) resolve to nothing rather than breaking the query.
+ */
+export function resolveGoalCategoryIds(goalSlugs, categories) {
+  return (goalSlugs ?? [])
+    .map((slug) => (categories ?? []).find((c) => c.slug === slug)?.id)
+    .filter((id) => id != null);
+}

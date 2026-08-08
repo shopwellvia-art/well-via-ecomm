@@ -1,12 +1,13 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
 from app.models.coupon import DiscountType
+from app.schemas.base import AppSchema
 
 
-class CouponCreate(BaseModel):
+class CouponCreate(AppSchema):
     code: str = Field(min_length=2, max_length=64)
     description: str | None = None
     discount_type: DiscountType
@@ -25,7 +26,7 @@ class CouponCreate(BaseModel):
         return v.strip().upper()
 
 
-class CouponUpdate(BaseModel):
+class CouponUpdate(AppSchema):
     description: str | None = None
     discount_type: DiscountType | None = None
     discount_value: Decimal | None = Field(default=None, gt=0)
@@ -38,7 +39,7 @@ class CouponUpdate(BaseModel):
     is_active: bool | None = None
 
 
-class CouponRead(BaseModel):
+class CouponRead(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -58,7 +59,7 @@ class CouponRead(BaseModel):
     updated_at: datetime
 
 
-class CouponApply(BaseModel):
+class CouponApply(AppSchema):
     code: str
 
     @field_validator("code")
@@ -67,7 +68,7 @@ class CouponApply(BaseModel):
         return v.strip().upper()
 
 
-class CouponValidationResult(BaseModel):
+class CouponValidationResult(AppSchema):
     code: str
     discount_amount: Decimal
     description: str | None = None

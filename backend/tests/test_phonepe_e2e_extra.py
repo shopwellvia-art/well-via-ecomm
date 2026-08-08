@@ -17,14 +17,19 @@ Run inside the backend container:
 """
 from __future__ import annotations
 
+import os
 import sys
 from decimal import Decimal
 from unittest.mock import MagicMock
 
 import pytest
 
-# Make the sibling suite importable regardless of pytest's import mode.
-sys.path.insert(0, "/app/tests")
+# Make the sibling suite importable regardless of pytest's import mode. This
+# used to hardcode "/app/tests", the mount point of one particular container;
+# anywhere else it silently inserted a path that does not exist and the import
+# only worked because pytest happens to prepend the rootdir itself. Derive it
+# from this file so the suite is not tied to one deployment's layout.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import test_phonepe_checkout_suite as S  # noqa: E402
 
 from app.db.session import SessionLocal  # noqa: E402
@@ -67,12 +72,13 @@ def test_every_failure_code_cancels_and_restores_stock(fail_code: str) -> None:
         order_ids.append(order.id)
         amount_minor = S._expected_minor(S._snapshot_order(order.id)["total_amount"])
 
-        body, sig = S._sign_webhook(
-            provider,
-            S._phonepe_status_envelope(
-                mtid, amount_minor, f"T_{fail_code}", code=fail_code, state="FAILED"
-            ),
+        envelope = S._phonepe_status_envelope(
+            mtid, amount_minor, f"T_{fail_code}", code=fail_code, state="FAILED"
         )
+        body, sig = S._sign_webhook(provider, envelope)
+        # handle_webhook confirms the claimed failure with the gateway before
+        # acting on it, so the status endpoint has to report it too.
+        S._gateway_confirms(provider, envelope)
         with S._use_phonepe(provider):
             PaymentService(db).handle_webhook(body, sig, gateway_code="phonepe")
 
@@ -205,7 +211,16 @@ def test_pending_then_failure_transition_restores_stock() -> None:
 def test_late_success_after_failure_does_not_revive_order() -> None:
     """Out-of-order callbacks: an order already CANCELLED by a failure must NOT
     be flipped back to PAID by a late SUCCESS webhook, and stock must not be
-    re-deducted. Guards against a replayed/delayed success."""
+    re-deducted. Guards against a replayed/delayed success.
+
+    Holding the order CANCELLED is only half the obligation. The gateway is
+    telling us it took the customer's money, and refusing to mark the order paid
+    does not give it back — so `_apply_status` routes a post-cancellation
+    settlement to `_refund_settled_after_cancel`: a SETTLED_AFTER_CANCEL audit
+    row, a refund attempt, and the captured leg flipped to REFUNDED on the books
+    whether or not the gateway could be reached. Asserting REFUNDED rather than
+    FAILED is the point: FAILED would mean we had quietly kept the money.
+    """
     user_ids: list[int] = []
     product_ids: list[int] = []
     order_ids: list[int] = []
@@ -225,29 +240,49 @@ def test_late_success_after_failure_does_not_revive_order() -> None:
         amount_minor = S._expected_minor(S._snapshot_order(order.id)["total_amount"])
 
         # First: a failure cancels the order + restores stock.
-        body_f, sig_f = S._sign_webhook(
-            provider,
-            S._phonepe_status_envelope(
-                mtid, amount_minor, "T_LF", code="PAYMENT_ERROR", state="FAILED"
-            ),
+        envelope_f = S._phonepe_status_envelope(
+            mtid, amount_minor, "T_LF", code="PAYMENT_ERROR", state="FAILED"
         )
+        body_f, sig_f = S._sign_webhook(provider, envelope_f)
+        S._gateway_confirms(provider, envelope_f)
         with S._use_phonepe(provider):
             PaymentService(db).handle_webhook(body_f, sig_f, gateway_code="phonepe")
         assert S._snapshot_order(order.id)["status"] == OrderStatus.CANCELLED
         assert S._stock(prod.id) == pre_stock
 
-        # Then: a late SUCCESS for the same order arrives.
-        body_s, sig_s = S._sign_webhook(
-            provider, S._phonepe_status_envelope(mtid, amount_minor, "T_LS_SUCCESS")
-        )
+        # Then: a late SUCCESS for the same order arrives — and PhonePe itself
+        # would corroborate it if asked. Arming the status endpoint with the
+        # success envelope is deliberate: it proves the order is held CANCELLED
+        # by the terminal-state guard in `_apply_status`, and not merely by
+        # `handle_webhook` skipping confirmation for a non-PENDING order.
+        envelope_s = S._phonepe_status_envelope(mtid, amount_minor, "T_LS_SUCCESS")
+        body_s, sig_s = S._sign_webhook(provider, envelope_s)
+        S._gateway_confirms(provider, envelope_s)
         with S._use_phonepe(provider):
             PaymentService(db).handle_webhook(body_s, sig_s, gateway_code="phonepe")
 
         snap = S._snapshot_order(order.id)
         assert snap["status"] == OrderStatus.CANCELLED, "late success must not revive"
         assert snap["paid_at"] is None
-        assert snap["legs"][0]["status"] == PaymentTxnStatus.FAILED
+        assert snap["legs"][0]["status"] == PaymentTxnStatus.REFUNDED, (
+            "money captured after cancellation is owed back — the leg must be "
+            "REFUNDED on the books, not left FAILED as though nothing was taken"
+        )
         assert S._stock(prod.id) == pre_stock, "stock must not be re-deducted"
+        # The reversal is audited, and audited exactly once.
+        assert S._count_events(mtid, PaymentEventType.SETTLED_AFTER_CANCEL) == 1
+        assert S._count_events(mtid, PaymentEventType.REFUND_ATTEMPT) >= 1
+
+        # A redelivery of the same late success must be a no-op: the leg is
+        # already REFUNDED, so no second refund is attempted.
+        with S._use_phonepe(provider):
+            PaymentService(db).handle_webhook(body_s, sig_s, gateway_code="phonepe")
+        replayed = S._snapshot_order(order.id)
+        assert replayed["status"] == OrderStatus.CANCELLED
+        assert replayed["legs"][0]["status"] == PaymentTxnStatus.REFUNDED
+        assert S._count_events(mtid, PaymentEventType.SETTLED_AFTER_CANCEL) == 1, (
+            "a redelivered settlement must not refund twice"
+        )
     finally:
         db.rollback()
         S._cleanup(user_ids, product_ids, order_ids)

@@ -1,9 +1,10 @@
 # Development / CI-only dependencies (test tooling).
 #
 # These are intentionally NOT in requirements.txt — the production image stays
-# lean and never ships a test runner. CI installs this file into the already-
-# CI installs this file on the runner (see the `backend-tests` job in
-# .github/workflows/cicd.yml), and locally you install it into your venv:
+# lean and never ships a test runner (tests/ is excluded via .dockerignore too).
+# CI installs this file directly on the runner: the `backend-tests` job in
+# .github/workflows/cicd.yml runs `pip install -r requirements-dev.txt` before
+# alembic + pytest. Locally, install it into your venv the same way:
 #   cd backend && pip install -r requirements-dev.txt
 -r requirements.txt
 

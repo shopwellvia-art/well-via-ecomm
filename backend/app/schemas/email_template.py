@@ -4,10 +4,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import ConfigDict, EmailStr
+from app.schemas.base import AppSchema
 
 
-class EmailTemplateListItem(BaseModel):
+class EmailTemplateListItem(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     key: str
@@ -30,26 +31,26 @@ class EmailTemplateDetail(EmailTemplateListItem):
     default_body_html: str | None = None
 
 
-class EmailTemplateUpdate(BaseModel):
+class EmailTemplateUpdate(AppSchema):
     subject: str | None = None
     body_html: str | None = None
     body_design: dict | None = None
     is_enabled: bool | None = None
 
 
-class EmailTemplatePreviewRequest(BaseModel):
+class EmailTemplatePreviewRequest(AppSchema):
     subject: str | None = None
     body_html: str | None = None
 
 
-class EmailTemplatePreviewResponse(BaseModel):
+class EmailTemplatePreviewResponse(AppSchema):
     subject: str | None
     html: str
 
 
-class EmailTemplateTestRequest(BaseModel):
+class EmailTemplateTestRequest(AppSchema):
     to: EmailStr
 
 
-class EmailTemplateListResponse(BaseModel):
+class EmailTemplateListResponse(AppSchema):
     items: list[EmailTemplateListItem]

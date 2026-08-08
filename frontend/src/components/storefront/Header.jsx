@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { cn } from '@/lib/utils';
+import { cn, mediaUrl } from '@/lib/utils';
+import { useStorefrontConfigWithDefaults } from '@/features/storefront-config/hooks.js';
 import { useAuthStore } from '@/features/auth/store';
 import { authApi } from '@/features/auth/api';
 import { useCart } from '@/features/cart/hooks';
 import { useCartDrawer } from '@/features/cart/drawerStore';
 import { useWishlist } from '@/features/wishlist/hooks';
 import Logo, { LeafMark } from './Logo';
+import SearchSuggestions from './SearchSuggestions.jsx';
 import {
   SearchIcon,
   BagIcon,
@@ -17,18 +19,6 @@ import {
   CloseIcon,
 } from './Icons';
 import ShopMegaMenu, { ShopMobileLinks, ChevronIcon } from './ShopMegaMenu.jsx';
-
-/** Primary nav links — real app routes (mockup order). "Shop" is rendered
- *  via ShopMegaMenu on desktop and as an accordion toggle on mobile. */
-const NAV = [
-  { to: '/', label: 'Home', end: true },
-  { to: '/products', label: 'Shop', megaMenu: true },
-  { to: '/categories', label: 'Categories' },
-  { to: '/bestsellers', label: 'Best Sellers' },
-  { to: '/new-arrivals', label: 'New Arrivals' },
-  { to: '/contact', label: 'Contact' },
-  { to: '/about', label: 'About' },
-];
 
 /** Account dropdown items — signed-in users. */
 const ACCOUNT_LINKS = [
@@ -62,6 +52,7 @@ export default function Header() {
   const [mobileShopOpen, setMobileShopOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [suggestOpen, setSuggestOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
   // Refs for account menu keyboard accessibility (mirrors AccountMenu.jsx pattern).
@@ -69,11 +60,25 @@ export default function Header() {
   const accountTriggerRef = useRef(null);
   const accountMenuRef = useRef(null);
 
+  // One suggestions panel per search input (lg pill / md inline bar / mobile
+  // drawer). They share `searchQuery` but each owns its own highlight state, so
+  // each needs its own imperative handle — a single shared ref would be
+  // overwritten by whichever panel mounted last, and the arrow keys would then
+  // drive an invisible list.
+  const deskSuggestRef = useRef(null);
+  const mdSuggestRef = useRef(null);
+  const mobileSuggestRef = useRef(null);
+
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const location = useLocation();
   const reduce = useReducedMotion();
+
+  // Admin-managed nav + brand identity. The item flagged `megaMenu` renders
+  // via ShopMegaMenu on desktop and as an accordion toggle on mobile.
+  const { config } = useStorefrontConfigWithDefaults();
+  const navItems = (config.nav_items ?? []).filter((n) => n.visible !== false);
 
   const isShopSection = location.pathname.startsWith('/products');
 
@@ -117,6 +122,7 @@ export default function Header() {
   closeMobileMenu();
   setAccountOpen(false);
   setSearchOpen(false);
+  setSuggestOpen(false);
 }, [location.pathname, closeMobileMenu]);
 
   // ── Lock body scroll while mobile menu is open ───────────────────────────────
@@ -202,14 +208,76 @@ export default function Header() {
     }
   }
 
-  // ── Search submit ─────────────────────────────────────────────────────────────
+  // ── Search ────────────────────────────────────────────────────────────────────
+  // Submitting the form searches the whole catalogue. Picking a suggestion goes
+  // straight to that one thing. Both end in the same teardown, so it lives in
+  // one place: clear the box, drop the panel, close whatever was open around it.
+  const closeSearch = useCallback(() => {
+    setSuggestOpen(false);
+    setSearchOpen(false);
+    setSearchQuery('');
+    deskSuggestRef.current?.reset();
+    mdSuggestRef.current?.reset();
+    mobileSuggestRef.current?.reset();
+  }, []);
+
   function handleSearch(e) {
     e.preventDefault();
     const q = searchQuery.trim();
     if (!q) return;
     navigate(`/products?q=${encodeURIComponent(q)}`);
-    setSearchOpen(false);
-    setSearchQuery('');
+    closeSearch();
+  }
+
+  /** A suggestion was chosen — the <Link> handles navigation, we just tidy up. */
+  function handleSuggestionNavigate() {
+    closeSearch();
+    closeMobileMenu();
+  }
+
+  /**
+   * Arrow / Enter / Escape on a search input, forwarded to that input's panel.
+   *
+   * Enter is only intercepted when a suggestion is actually highlighted;
+   * otherwise it falls through to the form's submit and searches the full
+   * catalogue. That ordering matters — swallowing every Enter would strand
+   * anyone who types a term the dropdown has no exact row for.
+   */
+  function handleSearchKeyDown(e, panelRef) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSuggestOpen(true);
+      panelRef.current?.moveDown();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      panelRef.current?.moveUp();
+    } else if (e.key === 'Escape') {
+      // Dismiss one layer at a time. The mobile drawer has its own
+      // document-level Escape listener, so without stopping propagation the
+      // first Escape inside the drawer's search box would take the whole drawer
+      // down with the suggestions.
+      if (suggestOpen) e.stopPropagation();
+      setSuggestOpen(false);
+      panelRef.current?.reset();
+    } else if (e.key === 'Enter') {
+      const to = panelRef.current?.openActive();
+      if (to) {
+        e.preventDefault();
+        navigate(to);
+        handleSuggestionNavigate();
+      }
+    }
+  }
+
+  /**
+   * Close the panel when focus leaves the search box AND the panel itself.
+   *
+   * `relatedTarget` is where focus is going. A click on a suggestion moves focus
+   * to that <Link>, which is inside this subtree, so the panel survives long
+   * enough for the click to land. Tabbing away or clicking elsewhere closes it.
+   */
+  function handleSearchBlur(e) {
+    if (!e.currentTarget.contains(e.relatedTarget)) setSuggestOpen(false);
   }
 
   // ── Sign out ──────────────────────────────────────────────────────────────────
@@ -243,7 +311,11 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-40 bg-[#08112C]">
       {/* ── Desktop (frontend-3: dark-green band, left logo, serif nav) ───────── */}
-      <div className="hidden md:flex items-center gap-4 lg:gap-7 py-2.5 px-5 lg:px-10">
+      {/* py-1.5 rather than the old py-2.5: the lockup export already carries
+          ~10px of its own top margin at this box size, so the band only needs a
+          little extra. Net effect is the same ~76px bar as before but with the
+          visible mark ~25% larger instead of crammed at 36px. */}
+      <div className="hidden md:flex items-center gap-4 lg:gap-7 py-1.5 px-5 lg:px-10">
         {/* Left: logo — cream/gold on dark green */}
         <Logo
           size="md"
@@ -257,17 +329,17 @@ export default function Header() {
           className="flex items-center gap-4 lg:gap-6 font-wserif text-[16px] lg:text-[18px] flex-1"
           aria-label="Main navigation"
         >
-          {NAV.map((n) => {
+          {navItems.map((n) => {
             const linkCls = ({ isActive }) =>
               cn(
                 'no-underline transition-colors flex items-center gap-1.5 whitespace-nowrap',
                 isActive ? 'text-white' : 'text-[#c9d4cc] hover:text-white',
               );
             if (n.megaMenu) {
-              return <ShopMegaMenu key={n.to} linkClassName={linkCls} />;
+              return <ShopMegaMenu key={`${n.label}-${n.to}`} linkClassName={linkCls} label={n.label} />;
             }
             return (
-              <NavLink key={n.to} to={n.to} end={n.end} className={linkCls}>
+              <NavLink key={`${n.label}-${n.to}`} to={n.to} end={n.end} className={linkCls}>
                 {n.label}
               </NavLink>
             );
@@ -275,10 +347,13 @@ export default function Header() {
         </nav>
 
         {/* Persistent search pill (frontend-3) */}
+        {/* `relative` anchors the suggestions panel; the panel is wider than the
+            300px pill and right-aligned so it never overhangs the viewport. */}
         <form
           onSubmit={handleSearch}
+          onBlur={handleSearchBlur}
           role="search"
-          className="hidden lg:flex items-center bg-white rounded-full pl-4 pr-2 py-1.5 w-[300px] gap-2"
+          className="relative hidden lg:flex items-center bg-white rounded-full pl-4 pr-2 py-1.5 w-[300px] gap-2"
         >
           <label htmlFor="header-search" className="sr-only">
             Search products
@@ -287,7 +362,12 @@ export default function Header() {
             id="header-search"
             type="search"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setSuggestOpen(true);
+            }}
+            onFocus={() => setSuggestOpen(true)}
+            onKeyDown={(e) => handleSearchKeyDown(e, deskSuggestRef)}
             placeholder="Looking for immunity, beauty, or better sleep?"
             autoComplete="off"
             className="flex-1 min-w-0 border-0 bg-transparent text-[12.5px] text-wink placeholder:text-[#a9a9a4] outline-none"
@@ -299,6 +379,14 @@ export default function Header() {
           >
             <SearchIcon size={16} strokeWidth={2} />
           </button>
+          <SearchSuggestions
+            ref={deskSuggestRef}
+            query={searchQuery}
+            open={suggestOpen}
+            isSignedIn={!!user}
+            onNavigate={handleSuggestionNavigate}
+            className="top-full right-0 w-[420px]"
+          />
         </form>
 
         {/* Icon row — cream on dark green */}
@@ -455,11 +543,27 @@ export default function Header() {
         </button>
 
         {/* Centre: inline logo */}
-        <Link to="/" className="flex items-center gap-1.5 no-underline" aria-label="Wellvia — home">
-          <LeafMark size={22} dot={false} color="#E9DDC0" />
-          <span className="font-display text-[17px] tracking-[0.2em] font-medium text-[#F1EAD8] pl-[0.2em]">
-            WELLVIA
-          </span>
+        <Link
+          to="/"
+          className="flex items-center gap-1.5 no-underline"
+          aria-label={`${config.brand_name} — home`}
+        >
+          {config.logo_url ? (
+            <img
+              src={mediaUrl(config.logo_url)}
+              alt={config.brand_name}
+              /* 28px left a stacked lockup unreadable on the smallest screens,
+                 where the brand is the only wayfinding cue in the bar. */
+              className="max-h-10 w-auto object-contain"
+            />
+          ) : (
+            <>
+              <LeafMark size={22} dot={false} color="#E9DDC0" />
+              <span className="font-display text-[17px] tracking-[0.2em] font-medium text-[#F1EAD8] pl-[0.2em]">
+                {config.brand_name}
+              </span>
+            </>
+          )}
         </Link>
 
         {/* Right: wishlist + cart */}
@@ -496,6 +600,7 @@ export default function Header() {
         <div className="lg:hidden border-t border-white/15 px-5 py-3 animate-rise">
           <form
             onSubmit={handleSearch}
+            onBlur={handleSearchBlur}
             className="flex items-center gap-3 max-w-2xl mx-auto"
             role="search"
           >
@@ -510,11 +615,24 @@ export default function Header() {
                 id="header-search-md"
                 type="search"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setSuggestOpen(true);
+                }}
+                onFocus={() => setSuggestOpen(true)}
+                onKeyDown={(e) => handleSearchKeyDown(e, mdSuggestRef)}
                 placeholder="Search wellness products…"
                 autoFocus
                 autoComplete="off"
                 className="w-full rounded-full border border-wline bg-wcard px-4 pl-9 py-2.5 text-[13.5px] text-wink placeholder:text-wmuted"
+              />
+              <SearchSuggestions
+                ref={mdSuggestRef}
+                query={searchQuery}
+                open={suggestOpen}
+                isSignedIn={!!user}
+                onNavigate={handleSuggestionNavigate}
+                className="top-full left-0"
               />
             </div>
             <button
@@ -558,10 +676,20 @@ export default function Header() {
               {/* Menu header */}
               <div className="flex items-center justify-between px-5 py-[18px] border-b border-wline shrink-0">
                 <div className="flex items-center gap-1.5">
-                  <LeafMark size={20} dot={false} />
-                  <span className="font-display text-[15px] tracking-[0.18em] font-medium text-wgreen pl-[0.18em]">
-                    WELLVIA
-                  </span>
+                  {config.logo_url ? (
+                    <img
+                      src={mediaUrl(config.logo_url)}
+                      alt={config.brand_name}
+                      className="max-h-6 w-auto object-contain"
+                    />
+                  ) : (
+                    <>
+                      <LeafMark size={20} dot={false} />
+                      <span className="font-display text-[15px] tracking-[0.18em] font-medium text-wgreen pl-[0.18em]">
+                        {config.brand_name}
+                      </span>
+                    </>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -574,8 +702,16 @@ export default function Header() {
               </div>
 
               {/* Search in mobile menu */}
+              {/* `relative` so the suggestions panel anchors to the form and
+                  overlays the nav below, rather than pushing it down and
+                  squeezing the drawer's scroll region. */}
               <div className="px-5 py-4 border-b border-wline shrink-0">
-                <form onSubmit={handleSearch} className="flex gap-2" role="search">
+                <form
+                  onSubmit={handleSearch}
+                  onBlur={handleSearchBlur}
+                  className="relative flex gap-2"
+                  role="search"
+                >
                   <label htmlFor="mobile-search" className="sr-only">
                     Search products
                   </label>
@@ -583,7 +719,12 @@ export default function Header() {
                     id="mobile-search"
                     type="search"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setSuggestOpen(true);
+                    }}
+                    onFocus={() => setSuggestOpen(true)}
+                    onKeyDown={(e) => handleSearchKeyDown(e, mobileSuggestRef)}
                     placeholder="Search…"
                     autoComplete="off"
                     className="flex-1 rounded-full border border-wline bg-wpaper px-4 py-2 text-[13.5px] text-wink placeholder:text-wmuted"
@@ -594,22 +735,41 @@ export default function Header() {
                   >
                     Go
                   </button>
+                  <SearchSuggestions
+                    ref={mobileSuggestRef}
+                    query={searchQuery}
+                    open={suggestOpen}
+                    isSignedIn={!!user}
+                    onNavigate={handleSuggestionNavigate}
+                    className="top-full left-0 max-h-[60vh] overflow-y-auto"
+                  />
                 </form>
               </div>
 
+              {/* Scrollable body: primary nav AND the account block share ONE
+                  scroll region.
+                  Previously <nav> was the only flex-1 overflow-y-auto element
+                  while the account block sat below it as shrink-0. With an
+                  avatar plus up to 7 account rows pinned, the nav was starved to
+                  a ~165px window for ~192px of links, so the last item ("About")
+                  was clipped behind a stubby nested scrollbar and looked broken.
+                  Scrolling the whole body — the way the Amazon/Flipkart drawers
+                  behave — means no menu item can ever be hidden by a taller
+                  account section, at any viewport height. */}
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
               {/* Nav links */}
               <nav
-                className="flex flex-col px-5 py-4 gap-1 overflow-y-auto flex-1"
+                className="flex flex-col px-5 py-4 gap-1"
                 aria-label="Mobile navigation"
               >
-                {NAV.map((n) => {
+                {navItems.map((n) => {
                   if (n.megaMenu) {
                     // "Shop" row is an accordion trigger on mobile — it toggles
                     // the category list open/closed instead of navigating away.
                     // The "All Products →" link inside the panel is what
                     // actually navigates to /products.
                     return (
-                      <div key={n.to}>
+                      <div key={`${n.label}-${n.to}`}>
                         <button
                           type="button"
                           onClick={() => setMobileShopOpen((v) => !v)}
@@ -654,7 +814,7 @@ export default function Header() {
                   }
                   return (
                     <NavLink
-                      key={n.to}
+                      key={`${n.label}-${n.to}`}
                       to={n.to}
                       end={n.end}
                       onClick={() => {
@@ -676,8 +836,9 @@ export default function Header() {
                 })}
               </nav>
 
-              {/* Account / sign-in section */}
-              <div className="border-t border-wline px-5 py-4 shrink-0">
+              {/* Account / sign-in section — inside the shared scroller above,
+                  so it no longer competes with the nav for vertical space. */}
+              <div className="border-t border-wline px-5 py-4">
                 {user ? (
                   <div>
                     {/* Avatar + name */}
@@ -735,6 +896,7 @@ export default function Header() {
                     Sign In
                   </Link>
                 )}
+              </div>
               </div>
             </motion.div>
           </>

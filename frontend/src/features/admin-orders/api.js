@@ -18,9 +18,12 @@ export const adminOrdersApi = {
     apiClient
       .post(`/orders/admin/${id}/cancel`, { reason })
       .then((r) => r.data),
-  refund: (id, reason) =>
+  // `force_manual: true` skips the gateway call and only records the refund —
+  // for operators who already reversed the payment in the gateway dashboard.
+  // Default (false) performs a REAL refund through the payment gateway.
+  refund: (id, { reason, force_manual = false } = {}) =>
     apiClient
-      .post(`/orders/admin/${id}/refund`, { reason })
+      .post(`/orders/admin/${id}/refund`, { reason, force_manual })
       .then((r) => r.data),
   updateNotes: (id, internal_notes) =>
     apiClient

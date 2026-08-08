@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { usePaymentStatus } from '@/features/payments/hooks.js';
-import { formatPrice, cn } from '@/lib/utils.js';
+import { trackPurchase } from '@/features/tracking/metaPixel.js';
+import { formatPrice } from '@/lib/utils.js';
 import { Check, CloseIcon } from '@/components/storefront/Icons.jsx';
 import Logo from '@/components/storefront/Logo.jsx';
 
@@ -12,17 +14,68 @@ import Logo from '@/components/storefront/Logo.jsx';
 
 const TERMINAL_STATES = new Set(['paid', 'cancelled', 'refunded']);
 
+/**
+ * react-query refetchInterval callback for the status poll.
+ *
+ * Exported for tests (regression: 2026-08-03 an errored poll — 401 after the
+ * gateway redirect landed on an expired session — refetched every 1.5s
+ * forever; the customer stared at "Confirming your payment" while each 401
+ * tick also cleared their stored session via the apiClient interceptor).
+ * Error and terminal states stop the poll; anything else keeps it at 1.5s.
+ */
+export function pollIntervalFor(query) {
+  if (query.state.status === 'error') return false;
+  const status = query.state.data?.order_status;
+  return status && TERMINAL_STATES.has(status) ? false : 1500;
+}
+
 export default function PaymentReturnPage() {
   const [params] = useSearchParams();
   const mtid = params.get('mtid');
 
   const { data, isLoading, isError } = usePaymentStatus(mtid, {
     enabled: !!mtid,
-    refetchInterval: (query) => {
-      const status = query.state.data?.order_status;
-      return status && TERMINAL_STATES.has(status) ? false : 1500;
-    },
+    refetchInterval: pollIntervalFor,
   });
+
+  const status = data?.order_status;
+  const isPaid = status === 'paid';
+  const isFailed = status === 'cancelled' || status === 'refunded';
+  const isPending = !status || status === 'pending';
+
+  // Meta `Purchase` — the single revenue event for EVERY flow. Razorpay, the
+  // mock gateway and COD all land here: COD transitions straight to PAID
+  // server-side and is redirected to PAYMENT_RETURN_URL like the rest
+  // (payment_service.py), so there is no separate COD purchase path to wire.
+  //
+  // Gated on the SERVER's paid status, never on arriving at this URL — a
+  // success-page URL is not proof of payment, and this page is reachable from
+  // browser history.
+  //
+  // Declared ABOVE the `!mtid` early return: a hook after a conditional return
+  // is called in a different order on the render where it bails, which is a
+  // rules-of-hooks violation. The effect no-ops on that path instead.
+  //
+  // `data` is a fresh object on every poll tick, so this effect re-runs roughly
+  // every 1.5s until the status is terminal. That is fine and deliberate:
+  // `trackPurchase` is idempotent per transaction (sessionStorage marker plus
+  // Meta's own eventID dedupe), so the repeats cost nothing and the alternative
+  // — hand-picking scalar dependencies — silently drifts from what the effect
+  // actually reads.
+  useEffect(() => {
+    if (!isPaid || !mtid) return;
+    trackPurchase(
+      {
+        id: data?.order_id,
+        total_amount: data?.total_amount,
+        currency: data?.currency,
+      },
+      // The status response carries no order_number, so the default ORD{id} rule
+      // would not match what the server calls this order. The merchant
+      // transaction id is known verbatim on both sides.
+      { transactionId: mtid },
+    );
+  }, [isPaid, mtid, data]);
 
   if (!mtid) {
     return (
@@ -31,11 +84,6 @@ export default function PaymentReturnPage() {
       </FullScreenWrap>
     );
   }
-
-  const status = data?.order_status;
-  const isPaid = status === 'paid';
-  const isFailed = status === 'cancelled' || status === 'refunded';
-  const isPending = !status || status === 'pending';
 
   return (
     <FullScreenWrap>

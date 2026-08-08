@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview --port 5173",
     "lint": "eslint src --ext .js,.jsx",
-    "test": "vitest"
+    "test": "vitest",
+    "test:e2e": "node --test \"e2e/*.test.mjs\""
   },
   "dependencies": {
     "@fontsource/cinzel": "^5.2.8",
@@ -35,11 +36,15 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.17.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^14.0.0",
+    "jsdom": "^30.0.1",
     "playwright": "^1.60.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",

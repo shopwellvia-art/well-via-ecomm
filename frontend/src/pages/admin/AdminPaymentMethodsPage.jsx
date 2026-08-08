@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/Input.jsx';
 import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { cn } from '@/lib/utils.js';
-import { fadeIn, fadeUp, staggerContainer, listStagger, scaleIn } from '@/lib/motion.js';
+import { fadeIn, fadeUp, listStagger } from '@/lib/motion.js';
 import {
   usePaymentMethods,
   useUpdatePaymentMethod,

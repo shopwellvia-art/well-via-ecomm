@@ -1,22 +1,23 @@
 """Request/response shapes for the COD OTP endpoints."""
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+from app.schemas.base import AppSchema
 
 
-class CodOtpSendRequest(BaseModel):
+class CodOtpSendRequest(AppSchema):
     phone: str = Field(min_length=8, max_length=20)
 
 
-class CodOtpSendResponse(BaseModel):
+class CodOtpSendResponse(AppSchema):
     phone_masked: str
     expires_in_seconds: int
 
 
-class CodOtpVerifyRequest(BaseModel):
+class CodOtpVerifyRequest(AppSchema):
     phone: str = Field(min_length=8, max_length=20)
     code: str = Field(min_length=4, max_length=8)
 
 
-class CodOtpVerifyResponse(BaseModel):
+class CodOtpVerifyResponse(AppSchema):
     verified: bool = True

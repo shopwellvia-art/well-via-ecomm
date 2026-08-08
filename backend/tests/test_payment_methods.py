@@ -48,6 +48,7 @@ from app.schemas.payment import CheckoutRequest
 from app.schemas.payment_method import PaymentMethodUpdate
 from app.services.payment_method_config_service import PaymentMethodConfigService
 from app.services.payment_service import PaymentService
+from tests.conftest import TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +165,7 @@ def _get_admin_token(client: TestClient) -> str:
     try:
         resp = client.post(
             "/api/v1/auth/login",
-            json={"email": "vinay@gmail.com", "password": "vinay@123"},
+            json={"email": TEST_ADMIN_EMAIL, "password": TEST_ADMIN_PASSWORD},
         )
         assert resp.status_code == 200, f"Login failed: {resp.text}"
         return resp.json()["access_token"]
@@ -369,6 +370,48 @@ class TestPaymentMethodConfigServiceUpdate:
             creds_after = svc.credentials_for("razorpay")
             assert "key_id" not in creds_after, (
                 "key_id should be removed when credential value is empty string"
+            )
+        finally:
+            _reset_razorpay(db)
+            db.close()
+
+    def test_credential_values_are_trimmed_on_save(self) -> None:
+        """Pasted credentials often carry a trailing newline/space; storing
+        them verbatim poisons the secret and the gateway rejects every call
+        with an auth error (live incident 2026-08-03: Razorpay 401
+        BAD_REQUEST_ERROR "Authentication failed" from a trailing space on
+        key_secret). Values must be stripped on save, and a whitespace-only
+        value must behave like "" (delete the key)."""
+        db = SessionLocal()
+        try:
+            _reset_razorpay(db)
+            svc = PaymentMethodConfigService(db)
+
+            svc.update(
+                "razorpay",
+                PaymentMethodUpdate(
+                    credentials={
+                        "key_id": "  rzp_test_trimme\n",
+                        "key_secret": "sekret_value \n",
+                    }
+                ),
+            )
+            creds = svc.credentials_for("razorpay")
+            assert creds["key_id"] == "rzp_test_trimme", (
+                f"key_id should be stored trimmed; got {creds['key_id']!r}"
+            )
+            assert creds["key_secret"] == "sekret_value", (
+                "key_secret should be stored trimmed"
+            )
+
+            # Whitespace-only value deletes the key, same as "".
+            svc.update(
+                "razorpay",
+                PaymentMethodUpdate(credentials={"key_secret": " \n "}),
+            )
+            creds = svc.credentials_for("razorpay")
+            assert "key_secret" not in creds, (
+                "whitespace-only credential value should delete the key"
             )
         finally:
             _reset_razorpay(db)
@@ -582,7 +625,7 @@ class TestCheckoutWithGatewayCode:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, redirect_url = svc.checkout(user, req)
+            order, mtid, redirect_url, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
 
             assert order.gateway_code == "mock", (
@@ -633,7 +676,7 @@ class TestCheckoutWithGatewayCode:
                 # gateway_code omitted — auto-resolve path
             )
             svc = PaymentService(db)
-            order, _, _ = svc.checkout(user, req)
+            order, _, _, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
 
             assert order.gateway_code == "mock", (

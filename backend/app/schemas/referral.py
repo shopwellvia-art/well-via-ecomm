@@ -1,11 +1,12 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
 from app.models.referral import ReferralStatus
+from app.schemas.base import AppSchema
 
 
-class ReferralBrief(BaseModel):
+class ReferralBrief(AppSchema):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -16,7 +17,7 @@ class ReferralBrief(BaseModel):
     completed_at: datetime | None
 
 
-class MyReferralOverview(BaseModel):
+class MyReferralOverview(AppSchema):
     """Payload for /loyalty/me/referral — everything the rewards page needs."""
 
     code: str
@@ -30,14 +31,14 @@ class MyReferralOverview(BaseModel):
     friend_welcome_min_order: float
 
 
-class ReferralListPage(BaseModel):
+class ReferralListPage(AppSchema):
     items: list[ReferralBrief]
     total: int
     page: int
     page_size: int
 
 
-class AdminReferralRow(BaseModel):
+class AdminReferralRow(AppSchema):
     """Admin sees both sides in full (no obfuscation)."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -52,14 +53,14 @@ class AdminReferralRow(BaseModel):
     completed_at: datetime | None
 
 
-class AdminReferralListPage(BaseModel):
+class AdminReferralListPage(AppSchema):
     items: list[AdminReferralRow]
     total: int
     page: int
     page_size: int
 
 
-class ExpirySummary(BaseModel):
+class ExpirySummary(AppSchema):
     users_processed: int
     rows_expired: int
     points_expired: int

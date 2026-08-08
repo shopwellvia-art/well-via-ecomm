@@ -374,23 +374,37 @@ class ReturnService:
                     req.id, order.id, exc,
                 )
             if provider is not None and hasattr(provider, "refund"):
-                result = provider.refund(
-                    RefundRequest(
-                        order_id=order.id,
-                        amount_minor=amount_minor,
-                        currency=currency,
-                        merchant_transaction_id=order.payment_intent_id or "",
-                        refund_reference=refund_ref,
-                        original_transaction_id=(
-                            gateway_leg.gateway_payment_id
-                            or order.payment_provider_ref
-                        ),
-                        reason=f"Return #{req.id}: {req.reason}",
+                try:
+                    result = provider.refund(
+                        RefundRequest(
+                            order_id=order.id,
+                            amount_minor=amount_minor,
+                            currency=currency,
+                            merchant_transaction_id=order.payment_intent_id or "",
+                            refund_reference=refund_ref,
+                            original_transaction_id=(
+                                gateway_leg.gateway_payment_id
+                                or order.payment_provider_ref
+                            ),
+                            reason=f"Return #{req.id}: {req.reason}",
+                        )
                     )
-                )
-                refund_method = order.gateway_code
-                refund_reference = result.refund_id or refund_ref
-                raw = result.raw
+                except Exception as exc:  # noqa: BLE001 — provider raised
+                    # Providers promise never to raise, but a misbehaving one
+                    # must not abort the return transition — map it to the
+                    # same manual-refund fallback as a missing provider
+                    # (refund_method stays "manual", ref stays ours).
+                    result = None
+                    logger.warning(
+                        "return %s: gateway %s refund call raised %s: %s — "
+                        "recording a manual refund instead (ref=%s)",
+                        req.id, order.gateway_code, type(exc).__name__, exc,
+                        refund_ref,
+                    )
+                if result is not None:
+                    refund_method = order.gateway_code
+                    refund_reference = result.refund_id or refund_ref
+                    raw = result.raw
             else:
                 # Gateway integrated for charging but not yet for refunds — route
                 # to the original method on the books; an operator completes the

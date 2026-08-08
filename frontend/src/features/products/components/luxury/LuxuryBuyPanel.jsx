@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { cn, formatPrice } from '@/lib/utils.js';
 import { useAddToCart } from '@/features/cart/hooks.js';
+import { useAddedToCartModal } from '@/features/cart/addedModalStore.js';
 import { usePublicSettings } from '@/features/settings/public.js';
 import { WishlistButton } from '@/features/wishlist/WishlistButton.jsx';
 import { Button } from '@/components/storefront/ui/Button.jsx';
@@ -60,6 +61,7 @@ function toArray(value) {
 export function LuxuryBuyPanel({ product }) {
   const navigate = useNavigate();
   const addToCart = useAddToCart();
+  const showAdded = useAddedToCartModal((s) => s.showAdded);
   const { data: publicCfg } = usePublicSettings();
 
   const maxQty = Math.max(1, product.stock);
@@ -86,11 +88,21 @@ export function LuxuryBuyPanel({ product }) {
     // login gate; the cart merges into the server cart at checkout login.
     setAdded(false);
     addToCart.mutate(
-      { productId: product.id, quantity: qty },
+      // `price` rides along for the Meta AddToCart value — see useAddToCart.
+      { productId: product.id, quantity: qty, price: product.price },
       {
         onSuccess: () => {
+          // The button's own 2s "Added ✓" state stays: it confirms which
+          // control was pressed, which the centred popup cannot.
           setAdded(true);
           setTimeout(() => setAdded(false), 2000);
+          showAdded({
+            id: product.id,
+            name: product.name,
+            image_url: product.image_url,
+            price: product.price,
+            quantity: qty,
+          });
         },
       },
     );

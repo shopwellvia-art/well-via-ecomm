@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Page } from '@/components/layout/Page.jsx';
 import ProductGrid from '@/components/storefront/ProductGrid.jsx';
@@ -22,6 +22,30 @@ export default function CategoriesPage() {
   const combosQuery = useProducts(tab === 'combos' ? { is_combo: true, page_size: 24 } : undefined);
   const combos = combosQuery.data?.items ?? [];
 
+  // One-level grouping: parents keep their card, children list beneath it.
+  // A child whose parent is missing from the list — or is itself a subcategory
+  // — renders as top-level so no category can ever disappear from the grid.
+  const categoryGroups = useMemo(() => {
+    const rootIds = new Set(
+      categories.filter((c) => c.parent_id == null).map((c) => c.id),
+    );
+    const childrenOf = new Map();
+    const parents = [];
+    for (const c of categories) {
+      if (c.parent_id != null && rootIds.has(c.parent_id)) {
+        const siblings = childrenOf.get(c.parent_id) ?? [];
+        siblings.push(c);
+        childrenOf.set(c.parent_id, siblings);
+      } else {
+        parents.push(c);
+      }
+    }
+    return parents.map((parent) => ({
+      parent,
+      children: childrenOf.get(parent.id) ?? [],
+    }));
+  }, [categories]);
+
   return (
    <Page bleed>
   {/* ── HERO ── */}
@@ -34,7 +58,7 @@ export default function CategoriesPage() {
 
     <div className="absolute inset-0 bg-black/20" />
 
-<div className="relative z-10 max-w-[1320px] mx-auto px-5 sm:px-10 lg:px-16 pt-0 sm:pt-10 pb-10 sm:pb-20 -translate-y-10 sm:translate-y-0">
+<div className="relative z-10 max-w-[1320px] mx-auto px-5 sm:px-10 lg:px-16 pt-0 sm:pt-4 pb-10 sm:pb-20 -translate-y-10 sm:-translate-y-4">
 
   <h1 className="font-cormorant font-semibold text-black text-[22px] sm:text-[clamp(30px,4.2vw,50px)] leading-[1.1] m-0 mb-1 sm:mb-2 max-w-[180px] sm:max-w-xl">
     Your Perfect Wellness Bundle.
@@ -46,7 +70,7 @@ export default function CategoriesPage() {
 
   <Link
     to="/products?offers=combo"
-    className="mt-3 sm:mt-5 inline-block rounded-full px-4 sm:px-6 py-2 sm:py-3 text-[10px] sm:text-[13px] tracking-wide text-white no-underline transition-colors"
+    className="mt-2.5 sm:mt-5 -ml-0.5 sm:ml-0 inline-block rounded-full px-2.5 sm:px-6 py-1 sm:py-3 text-[8.5px] sm:text-[13px] tracking-wide text-white no-underline transition-colors"
     style={{ backgroundColor: "#08112C" }}
   >
     Shop your combos →
@@ -93,25 +117,39 @@ export default function CategoriesPage() {
               Categories are being set up. Check back shortly.
             </p>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-5">
-              {categories.map((c) => (
-                <Link
-                  key={c.id}
-                  to={`/products?category_ids=${c.id}`}
-                  className="group bg-wcard border border-wline rounded-xl2 overflow-hidden no-underline transition-transform duration-200 hover:-translate-y-[4px] hover:shadow-[0_24px_50px_-28px_rgba(40,30,10,0.42)]"
-                >
-                  <div
-                    className="relative"
-                    style={{ background: 'linear-gradient(160deg,#efe9df,#e4dccd)' }}
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-5 items-start">
+              {categoryGroups.map(({ parent, children }) => (
+                <div key={parent.id} className="flex flex-col gap-3">
+                  <Link
+                    to={`/products?category_ids=${parent.id}`}
+                    className="group bg-wcard border border-wline rounded-xl2 overflow-hidden no-underline transition-transform duration-200 hover:-translate-y-[4px] hover:shadow-[0_24px_50px_-28px_rgba(40,30,10,0.42)]"
                   >
-                    <WImage src={c.image_url} alt="" className="w-full h-[220px]" />
-                  </div>
-                  <div className="p-4 text-center">
-                    <p className="font-wserif text-[19px] text-wink m-0 group-hover:text-wgreen transition-colors">
-                      {c.name}
-                    </p>
-                  </div>
-                </Link>
+                    <div
+                      className="relative"
+                      style={{ background: 'linear-gradient(160deg,#efe9df,#e4dccd)' }}
+                    >
+                      <WImage src={parent.image_url} alt="" className="w-full h-[220px]" />
+                    </div>
+                    <div className="p-4 text-center">
+                      <p className="font-wserif text-[19px] text-wink m-0 group-hover:text-wgreen transition-colors">
+                        {parent.name}
+                      </p>
+                    </div>
+                  </Link>
+                  {children.length > 0 && (
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {children.map((child) => (
+                        <Link
+                          key={child.id}
+                          to={`/products?category_ids=${child.id}`}
+                          className="font-outfit bg-wcard border border-wline rounded-full px-3.5 py-1.5 text-[13px] text-wink no-underline transition-colors hover:text-wgreen hover:border-wgreen/60"
+                        >
+                          {child.name}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           ))}

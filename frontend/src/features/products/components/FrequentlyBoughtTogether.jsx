@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Plus, ShoppingBag, Check, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/storefront/ui/Skeleton.jsx';
 import { useAddToCart } from '@/features/cart/hooks.js';
+import { useAddedToCartModal } from '@/features/cart/addedModalStore.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import { formatPrice } from '@/lib/utils.js';
 import { ProductMedia } from './ProductMedia.jsx';
@@ -14,6 +15,7 @@ import { ProductMedia } from './ProductMedia.jsx';
 export function FrequentlyBoughtTogether({ product, related, isLoading }) {
   const user = useAuthStore((s) => s.user);
   const addToCart = useAddToCart();
+  const showAdded = useAddedToCartModal((s) => s.showAdded);
   const [doneAt, setDoneAt] = useState(0);
   const [addError, setAddError] = useState(null);
 
@@ -58,10 +60,31 @@ export function FrequentlyBoughtTogether({ product, related, isLoading }) {
       return;
     }
     setAddError(null);
-    const ids = all.filter((p) => selected.has(p.id)).map((p) => p.id);
+    const chosen = all.filter((p) => selected.has(p.id));
     try {
-      await Promise.all(ids.map((productId) => addToCart.mutateAsync({ productId, quantity: 1 })));
+      // Mapped over the products, not the bare ids, so each add carries its
+      // price for the Meta AddToCart value — see useAddToCart.
+      await Promise.all(
+        chosen.map((p) =>
+          addToCart.mutateAsync({ productId: p.id, quantity: 1, price: p.price }),
+        ),
+      );
       setDoneAt(Date.now());
+      // A bundle add names the first product and counts the rest, rather than
+      // stacking one popup per line.
+      const [first, ...rest] = chosen;
+      if (first) {
+        showAdded(
+          {
+            id: first.id,
+            name: first.name,
+            image_url: first.image_url,
+            price: first.price,
+            quantity: 1,
+          },
+          { extraCount: rest.length },
+        );
+      }
     } catch {
       setAddError("Couldn't add items — please try again.");
     }

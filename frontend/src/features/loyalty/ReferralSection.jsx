@@ -69,7 +69,7 @@ function NativeShareButton({ url, friendAmount }) {
 
 export function ReferralSection() {
   const { data, isLoading, isError } = useMyReferralOverview();
-  const { data: list, isLoading: listLoading, isError: listError } = useMyReferrals({
+  const { data: list, isError: listError } = useMyReferrals({
     page: 1,
     page_size: 10,
   });

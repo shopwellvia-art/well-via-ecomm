@@ -108,16 +108,20 @@ class ProductService:
         )
 
     def bestsellers(self, *, limit: int = 8) -> list[Product]:
-        """Top sellers, with a graceful fallback for fresh catalogs.
+        """Top sellers, topped up with newest products when sales are sparse.
 
-        On a brand-new store with zero qualifying orders, returning an empty
-        list would make the homepage section disappear. Fall back to the most
-        recently added products instead, so the section is never empty.
+        On a young store only a few products have qualifying orders, and
+        ranking alone would render a near-empty homepage rail (a single card
+        when only one product has ever sold). Real bestsellers keep their
+        sales order at the front; the remaining slots fill with the most
+        recently added products so the rail always shows the catalog.
         """
         items = self.repo.bestsellers(limit=limit)
-        if items:
+        if len(items) >= limit:
             return items
-        return self.repo.newest(limit=limit)
+        ranked_ids = {p.id for p in items}
+        fill = [p for p in self.repo.newest(limit=limit) if p.id not in ranked_ids]
+        return items + fill[: limit - len(items)]
 
     def co_purchased(self, product_id: int, *, limit: int = 12) -> list[Product]:
         """Items bought in the same orders as this one. Falls back to related
@@ -230,6 +234,35 @@ class ProductService:
         self.db.flush()
         self._sync_primary(product)
         self.db.commit()
+        return self.get(product_id)
+
+    def reorder_images(self, product_id: int, image_ids: list[int]) -> Product:
+        """Rewrite gallery positions from `image_ids`, first id first.
+
+        The payload must be the product's full image set — a partial list would
+        leave the omitted images sharing stale positions with the reordered
+        ones, and the gallery order would then depend on row insertion order.
+        """
+        product = self.get(product_id)
+        current = {img.id for img in product.images}
+        given = list(image_ids)
+        if len(set(given)) != len(given):
+            raise ValidationError("image_ids contains duplicate ids")
+        if set(given) != current:
+            raise ValidationError(
+                "image_ids must list every image of this product exactly once"
+            )
+
+        by_id = {img.id: img for img in product.images}
+        for position, image_id in enumerate(given):
+            by_id[image_id].position = position
+        self.db.flush()
+        self._sync_primary(product)
+        self.db.commit()
+        # Sessions run with expire_on_commit=False, and a selectinload never
+        # overwrites an already-loaded collection — without this expire the
+        # response would echo the old order back while the DB holds the new one.
+        self.db.expire(product, ["images"])
         return self.get(product_id)
 
     def set_primary_image(self, product_id: int, image_id: int) -> Product:

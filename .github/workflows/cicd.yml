@@ -7,17 +7,30 @@
 #  whole thing end to end and the live EC2 stack comes back up on the new code.
 #
 #      push / merge to `production`
-#         ├─ frontend        (npm ci, lint, build, vitest)
-#         └─ backend-tests   (mysql 8 + redis 7 services, alembic, pytest)
+#         └─ frontend        (npm ci, lint, vitest, build)
 #                    │
-#                    ▼  BOTH must be green
-#              build-and-push (GHCR: :latest + :<sha>)
+#                    ▼  must be green
+#              build-and-push (GHCR: :latest + :<sha>, FULL no-cache rebuild)
 #                    │
 #                    ▼
-#                 deploy     (scp compose -> EC2, pull, recreate backend+frontend,
+#                 deploy     (scp compose -> EC2, pull, force-recreate
+#                             backend+frontend, delete the superseded images,
 #                             then verify both really run the new :<sha>)
 #
-#  A red test run BLOCKS the deploy — including manual `workflow_dispatch` runs.
+#  A red frontend run BLOCKS the deploy — including manual `workflow_dispatch`
+#  runs.
+#
+#  NOTE: the backend integration suite (mysql 8 + redis 7 services, alembic,
+#  pytest) was REMOVED from this pipeline on 2026-08-04 by request. Nothing here
+#  exercises the backend before it reaches the live EC2 — not the payment config
+#  guard, not the Alembic lineage, not the API. Run it locally before pushing to
+#  `production`:
+#      cd backend && python -m pytest tests/ -v
+#
+#  IMAGES ARE REBUILT FROM SCRATCH every run: `no-cache: true` + `pull: true`,
+#  and no GHA layer cache. Slower (~6-10 min) but guarantees a fresh `npm ci` /
+#  `pip install` and a current base image on every deploy.
+#
 #  Schema migrations are NEVER run by this pipeline; the shared remote MySQL is
 #  on a migration lineage this repo does not contain. See DEPLOY.md §6.
 # =============================================================================
@@ -41,175 +54,60 @@ permissions:
 
 jobs:
   # ===========================================================================
-  #  QUALITY GATE 1 — the React/Vite app must install, lint, build and test.
+  #  QUALITY GATE 1 — the React/Vite app must install, lint, test and BUILD.
+  #
+  #  All four steps are blocking. This also doubles as the cheap pre-flight:
+  #  it fails a broken frontend in ~2 min instead of ~8 min into the no-cache
+  #  Docker build.
   # ===========================================================================
   frontend:
-    name: Frontend build & tests
+    name: Frontend lint, tests & build
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          # 22 (LTS), not 20: the jsdom-env vitest files (pageMeta,
+          # razorpayCheckout) pull an undici whose webidl.util needs a newer
+          # Node — on 20 jsdom fails to LOAD, vitest reports the remaining
+          # files green and still exits 1 on the unhandled loader errors.
+          # The frontend IMAGE build stays on node:20-alpine (vite build only,
+          # no jsdom) — this pin is test-environment-only.
+          node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
-      # Non-blocking: ESLint v9 needs a flat `eslint.config.js` that this repo
-      # does not have yet, so the step currently CANNOT pass. Once that config
-      # lands, delete `continue-on-error` to make lint a required check.
-      - name: Lint (non-blocking — no eslint flat config yet)
+      # A real, blocking gate (no continue-on-error).
+      - name: Lint (ESLint)
         run: npm run lint
-        continue-on-error: true
 
-      # The real gate: if it doesn't build, nothing ships.
+      # `vitest run` = single pass, no watch mode. Called via npx rather than
+      # the package.json `test` script so a script change can never silently
+      # re-enable watch mode on the runner.
+      - name: Unit tests (Vitest)
+        run: npx vitest run
+
+      # If it doesn't build, nothing ships.
       - name: Build
         run: npm run build
 
-      # --run             -> single pass, no watch mode.
-      # --passWithNoTests -> tolerate the current zero-test state; drop this
-      #                      flag once real tests exist so an empty suite can't
-      #                      pass as a false green.
-      - name: Unit tests (Vitest)
-        run: npm test -- --run --passWithNoTests
-
   # ===========================================================================
-  #  QUALITY GATE 2 — the backend integration suite.
+  #  DELIVERY 1 — build both images FROM SCRATCH and push them to GHCR.
   #
-  #  These are real integration tests (live DB via SessionLocal + FastAPI
-  #  TestClient), so they need an actual MySQL + Redis. We use GitHub Actions
-  #  `services:` containers rather than a compose overlay, which is why this
-  #  repo needs only ONE compose file (the production one).
-  #
-  #  The database here is a THROWAWAY container that is destroyed with the
-  #  runner. backend/tests/conftest.py hard-fails the session unless it is
-  #  pointed at a local host + a non-production ENVIRONMENT, so this can never
-  #  touch the shared remote MySQL.
-  # ===========================================================================
-  backend-tests:
-    name: Backend tests (MySQL + Redis)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-
-    services:
-      mysql:
-        image: mysql:8
-        # Throwaway CI credentials — must match the backend/.env written below.
-        # mysql:8 auto-grants this user full rights on MYSQL_DATABASE, which the
-        # Alembic migrations need for DDL.
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: ecommerce
-          MYSQL_USER: ecom
-          MYSQL_PASSWORD: ecom_password
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=30
-
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=5s
-          --health-timeout=3s
-          --health-retries=20
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            backend/requirements.txt
-            backend/requirements-dev.txt
-
-      # requirements-dev.txt pulls in requirements.txt plus pytest. The DB
-      # driver is PyMySQL (pure Python), so no system build deps are needed.
-      - name: Install dependencies
-        run: pip install --no-cache-dir -r requirements-dev.txt
-
-      # The service's healthcheck can go green a moment before MySQL is really
-      # accepting application connections. Poll with the same driver the app
-      # uses so we fail fast with a clear message instead of mid-migration.
-      - name: Wait for MySQL to accept connections
-        run: |
-          python - <<'PY'
-          import sys, time
-          import pymysql
-          for attempt in range(1, 41):
-              try:
-                  pymysql.connect(host="127.0.0.1", port=3306, user="ecom",
-                                  password="ecom_password", database="ecommerce",
-                                  connect_timeout=3).close()
-                  print(f"MySQL ready after {attempt} attempt(s)")
-                  sys.exit(0)
-              except Exception as exc:
-                  print(f"attempt {attempt}: {exc}")
-                  time.sleep(3)
-          sys.exit("MySQL did not become reachable in time")
-          PY
-
-      # backend/.env is gitignored, so synthesize a CI one. ENVIRONMENT must NOT
-      # be "production" (the mock payment webhook several tests use is hard-
-      # disabled there); "ci" is one of the environments conftest.py allows.
-      - name: Write CI backend/.env
-        run: |
-          cat > .env <<'EOF'
-          ENVIRONMENT=ci
-          DEBUG=true
-          SECRET_KEY=ci-only-not-a-real-secret-rotate-me-0123456789abcdef
-          ACCESS_TOKEN_EXPIRE_MINUTES=30
-          REFRESH_TOKEN_EXPIRE_DAYS=7
-          MYSQL_HOST=127.0.0.1
-          MYSQL_PORT=3306
-          MYSQL_USER=ecom
-          MYSQL_PASSWORD=ecom_password
-          MYSQL_DB=ecommerce
-          REDIS_URL=redis://127.0.0.1:6379/0
-          CORS_ORIGINS=["http://localhost:5173"]
-          EMAIL_BACKEND=console
-          STORAGE_BACKEND=local
-          FRONTEND_URL=http://localhost:5173
-          PAYMENT_RETURN_URL=http://localhost:5173/payments/return
-          EOF
-
-      # Safe here (and ONLY here): this MySQL is an empty throwaway container.
-      # The migrations also seed the 26 payment_methods rows + COD/system
-      # settings that the suite relies on.
-      - name: Apply migrations
-        run: alembic upgrade head
-
-      # Run the FULL suite rather than a hand-maintained file list, so newly
-      # added tests are picked up automatically.
-      - name: Run test suite
-        run: python -m pytest tests/ -v
-
-  # ===========================================================================
-  #  DELIVERY 1 — build both images and push them to GHCR.
-  #
-  #  Gated on BOTH quality jobs. The `if:` is belt-and-braces: the workflow only
+  #  Gated on the frontend job. The `if:` is belt-and-braces: the workflow only
   #  triggers on `production` anyway, but a `workflow_dispatch` can be launched
   #  from any branch in the Actions UI, and that must never reach the live host.
   # ===========================================================================
   build-and-push:
-    name: Build & push images to GHCR
-    needs: [frontend, backend-tests]
+    name: Build & push images to GHCR (no cache)
+    needs: [frontend]
     if: github.ref == 'refs/heads/production'
     runs-on: ubuntu-latest
     permissions:
@@ -219,7 +117,7 @@ jobs:
       backend_image: ${{ steps.images.outputs.backend }}
       frontend_image: ${{ steps.images.outputs.frontend }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # GHCR repository paths must be lowercase; the GitHub owner name is not
       # guaranteed to be, so normalise it once and reuse.
@@ -249,13 +147,23 @@ jobs:
       # Both images are tagged twice: :latest (what a bare `docker compose up`
       # on the host pulls) and :<sha> (so every deploy is reproducible and
       # rollback is just IMAGE_TAG=<old-sha>).
-      - name: Build & push backend
+      #
+      # FULL REBUILD, deliberately:
+      #   no-cache: true -> every layer re-executes; `pip install` / `npm ci`
+      #                     really re-resolve instead of restoring a cached layer.
+      #   pull: true     -> re-pull the FROM base image so a patched
+      #                     python/node/nginx base is actually picked up.
+      #   No cache-from/cache-to: there is no GHA layer cache to fall back on.
+      # Costs ~6-10 min per run. Delete these two flags (and restore
+      # cache-from/cache-to: type=gha) if that ever becomes too slow.
+      - name: Build & push backend (clean rebuild)
         uses: docker/build-push-action@v6
         with:
           context: ./backend
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: true
+          pull: true
+          provenance: false
           build-args: |
             GIT_SHA=${{ github.sha }}
             BUILD_TIME=${{ steps.meta.outputs.build_time }}
@@ -263,13 +171,14 @@ jobs:
             ${{ steps.images.outputs.backend }}:latest
             ${{ steps.images.outputs.backend }}:${{ github.sha }}
 
-      - name: Build & push frontend
+      - name: Build & push frontend (clean rebuild)
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: true
+          pull: true
+          provenance: false
           build-args: |
             GIT_SHA=${{ github.sha }}
             BUILD_TIME=${{ steps.meta.outputs.build_time }}
@@ -285,7 +194,7 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Keep the host's compose file in sync with the commit we just built.
       - name: Copy compose file to EC2
@@ -297,7 +206,7 @@ jobs:
           source: docker-compose.yml
           target: ${{ secrets.EC2_APP_DIR }}
 
-      - name: Pull new images and restart the containers
+      - name: Pull new images, recreate containers, delete the old images
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -308,8 +217,26 @@ jobs:
             set -euo pipefail
             cd "$APP_DIR"
 
-            # Authenticate so the private GHCR packages can be pulled.
-            echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            # Authenticate so the private GHCR packages can be pulled. Both
+            # packages are Private, so this is NOT optional — without it the
+            # `docker compose pull` below dies with "denied: denied".
+            #
+            # GHCR_USER must be the GitHub *user account* that owns GHCR_PAT,
+            # NOT the org (`shopwellvia-art`) — an org name cannot log in.
+            if [ -z "${GHCR_USER:-}" ] || [ -z "${GHCR_PAT:-}" ]; then
+              echo "FAIL: GHCR_USER and/or GHCR_PAT repo secret is empty."
+              echo "  GHCR_USER = your GitHub username (e.g. 9741Prajwalj)"
+              echo "  GHCR_PAT  = classic PAT with read:packages"
+              exit 1
+            fi
+            if ! echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin; then
+              echo "FAIL: GHCR rejected the login for user '$GHCR_USER'."
+              echo "  'denied'      -> PAT is missing the read:packages scope,"
+              echo "                   is a fine-grained PAT, or was never"
+              echo "                   SSO-authorised for the shopwellvia-art org."
+              echo "  'unauthorized'-> PAT is wrong or expired. Regenerate it."
+              exit 1
+            fi
 
             # Leftover from the old multi-file layout; this repo now ships a
             # single docker-compose.yml. Harmless if already gone.
@@ -323,20 +250,63 @@ jobs:
             # container; per-service config still comes from backend/.env.)
             printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG" > .env
 
-            # Fetch the newly built backend + frontend images.
-            docker compose pull
+            # Record which images the CURRENTLY running app containers are on,
+            # so we can delete exactly those once the new ones are live. Taken
+            # BEFORE the pull — afterwards the old :latest tag is gone.
+            old_images=""
+            for svc in backend frontend; do
+              cid="$(docker compose ps -q "$svc" 2>/dev/null || true)"
+              if [ -n "$cid" ]; then
+                old_images="$old_images $(docker inspect -f '{{.Image}}' "$cid")"
+              fi
+            done
+            echo "currently running image ids:$old_images"
 
-            # Recreate the containers. Because IMAGE_TAG changed, the backend and
-            # frontend image references differ from what is running, so compose
-            # tears those two down and starts them on the new code. redis is
-            # untouched (same image) so the cache and its volume survive.
-            docker compose up -d --remove-orphans
+            # Fetch the freshly built backend + frontend images. Scoped to those
+            # two services on purpose: redis must not be re-pulled or restarted,
+            # because carts, refresh-token sessions and OTPs live in it.
+            docker compose pull backend frontend
 
-            # Reclaim disk from the superseded image layers on this shared host.
-            docker image prune -f
+            # Recreate the app containers unconditionally. --force-recreate
+            # means we do NOT depend on the image reference having changed to
+            # trigger a restart — the containers are destroyed and rebuilt from
+            # the new images every single deploy. redis is not named here, so it
+            # keeps running and its volume is never touched.
+            #
+            # The sidecars MUST be in this list: compose bakes env_file into a
+            # container at creation, so a cron/worker that isn't recreated keeps
+            # the env and image it was born with forever. That is how the
+            # payment-reconcile cron ran with a blank PAYMENT_RECONCILE_TOKEN
+            # (403 every cycle) across deploys that "fixed" the host env file,
+            # and how the analytics workers can drift onto an older backend
+            # image than the API they feed.
+            docker compose up -d --force-recreate --remove-orphans \
+              backend frontend \
+              payment-reconcile-cron loyalty-cron \
+              analytics-rollup-worker analytics-delivery-worker
+
+            # Now delete the superseded images. Only runs after the new
+            # containers are up, and Docker refuses to remove an image that a
+            # running container uses — so this can never pull the live stack out
+            # from under itself.
+            for img in $old_images; do
+              docker rmi -f "$img" 2>/dev/null || echo "keeping $img (still in use)"
+            done
+
+            # Sweep everything else unreferenced: dangling layers plus any older
+            # :<sha> tags from previous deploys. -a is safe for the same reason
+            # as above — images backing a RUNNING container are never removed,
+            # so redis:7-alpine and the two new app images survive.
+            docker image prune -af
+            docker builder prune -af 2>/dev/null || true
+
+            echo "images remaining on host:"
+            docker images
         env:
           IMAGE_TAG: ${{ github.sha }}
-          GHCR_USER: ${{ github.repository_owner }}
+          # NOT github.repository_owner — that resolves to the ORG name
+          # (shopwellvia-art), which GHCR will not accept as a login user.
+          GHCR_USER: ${{ secrets.GHCR_USER }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
           APP_DIR: ${{ secrets.EC2_APP_DIR }}
 

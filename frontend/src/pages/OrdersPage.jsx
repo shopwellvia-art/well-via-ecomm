@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import {
   ChevronDown,
   ChevronUp,
@@ -9,11 +8,14 @@ import {
   Banknote,
   MapPin,
   AlertTriangle,
+  XCircle,
 } from 'lucide-react';
-import { apiClient } from '@/services/apiClient.js';
 import { useAuthStore } from '@/features/auth/store.js';
 import RequestReturnModal from '@/features/returns/components/RequestReturnModal.jsx';
 import { useMyReturns } from '@/features/returns/hooks.js';
+import { useMyOrders } from '@/features/orders/hooks.js';
+import { isOrderCancellable } from '@/features/orders/api.js';
+import CancelOrderModal from '@/features/orders/components/CancelOrderModal.jsx';
 import { formatPrice } from '@/lib/utils.js';
 import AccountLayout from '@/components/storefront/AccountLayout.jsx';
 import WImage from '@/components/storefront/WImage.jsx';
@@ -165,17 +167,6 @@ function TrackingDisclosure({ order }) {
   );
 }
 
-// ── Data hook ──────────────────────────────────────────────────────────────
-function useMyOrders() {
-  const token = useAuthStore((s) => s.accessToken);
-  return useQuery({
-    queryKey: ['orders'],
-    queryFn: () => apiClient.get('/orders').then((r) => r.data),
-    enabled: !!token,
-    retry: false,
-  });
-}
-
 // ── Returns summary panel ──────────────────────────────────────────────────
 function ReturnsSummary() {
   const { data: returns, isLoading, isError } = useMyReturns();
@@ -227,6 +218,7 @@ export default function OrdersPage() {
   const { data, isLoading, isError, refetch } = useMyOrders();
   const orders = data ?? [];
   const [returnOrder, setReturnOrder] = useState(null);
+  const [cancelOrder, setCancelOrder] = useState(null);
 
   if (!user) return <Navigate to="/login" replace />;
 
@@ -446,6 +438,19 @@ export default function OrdersPage() {
 
                     {/* ── Actions row (always visible; stopPropagation per button) ── */}
                     <div className="mt-4 flex items-center justify-end gap-3 border-t border-wline pt-3">
+                      {isOrderCancellable(o) && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCancelOrder(o);
+                          }}
+                          className="flex items-center gap-1.5 rounded-full border border-wline bg-transparent px-5 py-2 text-[13px] text-wink transition-colors hover:border-red-400 hover:text-red-600"
+                        >
+                          <XCircle className="size-3.5" aria-hidden="true" />
+                          Cancel
+                        </button>
+                      )}
                       {o.status === 'delivered' && (
                         <button
                           type="button"
@@ -486,6 +491,14 @@ export default function OrdersPage() {
         <RequestReturnModal
           order={returnOrder}
           onClose={() => setReturnOrder(null)}
+        />
+      )}
+
+      {/* Cancel-order confirm modal */}
+      {cancelOrder && (
+        <CancelOrderModal
+          order={cancelOrder}
+          onClose={() => setCancelOrder(null)}
         />
       )}
     </AccountLayout>

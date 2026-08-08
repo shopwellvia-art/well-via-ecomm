@@ -83,6 +83,18 @@ def optional_current_user(
 
 
 def require_admin(user: User = Depends(get_current_user)) -> User:
+    """The superadmin tier: `users.is_admin`, ignoring RBAC entirely.
+
+    NOT a general-purpose admin gate — use `require_permission` for that. A route
+    on this dependency is unreachable for scoped staff even when they hold the
+    permission that names it, which is why the catalogue routes that used to sit
+    here (products, categories, hero slides) made `products.create` and friends
+    grantable but inert.
+
+    It now guards exactly one thing: `endpoints/database.py`, where "wipe every
+    table" is deliberately not delegable through the Roles UI. If you are adding
+    a route here, be sure it belongs in that category.
+    """
     if not user.is_admin:
         raise ForbiddenError("Admin privileges required")
     return user

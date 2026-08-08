@@ -1,17 +1,18 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 
 import Layout from '@/components/layout/Layout.jsx';
 import AdminLayout from '@/components/admin/AdminLayout.jsx';
 import RequireAdmin from './RequireAdmin.jsx';
+import RequireAuth from './RequireAuth.jsx';
 import RequirePermission from './RequirePermission.jsx';
 import RequireSuperadmin from './RequireSuperadmin.jsx';
 import ScrollToTop from './ScrollToTop.jsx';
 import AuthBootstrap from './AuthBootstrap.jsx';
+import SiteMeta from '@/components/storefront/SiteMeta.jsx';
+import ConsentGate from '@/components/consent/ConsentGate.jsx';
 import { PageFallback } from '@/components/feedback/PageFallback.jsx';
-import ProductDemoPage from '../pages/ProductDemoPage.jsx';
-import CheckoutFirst from '../pages/CheckoutFirst.jsx';
-import CheckoutAddress from '../pages/Address.jsx';
+import { useTracking } from '@/features/tracking/index.js';
 
 // Route-based code splitting — each page is its own chunk.
 const HomePage = lazy(() => import('@/pages/HomePage.jsx'));
@@ -19,7 +20,7 @@ const ProductListPage = lazy(() => import('@/pages/ProductListPage.jsx'));
 const CategoriesPage = lazy(() => import('@/pages/CategoriesPage.jsx'));
 const ProductDetailPage = lazy(() => import('@/pages/ProductDetailPage.jsx'));
 const CartPage = lazy(() => import('@/pages/CartPage.jsx'));
-const CheckoutPageFinal = lazy(() => import('@/pages/CheckoutPageFinal.jsx'));
+const CheckoutPage = lazy(() => import('@/pages/CheckoutPage.jsx'));
 const PaymentMockPage = lazy(() => import('@/pages/PaymentMockPage.jsx'));
 const PaymentReturnPage = lazy(() => import('@/pages/PaymentReturnPage.jsx'));
 const OrdersPage = lazy(() => import('@/pages/OrdersPage.jsx'));
@@ -53,7 +54,11 @@ const AdminCategoriesPage = lazy(() => import('@/pages/admin/AdminCategoriesPage
 const AdminHeroSlidesPage = lazy(() => import('@/pages/admin/AdminHeroSlidesPage.jsx'));
 const AdminCouponsPage = lazy(() => import('@/pages/admin/AdminCouponsPage.jsx'));
 const AdminRolesPage = lazy(() => import('@/pages/admin/AdminRolesPage.jsx'));
-const AdminUsersPage = lazy(() => import('@/pages/admin/AdminUsersPage.jsx'));
+const AdminTeamPage = lazy(() => import('@/pages/admin/AdminTeamPage.jsx'));
+const AdminCustomersPage = lazy(() => import('@/pages/admin/AdminCustomersPage.jsx'));
+const AdminCustomerDetailPage = lazy(() =>
+  import('@/pages/admin/AdminCustomerDetailPage.jsx'),
+);
 const AdminTaxesPage = lazy(() => import('@/pages/admin/AdminTaxesPage.jsx'));
 const AdminReviewsPage = lazy(() => import('@/pages/admin/AdminReviewsPage.jsx'));
 const AdminLoyaltyPage = lazy(() => import('@/pages/admin/AdminLoyaltyPage.jsx'));
@@ -61,20 +66,43 @@ const AdminAuditPage = lazy(() => import('@/pages/admin/AdminAuditPage.jsx'));
 const AdminSettingsPage = lazy(() => import('@/pages/admin/AdminSettingsPage.jsx'));
 const AdminPaymentMethodsPage = lazy(() => import('@/pages/admin/AdminPaymentMethodsPage.jsx'));
 const AdminFooterPage = lazy(() => import('@/pages/admin/AdminFooterPage.jsx'));
+const AdminStorefrontPage = lazy(() => import('@/pages/admin/AdminStorefrontPage.jsx'));
 const AdminPagesPage = lazy(() => import('@/pages/admin/AdminPagesPage.jsx'));
 const AdminOrdersPage = lazy(() => import('@/pages/admin/AdminOrdersPage.jsx'));
 const AdminOrderDetailPage = lazy(() => import('@/pages/admin/AdminOrderDetailPage.jsx'));
 const AdminReturnsPage = lazy(() => import('@/pages/admin/AdminReturnsPage.jsx'));
 const AdminSalesAnalyticsPage = lazy(() => import('@/pages/admin/AdminSalesAnalyticsPage.jsx'));
 const AdminProfitAnalyticsPage = lazy(() => import('@/pages/admin/AdminProfitAnalyticsPage.jsx'));
+// Analytics v2. Two pages serve all 12 modules and 73 views — everything that
+// varies between them comes from the generated registry contract.
+const AdminAnalyticsPage = lazy(() => import('@/pages/admin/AdminAnalyticsPage.jsx'));
+const AdminAnalyticsModulePage = lazy(() => import('@/pages/admin/AdminAnalyticsModulePage.jsx'));
+const AdminAnalyticsSettingsPage = lazy(
+  () => import('@/pages/admin/AdminAnalyticsSettingsPage.jsx'),
+);
+const AdminAnalyticsCostRulesPage = lazy(
+  () => import('@/pages/admin/AdminAnalyticsCostRulesPage.jsx'),
+);
 const AdminObservabilityPage = lazy(() => import('@/pages/admin/AdminObservabilityPage.jsx'));
 const AdminDangerZonePage = lazy(() => import('@/pages/admin/AdminDangerZonePage.jsx'));
 
 export default function App() {
+  // Mounted here — inside the router — so every navigation re-runs the gates
+  // rather than trusting the decision made on the first page. The hook is
+  // already gated internally on setting-enabled AND consent-granted AND
+  // not-an-/admin-route; do not re-check any of that out here, and do not
+  // relax it. Its return value is deliberately unused: nothing in the app
+  // should branch on whether a customer is being tracked.
+  useTracking();
+
   return (
     <>
       <ScrollToTop />
       <AuthBootstrap />
+      <SiteMeta />
+      {/* Consent dialog. Outside <Routes> so it survives navigation, inside the
+          router so it can see the path (it hides itself on /admin/*). */}
+      <ConsentGate />
       <Suspense fallback={<PageFallback />}>
         <Routes>
           {/* Storefront */}
@@ -87,14 +115,48 @@ export default function App() {
             <Route path="products/:id" element={<ProductDetailPage />} />
             <Route path="cart" element={<CartPage />} />
             <Route path="wishlist" element={<WishlistPage />} />
-            <Route path="rewards" element={<RewardsPage />} />
-            <Route path="account/security" element={<AccountSecurityPage />} />
-            <Route path="account/addresses" element={<AddressesPage />} />
-            <Route path="checkoutfirst" element={<CheckoutFirst/>}/>
-            <Route path="checkoutfinal" element={<CheckoutPageFinal />} />
-            <Route path='address' element={<CheckoutAddress/>}/>
-            <Route path="orders" element={<OrdersPage />} />
-            <Route path="orders/:id" element={<OrderDetailPage />} />
+            {/* Customer-only pages — /checkout stays unguarded (inline LoginPanel) */}
+            <Route
+              path="rewards"
+              element={
+                <RequireAuth>
+                  <RewardsPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="account/security"
+              element={
+                <RequireAuth>
+                  <AccountSecurityPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="account/addresses"
+              element={
+                <RequireAuth>
+                  <AddressesPage />
+                </RequireAuth>
+              }
+            />
+            <Route path="checkout" element={<CheckoutPage />} />
+            <Route
+              path="orders"
+              element={
+                <RequireAuth>
+                  <OrdersPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="orders/:id"
+              element={
+                <RequireAuth>
+                  <OrderDetailPage />
+                </RequireAuth>
+              }
+            />
             <Route path="payments/mock/:txnId" element={<PaymentMockPage />} />
             <Route path="payments/return" element={<PaymentReturnPage />} />
             <Route path="login" element={<LoginPage />} />
@@ -107,7 +169,6 @@ export default function App() {
             <Route path="stories" element={<StoriesPage />} />
             <Route path="press" element={<PressPage />} />
             <Route path="corporate" element={<CorporatePage />} />
-            <Route path='product' element={<ProductDemoPage/>}/>
             {/* Legal / customer-care policy pages (admin-editable) */}
             <Route path="privacy" element={<PrivacyPage />} />
             <Route path="terms" element={<TermsPage />} />
@@ -175,10 +236,33 @@ export default function App() {
               }
             />
             <Route
-              path="admin/users"
+              path="admin/team"
               element={
                 <RequirePermission permission="users.view">
-                  <AdminUsersPage />
+                  <AdminTeamPage />
+                </RequirePermission>
+              }
+            />
+            {/* The staff directory used to live here and mixed shoppers in with
+                it. Redirect rather than 404 so existing links and bookmarks
+                still land somewhere sensible. */}
+            <Route
+              path="admin/users"
+              element={<Navigate to="/admin/team" replace />}
+            />
+            <Route
+              path="admin/customers"
+              element={
+                <RequirePermission permission="customers.view">
+                  <AdminCustomersPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="admin/customers/:id"
+              element={
+                <RequirePermission permission="customers.view">
+                  <AdminCustomerDetailPage />
                 </RequirePermission>
               }
             />
@@ -239,6 +323,14 @@ export default function App() {
               }
             />
             <Route
+              path="admin/storefront"
+              element={
+                <RequirePermission permission="frontend.manage">
+                  <AdminStorefrontPage />
+                </RequirePermission>
+              }
+            />
+            <Route
               path="admin/pages"
               element={
                 <RequirePermission permission="frontend.manage">
@@ -259,6 +351,69 @@ export default function App() {
               element={
                 <RequirePermission permission="dashboard.view">
                   <AdminProfitAnalyticsPage />
+                </RequirePermission>
+              }
+            />
+            {/* Analytics v2. Declared AFTER the two legacy routes above, but the
+                order is not what protects them: React Router 6 ranks static
+                segments above dynamic ones, so /analytics/sales keeps hitting
+                AdminSalesAnalyticsPage regardless. Neither "sales" nor "profit"
+                is a module slug, so there is no collision either way — the
+                legacy pages stay reachable until shadow-mode reconciliation
+                signs off on retiring them.
+
+                Three routes serve all 73 views. The per-view permission is
+                enforced server-side (403 with the view's own permission), so the
+                route guard only checks the base grant — duplicating the 73
+                per-view checks in the router would be a second source of truth
+                that silently drifts from the registry. */}
+            <Route
+              path="admin/analytics"
+              element={
+                <RequirePermission permission="analytics.view">
+                  <AdminAnalyticsPage />
+                </RequirePermission>
+              }
+            />
+            {/* Declared BEFORE the :moduleSlug route on purpose. React Router 6
+                ranks static segments above dynamic ones, so "settings" would
+                win the match either way — but this is the one route the module
+                page would otherwise swallow whole, and leaving that to implicit
+                ranking means a future reorder breaks it silently, with a module
+                page rendering "settings" as a slug instead of a 404. */}
+            <Route
+              path="admin/analytics/settings"
+              element={
+                <RequirePermission permission="analytics.integrations.manage">
+                  <AdminAnalyticsSettingsPage />
+                </RequirePermission>
+              }
+            />
+            {/* Also declared BEFORE :moduleSlug, and for the same reason as
+                "settings" above. Gated on analytics.finance.view: a cost rate is
+                the store's margin structure, so seeing it is the same privilege
+                as seeing the margin itself. */}
+            <Route
+              path="admin/analytics/cost-rules"
+              element={
+                <RequirePermission permission="analytics.finance.view">
+                  <AdminAnalyticsCostRulesPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="admin/analytics/:moduleSlug"
+              element={
+                <RequirePermission permission="analytics.view">
+                  <AdminAnalyticsModulePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="admin/analytics/:moduleSlug/:viewSlug"
+              element={
+                <RequirePermission permission="analytics.view">
+                  <AdminAnalyticsModulePage />
                 </RequirePermission>
               }
             />

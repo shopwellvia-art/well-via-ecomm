@@ -205,7 +205,7 @@ class TestWebhookSuccessWritesStatusAppliedEvent:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
             order_id = order.id
 
@@ -284,7 +284,7 @@ class TestAmountMismatchWritesEventAndLeavesPending:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
             order_id = order.id
 
@@ -354,13 +354,18 @@ class TestInvalidSignatureRecordsEvent:
         """Enable razorpay with test credentials; POST with bad signature -> 403;
         then query payment_events in a fresh session for a WEBHOOK_SIGNATURE_INVALID
         row with gateway_code='razorpay' and signature_valid=False."""
-        # We track event IDs written in this test so we can delete them precisely
-        # (they have no order_id — only merchant_transaction_id matters, but for
-        # the bad-sig case there is no mtid either, so we delete by gateway_code
-        # and created_at recency in the finally block).
-        import datetime as _dt
+        # Identify the rows this test creates by id, NOT by created_at:
+        # payment_events.created_at is a second-precision DATETIME (micro-
+        # seconds truncated) and the DB clock can be skewed from the host
+        # clock (container-UTC vs host-IST), so a `created_at >= now()` filter
+        # nondeterministically misses same-second writes. Ids are monotonic —
+        # everything this test writes has id > the pre-test max.
+        from sqlalchemy import func
 
-        before_ts = _dt.datetime.now(_dt.timezone.utc)
+        with SessionLocal() as s0:
+            before_max_id = s0.execute(
+                select(func.coalesce(func.max(PaymentEvent.id), 0))
+            ).scalar_one()
 
         db = SessionLocal()
         try:
@@ -400,7 +405,7 @@ class TestInvalidSignatureRecordsEvent:
                     select(PaymentEvent).where(
                         PaymentEvent.gateway_code == "razorpay",
                         PaymentEvent.event_type == PaymentEventType.WEBHOOK_SIGNATURE_INVALID,
-                        PaymentEvent.created_at >= before_ts,
+                        PaymentEvent.id > before_max_id,
                     )
                 ).scalars().first()
 
@@ -420,17 +425,18 @@ class TestInvalidSignatureRecordsEvent:
             try:
                 _reset_razorpay(db2)
                 # Delete payment_events rows created by this test (no order_id;
-                # identify by gateway_code + recency).
+                # identify by gateway_code + id > pre-test max — created_at is
+                # second-precision and clock-skewed, so it can miss rows).
                 db2.execute(
                     text(
                         "DELETE FROM payment_events "
                         "WHERE gateway_code = 'razorpay' "
                         "AND event_type = :et "
-                        "AND created_at >= :ts"
+                        "AND id > :mid"
                     ),
                     {
                         "et": PaymentEventType.WEBHOOK_SIGNATURE_INVALID,
-                        "ts": before_ts,
+                        "mid": before_max_id,
                     },
                 )
                 db2.commit()
@@ -473,7 +479,7 @@ class TestReconcileSettlesStalePendingOrder:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
             order_id = order.id
 
@@ -568,7 +574,7 @@ class TestReconcileLeavesGenuinelyPendingOrderPending:
                 payment_method="prepaid",
             )
             svc = PaymentService(db)
-            order, mtid, _redirect = svc.checkout(user, req)
+            order, mtid, _redirect, _checkout = svc.checkout(user, req)
             order_ids.append(order.id)
             order_id = order.id
 
